@@ -69,6 +69,21 @@ export { LumenGeoMap } from './lumen-geo-map';
 export { LumenWidget, type CardControls, type CardLink, LumenSavedWidget } from './lumen-widget';
 export { LumenConfirm, type LumenConfirmProps } from './confirm';
 export {
+  type LumenAuthPoint,
+  LumenAuthHeading,
+  LumenAuthNote,
+  LumenAuthProblem,
+  LumenAuthStage,
+  type LumenAuthStageProps,
+  LumenCodeField,
+  LumenEmailField,
+  LumenPasswordField,
+  LumenStepBar,
+} from './lumen-auth';
+export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
+export { LumenSecret } from './lumen-secret';
+export { RankedBars, StackedBars } from './lumen-widget-charts';
+export {
   COVERAGE_LEVELS,
   CoverageCell,
   type CoverageJobState,
