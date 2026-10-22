@@ -406,3 +406,10 @@ export {
   tabState,
   useAssistantHotkey,
 } from './assistant-panel';
+export {
+  LumenTree,
+  LumenTreeItem,
+  type LumenTreeItemProps,
+  type LumenTreeProps,
+  useLumenTree,
+} from './lumen-tree';
