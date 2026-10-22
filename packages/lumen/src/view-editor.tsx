@@ -1915,7 +1915,7 @@ function FieldTree<T>({
                     {formulasGroup && <SigmaIcon className="text-muted-foreground" />}
                     {linkTo &&
                       (unlinked ? (
-                        <Unlink2Icon className="text-destructive" />
+                        <Unlink2Icon className="text-muted-foreground" />
                       ) : (
                         <Link2Icon className="text-muted-foreground" />
                       ))}
@@ -2010,14 +2010,7 @@ function FieldTree<T>({
                 style={{ borderColor: guide(color) }}
               >
                 {g.note && !q && (
-                  <p
-                    className={cn(
-                      'px-1 py-1 text-xs',
-                      unlinked ? 'text-destructive' : 'text-muted-foreground',
-                    )}
-                  >
-                    {g.note}
-                  </p>
+                  <p className="px-1 py-1 text-xs text-muted-foreground">{g.note}</p>
                 )}
                 {linkTo && linkPairs && !q && (
                   <LinkPairs
