@@ -7,6 +7,8 @@ Lumen is a React component system from [Columen Labs](https://github.com/columen
 | [`@columenlabs/lumen-ui`](packages/lumen) | Components: `LumenShell` (sidebar, header, status bar, settings), `LumenLayout` and `LumenGrid` (a page of cards), `LumenView` and `LumenTable` (filter, group, pivot), `LumenWidget` and `LumenCard`, `LumenChart` and `LumenEChart`, `LumenDrawer`, `LumenSelector`, `LumenTabs`, `LumenForm`, the shadcn parts under `ui/*`, and `theme.css` |
 | [`@columenlabs/lumen-ui-types`](packages/lumen-types) | The view model: view config, formulas, domains and joins, the data catalog, frames, chart formulas |
 
+Docs: [lumen-ui.columenlabs.com/docs](https://lumen-ui.columenlabs.com/docs/), every component with live props and code, generated from this source on each build. Built on [shadcn/ui](https://ui.shadcn.com). Coding agents can read [`llms.txt`](https://lumen-ui.columenlabs.com/docs/llms.txt) or the [component manifest](https://lumen-ui.columenlabs.com/docs/manifests/components.json); `bun run --filter=lumen-docs dev` also serves Storybook's MCP at `http://localhost:6006/mcp`.
+
 Status: 0.x. Any minor version may break things until 1.0.
 
 ## Install
@@ -48,8 +50,11 @@ Charts use TradingView Lightweight Charts™ with its logo off. Please link to h
 
 ```bash
 bun install
-bun run lint && bun run type-check && bun run build   # build writes out/lumen-types and out/lumen
+bun run lint && bun run type-check && bun run build   # build writes out/lumen-types, out/lumen and docs/dist
+bun run --filter=lumen-docs dev                       # the docs at http://localhost:6006
 ```
+
+The docs (`docs/`) are Storybook over the kit's source: add or change a story in `docs/stories/` with the part. `docs/wrangler.jsonc` serves `docs/dist` at lumen-ui.columenlabs.com/docs.
 
 To try a change inside an app before it is published, use `bun link` in `out/<package>` and `bun link @columenlabs/lumen-ui` in the app.
 

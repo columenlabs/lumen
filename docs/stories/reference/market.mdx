@@ -1,0 +1,39 @@
+import { ArgTypes, Meta } from '@storybook/addon-docs/blocks';
+import { LumenChart, MarketWidget, IndicatorPicker, OptionChainTable, SymbolSheetProvider } from '@columenlabs/lumen-ui';
+
+<Meta title="Reference/Market" />
+
+# Market
+
+Market parts read bars and quotes through the app's providers.
+
+## LumenChart
+
+The chart dialog: up to 8 symbols, % or price, indicators.
+
+<ArgTypes of={LumenChart} />
+
+## MarketWidget
+
+Live market widget: index lines, tiles and today's movers.
+
+<ArgTypes of={MarketWidget} />
+
+## IndicatorPicker
+
+Pick and set up chart indicators, or type a formula.
+
+<ArgTypes of={IndicatorPicker} />
+
+## OptionChainTable
+
+An option chain by expiration: calls and puts around the strike.
+
+<ArgTypes of={OptionChainTable} />
+
+## SymbolSheetProvider
+
+Opens the symbol sheet from any symbol cell.
+
+<ArgTypes of={SymbolSheetProvider} />
+
