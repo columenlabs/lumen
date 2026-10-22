@@ -1461,7 +1461,18 @@ export function customViewIssues(
     ...(config.cards ?? []).flatMap((c, i) =>
       isRowCard(c) && c.tiles ? tileListIssues(c.tiles, `cards.${i}.tiles`) : [],
     ),
-    ...(columns ? cardIssues(config.cards ?? [], columns) : []),
+    ...(config.cards ?? []).flatMap((c, i) => {
+      // A widget with its own data is checked against that data's fields, not the page's; a
+      // recipe or a domain the view catalog does not list has its rows' fields, known on read.
+      const cols = c.source
+        ? customViewFields[c.source]?.columns && [
+            ...(customViewFields[c.source]?.columns ?? []),
+            ...connectionColumns(c.connections, c),
+            ...formulas.map((f) => f.key),
+          ]
+        : columns;
+      return cols ? cardIssues([c], cols).map((x) => x.replace(/^cards\.0:/, `cards.${i}:`)) : [];
+    }),
   ];
 }
 
