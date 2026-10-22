@@ -1,0 +1,606 @@
+/* One theme for every app: Manrope + JetBrains Mono, the Authority palette,
+   compact density and the shell's frame spacing. Only the accent changes by app (`data-app` on
+   <html>, set by LumenShell): a product sets `--primary` per app in its own CSS (the product's
+   desks.css). Gain and loss never change by app.
+   An app imports this right after tailwindcss, then adds `@source` for this package and any
+   app-local tokens of its own. */
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/jetbrains-mono";
+/* Settings ▸ Appearance ▸ Font; each face downloads only when it is picked. */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/ibm-plex-sans";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--app-font);
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-gain: var(--gain);
+  --color-kind-declarative: var(--kind-declarative);
+  --color-kind-script: var(--kind-script);
+  --color-edge: var(--edge);
+  --color-loss: var(--loss);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-proxy: var(--proxy);
+  --color-warning: var(--warning);
+  --color-rule-yes: var(--rule-yes);
+  --color-rule-no: var(--rule-no);
+  --color-gap: var(--gap);
+  --color-cov-full: var(--cov-full);
+  --color-cov-high: var(--cov-high);
+  --color-cov-low: var(--cov-low);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
+  --color-chart-10: var(--chart-10);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* "Edge" in every app name (an app, an app, an app): one gold across the suite. */
+  --edge: #b8862e;
+  /* Frame: the shell owns these; pages never set their own outer padding or header. */
+  --shell-sidebar-width: 16rem;
+  --shell-assistant-width: 26rem;
+  --shell-header-height: 48px;
+  --shell-status-height: 32px;
+  --tile-width: 8.5rem;
+  --shell-gutter: 12px;
+  --shell-section-gap: 12px;
+  --shell-max-width: 1400px;
+  /* The text font, picked in Settings ▸ Appearance (`data-font` on <html>, prefs.ts). */
+  --app-font: "Manrope Variable", Manrope, ui-sans-serif, system-ui, sans-serif;
+  /* Compact density, the only density. */
+  --card-pad: 12px;
+  --row-h: 28px;
+  --cell-x: 8px;
+  --cell-y: 4px;
+
+  --background: #f4f6fa;
+  --foreground: #121826;
+  --card: #fbfcfe;
+  --card-foreground: #121826;
+  --popover: #fbfcfe;
+  --popover-foreground: #121826;
+  --primary: #2563eb;
+  --primary-foreground: #f5f8ff;
+  --secondary: #e9edf5;
+  --secondary-foreground: #121826;
+  --muted: #e9edf5;
+  --muted-foreground: #4f5970;
+  --accent: #e9edf5;
+  --accent-foreground: #121826;
+  --destructive: #c2183f;
+  --border: #d8deea;
+  --input: #c9d1e0;
+  /* Focus is quiet: a neutral ring for keyboard focus, never the brand colour. */
+  --ring: var(--muted-foreground);
+  --radius: 0.5rem;
+  --chart-1: var(--primary);
+  --chart-2: #0e9f6e;
+  --chart-3: #d97706;
+  --chart-4: #ea580c;
+  --chart-5: #db2777;
+  --chart-6: #0891b2;
+  --chart-7: #a16207;
+  --chart-8: #64748b;
+  --chart-9: #65a30d;
+  --chart-10: #dc2626;
+  /* Tags (an app categories and labels): 16 distinct hues, apart from the charts'. */
+  --tag-red: #dc2626;
+  --tag-orange: #ea580c;
+  --tag-amber: #d97706;
+  --tag-yellow: #ca8a04;
+  --tag-lime: #65a30d;
+  --tag-green: #16a34a;
+  --tag-teal: #0d9488;
+  --tag-cyan: #0891b2;
+  --tag-sky: #0284c7;
+  --tag-blue: #2563eb;
+  --tag-indigo: #4f46e5;
+  --tag-violet: #7c3aed;
+  --tag-purple: #9333ea;
+  --tag-pink: #db2777;
+  --tag-rose: #e11d48;
+  --tag-slate: #64748b;
+  /* Your data: the person's own columns (Edits in place). */
+  --origin-yours: #7c3aed;
+  /* The assistant frames (live domains): apart from the Symbol join's amber. */
+  --origin-assistant: #e11d48;
+  --sidebar: #eef1f7;
+  --sidebar-foreground: #121826;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: #dfe6f3;
+  --sidebar-accent-foreground: #121826;
+  --sidebar-border: #d8deea;
+  --sidebar-ring: var(--muted-foreground);
+  --gain: #00703c;
+  --loss: #c2183f;
+  /* A check that passed and one that needs a look (badges, the Overview's amber). */
+  --success: #12804a;
+  /* The assistant @ tokens: a blue that is neither the app accent nor a gain. */
+  --info: #2563eb;
+  /* A price taken from a stand-in ETF (≈ SPY). */
+  --proxy: #7c3aed;
+  --warning: #9a5b06;
+  /* Playbook rules: yes (fired, the path and the decision) green, no amber. */
+  --rule-yes: #15803d;
+  --rule-no: #b45309;
+  /* Coverage cells (LumenCoverageMap): a blue ramp for present, hatched orange for missing, so
+     they differ in hue and lightness (CVD-safe). */
+  --gap: #e2711d;
+  --gap-soft: #f8cfae;
+  --cov-full: #2563eb;
+  --cov-high: #7ea2f2;
+  --cov-low: #c3d3f8;
+  /* Filter links: a card's link colour, its square and what it follows. */
+  --link-teal: var(--chart-6);
+  --link-amber: var(--chart-3);
+  --link-pink: var(--chart-5);
+  --link-lime: var(--chart-9);
+  --link-blue: var(--chart-1);
+  /* Key-date markers on charts (FOMC, CPI, Jobs), one hue each, drawn faint. */
+  --key-date-fomc: var(--chart-10);
+  --key-date-cpi: var(--chart-3);
+  --key-date-jobs: var(--chart-6);
+  /* The assistant's models by weight: Haiku cyan, Sonnet blue, Opus orange. */
+  /* Playbook kinds: Declarative teal, Script orange. */
+  --kind-declarative: #0d9488;
+  --kind-script: #ea580c;
+  --tier-spark: #0891b2;
+  --tier-bolt: #2563eb;
+  --tier-dynamo: #ea580c;
+  color-scheme: light;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --shell-gutter: 16px;
+  }
+}
+
+.dark {
+  --edge: #d4a24c;
+  --background: #0b0f17;
+  --foreground: #e6eaf2;
+  --card: #121826;
+  --card-foreground: #e6eaf2;
+  --popover: #121826;
+  --popover-foreground: #e6eaf2;
+  --primary: #5b8cff;
+  --primary-foreground: #0b0f17;
+  --secondary: #1c2435;
+  --secondary-foreground: #e6eaf2;
+  --muted: #1c2435;
+  --muted-foreground: #9aa4b8;
+  --accent: #1c2435;
+  --accent-foreground: #e6eaf2;
+  --destructive: #ff5c7a;
+  --border: #263046;
+  --input: #2f3a52;
+  --chart-2: #34d399;
+  --chart-3: #fbbf24;
+  --chart-4: #fb923c;
+  --chart-5: #f472b6;
+  --chart-6: #22d3ee;
+  --chart-7: #f59e0b;
+  --chart-8: #94a3b8;
+  --chart-9: #a3e635;
+  --chart-10: #f87171;
+  --tag-red: #f87171;
+  --tag-orange: #fb923c;
+  --tag-amber: #fbbf24;
+  --tag-yellow: #facc15;
+  --tag-lime: #a3e635;
+  --tag-green: #4ade80;
+  --tag-teal: #2dd4bf;
+  --tag-cyan: #22d3ee;
+  --tag-sky: #38bdf8;
+  --tag-blue: #60a5fa;
+  --tag-indigo: #818cf8;
+  --tag-violet: #a78bfa;
+  --tag-purple: #c084fc;
+  --tag-pink: #f472b6;
+  --tag-rose: #fb7185;
+  --tag-slate: #94a3b8;
+  --origin-yours: #a78bfa;
+  --origin-assistant: #fb7185;
+  --sidebar: #0f1420;
+  --sidebar-foreground: #e6eaf2;
+  --sidebar-accent: #1c2435;
+  --sidebar-accent-foreground: #e6eaf2;
+  --sidebar-border: #263046;
+  --gain: #34d399;
+  --loss: #ff5c7a;
+  --success: #2fd081;
+  --info: #6aa9ff;
+  --proxy: #b69cff;
+  --warning: #e5a73a;
+  --rule-yes: #4ade80;
+  --rule-no: #fbbf24;
+  --gap: #f0883e;
+  --gap-soft: #5a3417;
+  --cov-full: #4c8dff;
+  --cov-high: #2f5fb8;
+  --cov-low: #1d3360;
+  --tier-spark: #22d3ee;
+  --kind-declarative: #2dd4bf;
+  --kind-script: #fb923c;
+  --tier-bolt: #5b8cff;
+  --tier-dynamo: #fb923c;
+  color-scheme: dark;
+}
+
+/* Glass surfaces, a user preference (Settings, All apps), off by default. */
+/* Frost needs something behind it ("I don't see much of a difference"): a flat
+   page under a blur looks the same, so glass also lays two soft washes of the desk's accent on the
+   page, fixed while it scrolls, and lets the frame show them through. The wash sits on one fixed
+   layer the size of the viewport, so a sticky tab row can paint the same wash exactly in line. */
+:root[data-glass="on"] {
+  --glass-wash: radial-gradient(
+      60rem 40rem at 85% -10%,
+      color-mix(in oklab, var(--primary) 22%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      50rem 36rem at -5% 105%,
+      color-mix(in oklab, var(--chart-6) 16%, transparent),
+      transparent 70%
+    );
+}
+:root[data-glass="on"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--glass-wash);
+}
+:root[data-glass="on"] [data-slot="sidebar-inset"],
+:root[data-glass="on"] [data-slot="sidebar-wrapper"] {
+  background-color: transparent;
+}
+:root[data-glass="on"] [data-slot="sidebar-inner"] {
+  background-color: color-mix(in oklab, var(--sidebar) 70%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+/* A sticky tab row looks clear, with no band (option B), yet nothing ever shows
+   through it: behind its tabs it paints the page itself (the page colour and the wash, lined up with
+   the fixed wash layer by --wash-x/-y/-w/-h, which the page's scroller sets once per resize), over
+   both gutters and --intro-fade below, fading out at the bottom. Being part of the sticky row, it
+   moves with the scroll in the same frame however fast the page is flicked; it shows from the first
+   pixel of scroll, before any card reaches the row. */
+:root[data-glass="on"] {
+  --intro-fade: var(--shell-section-gap);
+}
+:root[data-glass="on"] [data-slot="page-intro"]:has([data-slot="tabs-list"]) {
+  background-color: transparent;
+  box-shadow: none;
+}
+:root[data-glass="on"] [data-slot="page-intro"]:has([data-slot="tabs-list"])::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 calc(-1 * var(--shell-gutter)) calc(-1 * var(--intro-fade));
+  pointer-events: none;
+  background-color: var(--background);
+  background-image: var(--glass-wash);
+  background-repeat: no-repeat;
+  background-size: var(--wash-w, 100vw) var(--wash-h, 100vh);
+  background-position: calc(-1 * var(--wash-x, 0px)) calc(-1 * var(--wash-y, 0px));
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--intro-fade)), transparent);
+}
+@keyframes intro-page-in {
+  from {
+    opacity: 0;
+  }
+}
+@supports (animation-timeline: scroll()) {
+  :root[data-glass="on"] [data-slot="page-intro"]:has([data-slot="tabs-list"])::before {
+    animation: intro-page-in linear both;
+    animation-timeline: scroll(nearest);
+    animation-range: 0 1px;
+  }
+}
+:root[data-glass="on"] [data-slot="card"],
+:root[data-glass="on"] [data-slot="lumen-card"],
+:root[data-glass="on"] [data-slot="shell-header"],
+:root[data-glass="on"] [data-slot="shell-status"] {
+  background-color: color-mix(in oklab, var(--card) 55%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+/* Popups float over the page: a little more opaque so their text stays crisp. */
+:root[data-glass="on"] [data-slot="popover-content"],
+:root[data-glass="on"] [data-slot="dropdown-menu-content"],
+:root[data-glass="on"] [data-slot="dialog-content"],
+:root[data-glass="on"] [data-slot="sheet-content"][data-side="bottom"],
+:root[data-glass="on"] [data-slot="lumen-drawer"] {
+  background-color: color-mix(in oklab, var(--popover) 80%, transparent);
+  backdrop-filter: blur(20px) saturate(150%);
+}
+
+/* The loading bar's sliding segment (Progress with no value). */
+@keyframes lumen-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+/* Coverage cell states (LumenCoverageMap, LumenCoverageCalendarMap). */
+@keyframes lumen-cov-run {
+  to {
+    background-position: 11.3px 0;
+  }
+}
+
+@layer utilities {
+  .bg-gap-hatch {
+    background: repeating-linear-gradient(135deg, var(--gap) 0 3px, var(--gap-soft) 3px 6px);
+  }
+  .bg-cov-running {
+    background: repeating-linear-gradient(135deg, var(--cov-full) 0 4px, var(--cov-low) 4px 8px);
+    background-size: 11.3px 11.3px;
+    animation: lumen-cov-run 1s linear infinite;
+  }
+  .bg-cov-canceled {
+    background: linear-gradient(
+        135deg,
+        transparent 45%,
+        var(--muted-foreground) 45% 55%,
+        transparent 55%
+      ), var(--muted);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bg-cov-running {
+      animation: none;
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Font and size: the size is the root every rem scales from. Unlayered, so
+   they beat :root above. */
+:root[data-font="inter"] {
+  --app-font: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+}
+:root[data-font="plex"] {
+  --app-font: "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+:root[data-font="system"] {
+  --app-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+:root[data-font-size="small"] {
+  font-size: 15px;
+}
+:root[data-font-size="large"] {
+  font-size: 17px;
+}
+
+/* The assistant points at a card or a Settings row: two soft pulses of the edge colour. */
+@keyframes assistant-point {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--edge);
+  }
+}
+[data-assistant-point] {
+  animation: assistant-point 1s ease-in-out 2;
+}
+
+/* Save with issues: the field Save took the person to flashes red once. */
+@keyframes issue-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  30% {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 55%, transparent);
+  }
+}
+[data-issue-flash] {
+  animation: issue-flash 1.2s ease-out 1;
+}
+
+/* LumenSelector spotlight: hovering an option that stands for a card dims the
+   page's other cards and tags the card by name; pointing does the same under the cursor. A sidebar
+   page gets the sidebar's muted fill. No border and no glow. */
+body[data-spotlight="card"] [data-slot="lumen-card"]:not([data-spotlit]),
+body[data-pointing] [data-slot="lumen-card"]:not([data-spotlit]) {
+  opacity: 0.3;
+  transition: opacity 120ms ease-out;
+}
+body[data-pointing],
+body[data-pointing] [data-slot="lumen-card"] * {
+  cursor: crosshair;
+}
+body[data-spotlight="nav"] [data-spotlit] {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+}
+[data-slot="spotlight-tag"] {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  border-radius: calc(var(--radius) * 0.6);
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* LumenGrid: react-grid-layout's own rules, in the shell's tokens. */
+.lumen-grid {
+  position: relative;
+  transition: height 200ms ease;
+}
+.lumen-grid > .react-grid-item {
+  transition: transform 200ms ease, width 200ms ease, height 200ms ease;
+}
+.lumen-grid > .react-grid-item.resizing,
+.lumen-grid > .react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 40;
+  will-change: transform, width, height;
+}
+.lumen-grid > .react-grid-item.react-grid-placeholder {
+  z-index: 2;
+  border: 2px dashed color-mix(in oklab, var(--primary) 50%, transparent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+  /* The cell's bottom gap is the gap between cards, not part of the card. */
+  clip-path: inset(0 0 12px 0 round var(--radius-xl));
+  transition-duration: 100ms;
+  user-select: none;
+}
+.lumen-grid > .react-grid-item > .react-resizable-handle {
+  display: none;
+}
+.lumen-grid-edit > .react-grid-item:not([data-locked]) > .react-resizable-handle {
+  display: block;
+  position: absolute;
+  right: 0;
+  bottom: 12px;
+  z-index: 35;
+  width: 20px;
+  height: 20px;
+  cursor: se-resize;
+  touch-action: none;
+}
+.lumen-grid > .react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted-foreground);
+  border-bottom: 2px solid var(--muted-foreground);
+  border-bottom-right-radius: 2px;
+}
+
+/* LumenCode: shiki's light and dark tokens; lines scroll sideways inside the block, numbered by a
+   CSS counter where asked (no hand-rolled viewer). */
+@layer components {
+  .lumen-code pre {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    background: transparent !important;
+    font-family: var(--font-mono);
+    counter-reset: line;
+  }
+  .lumen-code.lumen-code-numbers pre {
+    padding: 0.625rem 0;
+  }
+  .lumen-code .line {
+    white-space: pre;
+  }
+  .lumen-code.lumen-code-wrap .line {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .lumen-code.lumen-code-numbers .line::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 2.75rem;
+    padding-right: 0.875rem;
+    text-align: right;
+    color: var(--muted-foreground);
+    user-select: none;
+  }
+  .lumen-code .line span {
+    color: var(--shiki-light);
+  }
+  .dark .lumen-code .line span {
+    color: var(--shiki-dark);
+  }
+  .lumen-code-editor .cm-editor {
+    height: 100%;
+    font-family: var(--font-mono);
+  }
+  .lumen-code-editor .cm-editor.cm-focused {
+    outline: none;
+  }
+}
+
+/* An emoji picked as a tab or view icon: grey and dimmed like the line icons
+   beside it, full colour on the active tab or nav item and on hover. */
+[data-slot="view-emoji"] {
+  filter: grayscale(1);
+  opacity: 0.6;
+  transition: filter 150ms, opacity 150ms;
+}
+[data-state="active"] [data-slot="view-emoji"],
+[data-active="true"] [data-slot="view-emoji"],
+:is(a, button):hover [data-slot="view-emoji"] {
+  filter: none;
+  opacity: 1;
+}

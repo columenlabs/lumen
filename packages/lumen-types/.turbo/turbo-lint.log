@@ -1,0 +1,2 @@
+$ biome check src && ../../../scripts/check-kit-neutral.sh
+Checked 11 files in 336ms. No fixes applied.

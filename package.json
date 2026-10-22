@@ -1,0 +1,20 @@
+{
+  "name": "lumen-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "lint": "bun run --filter='*' lint",
+    "type-check": "bun run --filter='*' type-check",
+    "build": "scripts/pack.sh",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.7.2"
+  }
+}

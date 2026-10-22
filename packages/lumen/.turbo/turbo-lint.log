@@ -1,0 +1,2 @@
+$ biome check src && ../../../scripts/check-kit-neutral.sh && ../../../scripts/check-suppressions.sh && ../../../scripts/check-settings-copy.sh && ../../../scripts/check-magic-numbers.sh
+Checked 104 files in 946ms. No fixes applied.

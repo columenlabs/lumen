@@ -1,0 +1,31 @@
+{
+  "name": "@columenlabs/lumen-types",
+  "version": "0.1.0",
+  "description": "Lumen's view model: views, formulas, domains and joins, frames.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "biome check src && ../../scripts/check-kit-neutral.sh",
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./views": "./src/views.ts",
+    "./view-formula": "./src/view-formula.ts",
+    "./domains": "./src/domains.ts",
+    "./market": "./src/market.ts",
+    "./chart-formula": "./src/chart-formula.ts",
+    "./catalog": "./src/catalog.ts",
+    "./frames": "./src/frames.ts",
+    "./workspaces": "./src/workspaces.ts",
+    "./tasks": "./src/tasks.ts",
+    "./registry": "./src/registry.ts"
+  },
+  "dependencies": {
+    "jexl": "2.3.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/jexl": "2.3.4"
+  }
+}

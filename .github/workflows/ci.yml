@@ -1,0 +1,24 @@
+# Lint, type-check and build on OpenShip's self-hosted runner. This repo is public, so the job
+# runs only for branches of this repo: a pull request from a fork never reaches the runner.
+name: CI
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, openship, linux, arm64]
+    timeout-minutes: 15
+    env:
+      LUMEN_FORBIDDEN_NAMES: ${{ vars.LUMEN_FORBIDDEN_NAMES }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run type-check
+      - run: bun run build

@@ -1,0 +1,75 @@
+# Every merge to main publishes both packages to npm and tags the version, on OpenShip's
+# self-hosted runner. The version is the next patch of the minor in packages/*/package.json
+# (0.1.0, then 0.1.1, 0.1.2 ...); to start a new minor, set both package.json versions to x.y.0.
+# Signs in to npm with the repository secret NPM_TOKEN.
+name: Publish
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write # the v<version> tag
+concurrency:
+  group: publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: [self-hosted, openship, linux, arm64]
+    timeout-minutes: 15
+    env:
+      LUMEN_FORBIDDEN_NAMES: ${{ vars.LUMEN_FORBIDDEN_NAMES }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - name: Install jq
+        run: |
+          command -v jq && exit 0
+          SUDO=$(command -v sudo || true)
+          $SUDO apt-get update -qq && $SUDO apt-get install -y -qq jq
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run type-check
+      - name: Next version
+        id: version
+        run: |
+          a=$(jq -r .version packages/lumen-types/package.json)
+          b=$(jq -r .version packages/lumen/package.json)
+          [ "$a" = "$b" ] || { echo "lumen-types is $a but lumen is $b: set both together" >&2; exit 1; }
+          minor=${a%.*}
+          # The highest patch npm has in this minor, if any.
+          top=$(npm view @columenlabs/lumen versions --json 2>/dev/null \
+            | jq -r --arg m "$minor." 'if type == "string" then [.] elif type == "array" then . else [] end
+                | map(select(startswith($m)) | split(".")[2] | tonumber) | max // empty' || true)
+          if [ -z "$top" ]; then v=$a; else n=$((top + 1)); v="$minor.$(( n > ${a##*.} ? n : ${a##*.} ))"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Publishing $v"
+      - run: scripts/pack.sh out
+        env:
+          LUMEN_VERSION: ${{ steps.version.outputs.version }}
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for pkg in lumen-types lumen; do
+            name=$(jq -r .name "out/$pkg/package.json")
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION is already on npm"
+              continue
+            fi
+            (cd "out/$pkg" && npm publish --access public)
+          done
+      - name: Tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git fetch --tags --quiet
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then exit 0; fi
+          git tag "v$VERSION" && git push origin "v$VERSION"

@@ -1,0 +1,12 @@
+Lumen
+Copyright (c) 2026 Columen Labs. Licensed under the MIT License (see LICENSE).
+
+Lumen draws price and market charts with TradingView Lightweight Charts™
+(https://github.com/tradingview/lightweight-charts), Copyright (c) 2025
+TradingView, Inc., licensed under the Apache License 2.0. Lumen turns off the
+chart's own logo, so per that library's NOTICE, an app that shows these charts
+should link to https://www.tradingview.com/ somewhere a user can find it (an
+About page or footer is enough).
+
+The components under packages/lumen/src/ui are based on shadcn/ui
+(https://ui.shadcn.com), MIT License, Copyright (c) 2023 shadcn.
