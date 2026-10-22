@@ -8,7 +8,7 @@ import {
   type WidgetControl,
   controlOn,
   viewCardKinds,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import { useAssistantName } from './assistant-context';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';

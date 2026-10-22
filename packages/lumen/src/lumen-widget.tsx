@@ -1,4 +1,8 @@
-import { type MarketWindow, OUTLOOK_INDEXES, marketWindows } from '@columenlabs/lumen-types/market';
+import {
+  type MarketWindow,
+  OUTLOOK_INDEXES,
+  marketWindows,
+} from '@columenlabs/lumen-ui-types/market';
 // LumenSavedWidget (as blocks; renamed): a page (LumenLayout) is an ordered list of cards, each a third, half, two thirds or the full width.
 // A card is the view (LumenView) or a widget. Chart and top-N widgets read every row of the view
 // (the table's filter is the table's), narrowed by their own tokens, and work their chart out here in the browser:
@@ -26,7 +30,7 @@ import {
   viewWidgetCatalog,
   widgetStyleId,
   widgetStyleOf,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import {
   ActivityIcon,
   ArrowDownIcon,

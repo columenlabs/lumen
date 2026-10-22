@@ -4,7 +4,7 @@
 // from a live field: Value, Unrealized, a formula over Price; , #861), ◷ As of (a daily or snapshot value: a close, a fact,
 // the assistant frame's column) and nothing for a fixed value (Qty, Cost). Declared once on each field
 // (`updates`, `from`); a formula's mark comes from the fields its expression reads.
-import { formulaReads } from '@columenlabs/lumen-types/views';
+import { formulaReads } from '@columenlabs/lumen-ui-types/views';
 import { CalculatorIcon } from 'lucide-react';
 import { FORMULAS_GROUP, type ViewDomain, type ViewField, groupOf, nameIndex } from './view-model';
 

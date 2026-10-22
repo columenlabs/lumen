@@ -5,7 +5,7 @@ import {
   catalogKeys,
   catalogTables,
   linkable,
-} from '@columenlabs/lumen-types/catalog';
+} from '@columenlabs/lumen-ui-types/catalog';
 // Joins: the registry's
 // join fields, attached to any card's rows by the keys they carry. A domain says how to read a
 // row's symbol or account (`keys`); `useJoins` collects those of the rows for the join fields the
@@ -22,7 +22,7 @@ import {
   type JoinKey,
   type SourceState,
   joinFields,
-} from '@columenlabs/lumen-types/domains';
+} from '@columenlabs/lumen-ui-types/domains';
 import {
   type FrameChoice,
   type FrameColumn,
@@ -31,7 +31,7 @@ import {
   type FrameMeta,
   type YourColumn,
   frameKeyAt,
-} from '@columenlabs/lumen-types/frames';
+} from '@columenlabs/lumen-ui-types/frames';
 import {
   type CustomViewConfig,
   type ViewConnection,
@@ -39,7 +39,7 @@ import {
   cardsOf,
   frameSpace,
   tileFieldKeys,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,

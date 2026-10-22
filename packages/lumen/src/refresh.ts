@@ -2,7 +2,7 @@
 // its cache. While a refresh runs, `refreshHeaders()` carries one token per click; an app's API client
 // adds it to every request and the server drops its cached reads once per token.
 
-import { REFRESH_HEADER } from '@columenlabs/lumen-types';
+import { REFRESH_HEADER } from '@columenlabs/lumen-ui-types';
 
 let token: string | null = null;
 

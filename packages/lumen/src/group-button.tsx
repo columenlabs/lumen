@@ -1,6 +1,6 @@
 // The Group button every LumenView card shows in its header: a saved view's
 // table and a page's second table (LumenViewCard) alike.
-import type { CustomViewConfig } from '@columenlabs/lumen-types/views';
+import type { CustomViewConfig } from '@columenlabs/lumen-ui-types/views';
 import { ChevronDownIcon, Grid3x3Icon, ListTreeIcon, TableIcon } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from './lib/utils';

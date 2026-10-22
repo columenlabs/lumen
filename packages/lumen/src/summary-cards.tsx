@@ -10,7 +10,7 @@ import {
   isOwnTile,
   meterTone,
   viewAggs,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 // The Summary widget's cards:
 // each card is one main number and any secondary lines. A domain's own cards (Value, Day P&L) are
 // drawn by the app; a card of the view's own rolls one field or formula column up over the rows

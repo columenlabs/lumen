@@ -11,7 +11,7 @@ import {
   type IndicatorSpec,
   builtinParams,
   parseChartFormula,
-} from '@columenlabs/lumen-types/chart-formula';
+} from '@columenlabs/lumen-ui-types/chart-formula';
 import { atr, bb, ema, macd, mmax, mmin, mstd, msum, rsi, sma } from 'indicatorts';
 
 export type ChartIndicator = {

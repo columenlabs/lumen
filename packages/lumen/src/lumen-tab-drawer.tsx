@@ -1,7 +1,7 @@
 // The Tab drawer: one panel for a tab the person may edit, on every app. It
 // names the tab and picks its icon (the shared IconPicker); Remove sits in the footer when the tab
 // can go. The app keeps the tab and saves what comes back.
-import type { ViewIcon } from '@columenlabs/lumen-types/views';
+import type { ViewIcon } from '@columenlabs/lumen-ui-types/views';
 import { Trash2Icon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { LumenConfirm } from './confirm';

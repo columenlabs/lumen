@@ -7,7 +7,7 @@
 //                            Esc cancels. Works on any LumenLayout card with no per-page setup.
 //
 // Both drive the DOM directly through data attributes the theme styles: one spotlight at a time.
-import { WIDGET_STYLES } from '@columenlabs/lumen-types/views';
+import { WIDGET_STYLES } from '@columenlabs/lumen-ui-types/views';
 
 export interface CardOnScreen {
   id: string;

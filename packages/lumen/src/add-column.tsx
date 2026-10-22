@@ -1,8 +1,8 @@
-import type { YourColumn } from '@columenlabs/lumen-types/frames';
+import type { YourColumn } from '@columenlabs/lumen-ui-types/frames';
 // + Add column (Edits in place): the two small dialogs the header's + opens
 // in place of Edit view. Formula is the same editor and check as Edit view's; Your data names a
 // column the person types into, kept as their own frame (joins.tsx `useYourData`).
-import type { ViewFormula } from '@columenlabs/lumen-types/views';
+import type { ViewFormula } from '@columenlabs/lumen-ui-types/views';
 import { HashIcon, TypeIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAssistantName } from './assistant-context';

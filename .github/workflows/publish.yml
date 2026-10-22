@@ -44,7 +44,7 @@ jobs:
           [ "$a" = "$b" ] || { echo "lumen-types is $a but lumen is $b: set both together" >&2; exit 1; }
           minor=${a%.*}
           # The highest patch npm has in this minor, if any.
-          top=$(npm view @columenlabs/lumen versions --json 2>/dev/null \
+          top=$(npm view @columenlabs/lumen-ui versions --json 2>/dev/null \
             | jq -r --arg m "$minor." 'if type == "string" then [.] elif type == "array" then . else [] end
                 | map(select(startswith($m)) | split(".")[2] | tonumber) | max // empty' || true)
           if [ -z "$top" ]; then v=$a; else n=$((top + 1)); v="$minor.$(( n > ${a##*.} ? n : ${a##*.} ))"; fi
@@ -65,6 +65,16 @@ jobs:
               continue
             fi
             (cd "out/$pkg" && npm publish --access public)
+          done
+      - name: Point the old names at the new ones
+        # The packages were @columenlabs/lumen and @columenlabs/lumen-types until 0.2.0.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pair in lumen:lumen-ui lumen-types:lumen-ui-types; do
+            old="@columenlabs/${pair%%:*}"; new="@columenlabs/${pair##*:}"
+            [ -n "$(npm view "$old" deprecated 2>/dev/null)" ] && continue
+            npm deprecate "$old" "Renamed to $new: bun add $new"
           done
       - name: Tag
         env:

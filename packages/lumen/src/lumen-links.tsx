@@ -5,8 +5,8 @@
 // Chips cross domains by key (symbol = underlying = ticker, account). Colours switch on the fly: a tap applies at once and
 // lasts until the filter box's save icon saves it as the view's own; a code-built card's pick is kept by
 // the browser for its page.
-import type { JoinKey } from '@columenlabs/lumen-types/domains';
-import { type ViewLinkColor, viewLinkColors } from '@columenlabs/lumen-types/views';
+import type { JoinKey } from '@columenlabs/lumen-ui-types/domains';
+import { type ViewLinkColor, viewLinkColors } from '@columenlabs/lumen-ui-types/views';
 import { LinkIcon } from 'lucide-react';
 import {
   type ReactNode,

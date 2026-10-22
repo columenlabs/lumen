@@ -9,7 +9,7 @@ import {
   isDollarFormat,
   viewPageSizes,
   viewPaginationSchema,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 // Custom views: any number of views on any app, one page for all of them.
 // A data domain (holdings, chains, bars, series, research results) describes its fields once in a
 // `ViewDomain`; a view is a saved `CustomViewConfig` over that domain, written in the page's Edit
@@ -165,7 +165,7 @@ export function mergeRows<T>(domain: ViewDomain<T>, rows: T[], groupBy: ViewFiel
   return [...m.values()].map((rs) => (rs.length > 1 ? merge.rows(rs) : (rs[0] as T)));
 }
 
-/** A saved view (`@columenlabs/lumen-types/views`); agents write the same shape through MCP. */
+/** A saved view (`@columenlabs/lumen-ui-types/views`); agents write the same shape through MCP. */
 export type { CustomViewConfig };
 
 const MINUS = '−';

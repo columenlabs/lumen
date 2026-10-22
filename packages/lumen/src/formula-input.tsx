@@ -1,4 +1,4 @@
-import { renameFormula } from '@columenlabs/lumen-types/views';
+import { renameFormula } from '@columenlabs/lumen-ui-types/views';
 // Formula box with autocomplete: a formula reads fields by name, where they
 // come from and their key (`symbol.price`, `frame.earnings_next_week.eps`, a formula's bare key),
 // but people know fields by their labels (Price). Typing a word opens a LumenSelectorList under

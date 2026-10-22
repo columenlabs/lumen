@@ -7,7 +7,7 @@ import {
   type TrendStyle,
   type ViewFormat,
   isDollarFormat,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import { useMemo } from 'react';
 import {
   Area,

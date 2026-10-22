@@ -1,7 +1,7 @@
 // Source health (views from data domains): the sources every card on screen
 // reads through its joins, one report per shell, so the assistant panel can say in one line how each
 // fared (the same report that marks a column's header and the status bar).
-import { type SourceState, sourceLine } from '@columenlabs/lumen-types/domains';
+import { type SourceState, sourceLine } from '@columenlabs/lumen-ui-types/domains';
 import {
   type ReactNode,
   createContext,
