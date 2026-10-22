@@ -22,11 +22,13 @@ import {
   WIDGET_STYLES,
   cardsOf,
   connectedKey,
+  customViewConfigSchema,
   inferConnection,
   isOwnTile,
   isRowCard,
   isTableCard,
   mainTableOf,
+  sourceConfigOf,
   tableConfigOf,
   tableLayoutOf,
   viewAggs,
@@ -79,6 +81,7 @@ import {
   MoveHorizontalIcon,
   PencilIcon,
   PlusIcon,
+  ReplaceIcon,
   RotateCcwIcon,
   SearchIcon,
   ShapesIcon,
@@ -87,6 +90,8 @@ import {
   SlidersHorizontalIcon,
   SmileIcon,
   SparklesIcon,
+  StarIcon,
+  TableIcon,
   ToggleRightIcon,
   Trash2Icon,
   Unlink2Icon,
@@ -108,7 +113,14 @@ import { type FormIssue, SaveButton } from './form-issues';
 import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
 import { IconPicker } from './icon-picker';
-import { asOf, frameGroupId, useDomainReads, useDraftFrames, useFrameChoices } from './joins';
+import {
+  asOf,
+  frameGroupId,
+  rowsDomain,
+  useDomainReads,
+  useDraftFrames,
+  useFrameChoices,
+} from './joins';
 import { cn } from './lib/utils';
 import {
   type FilterField,
@@ -120,7 +132,15 @@ import {
 } from './lumen-filter';
 import { LinkPicker } from './lumen-links';
 import { type LumenOption, LumenSelector } from './lumen-selector';
-import { CARD_COLUMNS, CARD_TITLE_MAX, cardTitle, draftOf, useOffered } from './lumen-widget';
+import { lumenToast } from './lumen-toast';
+import {
+  CARD_COLUMNS,
+  CARD_TITLE_MAX,
+  cardFilterFields,
+  cardTitle,
+  draftOf,
+  useOffered,
+} from './lumen-widget';
 import { useApp } from './shell';
 import { summaryCardIssues } from './summary-cards';
 import { Badge } from './ui/badge';
@@ -172,6 +192,7 @@ import {
   withViewFields,
 } from './view-model';
 import { WidgetControlsEditor } from './widget-controls';
+import { PAGE_SOURCE, useWidgetDataOptions } from './widget-data';
 import {
   EditorRow as Row,
   type WidgetDraft,
@@ -238,6 +259,7 @@ const SHAPES = [
 ] as const;
 
 const NONE = '_none';
+/** The main data picker's value for the page's own rows. */
 const NO_FRAMES: string[] = [];
 /** A catalog domain of this app that + Data offers. */
 interface DeskDomain {
@@ -345,14 +367,14 @@ const tableDraftOf = (config: CustomViewConfig, card: ViewWidget): CustomViewCon
 export function ViewEditDialog<T>({
   open,
   onOpenChange,
-  domain: joined,
+  domain: pageDomain,
   config,
-  rows,
+  rows: pageRows,
   current,
   onSave,
   card,
   onSaveCard,
-  fields: filterFields = [],
+  fields: pageFields = [],
   viewTiles,
   read,
   viewId,
@@ -361,8 +383,18 @@ export function ViewEditDialog<T>({
   onDelete,
 }: ViewEditDialogProps<T>) {
   const isMobile = useIsMobile();
-  const start = () => (card ? tableDraftOf(config, card) : config);
+  // A widget's main data (`source`): null is the page's rows, '' none yet (all cleared).
+  const [source, setSource] = useState<string | null>(card?.source ?? null);
+  const start = () =>
+    card ? tableDraftOf(card.source ? sourceConfigOf(card, config.name) : config, card) : config;
   const [draft, setDraft] = useState(start);
+  const srcIds = useMemo(() => (open && source ? [source] : NO_FRAMES), [open, source]);
+  const srcRead = useDomainReads(srcIds, srcIds);
+  const srcNow = source ? srcRead[source] : undefined;
+  const joined = (
+    source === null ? pageDomain : (srcNow?.domain ?? rowsDomain(source || 'none', [], []))
+  ) as ViewDomain<T>;
+  const rows = (source === null ? pageRows : (srcNow?.rows ?? [])) as T[];
   // Recipes: the assistant frames the draft attaches, their columns in the tree
   // before Save.
   const frameIds = draft.frames ?? NO_FRAMES;
@@ -394,6 +426,7 @@ export function ViewEditDialog<T>({
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
+      setSource(card?.source ?? null);
       setDraft(start());
       setWidget(card && !isTableCard(card) ? card : null);
       setFrame(card ?? null);
@@ -537,6 +570,9 @@ export function ViewEditDialog<T>({
         }
       : undefined;
   const domain = withViewFields(withLinks, draft);
+  // A widget's own filter reads the page's fields, or its own source's.
+  const filterFields: FilterField<T>[] =
+    source === null ? pageFields : cardFilterFields(domain.fields);
   const formulas = formulasOf(draft);
   // Each formula's blank rows on the page's rows now, and why.
   const formulaKey = JSON.stringify(formulas);
@@ -606,6 +642,102 @@ export function ViewEditDialog<T>({
     thumb: widgetThumb(w.id),
   }));
 
+  // Main data (a widget only): change it, drop it (the next source moves
+  // up and links re-infer against it), make a linked one the main, or clear all. Each has Undo.
+  const keysOf = (id: string) => (id.startsWith(FRAME_LINK) ? [] : catalogKeys(id));
+  const labelOf = (id: string) =>
+    id.startsWith(FRAME_LINK)
+      ? ((choices.data ?? []).find((f) => `${FRAME_LINK}${f.id}` === id)?.name ?? 'Recipe')
+      : (allRead[id]?.label ?? CATALOG[id]?.label ?? id);
+  const pageLabel = `${config.name} (this page)`;
+  const mainLabel = source === null ? pageLabel : source ? (srcNow?.label ?? labelOf(source)) : '';
+  // Everything the widget joins besides its main data: its links, and recipes attached by key.
+  const others = () => [
+    ...connections.map((c) => c.to),
+    ...frameIds.map((id) => `${FRAME_LINK}${id}`),
+  ];
+  const relink = (main: string, ids: string[]): ViewConnection[] =>
+    ids
+      .filter((x) => x !== main)
+      .slice(0, 4)
+      .map((to) => ({ to, on: inferConnection(keysOf(main), keysOf(to)) ?? [] }));
+  const rebuild = useRef(false);
+  const changeMain = (next: string | null, conns: ViewConnection[], message: string) => {
+    if (!card) return;
+    const before = { source, draft, widget, tokens };
+    setSource(next);
+    setDraft(
+      next === null
+        ? tableDraftOf(config, card)
+        : {
+            ...customViewConfigSchema.parse({ connections: conns }),
+            name: draft.name,
+            cards: draft.cards,
+          },
+    );
+    setTokens([]);
+    rebuild.current = true;
+    lumenToast.undo(message, () => {
+      setSource(before.source);
+      setDraft(before.draft);
+      setWidget(before.widget);
+      setTokens(before.tokens);
+    });
+  };
+  const dropMain = () => {
+    const rest = others();
+    const next = rest[0];
+    if (next)
+      changeMain(
+        next,
+        relink(next, rest),
+        `${mainLabel} dropped. ${labelOf(next)} is the main data now.`,
+      );
+    else changeMain('', [], `${mainLabel} dropped.`);
+  };
+  const makeMain = (to: string) => {
+    const old = source ?? (readableDomain(pageDomain.id) ? pageDomain.id : null);
+    const rest = [...others().filter((x) => x !== to), ...(old ? [old] : [])];
+    changeMain(to, relink(to, rest), `${labelOf(to)} is the main data now.`);
+  };
+  const pickMain = (to: string) =>
+    to === PAGE_SOURCE
+      ? changeMain(null, [], `${pageLabel} is the main data now.`)
+      : changeMain(to, relink(to, others()), `${labelOf(to)} is the main data now.`);
+  const clearAll = () => changeMain('', [], 'All data cleared.');
+  const dropLink = (to: string) => {
+    const before = draft;
+    unlink(to);
+    lumenToast.undo(`${labelOf(to)} dropped.`, () => setDraft(before));
+  };
+  const dropRecipe = (id: string) => {
+    const before = draft;
+    removeFrame(id);
+    lumenToast.undo(`${labelOf(`${FRAME_LINK}${id}`)} dropped.`, () => setDraft(before));
+  };
+  // The main data picker: this page's rows, the app's live domains, the person's recipes.
+  const dataOptions = useWidgetDataOptions(open && !!card, pageLabel);
+  const mainOptions = card ? dataOptions.filter((o) => o.value !== (source ?? PAGE_SOURCE)) : [];
+  // A new main data's fields: a widget whose fields it lacks starts afresh once its fields load.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the new main data's fields arrive.
+  useEffect(() => {
+    if (!rebuild.current) return;
+    if (source && srcNow?.state !== 'ok') return;
+    rebuild.current = false;
+    if (!widget) return;
+    const keys = new Set(domain.fields.map((f) => f.key));
+    const fits = widgetSlots(widget, domain).every((sl) => sl.keys.every((k) => keys.has(k)));
+    if (fits) return;
+    const kept = Object.fromEntries(
+      KEPT.filter((k) => widget[k] !== undefined).map((k) => [k, widget[k]]),
+    );
+    // A shape the new data cannot fill (a number with no number field) stays as it is, and Save
+    // says which field is missing.
+    try {
+      setWidget({ ...draftOf(styleId, domain, []), ...kept } as WidgetDraft);
+    } catch {}
+  }, [source, srcNow?.state, domain.fields.length]);
+
   // A widget's rows: the view's, narrowed by its own filter, with or without cash.
   const widgetRows = tokens.length ? filterByTokens(rows, filterFields, tokens, domain.text) : rows;
   const cashRows =
@@ -630,9 +762,26 @@ export function ViewEditDialog<T>({
       }
     : { on: (k: string) => shownKeys.includes(k), set: setShown, why: () => null };
 
+  // A widget on its own data keeps it and its links on the card; the page's stay as they were.
+  const sourcePart = source
+    ? { source, connections: draft.connections ?? [] }
+    : { source: undefined, connections: undefined };
+  const viewPart = (next: CustomViewConfig) =>
+    source !== null
+      ? {
+          formulas: config.formulas,
+          connections: config.connections,
+          ...(config.frames ? { frames: config.frames } : {}),
+        }
+      : {
+          formulas: next.formulas,
+          connections: next.connections,
+          ...(next.frames ? { frames: next.frames } : {}),
+        };
   const parsed = widget
     ? viewCardSchema.safeParse({
         ...widget,
+        ...sourcePart,
         title: title.trim() || null,
         // A widget's own filter is its own: it never shares with the colour group.
         filter: readsRows(widget) ? tokens.map(({ link: _, ...t }) => t) : [],
@@ -652,6 +801,16 @@ export function ViewEditDialog<T>({
     setSections((s) => new Set(s).add(id));
   };
   const issues: FormIssue[] = [
+    ...(source === ''
+      ? [
+          {
+            where: 'Data',
+            message: 'Pick the main data',
+            target: 'view-editor-main-data',
+            reveal: () => setTab('fields'),
+          },
+        ]
+      : []),
     ...(!card && !draft.name.trim()
       ? [
           {
@@ -730,12 +889,7 @@ export function ViewEditDialog<T>({
       return;
     }
     if (parsed) {
-      if (parsed.success)
-        onSaveCard?.(parsed.data as ViewWidget, {
-          formulas: draft.formulas,
-          connections: draft.connections,
-          ...(draft.frames ? { frames: draft.frames } : {}),
-        });
+      if (parsed.success) onSaveCard?.(parsed.data as ViewWidget, viewPart(draft));
     } else if (frame) {
       // A table of its own: the frame, its name and its layout.
       const next = tableConfig();
@@ -746,17 +900,14 @@ export function ViewEditDialog<T>({
             KEPT.filter((k) => frame[k] !== undefined).map((k) => [k, frame[k]]),
           ),
           ...(own?.controls ? { controls: own.controls } : {}),
+          ...sourcePart,
           kind: 'table',
           style: 'table',
           title: title.trim() || null,
           filter: [],
           table: tableLayoutOf(next),
         }) as ViewWidget,
-        {
-          formulas: next.formulas,
-          connections: next.connections,
-          ...(next.frames ? { frames: next.frames } : {}),
-        },
+        viewPart(next),
       );
     }
     onOpenChange(false);
@@ -775,7 +926,20 @@ export function ViewEditDialog<T>({
       onAddFormula={addFormula}
       deskDomains={deskDomains}
       onLink={link}
-      onUnlink={unlink}
+      onUnlink={card ? dropLink : unlink}
+      main={
+        card
+          ? {
+              label: mainLabel,
+              empty: source === '',
+              options: mainOptions,
+              onPick: pickMain,
+              onDrop: dropMain,
+              onClear: clearAll,
+              onMakeMain: makeMain,
+            }
+          : undefined
+      }
       linkPairs={{
         cardFields: unlinked.fields.filter((f) => f.group !== FORMULAS_GROUP),
         fieldsOf: (to) => allRead[to]?.domain.fields ?? [],
@@ -787,7 +951,7 @@ export function ViewEditDialog<T>({
       recipeNote={choices.isError ? `Recipes did not load: ${choices.error.message}` : null}
       onAddRecipe={addRecipe}
       recipeByKey={byKey}
-      onRemoveRecipe={removeFrame}
+      onRemoveRecipe={card ? dropRecipe : removeFrame}
       onNewRecipe={askRecipe}
     />
   ) : (
@@ -1410,6 +1574,17 @@ function LinkPairs<T>({
 }
 
 /** The right pane: every field by group and topic, ticked to show it as a column. */
+/** A widget's main data in the Data tree: its name, whether it is cleared, and its changes. */
+type MainData = {
+  label: string;
+  empty: boolean;
+  options: LumenOption[];
+  onPick: (value: string) => void;
+  onDrop: () => void;
+  onClear: () => void;
+  onMakeMain: (to: string) => void;
+};
+
 function FieldTree<T>({
   domain,
   draft,
@@ -1431,6 +1606,7 @@ function FieldTree<T>({
   onRemoveRecipe,
   onNewRecipe,
   linkPairs,
+  main,
 }: {
   domain: ViewDomain<T>;
   draft: CustomViewConfig;
@@ -1462,6 +1638,8 @@ function FieldTree<T>({
   linkPairs?: LinkPairsProps<T>;
   /** New recipe: what the person wants, for the assistant to write. */
   onNewRecipe?: (wish: string) => void;
+  /** A widget's main data: change it, drop it, make a linked source the main, or clear all. */
+  main?: MainData;
 }) {
   const assistantName = useAssistantName();
   const [query, setQuery] = useState('');
@@ -1598,7 +1776,7 @@ function FieldTree<T>({
 
   return (
     <div className="flex flex-col gap-px" data-testid="view-fields">
-      <div className="mb-1 flex items-center gap-1.5">
+      <div className={cn('mb-1 flex items-center gap-1.5', main?.empty && 'hidden')}>
         <InputGroup className="min-w-0 flex-1 bg-background">
           <InputGroupAddon>
             <SearchIcon />
@@ -1623,7 +1801,7 @@ function FieldTree<T>({
             </InputGroupAddon>
           )}
         </InputGroup>
-        {dataOptions.length > 0 && (
+        {dataOptions.length > 0 && !main?.empty && (
           <LumenSelector
             trigger="chip"
             icon={PlusIcon}
@@ -1636,6 +1814,16 @@ function FieldTree<T>({
             empty="Nothing else to add"
             onChange={addData}
           />
+        )}
+        {main && !main.empty && (
+          <LumenConfirm
+            title="Clear all data?"
+            description="Every source leaves this widget. Pick its main data again, or Undo."
+            action="Clear all"
+            onConfirm={main.onClear}
+          >
+            <IconButton icon={Trash2Icon} size="icon-xs" label="Clear all data" />
+          </LumenConfirm>
         )}
       </div>
       {recipeNote && <p className="px-1.5 pb-1 text-xs text-destructive">{recipeNote}</p>}
@@ -1668,150 +1856,259 @@ function FieldTree<T>({
           </div>
         </div>
       )}
-      {groupsOf(domain).map((g, gi) => {
-        const all = domain.fields.filter((f) => groupOf(domain, f) === g.id);
-        const fields = all.filter(match);
-        const formulasGroup = g.id === FORMULAS_GROUP;
-        const linkTo = g.id.startsWith(LINK_PREFIX) ? g.id.slice(LINK_PREFIX.length) : null;
-        const recipe = g.id.startsWith(FRAME_PREFIX) ? g.id.slice(FRAME_PREFIX.length) : null;
-        if (q && !fields.length) return null;
-        if (!all.length && !formulasGroup && !linkTo) return null;
-        const color = g.color ?? PLAIN;
-        // A link starts open, so its pairs and fields show where they are picked.
-        const open = linkTo
-          ? !!q || (toggled.get(`g:${g.id}`) ?? true)
-          : isOpen(`g:${g.id}`, all) || (formulasGroup && !all.length);
-        const topics = [...new Set(fields.map((f) => f.topic ?? ''))];
-        return (
-          <Collapsible key={g.id} open={open} onOpenChange={() => flip(`g:${g.id}`, open)}>
-            <div className="flex items-center gap-1">
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="h-7 min-w-0 flex-1 justify-start gap-2 px-1.5 text-[0.8125rem] font-semibold"
-                >
-                  <ChevronRightIcon
-                    className={cn(
-                      'text-muted-foreground transition-transform',
-                      open && 'rotate-90',
-                    )}
-                  />
-                  <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: color }} />
-                  {formulasGroup && <SigmaIcon className="text-muted-foreground" />}
-                  {linkTo && <Link2Icon className="text-muted-foreground" />}
-                  {recipe && <SparklesIcon className="text-muted-foreground" />}
-                  <span className="truncate">{g.label}</span>
-                  {gi === 0 && !linkTo && !recipe && !formulasGroup && (
-                    <Badge variant="secondary" className="h-4 px-1.5 text-[0.6875rem] font-normal">
-                      Rows
-                    </Badge>
-                  )}
-                  <span className="num ml-auto text-xs font-normal text-muted-foreground">
-                    {all.filter((f) => picked(f.key)).length}/{all.length}
-                  </span>
-                </Button>
-              </CollapsibleTrigger>
-              {linkTo && onUnlink && (
-                <LumenConfirm
-                  title={`Unlink ${g.label}?`}
-                  description="Its columns leave this widget when you save."
-                  action="Unlink"
-                  onConfirm={() => onUnlink(linkTo)}
-                >
-                  <IconButton icon={Unlink2Icon} size="icon-xs" label={`Unlink ${g.label}`} />
-                </LumenConfirm>
-              )}
-              {recipe && onRemoveRecipe && (
-                <LumenConfirm
-                  title={`Remove ${g.label}?`}
-                  description={`Its columns leave this widget when you save. The recipe stays in ${assistantName}.`}
-                  action="Remove"
-                  onConfirm={() => onRemoveRecipe(recipe)}
-                >
-                  <IconButton icon={XIcon} size="icon-xs" label={`Remove ${g.label}`} />
-                </LumenConfirm>
-              )}
-            </div>
-            <CollapsibleContent
-              className="ml-[0.9rem] flex flex-col gap-px border-l-2 pl-2"
-              style={{ borderColor: guide(color) }}
-            >
-              {g.note && !q && <p className="px-1 py-1 text-xs text-muted-foreground">{g.note}</p>}
-              {linkTo && linkPairs && !q && (
-                <LinkPairs
-                  label={g.label}
-                  on={linkPairs.onOf(linkTo)}
-                  cardFields={linkPairs.cardFields}
-                  fields={linkPairs.fieldsOf(linkTo)}
-                  onChange={(on) => linkPairs.set(linkTo, on)}
-                />
-              )}
-              {topics.map((t) => {
-                const inTopic = fields.filter((f) => (f.topic ?? '') === t);
-                if (!t) return inTopic.map(leaf);
-                const src = g.sources?.[t];
-                const id = `t:${g.id}:${t}`;
-                const topicOpen = isOpen(
-                  id,
-                  all.filter((f) => f.topic === t),
-                );
-                return (
-                  <Collapsible key={t} open={topicOpen} onOpenChange={() => flip(id, topicOpen)}>
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        className="h-7 w-full justify-start gap-1.5 px-1 text-[0.8125rem] font-semibold"
+      {main?.empty && (
+        <div className="flex flex-col items-center gap-2 rounded-md border border-dashed px-3 py-6 text-center">
+          <DatabaseIcon className="size-5 text-muted-foreground" />
+          <p className="text-sm font-medium">Pick the main data</p>
+          <p className="text-xs text-muted-foreground">Its rows are what this widget shows.</p>
+          <LumenSelector
+            id="view-editor-main-data"
+            trigger="chip"
+            icon={DatabaseIcon}
+            placeholder="Main data"
+            label="Pick the main data"
+            search
+            value={null}
+            options={main.options}
+            empty="No data to pick"
+            onChange={main.onPick}
+          />
+        </div>
+      )}
+      {!main?.empty &&
+        groupsOf(domain).map((g, gi) => {
+          const all = domain.fields.filter((f) => groupOf(domain, f) === g.id);
+          const fields = all.filter(match);
+          const formulasGroup = g.id === FORMULAS_GROUP;
+          const linkTo = g.id.startsWith(LINK_PREFIX) ? g.id.slice(LINK_PREFIX.length) : null;
+          const rowsGroup = gi === 0 && !linkTo && !formulasGroup;
+          const recipe =
+            !rowsGroup && g.id.startsWith(FRAME_PREFIX) ? g.id.slice(FRAME_PREFIX.length) : null;
+          // Not linked: no field pairs yet, so it adds nothing; its fields wait greyed out.
+          const unlinked = !!linkTo && !all.length && !(linkPairs?.onOf(linkTo).length ?? 0);
+          if (q && !fields.length) return null;
+          if (!all.length && !formulasGroup && !linkTo) return null;
+          const color = g.color ?? PLAIN;
+          // A link starts open, so its pairs and fields show where they are picked.
+          const open = linkTo
+            ? !!q || (toggled.get(`g:${g.id}`) ?? true)
+            : isOpen(`g:${g.id}`, all) || (formulasGroup && !all.length);
+          const topics = [...new Set(fields.map((f) => f.topic ?? ''))];
+          return (
+            <Collapsible key={g.id} open={open} onOpenChange={() => flip(`g:${g.id}`, open)}>
+              <div className="flex items-center gap-1">
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="h-7 min-w-0 flex-1 justify-start gap-2 px-1.5 text-[0.8125rem] font-semibold"
+                  >
+                    <ChevronRightIcon
+                      className={cn(
+                        'text-muted-foreground transition-transform',
+                        open && 'rotate-90',
+                      )}
+                    />
+                    <span
+                      className="size-2.5 shrink-0 rounded-[3px]"
+                      style={{ background: color }}
+                    />
+                    {formulasGroup && <SigmaIcon className="text-muted-foreground" />}
+                    {linkTo &&
+                      (unlinked ? (
+                        <Unlink2Icon className="text-destructive" />
+                      ) : (
+                        <Link2Icon className="text-muted-foreground" />
+                      ))}
+                    {recipe && <SparklesIcon className="text-muted-foreground" />}
+                    <span className="truncate">{rowsGroup && main ? main.label : g.label}</span>
+                    {rowsGroup && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 px-1.5 text-[0.6875rem] font-normal"
                       >
-                        <ChevronRightIcon
-                          className={cn(
-                            'text-muted-foreground transition-transform',
-                            topicOpen && 'rotate-90',
-                          )}
-                        />
-                        <span className="truncate">{t}</span>
-                        <span className="num text-xs font-normal text-muted-foreground">
-                          {inTopic.filter((f) => picked(f.key)).length}/{inTopic.length}
-                        </span>
-                        {src && (
-                          <span className="ml-auto flex min-w-0 items-center gap-1.5 text-xs font-normal text-muted-foreground">
-                            <span
-                              className="size-1.5 shrink-0 rounded-full"
-                              style={{ background: src.color }}
-                            />
-                            <span className="font-medium" style={{ color: src.color }}>
-                              {src.name}
-                            </span>
-                            {src.detail && (
-                              <span className="truncate max-md:hidden">· {src.detail}</span>
+                        Rows
+                      </Badge>
+                    )}
+                    {unlinked && (
+                      <Badge variant="destructive" className="h-4 px-1.5 text-xs font-normal">
+                        Not linked
+                      </Badge>
+                    )}
+                    <span className="num ml-auto text-xs font-normal text-muted-foreground">
+                      {all.filter((f) => picked(f.key)).length}/{all.length}
+                    </span>
+                  </Button>
+                </CollapsibleTrigger>
+                {rowsGroup && main && (
+                  <>
+                    <LumenSelector
+                      trigger="icon"
+                      icon={ReplaceIcon}
+                      label="Change the main data"
+                      align="end"
+                      search
+                      value={null}
+                      options={main.options}
+                      empty="No other data"
+                      onChange={main.onPick}
+                    />
+                    <IconButton
+                      icon={XIcon}
+                      size="icon-xs"
+                      label={`Drop ${main.label}`}
+                      onClick={main.onDrop}
+                    />
+                  </>
+                )}
+                {main && (linkTo || recipe) && (
+                  <IconButton
+                    icon={StarIcon}
+                    size="icon-xs"
+                    label={`Make ${g.label} the main data`}
+                    onClick={() => main.onMakeMain(linkTo ?? `${FRAME_LINK}${recipe}`)}
+                  />
+                )}
+                {main && linkTo && onUnlink && (
+                  <IconButton
+                    icon={XIcon}
+                    size="icon-xs"
+                    label={`Drop ${g.label}`}
+                    onClick={() => onUnlink(linkTo)}
+                  />
+                )}
+                {main && recipe && onRemoveRecipe && (
+                  <IconButton
+                    icon={XIcon}
+                    size="icon-xs"
+                    label={`Drop ${g.label}`}
+                    onClick={() => onRemoveRecipe(recipe)}
+                  />
+                )}
+                {!main && linkTo && onUnlink && (
+                  <LumenConfirm
+                    title={`Unlink ${g.label}?`}
+                    description="Its columns leave this widget when you save."
+                    action="Unlink"
+                    onConfirm={() => onUnlink(linkTo)}
+                  >
+                    <IconButton icon={Unlink2Icon} size="icon-xs" label={`Unlink ${g.label}`} />
+                  </LumenConfirm>
+                )}
+                {!main && recipe && onRemoveRecipe && (
+                  <LumenConfirm
+                    title={`Remove ${g.label}?`}
+                    description={`Its columns leave this widget when you save. The recipe stays in ${assistantName}.`}
+                    action="Remove"
+                    onConfirm={() => onRemoveRecipe(recipe)}
+                  >
+                    <IconButton icon={XIcon} size="icon-xs" label={`Remove ${g.label}`} />
+                  </LumenConfirm>
+                )}
+              </div>
+              <CollapsibleContent
+                className="ml-[0.9rem] flex flex-col gap-px border-l-2 pl-2"
+                style={{ borderColor: guide(color) }}
+              >
+                {g.note && !q && (
+                  <p
+                    className={cn(
+                      'px-1 py-1 text-xs',
+                      unlinked ? 'text-destructive' : 'text-muted-foreground',
+                    )}
+                  >
+                    {g.note}
+                  </p>
+                )}
+                {linkTo && linkPairs && !q && (
+                  <LinkPairs
+                    label={g.label}
+                    on={linkPairs.onOf(linkTo)}
+                    cardFields={linkPairs.cardFields}
+                    fields={linkPairs.fieldsOf(linkTo)}
+                    onChange={(on) => linkPairs.set(linkTo, on)}
+                  />
+                )}
+                {unlinked &&
+                  linkPairs
+                    ?.fieldsOf(linkTo)
+                    .filter(match)
+                    .map((f) => (
+                      <div
+                        key={f.key}
+                        className="flex min-h-7 items-center gap-2 px-1 text-sm text-muted-foreground opacity-60"
+                      >
+                        <WhyOff note="Link it first">
+                          <Checkbox checked={false} disabled aria-label={`Use ${f.label}`} />
+                        </WhyOff>
+                        <span className="truncate">{f.label}</span>
+                      </div>
+                    ))}
+                {topics.map((t) => {
+                  const inTopic = fields.filter((f) => (f.topic ?? '') === t);
+                  if (!t) return inTopic.map(leaf);
+                  const src = g.sources?.[t];
+                  const id = `t:${g.id}:${t}`;
+                  const topicOpen = isOpen(
+                    id,
+                    all.filter((f) => f.topic === t),
+                  );
+                  return (
+                    <Collapsible key={t} open={topicOpen} onOpenChange={() => flip(id, topicOpen)}>
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          className="h-7 w-full justify-start gap-1.5 px-1 text-[0.8125rem] font-semibold"
+                        >
+                          <ChevronRightIcon
+                            className={cn(
+                              'text-muted-foreground transition-transform',
+                              topicOpen && 'rotate-90',
                             )}
+                          />
+                          <span className="truncate">{t}</span>
+                          <span className="num text-xs font-normal text-muted-foreground">
+                            {inTopic.filter((f) => picked(f.key)).length}/{inTopic.length}
                           </span>
-                        )}
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent
-                      className="ml-[0.7rem] flex flex-col gap-px border-l-2 pl-2"
-                      style={{ borderColor: guide(src?.color ?? PLAIN) }}
-                    >
-                      {inTopic.map(leaf)}
-                    </CollapsibleContent>
-                  </Collapsible>
-                );
-              })}
-              {formulasGroup && onAddFormula && !q && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 justify-start gap-2 px-1 font-normal text-muted-foreground"
-                  onClick={onAddFormula}
-                >
-                  <PlusIcon />
-                  Add formula
-                </Button>
-              )}
-            </CollapsibleContent>
-          </Collapsible>
-        );
-      })}
+                          {src && (
+                            <span className="ml-auto flex min-w-0 items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                              <span
+                                className="size-1.5 shrink-0 rounded-full"
+                                style={{ background: src.color }}
+                              />
+                              <span className="font-medium" style={{ color: src.color }}>
+                                {src.name}
+                              </span>
+                              {src.detail && (
+                                <span className="truncate max-md:hidden">· {src.detail}</span>
+                              )}
+                            </span>
+                          )}
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent
+                        className="ml-[0.7rem] flex flex-col gap-px border-l-2 pl-2"
+                        style={{ borderColor: guide(src?.color ?? PLAIN) }}
+                      >
+                        {inTopic.map(leaf)}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
+                {formulasGroup && onAddFormula && !q && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 justify-start gap-2 px-1 font-normal text-muted-foreground"
+                    onClick={onAddFormula}
+                  >
+                    <PlusIcon />
+                    Add formula
+                  </Button>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
     </div>
   );
 }

@@ -497,6 +497,26 @@ export const CONTROL_DEFAULTS: Record<ViewCardKind, Partial<Record<WidgetControl
 };
 /** Slices an allocation bar shows on its own before the rest fold into Other. */
 export const ALLOCATION_MAX = 10;
+/**
+ * One connection: the domain `to` and the pairs that match a row to its rows, each a key the
+ * rows carry (`symbol`, `account`) or a field of each side. Left out of a card move, `on` is
+ * inferred from the keys both domains carry.
+ */
+export const viewConnectionSchema = z
+  .object({
+    // A catalog domain any reader returns, or a recipe `frame:<id>` (`linkIssues`, checked where
+    // views are written).
+    to: z
+      .string()
+      .regex(/^(?:frame:[A-Za-z0-9_-]+|[a-z][a-z0-9_]*)$/)
+      .max(80),
+    // No pairs: added but Not linked yet, unless both sides carry a key.
+    on: z.array(z.object({ from: fieldKey, to: fieldKey }).strict()).max(3),
+  })
+  .strict();
+export type ViewConnection = z.infer<typeof viewConnectionSchema>;
+/** A widget's own main data: a catalog domain id (`zeus_credits`) or a recipe (`frame:<id>`). */
+export const viewSourceSchema = viewConnectionSchema.shape.to;
 const cardBase = {
   id: viewKey,
   /** Null or left out: the style's own title (the catalog's name for a pre-built widget). */
@@ -516,6 +536,13 @@ const cardBase = {
   phone: viewCardPlaceSchema.optional(),
   /** Tokens that narrow the view's rows for this widget only, e.g. kind:Option. */
   filter: z.array(cardToken).max(MAX_FIELDS).default([]),
+  /**
+   * Its own main data, which gives its rows: a catalog domain id or a recipe (`frame:<id>`). Left
+   * out, the page's rows. A widget with a source follows the page's chips only by a key both carry.
+   */
+  source: viewSourceSchema.optional(),
+  /** What it links to its own source (with `source` only; a page-data widget shares the view's). */
+  connections: z.array(viewConnectionSchema).max(4).optional(),
   /** Its link colour: it shares its chips and tapped row with every card of that colour and
    *  follows theirs. Left out: none. */
   link: z.enum(viewLinkColors).optional(),
@@ -969,7 +996,7 @@ export const defaultViewCards: ViewCard[] = [
 export const cardsOf = (c: { cards?: ViewCard[] }) => c.cards ?? defaultViewCards;
 /** The table that draws the view's own layout: the first table card without its own `table`. */
 export const mainTableOf = (cards: ViewCard[]) =>
-  cards.find((c): c is ViewTableCard => isTableCard(c) && !c.table);
+  cards.find((c): c is ViewTableCard => isTableCard(c) && !c.table && !c.source);
 /** A row card's numbers: its own, else the view's. */
 export const tilesOfCard = (c: { tiles?: ViewTile[] }, card: ViewRowCard): ViewTile[] =>
   card.tiles ?? c.tiles ?? [];
@@ -1062,24 +1089,6 @@ export const widgetPresets = (items: [string, string, ViewWidgetDraft][]): ViewW
     widget: viewCardSchema.parse({ title: name, ...b }) as ViewWidget,
   }));
 
-/**
- * One connection: the domain `to` and the pairs that match a row to its rows, each a key the
- * rows carry (`symbol`, `account`) or a field of each side. Left out of a card move, `on` is
- * inferred from the keys both domains carry.
- */
-export const viewConnectionSchema = z
-  .object({
-    // A catalog domain any reader returns, or a recipe `frame:<id>` (`linkIssues`, checked where
-    // views are written).
-    to: z
-      .string()
-      .regex(/^(?:frame:[A-Za-z0-9_-]+|[a-z][a-z0-9_]*)$/)
-      .max(80),
-    // No pairs: added but Not linked yet, unless both sides carry a key.
-    on: z.array(z.object({ from: fieldKey, to: fieldKey }).strict()).max(3),
-  })
-  .strict();
-export type ViewConnection = z.infer<typeof viewConnectionSchema>;
 /** A connected field's key on the card: `holdings_quantity`; `holdings_count` counts the rows. */
 export const connectedKey = (to: string, field: string) => `${linkSpace(to)}_${field}`;
 /** A link's name in field keys: the domain id, or `r` and the end of a recipe's frame id. */
@@ -1260,6 +1269,20 @@ export function tableConfigOf(c: CustomViewConfig, card: ViewTableCard): CustomV
   };
 }
 
+/**
+ * The config a widget with its own `source` draws: its own table layout and links over a fresh
+ * config, nothing of the page's (formulas, links, recipes) carried in.
+ */
+export function sourceConfigOf(card: ViewWidget, name: string): CustomViewConfig {
+  const base: CustomViewConfig = {
+    ...customViewConfigSchema.parse({ connections: card.connections ?? [] }),
+    name: card.title ?? name,
+  };
+  return isTableCard(card)
+    ? tableConfigOf(base, { ...card, table: card.table ?? tableLayoutOf(base) })
+    : base;
+}
+
 /** A custom view's domain: lowercase, like `holdings` or `explorer`. */
 export const customViewDomainSchema = z
   .string()
@@ -1438,7 +1461,18 @@ export function customViewIssues(
     ...(config.cards ?? []).flatMap((c, i) =>
       isRowCard(c) && c.tiles ? tileListIssues(c.tiles, `cards.${i}.tiles`) : [],
     ),
-    ...(columns ? cardIssues(config.cards ?? [], columns) : []),
+    ...(config.cards ?? []).flatMap((c, i) => {
+      // A widget with its own data is checked against that data's fields, not the page's; a
+      // recipe or a domain the view catalog does not list has its rows' fields, known on read.
+      const cols = c.source
+        ? customViewFields[c.source]?.columns && [
+            ...(customViewFields[c.source]?.columns ?? []),
+            ...connectionColumns(c.connections, c),
+            ...formulas.map((f) => f.key),
+          ]
+        : columns;
+      return cols ? cardIssues([c], cols).map((x) => x.replace(/^cards\.0:/, `cards.${i}:`)) : [];
+    }),
   ];
 }
 

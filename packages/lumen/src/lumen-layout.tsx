@@ -106,6 +106,7 @@ import {
 } from './lumen-widget';
 import { OriginLegend } from './origin-legend';
 import { type Crumb, IconButton, Page } from './page';
+import { SourcedCard } from './sourced-card';
 import { LumenCard, SummaryTiles } from './summary-cards';
 import { Button } from './ui/button';
 import { ViewEditDialog, type ViewEditorSection } from './view-editor';
@@ -982,86 +983,91 @@ function ViewLayout<T extends RowData>({
     return {
       ...place,
       wide: isTableCard(c) && c.w === GRID_COLS && c.h === undefined,
-      node:
-        isTableCard(c) && c.id !== viewCardId ? (
-          <LayoutTable
-            card={c}
-            base={joins.domain}
-            config={config}
-            rows={c.filter.length ? filterByTokens(rows, widgetFields, c.filter) : rows}
-            load={scope(c.id, load)}
-            state={state}
-            onDetails={onDetails}
-            controls={controls}
-            onLayout={onConfigChange ? (table) => putCard({ ...c, table }) : undefined}
-          />
-        ) : isTableCard(c) ? (
-          <LumenView
-            domain={domain}
-            config={config}
-            rows={viewRows}
-            total={rows.length}
-            groupBy={group.groupField}
-            pivot={pivot}
-            subgroup={group.sub}
-            load={scope(c.id, load)}
-            state={state}
-            title={c.title ?? config.name}
-            selection={selection}
-            onDetails={rowPick.onTap ?? onDetails}
-            tapped={rowPick.tapped}
-            groupActions={groupActions}
-            controls={controls}
-            inLayout
-            tools={viewTools}
-            filter={viewFilter}
-            filterCount={filter.tokens.length}
-            strip={
-              <ConnectOffer
-                domain={domain}
-                rows={rows}
-                config={config}
-                read={joins.read}
-                cardKey={viewId ?? config.name}
-                onConnect={onConfigChange ? connect : undefined}
-              />
-            }
-            link={cardLink(c.id, viewFollows, viewColor ? filter.tokens.length : 0)}
-            shown={c.controls}
-            onColumns={
-              onConfigChange && columnPicker !== false
-                ? (columns) => onConfigChange({ ...config, columns })
-                : undefined
-            }
-            onAddColumn={addColumn}
-            sort={heldSort}
-            onSort={setHeldSort}
-          />
-        ) : (
-          <LumenSavedWidget
-            widget={c as ViewWidget}
-            title={cardTitle(c, config.name)}
-            domain={domain}
-            rows={narrow(rows, followed(c.id))}
-            link={cardLink(c.id, followed(c.id))}
-            fields={widgetFields}
-            merge={mergeFlat}
-            onDetails={onDetails}
-            load={scope(c.id, load)}
-            tiles={
-              'tile' in c
-                ? cardOf(c)
-                : isRowCard(c)
-                  ? (summaryOf(c) ?? (
-                      <p className="text-sm text-muted-foreground">
-                        No cards yet: add them in Edit widget.
-                      </p>
-                    ))
-                  : null
-            }
-            controls={controls}
-          />
-        ),
+      node: c.source ? (
+        <SourcedCard
+          card={c as ViewWidget & { source: string }}
+          name={config.name}
+          controls={controls}
+        />
+      ) : isTableCard(c) && c.id !== viewCardId ? (
+        <LayoutTable
+          card={c}
+          base={joins.domain}
+          config={config}
+          rows={c.filter.length ? filterByTokens(rows, widgetFields, c.filter) : rows}
+          load={scope(c.id, load)}
+          state={state}
+          onDetails={onDetails}
+          controls={controls}
+          onLayout={onConfigChange ? (table) => putCard({ ...c, table }) : undefined}
+        />
+      ) : isTableCard(c) ? (
+        <LumenView
+          domain={domain}
+          config={config}
+          rows={viewRows}
+          total={rows.length}
+          groupBy={group.groupField}
+          pivot={pivot}
+          subgroup={group.sub}
+          load={scope(c.id, load)}
+          state={state}
+          title={c.title ?? config.name}
+          selection={selection}
+          onDetails={rowPick.onTap ?? onDetails}
+          tapped={rowPick.tapped}
+          groupActions={groupActions}
+          controls={controls}
+          inLayout
+          tools={viewTools}
+          filter={viewFilter}
+          filterCount={filter.tokens.length}
+          strip={
+            <ConnectOffer
+              domain={domain}
+              rows={rows}
+              config={config}
+              read={joins.read}
+              cardKey={viewId ?? config.name}
+              onConnect={onConfigChange ? connect : undefined}
+            />
+          }
+          link={cardLink(c.id, viewFollows, viewColor ? filter.tokens.length : 0)}
+          shown={c.controls}
+          onColumns={
+            onConfigChange && columnPicker !== false
+              ? (columns) => onConfigChange({ ...config, columns })
+              : undefined
+          }
+          onAddColumn={addColumn}
+          sort={heldSort}
+          onSort={setHeldSort}
+        />
+      ) : (
+        <LumenSavedWidget
+          widget={c as ViewWidget}
+          title={cardTitle(c, config.name)}
+          domain={domain}
+          rows={narrow(rows, followed(c.id))}
+          link={cardLink(c.id, followed(c.id))}
+          fields={widgetFields}
+          merge={mergeFlat}
+          onDetails={onDetails}
+          load={scope(c.id, load)}
+          tiles={
+            'tile' in c
+              ? cardOf(c)
+              : isRowCard(c)
+                ? (summaryOf(c) ?? (
+                    <p className="text-sm text-muted-foreground">
+                      No cards yet: add them in Edit widget.
+                    </p>
+                  ))
+                : null
+          }
+          controls={controls}
+        />
+      ),
     };
   });
 
@@ -1226,10 +1232,15 @@ function ViewLayout<T extends RowData>({
             onOpenChange={setAdding}
             domain={domain}
             cards={cards}
+            name={config.name}
             onAdd={(c) => {
               setAdding(false);
               // A second table starts as a copy of the view's layout, then goes its own way.
-              putCard(isTableCard(c) && mainTable ? { ...c, table: tableLayoutOf(config) } : c);
+              putCard(
+                isTableCard(c) && mainTable && !c.source
+                  ? { ...c, table: tableLayoutOf(config) }
+                  : c,
+              );
             }}
             onBuild={(c) => {
               setAdding(false);
