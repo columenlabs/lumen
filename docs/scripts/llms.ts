@@ -1,7 +1,8 @@
 // Writes dist/docs/llms.txt for coding agents from what the Storybook build just made: every
 // component's props (manifests/components.json), its usage snippets, and the reference pages
 // (manifests/docs.json). Nothing here is written by hand, so it stays as current as the build.
-import { readFileSync, writeFileSync } from 'node:fs';
+// It first strips the build machine's own folder from every file: docgen records absolute paths.
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +26,16 @@ type Doc = { id: string; title: string; content: string };
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const out = join(root, 'dist/docs');
+const repo = fileURLToPath(new URL('../..', import.meta.url));
+
+for (const file of (function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((f) =>
+    statSync(join(dir, f)).isDirectory() ? walk(join(dir, f)) : [join(dir, f)],
+  );
+})(out).filter((f) => /\.(js|json|html)$/.test(f))) {
+  const text = readFileSync(file, 'utf8');
+  if (text.includes(repo)) writeFileSync(file, text.replaceAll(repo, ''));
+}
 const site = 'https://lumen-ui.columenlabs.com/docs';
 const components: Record<string, Component> = JSON.parse(
   readFileSync(join(out, 'manifests/components.json'), 'utf8'),
