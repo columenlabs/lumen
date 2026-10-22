@@ -18,7 +18,9 @@ git fetch -q origin main --tags
 git rev-parse -q --verify "refs/tags/$TAG" > /dev/null || { echo "no tag $TAG" >&2; exit 1; }
 PREV=$(git tag --list 'v*' --sort=-v:refname | awk -v t="$TAG" 'found { print; exit } $0 == t { found = 1 }')
 SHA=$(git rev-list -n1 "$TAG")
+# A tag with no release answers 404, whose error body gh still prints: keep only an id.
 ID=$(gh api "repos/$REPO/releases/tags/$TAG" --jq .id 2> /dev/null || true)
+[[ "$ID" =~ ^[0-9]+$ ]] || ID=
 if [ -n "$ID" ] && [ "$REDO" != 1 ]; then echo "$TAG already has a release"; exit; fi
 
 named() { # text: the product names it carries, if any
