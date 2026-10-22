@@ -1915,7 +1915,7 @@ function FieldTree<T>({
                     {formulasGroup && <SigmaIcon className="text-muted-foreground" />}
                     {linkTo &&
                       (unlinked ? (
-                        <Unlink2Icon className="text-muted-foreground" />
+                        <Unlink2Icon className="text-destructive" />
                       ) : (
                         <Link2Icon className="text-muted-foreground" />
                       ))}
@@ -1927,11 +1927,6 @@ function FieldTree<T>({
                         className="h-4 px-1.5 text-[0.6875rem] font-normal"
                       >
                         Rows
-                      </Badge>
-                    )}
-                    {unlinked && (
-                      <Badge variant="destructive" className="h-4 px-1.5 text-xs font-normal">
-                        Not linked
                       </Badge>
                     )}
                     <span className="num ml-auto text-xs font-normal text-muted-foreground">
