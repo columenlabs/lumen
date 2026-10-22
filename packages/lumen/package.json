@@ -1,6 +1,6 @@
 {
   "name": "@columenlabs/lumen-ui",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Lumen: shared React components (frame, views, widgets, charts, drawers).",
   "type": "module",
   "main": "src/index.ts",
