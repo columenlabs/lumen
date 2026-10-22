@@ -11,7 +11,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Asks before an action that cannot be undone. Wrap the button that opens it, or control `open` yourself. Destructive by default (a red action); `destructive={false}` for a plain confirm.',
+          'Asks before an action that cannot be undone. Wrap the button that opens it, or control `open` yourself. Destructive by default (a red action); `destructive={false}` for a plain confirm. When `onConfirm` returns a promise the dialog stays open and busy until it settles: a failure shows in the dialog (`problem` words it), a success closes it or shows `done`.',
       },
     },
   },
@@ -38,5 +38,32 @@ export const Plain: Story = {
     action: 'Publish',
     destructive: false,
     children: <Button>Publish</Button>,
+  },
+};
+export const Waits: Story = {
+  args: {
+    title: 'Delete your account?',
+    description: 'Your data and sign-in are deleted. It cannot be undone.',
+    action: 'Delete account',
+    busyAction: 'Deleting…',
+    typeToConfirm: 'DELETE',
+    size: 'default',
+    onConfirm: fn(() => new Promise((resolve) => setTimeout(resolve, 1500))),
+    done: { title: 'Your account is deleted', description: 'You are signed out.' },
+    children: (
+      <Button variant="destructive">
+        <Trash2Icon />
+        Delete account
+      </Button>
+    ),
+  },
+};
+export const Fails: Story = {
+  args: {
+    ...Waits.args,
+    onConfirm: fn(
+      () => new Promise((_, reject) => setTimeout(() => reject(new Error('delete_failed')), 1200)),
+    ),
+    problem: () => "The server didn't answer, so nothing was deleted. Try again in a minute.",
   },
 };

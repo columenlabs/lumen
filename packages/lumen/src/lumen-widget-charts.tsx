@@ -5,11 +5,14 @@ import { type ReactNode, useState } from 'react';
 import {
   Bar,
   BarChart,
+  type BarShapeProps,
+  CartesianGrid,
   Cell,
   Label,
   LabelList,
   Pie,
   PieChart,
+  Rectangle,
   XAxis,
   YAxis,
   usePlotArea,
@@ -22,6 +25,9 @@ export const STACK_MAX = 5;
 
 type Item = { name: string; v: number; fill: string };
 type Fmt = (v: number) => string;
+
+/** A column's rounded top. */
+const CAP: [number, number, number, number] = [3, 3, 0, 0];
 
 /** The widget's lead number over its chart: total and a short caption. */
 export function Headline({
@@ -173,6 +179,126 @@ export function StackedBars({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Columns over time (one per day, week or month), each split into stacked parts: what worked and
+ * what failed per day, spend per category per month. Oldest on the left; the top part gets the
+ * rounded cap; the tooltip lists every part and the column's total.
+ */
+export function StackedColumns({
+  rows,
+  x,
+  parts,
+  label,
+  height = 220,
+  tick = String,
+  fmt = (v) => v.toLocaleString(),
+  legend = true,
+}: {
+  /** One row per period, oldest first: the `x` field plus a number for each part's key. */
+  rows: Record<string, number | string>[];
+  /** The field that names each column (a date, a month). */
+  x: string;
+  parts: { name: string; key: string; fill: string }[];
+  /** What the chart shows, for screen readers. */
+  label: string;
+  height?: number;
+  /** How a column's name reads under it (a date as `10-22`). */
+  tick?: (v: string) => string;
+  fmt?: Fmt;
+  /** The parts' names under the columns. */
+  legend?: boolean;
+}) {
+  const config: ChartConfig = Object.fromEntries(
+    parts.map((p) => [p.key, { label: p.name, color: p.fill }]),
+  );
+  const total = (r: Record<string, number | string>) =>
+    parts.reduce((n, p) => n + (Number(r[p.key]) || 0), 0);
+  // The highest part with a value carries the column's rounded cap.
+  const top = (r: Record<string, number | string>) =>
+    parts.findLast((p) => Number(r[p.key]) > 0)?.key;
+  return (
+    <div className="flex flex-col gap-2">
+      <ChartContainer
+        config={config}
+        role="img"
+        aria-label={label}
+        className="aspect-auto w-full"
+        style={{ height }}
+      >
+        <BarChart data={rows} margin={{ left: 0, right: 0, top: 8, bottom: 0 }}>
+          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+          <XAxis
+            dataKey={x}
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            minTickGap={12}
+            tickFormatter={(v) => tick(String(v))}
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            width={36}
+            allowDecimals={false}
+            tickFormatter={(v) => fmt(Number(v))}
+          />
+          <ChartTooltip
+            cursor={{ fill: 'var(--muted)', opacity: 0.5 }}
+            content={
+              <ChartTooltipContent
+                labelFormatter={(_, payload) => {
+                  const r = payload?.[0]?.payload as Record<string, number | string> | undefined;
+                  return r ? (
+                    <span className="flex w-full gap-3">
+                      <span>{tick(String(r[x]))}</span>
+                      <span className="num ml-auto">{fmt(total(r))}</span>
+                    </span>
+                  ) : null;
+                }}
+                formatter={(v, name) => (
+                  <span className="flex w-full items-center gap-2">
+                    <span
+                      className="size-2 shrink-0 rounded-sm"
+                      style={{ background: config[String(name)]?.color }}
+                    />
+                    <span>{config[String(name)]?.label}</span>
+                    <span className="num ml-auto pl-3">{fmt(Number(v))}</span>
+                  </span>
+                )}
+              />
+            }
+          />
+          {parts.map((p) => (
+            <Bar
+              key={p.key}
+              dataKey={p.key}
+              stackId="a"
+              fill={p.fill}
+              isAnimationActive={false}
+              shape={(b: BarShapeProps) => (
+                <Rectangle
+                  {...b}
+                  radius={top(b.payload as Record<string, number | string>) === p.key ? CAP : 0}
+                />
+              )}
+            />
+          ))}
+        </BarChart>
+      </ChartContainer>
+      {legend && (
+        <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {parts.map((p) => (
+            <li key={p.key} className="flex items-center gap-1.5">
+              <span className="size-2 rounded-sm" style={{ background: p.fill }} />
+              {p.name}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
