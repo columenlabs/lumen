@@ -1,0 +1,61 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Base parts/Overview" />
+
+# Base parts
+
+These are [shadcn/ui](https://ui.shadcn.com/docs/components) components, kept in `@columenlabs/lumen-ui/ui/*` and styled by Lumen's theme. Their props and behaviour are shadcn/ui's, so its docs are the reference for each one. Import them from Lumen, never from your own copy, so they share the theme and the shell's state:
+
+```tsx
+import { Button } from '@columenlabs/lumen-ui/ui/button';
+```
+
+The Gallery page shows the common ones in Lumen's theme; Button and Badge have their own pages with props.
+
+| Part | Import | shadcn/ui docs |
+|---|---|---|
+| Alert | `ui/alert` | [alert](https://ui.shadcn.com/docs/components/alert) |
+| Alert dialog | `ui/alert-dialog` | [alert-dialog](https://ui.shadcn.com/docs/components/alert-dialog) |
+| Avatar | `ui/avatar` | [avatar](https://ui.shadcn.com/docs/components/avatar) |
+| Badge | `ui/badge` | [badge](https://ui.shadcn.com/docs/components/badge) |
+| Breadcrumb | `ui/breadcrumb` | [breadcrumb](https://ui.shadcn.com/docs/components/breadcrumb) |
+| Button | `ui/button` | [button](https://ui.shadcn.com/docs/components/button) |
+| Button group | `ui/button-group` | [button-group](https://ui.shadcn.com/docs/components/button-group) |
+| Card | `ui/card` | [card](https://ui.shadcn.com/docs/components/card) |
+| Chart | `ui/chart` | [chart](https://ui.shadcn.com/docs/components/chart) |
+| Checkbox | `ui/checkbox` | [checkbox](https://ui.shadcn.com/docs/components/checkbox) |
+| Collapsible | `ui/collapsible` | [collapsible](https://ui.shadcn.com/docs/components/collapsible) |
+| Combobox | `ui/combobox` | [combobox](https://ui.shadcn.com/docs/components/combobox) |
+| Command | `ui/command` | [command](https://ui.shadcn.com/docs/components/command) |
+| Dialog | `ui/dialog` | [dialog](https://ui.shadcn.com/docs/components/dialog) |
+| Dropdown menu | `ui/dropdown-menu` | [dropdown-menu](https://ui.shadcn.com/docs/components/dropdown-menu) |
+| Empty | `ui/empty` | [empty](https://ui.shadcn.com/docs/components/empty) |
+| Field | `ui/field` | [field](https://ui.shadcn.com/docs/components/field) |
+| Hover card | `ui/hover-card` | [hover-card](https://ui.shadcn.com/docs/components/hover-card) |
+| Input | `ui/input` | [input](https://ui.shadcn.com/docs/components/input) |
+| Input group | `ui/input-group` | [input-group](https://ui.shadcn.com/docs/components/input-group) |
+| Item | `ui/item` | [item](https://ui.shadcn.com/docs/components/item) |
+| Kbd | `ui/kbd` | [kbd](https://ui.shadcn.com/docs/components/kbd) |
+| Label | `ui/label` | [label](https://ui.shadcn.com/docs/components/label) |
+| Popover | `ui/popover` | [popover](https://ui.shadcn.com/docs/components/popover) |
+| Progress | `ui/progress` | [progress](https://ui.shadcn.com/docs/components/progress) |
+| Resizable | `ui/resizable` | [resizable](https://ui.shadcn.com/docs/components/resizable) |
+| Scroll area | `ui/scroll-area` | [scroll-area](https://ui.shadcn.com/docs/components/scroll-area) |
+| Select | `ui/select` | [select](https://ui.shadcn.com/docs/components/select) |
+| Separator | `ui/separator` | [separator](https://ui.shadcn.com/docs/components/separator) |
+| Sheet | `ui/sheet` | [sheet](https://ui.shadcn.com/docs/components/sheet) |
+| Sidebar | `ui/sidebar` | [sidebar](https://ui.shadcn.com/docs/components/sidebar) |
+| Skeleton | `ui/skeleton` | [skeleton](https://ui.shadcn.com/docs/components/skeleton) |
+| Slider | `ui/slider` | [slider](https://ui.shadcn.com/docs/components/slider) |
+| Sonner (toasts) | `ui/sonner` | [sonner](https://ui.shadcn.com/docs/components/sonner) |
+| Spinner | `ui/spinner` | [spinner](https://ui.shadcn.com/docs/components/spinner) |
+| Switch | `ui/switch` | [switch](https://ui.shadcn.com/docs/components/switch) |
+| Table | `ui/table` | [table](https://ui.shadcn.com/docs/components/table) |
+| Tabs | `ui/tabs` | [tabs](https://ui.shadcn.com/docs/components/tabs) |
+| Textarea | `ui/textarea` | [textarea](https://ui.shadcn.com/docs/components/textarea) |
+| Toggle | `ui/toggle` | [toggle](https://ui.shadcn.com/docs/components/toggle) |
+| Toggle group | `ui/toggle-group` | [toggle-group](https://ui.shadcn.com/docs/components/toggle-group) |
+| Tooltip | `ui/tooltip` | [tooltip](https://ui.shadcn.com/docs/components/tooltip) |
+| Emoji picker | `ui/emoji-picker` | [frimousse](https://frimousse.liveblocks.io/docs/integrations/shadcn-ui), shadcn/ui style |
+
+In an app, prefer Lumen's own parts where one exists: `LumenSelector` over Select, Combobox and Command; `LumenDrawer` over Sheet; `LumenTabs` over Tabs; `LumenConfirm` over Alert dialog.

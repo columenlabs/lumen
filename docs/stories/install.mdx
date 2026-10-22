@@ -1,0 +1,42 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Install" />
+
+# Install
+
+```bash
+bun add @columenlabs/lumen-ui @columenlabs/lumen-ui-types
+bun add react react-dom @tanstack/react-query @tanstack/react-router   # peers
+bun add -d tailwindcss @tailwindcss/vite tw-animate-css shadcn
+```
+
+## Styles
+
+In your app's `src/index.css`:
+
+```css
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@columenlabs/lumen-ui/theme.css";
+@source "../node_modules/@columenlabs/lumen-ui/dist";
+
+/* your accent, per app (LumenShell sets data-app on <html>) */
+:root[data-app="myapp"] { --primary: oklch(0.55 0.15 160); }
+```
+
+## The frame
+
+```tsx
+import { LumenShell } from '@columenlabs/lumen-ui';
+
+<LumenShell app="myapp" appLabel="My app" brand={<Logo />} nav={nav} user={{ email, name }}>
+  <Outlet />
+</LumenShell>
+```
+
+Pages and views read the router and a TanStack Query client, so mount the shell inside both. Your app's own parts go in the shell's slots: `brand`, `headerActions`, `panel`, `wrap`, `shared`, `profile` and `statusEnd`. Set your names once with `configureLumen`, and register your data domains with `registerDomains` (`@columenlabs/lumen-ui-types/registry`).
+
+## Versions
+
+Lumen is 0.x: a minor version may break things until 1.0. Pin one exact version of both packages, the same for the two.

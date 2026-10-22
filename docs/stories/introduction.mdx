@@ -1,0 +1,37 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Introduction" />
+
+# Lumen
+
+Lumen is a React component kit from Columen Labs: an app frame, data-driven pages and views, widgets, charts, drawers and pickers, all on one theme. You hand it data and a view config; it draws the screen.
+
+## Built on shadcn/ui
+
+Lumen's base parts (`@columenlabs/lumen-ui/ui/*`) are [shadcn/ui](https://ui.shadcn.com) components, built on [Radix UI](https://www.radix-ui.com) and [Base UI](https://base-ui.com) and styled with [Tailwind CSS](https://tailwindcss.com). Every Lumen part is composed from them. shadcn/ui is MIT licensed, © 2023 shadcn. Thank you.
+
+Lumen also draws on [TanStack Table](https://tanstack.com/table), [Recharts](https://recharts.org), [Apache ECharts](https://echarts.apache.org), [CodeMirror](https://codemirror.net), [Shiki](https://shiki.style) and TradingView [Lightweight Charts™](https://www.tradingview.com/lightweight-charts/) (see the NOTICE file for what an app that shows those charts must link).
+
+## What is here
+
+Every page in the sidebar comes from the kit's source on each release:
+
+- **Live examples** you can change: open a part, then use **Controls** under the canvas to change its props and **Show code** to copy the code for what you set.
+- **Props tables** generated from the TypeScript types, with each prop's comment.
+- **Dark mode and phone width** from the toolbar.
+
+The examples use made-up data.
+
+## Packages
+
+| Package | What it holds |
+|---|---|
+| `@columenlabs/lumen-ui` | The components, the shadcn/ui parts under `ui/*`, and `theme.css` |
+| `@columenlabs/lumen-ui-types` | The view model: view config, formulas, domains and joins, catalog, frames, chart formulas |
+
+Both are MIT licensed. Source: [github.com/columenlabs/lumen-ui](https://github.com/columenlabs/lumen-ui).
+
+## For coding agents
+
+- [`llms.txt`](./llms.txt): every component with its description, props and an example, as plain text.
+- [`manifests/components.json`](./manifests/components.json): the same as JSON.

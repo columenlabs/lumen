@@ -1,0 +1,45 @@
+import { ArgTypes, Meta } from '@storybook/addon-docs/blocks';
+import { LumenSettings, SchedulesSection, NotificationsSettings, McpSettings, IntegrationRow, TimeZoneSelect } from '@columenlabs/lumen-ui';
+
+<Meta title="Reference/Settings" />
+
+# Settings
+
+Parts an app's Settings page is built from. Each reads and saves through the app's own API, so they are shown by their props here rather than live.
+
+## LumenSettings
+
+The Settings page: a list of sections, each a row with its title, one-line description and body.
+
+<ArgTypes of={LumenSettings} />
+
+## SchedulesSection
+
+Schedules: each job with its switch, frequency, window and time zone, as the API describes them.
+
+<ArgTypes of={SchedulesSection} />
+
+## NotificationsSettings
+
+Notification targets (email, push, webhooks) and the grid of which events go to each.
+
+<ArgTypes of={NotificationsSettings} />
+
+## McpSettings
+
+The app's MCP server addresses and the steps to connect each client.
+
+<ArgTypes of={McpSettings} />
+
+## IntegrationRow
+
+One integration row: its key fields, Test and the last result.
+
+<ArgTypes of={IntegrationRow} />
+
+## TimeZoneSelect
+
+A time zone picker.
+
+<ArgTypes of={TimeZoneSelect} />
+
