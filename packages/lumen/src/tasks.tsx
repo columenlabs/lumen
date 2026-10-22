@@ -1,5 +1,5 @@
-import type { Task, TaskList } from '@columenlabs/lumen-types/tasks';
-import { isActive } from '@columenlabs/lumen-types/tasks';
+import type { Task, TaskList } from '@columenlabs/lumen-ui-types/tasks';
+import { isActive } from '@columenlabs/lumen-ui-types/tasks';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import {

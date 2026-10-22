@@ -4,7 +4,11 @@
 // widget's are its slots (By and Value, Date and Values, a card's number), which the tree fills the
 // same way it ticks a column. Settings are the picked style's own options. Switching the type
 // swaps only these two parts.
-import { type MarketWindow, OUTLOOK_INDEXES, marketWindows } from '@columenlabs/lumen-types/market';
+import {
+  type MarketWindow,
+  OUTLOOK_INDEXES,
+  marketWindows,
+} from '@columenlabs/lumen-ui-types/market';
 import {
   ALLOCATION_MAX,
   type ViewTile,
@@ -14,7 +18,7 @@ import {
   isTableCard,
   trendBuckets,
   widgetStyleId,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { FilterField } from './lumen-filter';

@@ -13,7 +13,7 @@
  * shown: computed ones in the browser from the bars plus warm-up bars before the window (SMA 200
  * draws from the first bar); P/E, IV and the EPS estimate read once from market data.
  */
-import type { ChartFormula, IndicatorSpec } from '@columenlabs/lumen-types/chart-formula';
+import type { ChartFormula, IndicatorSpec } from '@columenlabs/lumen-ui-types/chart-formula';
 import {
   MARKET_SYMBOLS,
   type MarketBar,
@@ -23,7 +23,7 @@ import {
   type MarketWindow,
   isDailyMarketKey,
   marketWindows,
-} from '@columenlabs/lumen-types/market';
+} from '@columenlabs/lumen-ui-types/market';
 import { queryOptions, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { XIcon } from 'lucide-react';
 import {

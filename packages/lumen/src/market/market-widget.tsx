@@ -15,7 +15,7 @@
  * A name or a widget opens the chart dialog. Without a market provider (apps other than an app,
  * or the exported an app) the widget says live data is not available here.
  */
-import { type MarketSeries, isDailyMarketKey } from '@columenlabs/lumen-types/market';
+import { type MarketSeries, isDailyMarketKey } from '@columenlabs/lumen-ui-types/market';
 import {
   ColorType,
   CrosshairMode,

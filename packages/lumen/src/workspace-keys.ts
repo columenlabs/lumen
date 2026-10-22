@@ -1,4 +1,4 @@
-import type { WorkspaceSummary } from '@columenlabs/lumen-types/workspaces';
+import type { WorkspaceSummary } from '@columenlabs/lumen-ui-types/workspaces';
 import { apiJson } from './api-fetch';
 
 // Query keys of frames and the workspaces that show them, shared by every card that attaches a

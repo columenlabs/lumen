@@ -5,8 +5,8 @@
 // table). A saved view's `cards` say which and in what order, and Edit layout changes them; a page
 // can add cards of its own in code (`cards`), views of other data among them. The frame paints at
 // once and each card loads its own data (lumen-source.tsx).
-import { linkColumns } from '@columenlabs/lumen-types/catalog';
-import { sourceLine } from '@columenlabs/lumen-types/domains';
+import { linkColumns } from '@columenlabs/lumen-ui-types/catalog';
+import { sourceLine } from '@columenlabs/lumen-ui-types/domains';
 import {
   CONNECTED_COUNT,
   type CustomViewConfig,
@@ -28,7 +28,7 @@ import {
   tableConfigOf,
   tableLayoutOf,
   tilesOfCard,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import type { RowData } from '@tanstack/react-table';
 import {
   LayoutDashboardIcon,

@@ -1,7 +1,7 @@
 // The icon picker (for views; shared for tabs): a popup with every
 // lucide icon, the quick picks first, and every emoji. A view's sidebar icon and an editable tab's
 // icon both pick here; the value is a lucide name or one emoji (`viewIconSchema`).
-import type { ViewIcon } from '@columenlabs/lumen-types/views';
+import type { ViewIcon } from '@columenlabs/lumen-ui-types/views';
 import { RotateCcwIcon, SearchIcon, ShapesIcon, SmileIcon } from 'lucide-react';
 import { useState } from 'react';
 import { IconButton } from './icon-button';

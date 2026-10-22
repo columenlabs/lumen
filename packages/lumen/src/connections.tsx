@@ -7,8 +7,8 @@
 // (symbol first), and a card that could connect offers it in one line ("Link to Holdings by
 // Symbol? You hold 2 of these.") rather than another screen. Freshness carries through: a sum of
 // live values is Live calc.
-import { CATALOG, linkable } from '@columenlabs/lumen-types/catalog';
-import type { SourceState } from '@columenlabs/lumen-types/domains';
+import { CATALOG, linkable } from '@columenlabs/lumen-ui-types/catalog';
+import type { SourceState } from '@columenlabs/lumen-ui-types/domains';
 import {
   CONNECTED_COUNT,
   type CustomViewConfig,
@@ -16,7 +16,7 @@ import {
   connectedKey,
   inferConnection,
   linkSpace,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import { HashIcon, Link2Icon, XIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { freshnessOf } from './freshness';

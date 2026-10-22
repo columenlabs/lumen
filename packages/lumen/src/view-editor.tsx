@@ -5,8 +5,8 @@ import {
   catalogKeys,
   linkColumns,
   readableDomain,
-} from '@columenlabs/lumen-types/catalog';
-import type { FrameChoice } from '@columenlabs/lumen-types/frames';
+} from '@columenlabs/lumen-ui-types/catalog';
+import type { FrameChoice } from '@columenlabs/lumen-ui-types/frames';
 import {
   CONNECTED_COUNT,
   type CustomViewConfig,
@@ -35,7 +35,7 @@ import {
   viewPageSizes,
   viewPaginationSchema,
   widgetStyleId,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 // The Edit view dialog (mock 2b): two panes. Left, a tree of every field the
 // view's rows reach, grouped by where it comes from (Holding, Symbol by topic, Account, Formulas),
 // ticked to show. Right, what the view does with them: column order (drag), shape, group, filter,

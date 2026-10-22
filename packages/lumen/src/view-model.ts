@@ -1,6 +1,6 @@
 // The view model every LumenView and its Edit dialog share: a domain's fields, a view's
 // formula columns and chips, and the values worked out over the shown rows.
-import type { JoinKey } from '@columenlabs/lumen-types/domains';
+import type { JoinKey } from '@columenlabs/lumen-ui-types/domains';
 import {
   CONTAINS_KEY,
   type CustomViewConfig,
@@ -9,7 +9,7 @@ import {
   type ViewFormat,
   type ViewTotalAgg,
   whyBlank,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ChartBand, ChartMarker, Series } from './growth-chart';

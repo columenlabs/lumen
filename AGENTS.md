@@ -3,7 +3,7 @@
 Instructions for every coding agent in this repo. `CLAUDE.md` imports this file; keep it.
 
 ## What this is
-Lumen is Columen Labs' public React component system (MIT), published to npm as `@columenlabs/lumen` and `@columenlabs/lumen-types`. Columen's apps install it from npm. This repo is the only place the kit's source lives: change it here, release it, then bump the version in each app.
+Lumen is Columen Labs' public React component system (MIT), published to npm as `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types`. Columen's apps install it from npm. This repo is the only place the kit's source lives: change it here, release it, then bump the version in each app.
 
 ## Layout
 - `packages/lumen-types`: the view model (views, formulas, domains and joins, catalog, frames, chart formulas). No React.
@@ -22,7 +22,7 @@ Lumen is Columen Labs' public React component system (MIT), published to npm as 
 
 ## Release
 1. Every merge to `main` publishes the next patch (0.1.0, 0.1.1, ...) of the minor in `packages/*/package.json` and tags it. For a new minor (new parts or anything that breaks), set both package.json versions to `x.y.0` in the PR.
-2. Bump the exact version in each app (`@columenlabs/lumen` and `@columenlabs/lumen-types` together).
+2. Bump the exact version in each app (`@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types` together).
 
 ## Conventions
 - Bun only, never npm, yarn or pnpm. The one exception is the publish workflow, which calls `npm publish`.

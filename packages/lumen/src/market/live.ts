@@ -17,7 +17,7 @@ import {
   type MarketServerMessage,
   type MarketSession,
   type MarketSessionResponse,
-} from '@columenlabs/lumen-types/market';
+} from '@columenlabs/lumen-ui-types/market';
 import {
   type ReactNode,
   createContext,

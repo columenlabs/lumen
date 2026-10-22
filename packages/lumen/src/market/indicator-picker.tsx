@@ -1,4 +1,4 @@
-import { type ChartFormula, parseChartFormula } from '@columenlabs/lumen-types/chart-formula';
+import { type ChartFormula, parseChartFormula } from '@columenlabs/lumen-ui-types/chart-formula';
 import { PlusIcon, SaveIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { LumenConfirm } from '../confirm';

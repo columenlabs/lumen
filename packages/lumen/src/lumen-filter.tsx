@@ -1,5 +1,5 @@
-import type { JoinKey } from '@columenlabs/lumen-types/domains';
-import { CONTAINS_KEY, type ViewTokenOp, meetsNumber } from '@columenlabs/lumen-types/views';
+import type { JoinKey } from '@columenlabs/lumen-ui-types/domains';
+import { CONTAINS_KEY, type ViewTokenOp, meetsNumber } from '@columenlabs/lumen-ui-types/views';
 // The one filter box every view uses, redone after p2e's:
 // one chip per field in the sans face, `Account IRA, Roth ×`, included or excluded as a whole
 // (`Symbol not AAPL`). A chip's tap opens its field: Include / Exclude, then its values ticked,

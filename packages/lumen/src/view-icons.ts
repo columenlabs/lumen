@@ -1,6 +1,6 @@
 // The icons a person can pick for a view; names are `viewIconNames` in
-// `@columenlabs/lumen-types/views`. A view without one shows its shape's icon.
-import type { ViewIcon, ViewIconName, ViewShape } from '@columenlabs/lumen-types/views';
+// `@columenlabs/lumen-ui-types/views`. A view without one shows its shape's icon.
+import type { ViewIcon, ViewIconName, ViewShape } from '@columenlabs/lumen-ui-types/views';
 import {
   BanknoteIcon,
   BriefcaseIcon,

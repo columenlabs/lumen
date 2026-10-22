@@ -1,7 +1,7 @@
 // Lumen (the whole component system is Lumen: published as
-// `@columenlabs/lumen` for every app): the frame, page, status bar, sidebar building
+// `@columenlabs/lumen-ui` for every app): the frame, page, status bar, sidebar building
 // blocks, preferences, filter, views, widgets, charts and drawers. Shadcn components it is built from
-// are under `@columenlabs/lumen/ui/*`; an app's sidebar content must use these (not its own
+// are under `@columenlabs/lumen-ui/ui/*`; an app's sidebar content must use these (not its own
 // copies) so it shares the shell's sidebar state. What one product adds (the product's assistant panel,
 // Tasks) lives in that product and plugs into the shell's slots. Every app and the shell use the same major
 // of TanStack Table (v9): vite's dev pre-bundling serves one copy to all of them.

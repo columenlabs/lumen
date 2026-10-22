@@ -11,7 +11,7 @@ import {
   GRID_PHONE_COLS,
   GRID_ROW_PX,
   type ViewCardPlace,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import {
   type ReactNode,
   createContext,

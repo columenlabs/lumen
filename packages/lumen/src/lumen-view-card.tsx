@@ -1,4 +1,4 @@
-import { type ViewCard, controlOn } from '@columenlabs/lumen-types/views';
+import { type ViewCard, controlOn } from '@columenlabs/lumen-ui-types/views';
 // A second table on a LumenLayout page (every table is a LumenView): the
 // page's own rows as a LumenView card with its own filter, Group button, Columns picker, pager and
 // a header that pins under the page's tabs. Its link colour joins the page's filter links: its

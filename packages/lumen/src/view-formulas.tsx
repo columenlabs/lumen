@@ -1,5 +1,5 @@
 // Formula columns and tiles on a custom view: a view computes its own columns
-// from the domain's fields (`config.formulas`, Jexl, `@columenlabs/lumen-types/views`) and rolls fields up
+// from the domain's fields (`config.formulas`, Jexl, `@columenlabs/lumen-ui-types/views`) and rolls fields up
 // into its own tiles (`config.tiles`). Each formula is a row of the Edit dialog's Fields list; its
 // pencil opens this form under the row.
 import {
@@ -14,7 +14,7 @@ import {
   viewAggs,
   viewFormulaIsText,
   viewNumberFormats,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import {
   CalendarCheckIcon,
   CalendarClockIcon,

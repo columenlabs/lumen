@@ -5,17 +5,17 @@ import {
   frameKeyAt,
   frameSymbolAt,
   liveQuoteColumns,
-} from '@columenlabs/lumen-types/frames';
+} from '@columenlabs/lumen-ui-types/frames';
 import {
   type CustomViewConfig,
   customViewConfigSchema,
   frameSpace,
-} from '@columenlabs/lumen-types/views';
+} from '@columenlabs/lumen-ui-types/views';
 import {
   type Workspace,
   type WorkspaceTab,
   workspacePath,
-} from '@columenlabs/lumen-types/workspaces';
+} from '@columenlabs/lumen-ui-types/workspaces';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import {

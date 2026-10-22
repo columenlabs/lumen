@@ -8,8 +8,8 @@
     "declarationMap": false,
     "sourceMap": false,
     "paths": {
-      "@columenlabs/lumen-types": ["../lumen-types/dist/index.d.ts"],
-      "@columenlabs/lumen-types/*": ["../lumen-types/dist/*.d.ts"]
+      "@columenlabs/lumen-ui-types": ["../lumen-types/dist/index.d.ts"],
+      "@columenlabs/lumen-ui-types/*": ["../lumen-types/dist/*.d.ts"]
     }
   },
   "include": ["src/**/*"]

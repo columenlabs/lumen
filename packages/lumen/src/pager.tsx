@@ -1,6 +1,6 @@
 // The compact pager, the same look as LumenView's: the count opens the page sizes,
 // and the chevrons turn the page while there is more than one. Coverage views page their rows with it.
-import { viewPageSizes } from '@columenlabs/lumen-types/views';
+import { viewPageSizes } from '@columenlabs/lumen-ui-types/views';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { IconButton } from './icon-button';
 import { Button } from './ui/button';

@@ -2,7 +2,7 @@
 // opens as the person left it, saves their edits as their own copy and goes back to its default
 // with Reset to default. It is never deleted. One hook for every app: `/api/app-views` answers on
 // each app host.
-import type { CustomView, CustomViewConfig } from '@columenlabs/lumen-types/views';
+import type { CustomView, CustomViewConfig } from '@columenlabs/lumen-ui-types/views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiJson } from './api-fetch';
 

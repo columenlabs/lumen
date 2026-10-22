@@ -12,7 +12,7 @@
 // every call has Undo (the page through browser history, the rest from the snapshot). While the
 // person is mid-edit (a layout or view being edited, a confirm open) moves don't run: the chip says
 // Tap to go. The nav registers its pages (`useAssistantPages`) for the page map the assistant reads.
-import type { IndicatorSpec } from '@columenlabs/lumen-types/chart-formula';
+import type { IndicatorSpec } from '@columenlabs/lumen-ui-types/chart-formula';
 import { useRouter } from '@tanstack/react-router';
 import {
   type ReactNode,

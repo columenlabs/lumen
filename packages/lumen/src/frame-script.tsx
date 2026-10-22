@@ -1,4 +1,4 @@
-import type { FrameData, FrameScript } from '@columenlabs/lumen-types/frames';
+import type { FrameData, FrameScript } from '@columenlabs/lumen-ui-types/frames';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlayIcon, RotateCcwIcon, WrapTextIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
