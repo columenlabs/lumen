@@ -21,7 +21,7 @@ Lumen is Columen Labs' public React component system (MIT), published to npm as 
 - Breaking changes are allowed while the version is 0.x, but say so in the PR, and land the app-side fix in the same release cycle.
 
 ## Release
-1. Every merge to `main` publishes the next patch (0.1.0, 0.1.1, ...) of the minor in `packages/*/package.json` and tags it. For a new minor (new parts or anything that breaks), set both package.json versions to `x.y.0` in the PR.
+1. Every merge to `main` publishes the next patch (0.1.0, 0.1.1, ...) of the minor in `packages/*/package.json`, tags it and makes its GitHub release. `scripts/release.sh` has Claude (secret `ANTHROPIC_API_KEY`) write the notes from the merged pull requests: Key takeaways that name the exported part and prop each change lives in, then a section per area. Notes naming a product in `LUMEN_FORBIDDEN_NAMES` are not published. Run workflow on Publish with a tag (and redo) writes one tag's release again. For a new minor (new parts or anything that breaks), set both package.json versions to `x.y.0` in the PR.
 2. Bump the exact version in each app (`@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types` together).
 
 ## Conventions
