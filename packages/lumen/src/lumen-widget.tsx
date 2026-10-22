@@ -42,6 +42,7 @@ import {
   CheckIcon,
   CodeIcon,
   CopyIcon,
+  DatabaseIcon,
   EyeOffIcon,
   FoldVerticalIcon,
   FunnelIcon,
@@ -71,6 +72,7 @@ import { FoldChevron, useFolded, usePageKey } from './fold';
 import { GrowthChart } from './growth-chart';
 import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
+import { useDomainReads } from './joins';
 import { cn } from './lib/utils';
 import { LumenBoundary } from './lumen-boundary';
 import {
@@ -152,6 +154,7 @@ import {
   summaryCash,
 } from './view-model';
 import { WidgetControlsEditor } from './widget-controls';
+import { PAGE_SOURCE, useWidgetDataOptions } from './widget-data';
 import { dateFields } from './widget-settings';
 
 /** Each style's icon, by its id in `WIDGET_STYLES`; a style left out takes its kind's. */
@@ -1322,37 +1325,81 @@ export function AddWidgetDialog<T>({
   cards,
   onAdd,
   onBuild,
+  name = 'This page',
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   domain: ViewDomain<T>;
   cards: ViewCard[];
+  /** The page's name, for the data picker's "this page" row. */
+  name?: string;
   /** Adds a ready card (a pre-built widget, or the view's tiles or the view itself). */
   onAdd: (card: ViewCard) => void;
   /** Opens Edit widget on a new card of a kind. */
   onBuild: (card: ViewCard) => void;
 }) {
-  const catalog = viewWidgetCatalog[domain.id] ?? [];
+  // Step 1: the widget's main data, this page's rows unless another is picked.
+  const [data, setData] = useState(PAGE_SOURCE);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: starts on this page each time it opens.
+  useEffect(() => setData(PAGE_SOURCE), [open]);
+  const pageLabel = `${name} (this page)`;
+  const dataOptions = useWidgetDataOptions(open, pageLabel);
+  const own = data !== PAGE_SOURCE;
+  const ids = useMemo(() => (own ? [data] : []), [own, data]);
+  const read = useDomainReads(ids, ids)[data];
+  const shapeDomain = (
+    own ? (read?.domain ?? { id: data, rowKey: String, fields: [] }) : domain
+  ) as ViewDomain<T>;
+  const sourced = (c: ViewCard): ViewCard => (own ? ({ ...c, source: data } as ViewCard) : c);
+  const catalog = own ? [] : (viewWidgetCatalog[domain.id] ?? []);
   const keys = new Set(domain.fields.map((f) => f.key));
-  const hasRow = cards.some(isRowCard);
+  const hasRow = !own && cards.some(isRowCard);
   const full = cards.length >= 12;
-  const offered = useOffered(domain);
+  const offered = useOffered(shapeDomain);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add widget</DialogTitle>
           <DialogDescription>
-            Widgets use this view's rows and their own filter
+            Pick its data, then its shape
             {full ? '. A page holds 12 cards at most.' : '.'}
           </DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue={catalog.length ? 'prebuilt' : 'own'}>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="add-widget-data" className="text-xs font-medium text-muted-foreground">
+            Data
+          </Label>
+          <LumenSelector
+            id="add-widget-data"
+            icon={DatabaseIcon}
+            label="Widget data"
+            search
+            value={data}
+            options={dataOptions}
+            onChange={setData}
+          />
+          {own && read?.state !== 'ok' && (
+            <p
+              className={cn(
+                'text-xs',
+                read?.state === 'loading' || !read ? 'text-muted-foreground' : 'text-destructive',
+              )}
+            >
+              {read?.state === 'loading' || !read
+                ? 'Reading its fields…'
+                : (read.detail ?? 'Its rows could not be read.')}
+            </p>
+          )}
+        </div>
+        <Tabs key={data} defaultValue={catalog.length ? 'prebuilt' : 'own'}>
           <TabsList>
-            <TabsTrigger value="prebuilt">
-              <PackageIcon />
-              Pre-built
-            </TabsTrigger>
+            {!own && (
+              <TabsTrigger value="prebuilt">
+                <PackageIcon />
+                Pre-built
+              </TabsTrigger>
+            )}
             <TabsTrigger value="own">
               <WrenchIcon />
               Build your own
@@ -1406,17 +1453,19 @@ export function AddWidgetDialog<T>({
                           icon={cardIcon(w)}
                           name={w.name}
                           note={w.note}
-                          disabled={full}
+                          disabled={full || (own && read?.state !== 'ok')}
                           onClick={() =>
                             ready
-                              ? onAdd(draftOf(w.id, domain, cards))
+                              ? onAdd(sourced(draftOf(w.id, shapeDomain, cards)))
                               : onBuild(
-                                  w.id === 'metric:row'
-                                    ? viewCardSchema.parse({
-                                        ...draftOf(w.id, domain, cards),
-                                        tiles: [],
-                                      })
-                                    : draftOf(w.id, domain, cards),
+                                  sourced(
+                                    w.id === 'metric:row'
+                                      ? viewCardSchema.parse({
+                                          ...draftOf(w.id, shapeDomain, cards),
+                                          tiles: [],
+                                        })
+                                      : draftOf(w.id, shapeDomain, cards),
+                                  ),
                                 )
                           }
                         />
