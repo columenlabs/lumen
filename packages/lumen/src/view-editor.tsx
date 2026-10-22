@@ -95,6 +95,7 @@ import {
   ToggleRightIcon,
   Trash2Icon,
   Unlink2Icon,
+  UnlinkIcon,
   XIcon,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -1915,7 +1916,7 @@ function FieldTree<T>({
                     {formulasGroup && <SigmaIcon className="text-muted-foreground" />}
                     {linkTo &&
                       (unlinked ? (
-                        <Unlink2Icon className="text-destructive" />
+                        <UnlinkIcon className="text-destructive" />
                       ) : (
                         <Link2Icon className="text-muted-foreground" />
                       ))}
