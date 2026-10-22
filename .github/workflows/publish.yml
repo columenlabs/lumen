@@ -1,19 +1,32 @@
 # Every merge to main publishes both packages to npm and tags the version, on OpenShip's
 # self-hosted runner. The version is the next patch of the minor in packages/*/package.json
 # (0.1.0, then 0.1.1, 0.1.2 ...); to start a new minor, set both package.json versions to x.y.0.
-# Signs in to npm with the repository secret NPM_TOKEN.
+# Signs in to npm with the repository secret NPM_TOKEN. Then scripts/release.sh makes the
+# version's GitHub release, its notes written by Claude (secret ANTHROPIC_API_KEY).
+# Run workflow with a tag only writes that tag's release (redo: write its notes again).
 name: Publish
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Only make the GitHub release of this tag (v0.4.1); empty publishes main
+        type: string
+        default: ""
+      redo:
+        description: Write that release's notes again
+        type: boolean
+        default: false
 permissions:
-  contents: write # the v<version> tag
+  contents: write # the v<version> tag and its release
+  pull-requests: read # release notes read each PR's description
 concurrency:
   group: publish
   cancel-in-progress: false
 jobs:
   publish:
+    if: inputs.tag == '' || inputs.tag == null
     runs-on: [self-hosted, openship, linux, arm64]
     timeout-minutes: 15
     env:
@@ -83,3 +96,35 @@ jobs:
           git fetch --tags --quiet
           if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then exit 0; fi
           git tag "v$VERSION" && git push origin "v$VERSION"
+      - name: Install gh
+        run: |
+          command -v gh && exit 0
+          SUDO=$(command -v sudo || true)
+          $SUDO apt-get update -qq && $SUDO apt-get install -y -qq gh
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: scripts/release.sh "v${{ steps.version.outputs.version }}"
+
+  release:
+    if: inputs.tag != '' && inputs.tag != null
+    runs-on: [self-hosted, openship, linux, arm64]
+    timeout-minutes: 15
+    env:
+      LUMEN_FORBIDDEN_NAMES: ${{ vars.LUMEN_FORBIDDEN_NAMES }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - name: Install gh and jq
+        run: |
+          command -v gh && command -v jq && exit 0
+          SUDO=$(command -v sudo || true)
+          $SUDO apt-get update -qq && $SUDO apt-get install -y -qq gh jq
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REDO: ${{ inputs.redo && '1' || '0' }}
+          TAG: ${{ inputs.tag }}
+        run: scripts/release.sh "$TAG"
