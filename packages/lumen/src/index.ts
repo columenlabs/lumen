@@ -82,6 +82,7 @@ export {
 } from './lumen-auth';
 export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
 export { LumenSecret } from './lumen-secret';
+export { RankedBars, StackedBars } from './lumen-widget-charts';
 export {
   COVERAGE_LEVELS,
   CoverageCell,
