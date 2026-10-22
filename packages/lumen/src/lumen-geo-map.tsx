@@ -23,6 +23,20 @@ const HEIGHT = 260;
 /** Country borders, thin enough to read small countries at 110m. */
 const BORDER = 0.5;
 
+/**
+ * A CSS colour as `rgb(r, g, b)`. ECharts blends a visual map's colours itself and reads only hex
+ * and rgb, so a theme colour in another form (`oklch(…)`, `color-mix(…)`) blends to black. The
+ * browser paints it on one pixel and the pixel is read back.
+ */
+function toRgb(color: string) {
+  const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+  if (!ctx) return color;
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 /** Moves every far-west longitude in nested GeoJSON coordinates one turn east, in place. */
 function unwrap(c: unknown) {
   if (!Array.isArray(c)) return;
@@ -119,7 +133,7 @@ export function LumenGeoMap({
         show: false,
         min: 0,
         max,
-        inRange: { color: [t.border, t.primary] },
+        inRange: { color: [toRgb(t.border), toRgb(t.primary)] },
       },
       series: [
         {
