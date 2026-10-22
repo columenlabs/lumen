@@ -177,7 +177,12 @@ export function connectionFields<T>(
     // field on each side is picked; its group stays in the tree for that.
     if (!on) {
       sources.push({ id, name, state: 'off', detail: NOT_LINKED });
-      groups.push({ id, label: name, color: LINK_COLOR, note: NOT_LINKED });
+      groups.push({
+        id,
+        label: name,
+        color: LINK_COLOR,
+        note: 'Pick a field on each side to link it',
+      });
       continue;
     }
     const { index, ok } = indexOf(to, on);
