@@ -1,6 +1,7 @@
 # Every merge to main publishes both packages to npm and tags the version, on OpenShip's
-# self-hosted runner. The version is the next patch of the minor in packages/*/package.json
-# (0.1.0, then 0.1.1, 0.1.2 ...); to start a new minor, set both package.json versions to x.y.0.
+# self-hosted runner. The version is always the next patch after the newest v* tag (0.1.0, 0.1.1,
+# 0.1.2 ...). A new minor is cut only by hand: Run workflow with bump = minor publishes main as the
+# next minor no tag or npm version has used yet. packages/*/package.json versions are not read.
 # Signs in to npm with the repository secret NPM_TOKEN. Then scripts/release.sh makes the
 # version's GitHub release, its notes written by Claude (secret ANTHROPIC_API_KEY).
 # Run workflow with a tag only writes that tag's release (redo: write its notes again).
@@ -18,6 +19,11 @@ on:
         description: Write that release's notes again
         type: boolean
         default: false
+      bump:
+        description: Publish main as the next patch, or as a new minor
+        type: choice
+        options: [patch, minor]
+        default: patch
 permissions:
   contents: write # the v<version> tag and its release
   pull-requests: read # release notes read each PR's description
@@ -51,18 +57,25 @@ jobs:
       - run: bun run type-check
       - name: Next version
         id: version
+        env:
+          BUMP: ${{ inputs.bump || 'patch' }}
         run: |
-          a=$(jq -r .version packages/lumen-types/package.json)
-          b=$(jq -r .version packages/lumen/package.json)
-          [ "$a" = "$b" ] || { echo "lumen-types is $a but lumen is $b: set both together" >&2; exit 1; }
-          minor=${a%.*}
-          # The highest patch npm has in this minor, if any.
-          top=$(npm view @columenlabs/lumen-ui versions --json 2>/dev/null \
-            | jq -r --arg m "$minor." 'if type == "string" then [.] elif type == "array" then . else [] end
-                | map(select(startswith($m)) | split(".")[2] | tonumber) | max // empty' || true)
-          if [ -z "$top" ]; then v=$a; else n=$((top + 1)); v="$minor.$(( n > ${a##*.} ? n : ${a##*.} ))"; fi
+          git fetch --tags --quiet
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
+          # Every version npm or a tag has used: npm never takes a number twice, even unpublished.
+          used=$( { npm view @columenlabs/lumen-ui versions --json 2>/dev/null \
+            | jq -r 'if type == "string" then . elif type == "array" then .[] else empty end' || true
+            git tag --list 'v*' | sed 's/^v//'; } | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -uV)
+          IFS=. read -r a b c <<< "${last:-v0.1.-1}"; a=${a#v}
+          if [ "$BUMP" = minor ]; then
+            b=$(grep "^$a\." <<< "$used" | cut -d. -f2 | sort -n | tail -1)
+            v="$a.$((b + 1)).0"
+          else
+            v="$a.$b.$((c + 1))"
+            while grep -qx "$v" <<< "$used"; do c=$((c + 1)); v="$a.$b.$((c + 1))"; done
+          fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          echo "Publishing $v"
+          echo "Publishing $v ($BUMP after ${last:-no tag})"
       - run: scripts/pack.sh out
         env:
           LUMEN_VERSION: ${{ steps.version.outputs.version }}
