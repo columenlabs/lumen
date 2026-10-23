@@ -21,7 +21,8 @@ export interface LumenAuthStageProps {
   /** The story's headline and the line under it. */
   pitch: { title: ReactNode; body?: ReactNode };
   points?: LumenAuthPoint[];
-  /** A picture under the points, such as a diagram of what the app does. */
+  /** A picture under the points, such as a diagram of what the app does. Without one, the
+   *  story is centred in the pane. */
   illustration?: ReactNode;
   /** Small links under the form (privacy, terms). */
   footer?: ReactNode;
@@ -37,30 +38,42 @@ export function LumenAuthStage({
   footer,
   children,
 }: LumenAuthStageProps) {
+  const story = (
+    <>
+      <div className="flex flex-col gap-3">
+        <h2 className="text-balance font-semibold text-3xl leading-tight">{pitch.title}</h2>
+        {pitch.body && <p className="max-w-md text-muted-foreground">{pitch.body}</p>}
+      </div>
+      {points.length > 0 && (
+        <ul className="flex flex-col gap-4">
+          {points.map(({ icon: Icon, title, body }) => (
+            <li key={title} className="flex gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                <Icon className="size-4.5" />
+              </span>
+              <span className="flex flex-col">
+                <span className="font-medium text-sm">{title}</span>
+                <span className="text-muted-foreground text-sm">{body}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
   return (
     <div className="grid min-h-svh grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
       <aside className="hidden flex-col gap-10 border-r bg-sidebar px-10 py-8 text-sidebar-foreground lg:flex">
         {brand}
-        <div className="flex flex-col gap-3">
-          <h2 className="text-balance font-semibold text-3xl leading-tight">{pitch.title}</h2>
-          {pitch.body && <p className="max-w-md text-muted-foreground">{pitch.body}</p>}
-        </div>
-        {points.length > 0 && (
-          <ul className="flex flex-col gap-4">
-            {points.map(({ icon: Icon, title, body }) => (
-              <li key={title} className="flex gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <Icon className="size-4.5" />
-                </span>
-                <span className="flex flex-col">
-                  <span className="font-medium text-sm">{title}</span>
-                  <span className="text-muted-foreground text-sm">{body}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+        {illustration ? (
+          <>
+            {story}
+            {illustration}
+          </>
+        ) : (
+          // With no picture under it, the story sits in the middle of the pane.
+          <div className="flex flex-1 flex-col justify-center gap-10 pb-16">{story}</div>
         )}
-        {illustration}
       </aside>
       <main className="flex flex-col bg-background px-6 py-8 sm:px-12">
         <div className="lg:hidden">{brand}</div>

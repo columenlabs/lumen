@@ -250,6 +250,8 @@ export interface LumenShellProps {
   signOutUrl?: string;
   /** Settings ▸ General ▸ Profile's content; no Profile section without it. */
   profile?: ReactNode;
+  /** Settings ▸ General ▸ Security's content (LumenSignInMethods); no Security section without it. */
+  security?: ReactNode;
   /** Reloads the page's data and drops every cached read (TanStack Query `invalidateQueries`);
    *  shows Refresh in the header, which then mounts the page again. */
   onRefresh?: () => Promise<unknown>;
@@ -297,6 +299,7 @@ export function LumenShell({
   user = null,
   signOutUrl,
   profile,
+  security,
   onRefresh,
   hideAmounts = false,
   onLogs,
@@ -336,7 +339,7 @@ export function LumenShell({
   }, [app]);
   // Find lists every Settings section by name.
   const sectionNames = JSON.stringify(
-    allSettings(profile, shared, settings).map((s) => ({ id: s.id, title: s.title })),
+    allSettings(profile, shared, settings, security).map((s) => ({ id: s.id, title: s.title })),
   );
   const findSettings = useMemo(
     () => JSON.parse(sectionNames) as { id: string; title: string }[],
@@ -408,6 +411,7 @@ export function LumenShell({
                   onClose={() => setSettingsAt(null)}
                   appLabel={appLabel}
                   profile={profile}
+                  security={security}
                   sections={settings}
                   shared={shared}
                   sharedLabel={sharedLabel}

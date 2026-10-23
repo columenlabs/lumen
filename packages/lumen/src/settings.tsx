@@ -11,6 +11,7 @@ import {
   MoonIcon,
   PaletteIcon,
   SearchIcon,
+  ShieldCheckIcon,
   SlidersHorizontalIcon,
   SunIcon,
   UserRoundIcon,
@@ -255,6 +256,12 @@ const PROFILE: Omit<SettingsSectionDef, 'content'> = {
   icon: UserRoundIcon,
   description: 'Your name and sign-in on every desk.',
 };
+const SECURITY: Omit<SettingsSectionDef, 'content'> = {
+  id: 'security',
+  title: 'Security',
+  icon: ShieldCheckIcon,
+  description: 'How you sign in. Changes ask you to confirm it’s you.',
+};
 const GENERAL: SettingsSectionDef[] = [
   {
     id: 'appearance',
@@ -277,8 +284,13 @@ export function allSettings(
   profile: ReactNode | undefined,
   shared: SettingsSectionDef[] = [],
   sections: SettingsSectionDef[] = [],
+  security?: ReactNode,
 ): SettingsSectionDef[] {
-  const general = profile ? [{ ...PROFILE, content: profile }, ...GENERAL] : GENERAL;
+  const general = [
+    ...(profile ? [{ ...PROFILE, content: profile }] : []),
+    ...(security ? [{ ...SECURITY, content: security }] : []),
+    ...GENERAL,
+  ];
   return [...general, ...shared, ...sections];
 }
 
@@ -289,6 +301,7 @@ export function LumenSettings({
   onClose,
   appLabel,
   profile,
+  security,
   sections = [],
   shared = [],
   sharedLabel = 'All apps',
@@ -302,12 +315,14 @@ export function LumenSettings({
   appLabel: string;
   /** Profile's content, the first General section; none without it. */
   profile?: ReactNode;
+  /** Security's content, after Profile (LumenSignInMethods); none without it. */
+  security?: ReactNode;
   sections?: SettingsSectionDef[];
   /** Sections the product adds to every app (the assistant), listed under `sharedLabel` after General. */
   shared?: SettingsSectionDef[];
   sharedLabel?: string;
 }) {
-  const all = allSettings(profile, shared, sections);
+  const all = allSettings(profile, shared, sections, security);
   const general = all.slice(0, all.length - shared.length - sections.length);
   const current = all.find((s) => s.id === section) ?? (all[0] as SettingsSectionDef);
   // The assistant opens Settings at a section (it never changes a setting); Undo puts it back as it was.
