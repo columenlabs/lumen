@@ -95,7 +95,8 @@ export function LumenDrawer({
       {isMobile ? (
         <SheetContent side="bottom" className="max-h-[85svh] gap-0 overflow-hidden">
           <SheetHeader className="order-first shrink-0 border-b">{head}</SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
+          {/* The footer is a bar at the top here, so the body fades out at the bottom (end-fade). */}
+          <div className="end-fade min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
           {foot}
         </SheetContent>
       ) : (

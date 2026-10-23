@@ -526,14 +526,14 @@ export function LumenSettings({
                 </div>
                 {/* Children keep their height (`*:shrink-0`): a flex child that clips (a bordered table)
                 would shrink to fit and cut its rows off instead of letting the body scroll. */}
-                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pt-3 pb-4 *:shrink-0 md:px-6">
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pt-3 pb-4 *:shrink-0 md:px-6 [&:has(+[data-slot=settings-footer]:empty)]:end-fade">
                   {current.content}
                 </div>
-                {/* Pinned under the body on every section, empty or not. */}
+                {/* Pinned under the body while it holds something; empty, it is gone and the body fades out. */}
                 <div
                   ref={footer}
                   data-slot="settings-footer"
-                  className="flex min-h-12 shrink-0 items-center justify-end gap-2 border-t px-4 py-2 md:px-6"
+                  className="flex min-h-12 shrink-0 items-center justify-end gap-2 border-t px-4 py-2 empty:hidden md:px-6"
                 >
                   {current.footer}
                 </div>

@@ -1182,7 +1182,7 @@ export function ViewEditDialog<T>({
       <DialogContent
         data-slot="view-editor"
         showCloseButton={false}
-        className="flex h-[min(780px,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 max-md:h-svh max-md:max-w-full max-md:rounded-none max-md:ring-0 sm:max-w-6xl"
+        className="flex h-[min(780px,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 max-md:h-svh max-md:max-w-full max-md:rounded-none max-md:ring-0 max-md:[--dialog-pad:0px] sm:max-w-6xl"
       >
         <DialogDescription className="sr-only">
           This widget's type, fields, settings, rows and controls, and the fields it can use.
@@ -1228,23 +1228,26 @@ export function ViewEditDialog<T>({
             </TabsList>
             <TabsContent
               value="view"
-              className="min-h-0 overflow-y-auto px-2 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+              className="end-fade min-h-0 overflow-y-auto px-2 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]"
             >
               {main}
             </TabsContent>
-            <TabsContent value="fields" className="min-h-0 overflow-y-auto px-3 py-2">
+            <TabsContent value="fields" className="end-fade min-h-0 overflow-y-auto px-3 pt-2 pb-4">
               {treeHint}
               {tree}
             </TabsContent>
           </Tabs>
         ) : (
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px]">
-            <section aria-label="Widget" className="min-h-0 overflow-y-auto px-3 py-2">
+            <section
+              aria-label="Widget"
+              className="end-fade min-h-0 overflow-y-auto px-3 pt-2 pb-4"
+            >
               {main}
             </section>
             <aside
               aria-label="Data"
-              className="flex min-h-0 flex-col overflow-y-auto border-l bg-sidebar px-2 py-2"
+              className="end-fade flex min-h-0 flex-col overflow-y-auto border-l bg-sidebar px-2 pt-2 pb-4"
             >
               {treeHint}
               {tree}

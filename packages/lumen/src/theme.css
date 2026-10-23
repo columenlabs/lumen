@@ -331,6 +331,17 @@
   background-position: calc(-1 * var(--wash-x, 0px)) calc(-1 * var(--wash-y, 0px));
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--intro-fade)), transparent);
 }
+/* The end of a dialog's or drawer's scrolling body with no buttons under it: its last --end-fade
+   (--spacing(4) unless set) fades out, the same affordance as the sticky tab row's --intro-fade, so
+   content never stops at a hard edge. The element keeps at least that much padding at its end, so
+   its last row clears the fade once scrolled to the bottom. */
+@utility end-fade {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - var(--end-fade, calc(var(--spacing) * 4))),
+    transparent
+  );
+}
 @keyframes intro-page-in {
   from {
     opacity: 0;
