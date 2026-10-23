@@ -60,7 +60,7 @@ To try a change inside an app before it is published, use `bun link` in `out/<pa
 
 ## Releases
 
-Every merge to `main` publishes both packages at the next patch version and tags it ([publish.yml](.github/workflows/publish.yml)). The minor version comes from `packages/*/package.json`.
+Every merge to `main` publishes both packages at the next patch version and tags it ([publish.yml](.github/workflows/publish.yml)). A new minor is cut only by hand (Run workflow with bump = minor).
 
 ## License
 
