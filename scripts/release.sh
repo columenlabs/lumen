@@ -34,11 +34,17 @@ notes() { # Key takeaways and changes by part, from the pull requests since PREV
     gh api "repos/$REPO/pulls/$n" --jq '{number, title, body, login: .user.login}' \
       || { echo "could not read PR #$n" >&2; return 1; }
   done) || return 1
-  [ -n "$pulls" ] || { echo "No pull requests since ${PREV:-the start}."; return; }
-  input=$(jq -r '"## #\(.number) \(.title)\n\((.body // "") | .[0:1500])\n"' <<< "$pulls")
-  list=$(jq -r '"- #\(.number) by @\(.login)"' <<< "$pulls") # titles are checked by no one: numbers only
+  if [ -n "$pulls" ]; then
+    input=$(jq -r '"## #\(.number) \(.title)\n\((.body // "") | .[0:1500])\n"' <<< "$pulls")
+    list=$(jq -r '"- #\(.number) by @\(.login)"' <<< "$pulls") # titles are checked by no one: numbers only
+    count="Pull requests ($(echo "$prs" | wc -w | tr -d ' '))"
+  else # commits straight to main, like the first release: their messages stand in
+    input=$(git log --first-parent --format='## %s%n%b' ${PREV:+"$PREV.."}"$SHA" | cut -c1-1500)
+    list=$(git log --first-parent --format='- %h' ${PREV:+"$PREV.."}"$SHA")
+    count="Commits ($(echo "$list" | wc -l | tr -d ' '))"
+  fi
   prompt="Write the GitHub release notes for Lumen $TAG, an open-source React component kit published to npm \
-as @columenlabs/lumen-ui (components) and @columenlabs/lumen-ui-types (its view model types). It covers the merged pull requests below. \
+as @columenlabs/lumen-ui (components) and @columenlabs/lumen-ui-types (its view model types). It covers the merged pull requests (or commits) below. \
 Start with '## Key takeaways': 3 to 5 bullets, each opening with one or more type tags from [Feature] [Improvement] [Fix] [Performance] [Security] [Breaking] \
 (e.g. '- [Feature] **Headline**: sentence'), then a bold one-line headline, then one plain sentence on what a developer using the kit can now do. \
 Write each bullet for a developer who has never seen the change: the sentence must say where it lives, by the exported part and the prop, \
@@ -71,7 +77,7 @@ say 'an app' instead. No PR numbers, no file paths, no vendor names. Output only
   done
   [ -n "$text" ] || return 1
   printf '%s' "$text"
-  printf '\n\n## Pull requests (%s)\n%s\n\n' "$(echo "$prs" | wc -w | tr -d ' ')" "$list"
+  printf '\n\n## %s\n%s\n\n' "$count" "$list"
   [ -z "$PREV" ] || printf 'Full changelog: https://github.com/%s/compare/%s...%s\n' "$REPO" "$PREV" "$TAG"
 }
 
