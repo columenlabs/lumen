@@ -60,13 +60,6 @@ jobs:
           command -v gh && exit 0
           SUDO=$(command -v sudo || true)
           $SUDO apt-get update -qq && $SUDO apt-get install -y -qq gh
-      - name: Renumber every version so far into 0.1.* (one-off, 2026-10-23)
-        # Does nothing once v0.1.12 exists; remove with scripts/renumber.sh after it has run.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: bash scripts/renumber.sh
       - name: Next version
         id: version
         env:
@@ -102,7 +95,8 @@ jobs:
               echo "$name@$VERSION is already on npm"
               continue
             fi
-            (cd "out/$pkg" && npm publish --access public)
+            # npm will not move latest on its own past the deprecated 0.2.0 to 0.4.4.
+            (cd "out/$pkg" && npm publish --access public --tag latest)
           done
       - name: Point the old names at the new ones
         # The packages were @columenlabs/lumen and @columenlabs/lumen-types until 0.2.0.
@@ -114,6 +108,10 @@ jobs:
             [ -n "$(npm view "$old" deprecated 2>/dev/null)" ] && continue
             npm deprecate "$old" "Renamed to $new: bun add $new"
           done
+          # The 0.1.* renumber left a legacy dist-tag on each.
+          for pkg in lumen-ui lumen-ui-types; do
+            npm dist-tag ls "@columenlabs/$pkg" | grep -q '^legacy:' && npm dist-tag rm "@columenlabs/$pkg" legacy
+          done || true
       - name: Tag
         env:
           VERSION: ${{ steps.version.outputs.version }}
