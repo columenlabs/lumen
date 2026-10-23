@@ -81,6 +81,16 @@ export {
   LumenStepBar,
 } from './lumen-auth';
 export {
+  LumenBackupCodes,
+  type LumenCodeMethod,
+  type LumenPasskey,
+  type LumenResult,
+  LumenSecondStep,
+  type LumenSecondStepProps,
+  LumenSignInMethods,
+  type LumenSignInMethodsProps,
+} from './lumen-security';
+export {
   LumenDateInput,
   type LumenDateInputProps,
   stepDate,
