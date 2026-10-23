@@ -68,10 +68,12 @@ export function LumenDrawer({
   const body = <div className="flex flex-col px-4 pb-4">{children}</div>;
   // Every drawer has a footer, styled like a dialog's: the body scrolls above
   // it and always ends on a clear edge. Without actions of its own it offers Close.
+  // On a phone the drawer is a full screen and the footer a bar under the header, so the
+  // keyboard never covers its actions (Dialog does the same).
   const foot = (
     <footer
       data-slot="drawer-footer"
-      className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-4 py-2.5"
+      className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-4 py-2.5 max-md:order-first max-md:border-t-0 max-md:border-b"
     >
       {footerStart && (
         <div className="min-w-0 flex-1 truncate text-muted-foreground text-xs">{footerStart}</div>
@@ -92,7 +94,7 @@ export function LumenDrawer({
     <Sheet open={open} onOpenChange={(o) => !o && onClose()} modal={isMobile}>
       {isMobile ? (
         <SheetContent side="bottom" className="max-h-[85svh] gap-0 overflow-hidden">
-          <SheetHeader className="shrink-0 border-b">{head}</SheetHeader>
+          <SheetHeader className="order-first shrink-0 border-b">{head}</SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
           {foot}
         </SheetContent>

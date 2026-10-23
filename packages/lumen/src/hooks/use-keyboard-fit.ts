@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useIsMobile } from './use-mobile';
 
 /** The visual viewport while a phone's keyboard covers part of the layout viewport. */
 export interface KeyboardFit {
@@ -11,9 +12,9 @@ export interface KeyboardFit {
 }
 
 /**
- * Where a fixed modal must sit while the keyboard is open. iOS shrinks the visual viewport but not
- * the layout viewport fixed elements use, so a modal centred or bottom-anchored there runs under the
- * keyboard or off the top. Undefined while no keyboard is up.
+ * Where a fixed overlay must sit while the keyboard is open. iOS shrinks the visual viewport but not
+ * the layout viewport fixed elements use, so an overlay sized to the layout viewport runs under the
+ * keyboard. Undefined while no keyboard is up.
  */
 export function useKeyboardFit(): KeyboardFit | undefined {
   const [fit, setFit] = React.useState<KeyboardFit>();
@@ -36,4 +37,16 @@ export function useKeyboardFit(): KeyboardFit | undefined {
     };
   }, []);
   return fit;
+}
+
+/**
+ * The one phone rule for every overlay (Dialog, AlertDialog, a bottom Sheet): a full screen pinned to
+ * the top, its actions in a bar at the top, so the fields a person types in already sit high and the
+ * keyboard covers only what is below them. With the keyboard up the screen ends at the keyboard.
+ * The classes are `phoneScreen`; this gives the style.
+ */
+export function usePhoneScreen(style?: React.CSSProperties): React.CSSProperties | undefined {
+  const phone = useIsMobile();
+  const kb = useKeyboardFit();
+  return phone && kb ? { ...style, top: kb.top, height: kb.height, maxHeight: kb.height } : style;
 }

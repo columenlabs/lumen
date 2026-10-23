@@ -4,7 +4,7 @@ import type * as React from 'react';
 
 import { Button } from './button';
 import { XIcon } from 'lucide-react';
-import { useKeyboardFit } from '../hooks/use-keyboard-fit';
+import { usePhoneScreen } from '../hooks/use-keyboard-fit';
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -46,18 +46,15 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
 }) {
-  // With a phone's keyboard up, centre it in what is left above the keyboard and fit it there.
-  const kb = useKeyboardFit();
-  const style = kb
-    ? { ...props.style, top: kb.top + kb.height / 2, maxHeight: kb.height - 16 }
-    : props.style;
+  // On a phone it is a full screen pinned to the top, its footer a bar at the top (usePhoneScreen).
+  const style = usePhoneScreen(props.style);
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-(--dialog-pad) text-sm [--dialog-pad:--spacing(4)] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-(--dialog-pad) text-sm [--dialog-pad:--spacing(4)] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm max-md:inset-0 max-md:h-full max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:content-start max-md:overflow-y-auto max-md:rounded-none max-md:pt-[calc(var(--dialog-pad)+env(safe-area-inset-top))] max-md:ring-0 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}
@@ -66,7 +63,11 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button variant="ghost" className="absolute top-2 right-2" size="icon-sm">
+            <Button
+              variant="ghost"
+              className="absolute top-2 right-2 max-md:top-[calc(1.25rem+env(safe-area-inset-top))]"
+              size="icon-sm"
+            >
               <XIcon />
               <span className="sr-only">Close</span>
             </Button>
@@ -88,7 +89,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
  *  footer bleed by `--dialog-pad`, the content's padding, so a dialog that changes its padding sets
  *  that variable (`[--dialog-pad:0px]`), never `p-0`, and they still meet its edges. */
 const dialogBody =
-  '-mx-(--dialog-pad) max-h-[60svh] min-h-0 overflow-y-auto px-(--dialog-pad)';
+  '-mx-(--dialog-pad) max-h-[60svh] min-h-0 overflow-y-auto px-(--dialog-pad) max-md:max-h-none max-md:overflow-visible';
 
 function DialogBody({ className, ...props }: React.ComponentProps<'div'>) {
   return <div data-slot="dialog-body" className={cn(dialogBody, className)} {...props} />;
@@ -106,7 +107,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        '-mx-(--dialog-pad) -mb-(--dialog-pad) flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end',
+        '-mx-(--dialog-pad) -mb-(--dialog-pad) flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end max-md:order-first max-md:-mt-(--dialog-pad) max-md:mb-0 max-md:flex-row max-md:justify-end max-md:rounded-none max-md:border-t-0 max-md:border-b max-md:pr-12',
         className,
       )}
       {...props}
