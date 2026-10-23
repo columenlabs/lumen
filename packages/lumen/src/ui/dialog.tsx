@@ -54,7 +54,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-(--dialog-pad) text-sm [--dialog-pad:--spacing(4)] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm max-md:inset-0 max-md:h-full max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:content-start max-md:overflow-y-auto max-md:rounded-none max-md:pt-[calc(var(--dialog-pad)+env(safe-area-inset-top))] max-md:ring-0 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-(--dialog-pad) text-sm [--dialog-pad:--spacing(4)] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm max-md:inset-0 max-md:h-full max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:content-start max-md:overflow-y-auto max-md:rounded-none max-md:pt-[calc(var(--dialog-pad)+env(safe-area-inset-top))] max-md:ring-0 max-md:end-fade max-md:[--end-fade:var(--dialog-pad)] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}
@@ -91,8 +91,19 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
 const dialogBody =
   '-mx-(--dialog-pad) max-h-[60svh] min-h-0 overflow-y-auto px-(--dialog-pad) max-md:max-h-none max-md:overflow-visible';
 
+/** With no footer under it the body reaches the dialog's bottom edge and fades into it (`end-fade`). */
 function DialogBody({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="dialog-body" className={cn(dialogBody, className)} {...props} />;
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn(
+        dialogBody,
+        'last:-mb-(--dialog-pad) last:pb-(--dialog-pad) last:end-fade last:[--end-fade:var(--dialog-pad)]',
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 function DialogFooter({
