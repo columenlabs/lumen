@@ -55,6 +55,18 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run type-check
+      - name: Install gh
+        run: |
+          command -v gh && exit 0
+          SUDO=$(command -v sudo || true)
+          $SUDO apt-get update -qq && $SUDO apt-get install -y -qq gh
+      - name: Renumber every version so far into 0.1.* (one-off, 2026-10-23)
+        # Does nothing once v0.1.12 exists; remove with scripts/renumber.sh after it has run.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bash scripts/renumber.sh
       - name: Next version
         id: version
         env:
@@ -109,11 +121,6 @@ jobs:
           git fetch --tags --quiet
           if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then exit 0; fi
           git tag "v$VERSION" && git push origin "v$VERSION"
-      - name: Install gh
-        run: |
-          command -v gh && exit 0
-          SUDO=$(command -v sudo || true)
-          $SUDO apt-get update -qq && $SUDO apt-get install -y -qq gh
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
