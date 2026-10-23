@@ -80,6 +80,11 @@ export {
   LumenPasswordField,
   LumenStepBar,
 } from './lumen-auth';
+export {
+  LumenDateInput,
+  type LumenDateInputProps,
+  stepDate,
+} from './lumen-date-input';
 export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
 export { LumenSecret } from './lumen-secret';
 export { RankedBars, StackedBars, StackedColumns } from './lumen-widget-charts';
