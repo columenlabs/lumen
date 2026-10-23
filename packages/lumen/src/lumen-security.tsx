@@ -51,8 +51,11 @@ const link = 'text-primary underline-offset-4 hover:underline';
 export interface LumenSecondStepProps {
   /** The ways this person can pass the second step. */
   methods: { passkey?: boolean; app?: boolean; email?: boolean; backup?: boolean };
-  /** The method shown first; the app sends the first emailed code itself. */
-  initial: LumenCodeMethod;
+  /**
+   * The code method shown first (the app sends the first emailed code itself). Left out, it is
+   * the app, then email, then backup, whichever the person has; with none, only the passkey shows.
+   */
+  initial?: LumenCodeMethod;
   /** Where emailed codes go, as the app wants it shown (masked or whole). */
   emailTo?: string;
   onPasskey?: () => LumenResult;
@@ -76,7 +79,9 @@ export function LumenSecondStep({
   onVerify,
   onBack,
 }: LumenSecondStepProps) {
-  const [method, setMethod] = useState<LumenCodeMethod>(initial);
+  const [method, setMethod] = useState<LumenCodeMethod | null>(
+    initial ?? (['app', 'email', 'backup'] as const).find((m) => methods[m]) ?? null,
+  );
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -100,6 +105,7 @@ export function LumenSecondStep({
   };
   const verify = (e: FormEvent) => {
     e.preventDefault();
+    if (!method) return;
     if (method !== 'backup' && code.length !== 6) return setError('Enter all 6 digits.');
     return run(() => onVerify(method, code.trim()));
   };
@@ -115,7 +121,9 @@ export function LumenSecondStep({
         : 'We emailed you a code.'
       : method === 'app'
         ? 'Enter the code from your authenticator app.'
-        : 'Enter one of the backup codes you saved. Each works once.';
+        : method === 'backup'
+          ? 'Enter one of the backup codes you saved. Each works once.'
+          : 'Use your passkey to finish signing in.';
 
   return (
     <>
@@ -126,46 +134,48 @@ export function LumenSecondStep({
             <Button size="lg" className="h-10" disabled={busy} onClick={() => run(onPasskey)}>
               <Fingerprint /> {busy ? 'Waiting for your passkey…' : 'Use my passkey'}
             </Button>
-            <FieldSeparator>or enter the code</FieldSeparator>
+            {method && <FieldSeparator>or enter the code</FieldSeparator>}
           </>
         )}
         <LumenAuthNote>{note}</LumenAuthNote>
-        <form className="flex flex-col gap-4" onSubmit={verify}>
-          {method === 'backup' ? (
-            <>
-              <Input
-                aria-label="Backup code"
-                autoComplete="one-time-code"
-                className="h-12 text-center font-code text-lg"
+        {method && (
+          <form className="flex flex-col gap-4" onSubmit={verify}>
+            {method === 'backup' ? (
+              <>
+                <Input
+                  aria-label="Backup code"
+                  autoComplete="one-time-code"
+                  className="h-12 text-center font-code text-lg"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+                <LumenAuthProblem>{error}</LumenAuthProblem>
+              </>
+            ) : (
+              <LumenCodeField
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={setCode}
+                error={error}
+                hint={
+                  method === 'email'
+                    ? 'It expires in 5 minutes.'
+                    : 'The code changes every 30 seconds.'
+                }
+                onResend={
+                  method === 'email' && onSendEmail
+                    ? async () => {
+                        await run(onSendEmail);
+                        setNote(emailTo ? `New code sent to ${emailTo}.` : 'New code sent.');
+                      }
+                    : undefined
+                }
               />
-              <LumenAuthProblem>{error}</LumenAuthProblem>
-            </>
-          ) : (
-            <LumenCodeField
-              value={code}
-              onChange={setCode}
-              error={error}
-              hint={
-                method === 'email'
-                  ? 'It expires in 5 minutes.'
-                  : 'The code changes every 30 seconds.'
-              }
-              onResend={
-                method === 'email' && onSendEmail
-                  ? async () => {
-                      await run(onSendEmail);
-                      setNote(emailTo ? `New code sent to ${emailTo}.` : 'New code sent.');
-                    }
-                  : undefined
-              }
-            />
-          )}
-          <Button size="lg" variant="outline" type="submit" className="h-10" disabled={busy}>
-            Verify
-          </Button>
-        </form>
+            )}
+            <Button size="lg" variant="outline" type="submit" className="h-10" disabled={busy}>
+              Verify
+            </Button>
+          </form>
+        )}
         <div className="flex flex-col items-center gap-2 text-sm">
           {others.map((o) => (
             <button key={o.m} type="button" className={link} onClick={() => switchTo(o.m)}>
