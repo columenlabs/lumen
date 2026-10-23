@@ -275,6 +275,8 @@ export interface LumenSignInMethodsProps {
     onConfirm: (code: string) => LumenResult;
     /** Turns it off after the password; no Turn off without it. */
     onTurnOff?: (password: string) => LumenResult;
+    /** Whether Replace shows while it is on (set up again over the old one); true when absent. */
+    replaceable?: boolean;
   };
   /** A code emailed at each sign-in. */
   email?: {
@@ -604,9 +606,11 @@ export function LumenSignInMethods({
                 <Check /> On
               </Badge>
             )}
-            <Button size="sm" variant="outline" onClick={() => open('app')}>
-              <Smartphone /> {app.on ? 'Replace' : 'Set up'}
-            </Button>
+            {(!app.on || app.replaceable !== false) && (
+              <Button size="sm" variant="outline" onClick={() => open('app')}>
+                <Smartphone /> {app.on ? 'Replace' : 'Set up'}
+              </Button>
+            )}
             {app.on && app.onTurnOff && (
               <Button
                 size="sm"
