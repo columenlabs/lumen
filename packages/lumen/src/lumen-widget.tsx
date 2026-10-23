@@ -22,6 +22,7 @@ import {
   type WidgetControl,
   controlOn,
   isDollarFormat,
+  isOwnTile,
   isRowCard,
   isTableCard,
   trendBuckets,
@@ -1012,10 +1013,15 @@ export function LumenSavedWidget<T>({
   const number = widget.kind === 'metric' && 'tile' in widget;
   const head = row ? domain.tilesHead?.(rows) : undefined;
   const compact = number;
+  // A Number widget reads as its main number's label over the number; its name stands in without one.
+  const label =
+    widget.kind === 'metric' && 'tile' in widget && isOwnTile(widget.tile)
+      ? widget.tile.label.trim()
+      : '';
   const frame = {
     id: widget.id,
     kind: widget.kind,
-    title: head?.title ?? title,
+    title: head?.title ?? (label || title),
     compact,
     controls,
     link,
