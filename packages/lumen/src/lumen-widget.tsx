@@ -56,6 +56,7 @@ import {
   PackageIcon,
   PencilIcon,
   PlusIcon,
+  RefreshCwIcon,
   RotateCcwIcon,
   Rows3Icon,
   SparklesIcon,
@@ -138,7 +139,7 @@ import {
 } from './ui/dropdown-menu';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Skeleton } from './ui/skeleton';
 import { Switch } from './ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -741,6 +742,8 @@ export function LumenWidget({
           layout &&
             "relative after:pointer-events-none after:absolute after:inset-0 after:z-30 after:rounded-[inherit] after:border-2 after:border-primary/40 after:border-dashed after:content-['']",
           flat && 'border-0 bg-transparent shadow-none',
+          // The corner ⋯ of a card with its header off sits over the body's top right.
+          headless && 'relative',
           className,
         )}
       >
@@ -951,6 +954,17 @@ export function LumenWidget({
         >
           <LumenBoundary where={id}>{children}</LumenBoundary>
         </div>
+        {headless && (
+          <HeaderlessMenu
+            title={title}
+            ask={ask}
+            askLabel={`Ask ${assistantName}`}
+            load={load && on('refresh') ? load : undefined}
+            editScript={load?.editScript}
+            filter={showFilter ? filter : undefined}
+            filterCount={filterCount}
+          />
+        )}
         {!layout && !folded && load && on('footer') && (
           // The load line sits at the card's foot, whatever the body's height.
           <div
@@ -1513,6 +1527,117 @@ export function cardsAfter(cards: ViewCard[], i: number, action: CardAction) {
 }
 
 export type { CustomViewConfig };
+
+/**
+ * The controls of a card with its header off (Edit widget ▸ Controls): a faint ⋯ in the top right
+ * corner, always there on desktop and phone, opening Ask the assistant, Refresh, Filter and Script
+ * (only those the card has on). Filter opens the card's filter in a popover from the same corner;
+ * while it holds tokens their count sits beside the ⋯, so a filtered card never looks unfiltered.
+ */
+function HeaderlessMenu({
+  title,
+  ask,
+  askLabel,
+  load,
+  editScript,
+  filter,
+  filterCount,
+}: {
+  title: string;
+  ask: (() => void) | null;
+  askLabel: string;
+  load?: LumenLoad;
+  editScript?: () => void;
+  filter?: ReactNode;
+  filterCount: number;
+}) {
+  const [filterOpen, setFilterOpen] = useState(false);
+  const opening = useRef(false);
+  if (!ask && !load && !editScript && !filter) return null;
+  return (
+    <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+      <PopoverAnchor asChild>
+        <div
+          data-card-corner
+          className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 rounded-md bg-card/80"
+        >
+          {filter && filterCount > 0 && (
+            <Badge
+              variant="secondary"
+              className="num cursor-pointer gap-1 px-1.5 text-xs"
+              title={`${filterCount} filter ${filterCount === 1 ? 'token' : 'tokens'}`}
+              onClick={() => setFilterOpen(true)}
+            >
+              <FunnelIcon className="size-3" />
+              {filterCount}
+            </Badge>
+          )}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <IconButton
+                icon={load?.fetching ? RefreshCwIcon : MoreHorizontalIcon}
+                busy={load?.fetching}
+                label={`${title} menu`}
+                className="text-muted-foreground opacity-60 hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-44"
+              onCloseAutoFocus={(e) => {
+                if (!opening.current) return;
+                opening.current = false;
+                e.preventDefault();
+                setFilterOpen(true);
+              }}
+            >
+              {ask && (
+                <DropdownMenuItem onSelect={ask}>
+                  <SparklesIcon /> {askLabel}
+                </DropdownMenuItem>
+              )}
+              {load && (
+                <DropdownMenuItem disabled={load.fetching} onSelect={() => void load.refresh()}>
+                  <RefreshCwIcon /> Refresh
+                </DropdownMenuItem>
+              )}
+              {filter && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    // Opened once the menu has closed (its close hands focus back, which would
+                    // shut a popover opened sooner).
+                    opening.current = true;
+                  }}
+                >
+                  <FunnelIcon /> Filter
+                  {filterCount > 0 && (
+                    <span className="num ml-auto text-xs text-muted-foreground">{filterCount}</span>
+                  )}
+                </DropdownMenuItem>
+              )}
+              {editScript && (
+                <DropdownMenuItem onSelect={editScript}>
+                  <CodeIcon /> Script
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </PopoverAnchor>
+      {filter && (
+        <PopoverContent
+          align="end"
+          collisionPadding={8}
+          className="w-xl max-w-(--radix-popover-content-available-width) p-2"
+        >
+          <div data-card-filter className="flex items-center gap-2">
+            {filter}
+          </div>
+        </PopoverContent>
+      )}
+    </Popover>
+  );
+}
 
 /** ⓘ How to read: the card's own few lines on what it shows and what to look for. */
 function CardHelp({ title, children }: { title: string; children: ReactNode }) {
