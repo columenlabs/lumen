@@ -5,6 +5,7 @@ import type * as React from 'react';
 import { Button } from './button';
 import { XIcon } from 'lucide-react';
 import { useKeyboardFit } from '../hooks/use-keyboard-fit';
+import { useIsMobile } from '../hooks/use-mobile';
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -48,15 +49,18 @@ function SheetContent({
   side?: 'top' | 'right' | 'bottom' | 'left';
   showCloseButton?: boolean;
 }) {
-  // With a phone's keyboard up, a bottom sheet sits on the keyboard and fits what is left above it;
-  // a side sheet spans only the visible part.
+  // On a phone a bottom sheet is a full screen pinned to the top, like a Dialog (usePhoneScreen), so
+  // the fields a person types in sit high. With the keyboard up a top or full screen sheet ends at
+  // the keyboard; a side sheet spans only the visible part.
   const kb = useKeyboardFit();
+  const phone = useIsMobile();
+  const screen = side === 'top' || (side === 'bottom' && phone);
   const style = !kb
     ? props.style
-    : side === 'bottom'
-      ? { ...props.style, bottom: kb.below, maxHeight: kb.height - 8 }
-      : side === 'top'
-        ? { ...props.style, top: kb.top, maxHeight: kb.height - 8 }
+    : screen
+      ? { ...props.style, top: kb.top, maxHeight: kb.height, height: kb.height }
+      : side === 'bottom'
+        ? { ...props.style, bottom: kb.below, maxHeight: kb.height - 8 }
         : { ...props.style, top: kb.top, height: kb.height };
   return (
     <SheetPortal>
@@ -65,7 +69,7 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          'bg-popover text-popover-foreground fixed z-50 flex flex-col gap-4 bg-clip-padding text-sm shadow-lg transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-(--assistant-docked,0px) data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-[side=bottom]:data-open:slide-in-from-bottom-10 data-[side=left]:data-open:slide-in-from-left-10 data-[side=right]:data-open:slide-in-from-right-10 data-[side=top]:data-open:slide-in-from-top-10 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:data-closed:slide-out-to-bottom-10 data-[side=left]:data-closed:slide-out-to-left-10 data-[side=right]:data-closed:slide-out-to-right-10 data-[side=top]:data-closed:slide-out-to-top-10',
+          'group/sheet bg-popover text-popover-foreground fixed z-50 flex flex-col gap-4 bg-clip-padding text-sm shadow-lg transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-(--assistant-docked,0px) data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:border-b max-md:data-[side=bottom]:top-0 max-md:data-[side=bottom]:h-full max-md:data-[side=bottom]:max-h-none max-md:data-[side=bottom]:rounded-none max-md:data-[side=bottom]:border-t-0 max-md:data-[side=bottom]:pt-[env(safe-area-inset-top)] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-[side=bottom]:data-open:slide-in-from-bottom-10 data-[side=left]:data-open:slide-in-from-left-10 data-[side=right]:data-open:slide-in-from-right-10 data-[side=top]:data-open:slide-in-from-top-10 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:data-closed:slide-out-to-bottom-10 data-[side=left]:data-closed:slide-out-to-left-10 data-[side=right]:data-closed:slide-out-to-right-10 data-[side=top]:data-closed:slide-out-to-top-10',
           className,
         )}
         {...props}
@@ -80,7 +84,11 @@ function SheetContent({
         {children}
         {showCloseButton && (
           <SheetPrimitive.Close data-slot="sheet-close" asChild>
-            <Button variant="ghost" className="absolute top-3 right-3" size="icon-sm">
+            <Button
+              variant="ghost"
+              className="absolute top-3 right-3 max-md:group-data-[side=bottom]/sheet:top-[calc(0.75rem+env(safe-area-inset-top))]"
+              size="icon-sm"
+            >
               <XIcon />
               <span className="sr-only">Close</span>
             </Button>
