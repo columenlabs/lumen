@@ -2,7 +2,7 @@ import { LumenGeoMap } from '@columenlabs/lumen-ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
-  title: 'Charts/LumenGeoMap',
+  title: 'Components/Charts/LumenGeoMap',
   component: LumenGeoMap,
   parameters: {
     docs: {

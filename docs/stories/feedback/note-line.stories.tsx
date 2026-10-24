@@ -4,7 +4,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { PlugIcon } from 'lucide-react';
 
 const meta = {
-  title: 'Feedback/NoteLine',
+  title: 'Components/Feedback/NoteLine',
   component: NoteLine,
   parameters: {
     docs: {

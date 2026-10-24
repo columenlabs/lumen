@@ -50,7 +50,7 @@ function Methods() {
 }
 
 const meta = {
-  title: 'Frame/Two-step sign-in',
+  title: 'Blocks/Sign-in',
   component: LumenSignInMethods,
   parameters: {
     docs: {

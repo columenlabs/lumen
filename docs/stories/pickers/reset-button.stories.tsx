@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 
 const meta = {
-  title: 'Pickers and panels/ResetButton',
+  title: 'Components/Pickers and panels/ResetButton',
   component: ResetButton,
   parameters: {
     docs: {

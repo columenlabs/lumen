@@ -22,7 +22,7 @@ function Demo(props: Partial<Parameters<typeof LumenDateInput>[0]>) {
 }
 
 const meta = {
-  title: 'Pickers and panels/LumenDateInput',
+  title: 'Components/Pickers and panels/LumenDateInput',
   component: LumenDateInput,
   parameters: {
     docs: {

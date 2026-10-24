@@ -1,0 +1,583 @@
+[
+  {
+    "tag": "v0.1.21",
+    "date": "2026-10-24T01:50:01Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "README opens like a product page",
+        "body": "The README header now gives a one-line pitch, badges for npm version, MIT licence and docs, and links to Docs, Changelog, llms.txt and Install, so you can judge the kit and jump to what you need from the first screen."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "See the kit in use before installing",
+        "body": "The README now shows a dark screenshot of a made-up sample app built only from Lumen, so you can see how the components look together without running anything."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A map of the kit in the README",
+        "body": "The new \"What's inside\" table runs from the app shell through blocks, views and charts, then pickers and primitives, and ends with the two packages, `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types`, so you can find the part you need. This release changes documentation only, and no component or type behaviour differs from the previous version."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.20",
+    "date": "2026-10-24T00:40:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "LumenShell Docs page no longer freezes the browser",
+        "body": "The description of LumenShell's `app` prop now shows the `<html>` tag as inline code, so you can open the Frame / LumenShell Docs page and read the full props table without the \"Page Unresponsive\" hang."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.19",
+    "date": "2026-10-23T21:54:11Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Second sign-in step",
+        "body": "Place the new `LumenSecondStep` inside `LumenAuthStage` after the password screen to offer a passkey button, a 6-digit code from an authenticator app or email, or a backup code, with links to switch between them. The `initial` prop is optional, and an app with no code method configured shows only the passkey."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Sign-in methods management",
+        "body": "The new `LumenSignInMethods` part gives you ready-made content for a Security page, with rows for password, passkeys, authenticator app, emailed code and backup codes. If your sign-in service can't set up the authenticator app over an existing one, set `app.replaceable: false` to hide Replace."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Security page in Settings",
+        "body": "Pass the new `security` prop to `LumenShell` or `LumenSettings` and Settings ▸ General lists **Security** right after Profile."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Backup codes display",
+        "body": "The new `LumenBackupCodes` shows a set of codes once, with Copy, Download and an \"I saved them\" tick that must be checked before Done."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Centred pitch in the auth side pane",
+        "body": "When you don't pass `illustration` to `LumenAuthStage`, the pitch and points now sit centred in the side pane."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.18",
+    "date": "2026-10-23T21:06:14Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Step a date field one open day at a time",
+        "body": "The new `LumenDateInput` component has ‹ › buttons (and Alt+← / Alt+→ while the field has focus) that move the date by one day, and its `isOpen` prop lets you pass a function that says which days count, such as a trading calendar, so steps skip weekends and holidays."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Keep stepping inside a date range",
+        "body": "In `LumenDateInput`, the `min` and `max` props switch a step off when it would pass the limit, so › greys out at today when `max` is today."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Add a Today button and pick a size",
+        "body": "In `LumenDateInput`, the `onToday` prop adds a Today icon button (with `atToday` turning it off), and `size` accepts `sm` for toolbars and card headers or `default` for forms."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.17",
+    "date": "2026-10-23T18:08:52Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Headerless cards keep their controls behind a corner ⋯",
+        "body": "In `LumenWidget`, turning the header off (the `Header` control under Edit widget) no longer drops Ask, Refresh and Filter, because the card now shows a ⋯ menu in its top right corner with whichever of those the card has on."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Filtered headerless cards never look unfiltered",
+        "body": "In `LumenWidget` with the header off, a count chip now sits beside the ⋯ while the card's filter holds tokens, so you can see the filter is active and tap the chip to open it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Refresh progress stays visible without a header",
+        "body": "In `LumenWidget` with the header off, the corner ⋯ spins as ↻ while a refresh runs."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.16",
+    "date": "2026-10-23T17:50:25Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "`end-fade` utility",
+        "body": "The theme stylesheet now has an `end-fade` class that masks the last part of an element so it fades out, and you can change the length with `--end-fade` (default `--spacing(4)`, 16px)."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Dialog bodies fade when no footer follows",
+        "body": "`DialogBody` now bleeds to the dialog's edge and fades over its last 16px when it is the last child of `DialogContent`, meaning you left out `DialogFooter`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Phone dialogs and drawers fade at the bottom",
+        "body": "On phones, `DialogContent`, `AlertDialogContent` and `LumenDrawer` fade their content at the bottom edge, because their footer is a bar at the top there."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Empty settings footers disappear",
+        "body": "A settings footer with nothing in `SettingsFooter` is now hidden and the body fades instead, while a section that fills `SettingsFooter` keeps its bar."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.15",
+    "date": "2026-10-23T17:46:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Number widgets now show their main number's label",
+        "body": "In `LumenSavedWidget`, a Number widget (kind `metric` with a `tile`) now titles its card with the label set on the main number under Edit widget ▸ Fields, and falls back to the widget's name (or the style name) only when no label is set."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.14",
+    "date": "2026-10-23T17:10:39Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Release notes no longer collapse for releases with no pull requests",
+        "body": "In the release-notes step of the repo's release process (not in `@columenlabs/lumen-ui` or `@columenlabs/lumen-ui-types`, so there is nothing to change in an app), a release whose range has no pull requests now gets notes written from its commit messages, and the list at the end shows commit hashes instead of pull requests."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.13",
+    "date": "2026-10-23T06:34:23Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "Versions 0.2.0 to 0.4.4 are now 0.1.2 to 0.1.12",
+        "body": "If an app pins `@columenlabs/lumen-ui` or `@columenlabs/lumen-ui-types` to a 0.2, 0.3 or 0.4 version, change the pin to the matching 0.1.x build (0.2.0–0.2.2 is now 0.1.2–0.1.4, 0.3.0–0.3.2 is now 0.1.5–0.1.7, and 0.4.0–0.4.4 is now 0.1.8–0.1.12). The code is identical, only the number changed."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "`latest` now points at 0.1.13",
+        "body": "Running `npm install @columenlabs/lumen-ui` or `@columenlabs/lumen-ui-types` without a version installs the newest 0.1.x build instead of a deprecated 0.4 release."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Every release is a patch",
+        "body": "Both packages now publish the next 0.1.x patch on each merge, so a plain `^0.1.x` range picks up each new build, and a new minor only ships when a maintainer asks for it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Deprecation notices name the new version",
+        "body": "Installing any deprecated 0.2.0–0.4.4 build of either package prints a warning that names the 0.1.x number it became."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.12",
+    "date": "2026-10-23T04:05:46Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Confirm dialogs no longer slide under the phone keyboard",
+        "body": "`LumenConfirm` and `AlertDialogContent` now open as a full screen pinned to the top on screens below 768px, so a type-to-confirm field stays visible while you type."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Dialogs become full screens on phones",
+        "body": "`DialogContent` now fills the screen below 768px, `DialogFooter` becomes an action bar at the top, and `DialogBody` no longer scrolls on its own, so the whole screen scrolls as one."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Bottom sheets are full screens on phones",
+        "body": "a bottom `SheetContent`, including `LumenDrawer` and `LumenSelector`, now fills the screen on phones, and the `LumenDrawer` footer sits directly under its header."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.11",
+    "date": "2026-10-22T23:50:25Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Docs pages no longer show the build machine's folder",
+        "body": "In the component docs, the file location shown for each component is now relative to the repository root, so you no longer see an absolute home-directory path."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Repo-relative `filePath` in the components manifest",
+        "body": "In the generated components manifest, each component's `filePath` now starts at the repository root, so you can read or match it the same way on any machine."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Built docs output no longer exposes local directory names",
+        "body": "The `.js`, `.json` and `.html` files in the built docs site no longer contain the absolute path of the machine that built them, so you can publish the output without revealing where it was built."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.10",
+    "date": "2026-10-22T23:15:47Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Release step no longer skips tags that have no release",
+        "body": "In the release tooling, which is not part of `@columenlabs/lumen-ui` or `@columenlabs/lumen-ui-types` and leaves both packages unchanged, a maintainer can now tag a version and have its release created, instead of being told it already exists."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.9",
+    "date": "2026-10-23T06:26:52Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Every published version now gets a release",
+        "body": "The Publish workflow now ends by creating a release for the tag it just published, so each version of `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types` has notes built from the merged pull requests since the previous tag."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Backfill releases for older tags",
+        "body": "When you run the Publish workflow manually, the `tag` input (plus `redo`) creates or rewrites the release for one existing tag without publishing a package, which covers versions tagged before this change."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Notes are checked before they go public",
+        "body": "The release step checks the notes against the `LUMEN_FORBIDDEN_NAMES` list (case-insensitive), asks for new notes if a name matches, and fails the release rather than publish it."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.8",
+    "date": "2026-10-23T06:26:50Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Stacked time-series columns",
+        "body": "The new `StackedColumns` chart takes `rows`, `x` and `parts` and draws one stacked column per period, oldest on the left, so you can show how a total splits over time."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Confirm dialogs that wait on async work",
+        "body": "In `LumenConfirm`, an `onConfirm` that returns a promise now keeps the dialog open and shows `busyAction` until it settles, and you can word a failure with `problem` or show a success message with `done`."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Typed-confirm input on phones",
+        "body": "The typed-confirm input in `LumenConfirm` no longer spell-checks or auto-capitalises an all-caps word on phones, so people can type the confirmation word without it being altered."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.7",
+    "date": "2026-10-23T06:26:48Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Live docs site for every component",
+        "body": "At lumen-ui.columenlabs.com/docs you can try about 25 components on sample data, including LumenView as a table, grouped or pivot, LumenLayout with widgets, LumenShell, LumenSelector, LumenDrawer and the charts, change their props with Controls, and copy the code with Show code."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Props tables generated from the code",
+        "body": "Each component page lists its props, read from the kit's own source on every build, so the tables for parts like LumenView and LumenChart stay in step with what you install from `@columenlabs/lumen-ui`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Reference pages for app-bound parts",
+        "body": "Settings, the frame parts, the assistant and workspaces, widgets and market now have props pages, so you can look up what they accept even though they need an app behind them to run."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Docs that coding agents can read",
+        "body": "The docs build writes an `llms.txt` and serves the component manifest at `/docs/manifests/components.json`, and running the docs workspace locally exposes an MCP endpoint at `/mcp` that agents can query for component details."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.6",
+    "date": "2026-10-23T06:26:46Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Nested, foldable rows with LumenTree",
+        "body": "Import `LumenTree` and `LumenTreeItem` from `@columenlabs/lumen-ui` and nest items to show hierarchies such as a decision path. Each item is one wrapping row beside a chevron, and its children hang off a guide line."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Mark a path taken or dim a row",
+        "body": "On `LumenTreeItem`, set the `tone` prop to `positive` to colour the guide line for a path that was taken, or to `muted` to dim the row."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Jump straight to any row",
+        "body": "With `useLumenTree`, call `reveal(id)` to open every item above a row, scroll to it and flash it. The flash honours reduced motion, and folded children stay mounted so any row can be revealed."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.5",
+    "date": "2026-10-23T06:26:44Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Split sign-in page",
+        "body": "`LumenAuthStage` takes `brand`, `pitch`, `points`, `illustration` and `footer` props to build a signed-out page, with `LumenAuthHeading`, `LumenAuthProblem` and `LumenAuthNote` for the form side, and the story side hides on phones."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Sign-in form fields",
+        "body": "`LumenEmailField`, `LumenPasswordField` (with a Show switch) and `LumenCodeField` (digits only, with `length`, error, hint and a resend link) replace hand-built inputs, and `LumenStepBar` shows progress with its `at` and `of` props."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choice cards and show-once secrets",
+        "body": "`LumenChoice` renders pick-one cards with an icon, title, description and disabled state, and `LumenSecret` shows a secret once with a warning, Show/Hide and Copy."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Typed confirmation",
+        "body": "In `LumenConfirm`, the new `typeToConfirm` prop keeps the action disabled until the user types the required word, and leaving the prop out changes nothing."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Bar charts now importable",
+        "body": "`RankedBars` and `StackedBars` are exported from the `@columenlabs/lumen-ui` package root, so you can import them directly instead of working around their absence."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.4",
+    "date": "2026-10-23T06:26:42Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "One red flag for an unlinked source",
+        "body": "In the Edit widget panel's Data section, a source with no field pairs now shows a single red broken-link icon instead of three red flags, so an unlinked source reads as one clear warning."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "\"Not linked\" badge removed",
+        "body": "The Data section no longer renders the \"Not linked\" badge, so if an app's tests or styles look for that badge, they should look for the broken-link icon instead."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Fields stay locked until linked",
+        "body": "In the Data section, the fields of an unlinked source stay greyed out and can't be ticked until the source is linked, and the muted hint \"Pick a field on each side to link it\" stays in place."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.3",
+    "date": "2026-10-23T06:26:39Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Widgets can read their own data",
+        "body": "In the view model, a card now accepts `source` (a catalog domain id or a recipe `frame:<id>`) and its own `connections`, and `SourcedCard` reads those rows itself, so the widget can sit on any page."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Pick the data when adding a widget",
+        "body": "The Add widget flow now opens with a Data step, where a `LumenSelector` offers This page, the app's live domains that have a reader, or Recipes."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Reshape a widget's data tree",
+        "body": "In Edit widget ▸ Data, you can remove any source (the main one included), promote a linked source with ★ Make main, swap the main data with ⇄, or Clear all, and every change has an Undo toast and waits for Save."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Unlinked sources are obvious",
+        "body": "In Edit widget ▸ Data, a source that isn't linked shows a red unlink icon, a red badge and a red note, and its fields are greyed out and disabled until you link it."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.2",
+    "date": "2026-10-23T06:26:37Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "Components package renamed to `@columenlabs/lumen-ui`",
+        "body": "In your app, replace every import from `@columenlabs/lumen` with `@columenlabs/lumen-ui` and update the dependency in `package.json`; component names such as `LumenShell` and `LumenTable` are unchanged."
+      },
+      {
+        "kinds": [],
+        "title": "View model types package renamed to `@columenlabs/lumen-ui-types`",
+        "body": "Replace imports from `@columenlabs/lumen-types` with `@columenlabs/lumen-ui-types`, including subpaths such as `@columenlabs/lumen-ui-types/views`, and keep it on the same version as `@columenlabs/lumen-ui`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Old package names now point to the new ones",
+        "body": "Installing `@columenlabs/lumen` or `@columenlabs/lumen-types` now shows a deprecation message starting \"Renamed to …\", so you can find the new names without reading the release notes."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Built with TypeScript 7",
+        "body": "The declarations in `@columenlabs/lumen-ui-types/views` still export schemas such as `viewCardSchema`, so existing type and schema imports keep working."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.1",
+    "date": "2026-10-23T06:26:35Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "LumenGeoMap shades with any CSS colour",
+        "body": "LumenGeoMap now reads the `--border` and `--primary` theme tokens in any CSS colour format, including `oklch(...)`, so regions shade from the border colour to the primary colour instead of turning black, with no change needed in your app."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.0",
+    "date": "2026-10-23T06:26:33Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "React component kit on npm",
+        "body": "Install `@columenlabs/lumen-ui` to import the app frame, pages, views, widgets, charts, drawers and pickers as React components."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Typed view model",
+        "body": "Install `@columenlabs/lumen-ui-types` to import the view model types and type-check the view data you pass to components from `@columenlabs/lumen-ui`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Open source under MIT",
+        "body": "Use, fork and ship the kit in your own apps, since both packages are published under the MIT license."
+      }
+    ]
+  }
+]

@@ -33,7 +33,7 @@ const lines: Series[] = [
 ];
 
 const meta = {
-  title: 'Charts/GrowthChart',
+  title: 'Components/Charts/GrowthChart',
   component: GrowthChart,
   parameters: {
     docs: {

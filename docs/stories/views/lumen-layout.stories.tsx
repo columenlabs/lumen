@@ -23,7 +23,7 @@ function StoresPage({ cards }: { cards?: unknown[] }) {
 }
 
 const meta = {
-  title: 'Pages and views/LumenLayout',
+  title: 'Blocks/Page layout',
   component: LumenLayout,
   parameters: {
     layout: 'fullscreen',

@@ -14,7 +14,7 @@ const VARIANTS = [
 ] as const;
 
 const meta = {
-  title: 'Base parts/Badge',
+  title: 'Components/Base parts/Badge',
   component: Badge,
   args: { children: 'Live', variant: 'success' },
   argTypes: { variant: { control: 'select', options: VARIANTS } },

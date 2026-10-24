@@ -7,7 +7,7 @@ const rows = Array.from({ length: 14 }, (_, i) => {
 });
 
 const meta = {
-  title: 'Charts/StackedColumns',
+  title: 'Components/Charts/StackedColumns',
   component: StackedColumns,
   parameters: {
     docs: {

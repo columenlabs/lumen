@@ -15,7 +15,7 @@ const nav = (
 );
 
 const meta = {
-  title: 'Frame/LumenShell',
+  title: 'App shell/LumenShell',
   component: LumenShell,
   parameters: {
     layout: 'fullscreen',

@@ -5,7 +5,7 @@ import { InfoIcon, ReceiptIcon } from 'lucide-react';
 import { useArgs } from 'storybook/preview-api';
 
 const meta = {
-  title: 'Pickers and panels/LumenDrawer',
+  title: 'Components/Pickers and panels/LumenDrawer',
   component: LumenDrawer,
   subcomponents: { DrawerSection },
   parameters: {

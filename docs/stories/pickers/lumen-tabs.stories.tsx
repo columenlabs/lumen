@@ -5,7 +5,7 @@ import { BarChart3Icon, ListIcon, SettingsIcon } from 'lucide-react';
 import { useArgs } from 'storybook/preview-api';
 
 const meta = {
-  title: 'Frame/LumenTabs',
+  title: 'Blocks/Tabs',
   component: LumenTabs,
   parameters: {
     docs: {

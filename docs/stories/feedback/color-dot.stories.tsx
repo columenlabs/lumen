@@ -2,7 +2,7 @@ import { ColorChip, ColorDot } from '@columenlabs/lumen-ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
-  title: 'Feedback/ColorDot',
+  title: 'Components/Feedback/ColorDot',
   component: ColorDot,
   subcomponents: { ColorChip },
   parameters: {

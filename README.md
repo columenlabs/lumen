@@ -32,6 +32,16 @@
 | [`@columenlabs/lumen-ui`](packages/lumen) | The components, the shadcn parts under `ui/*`, and `theme.css` |
 | [`@columenlabs/lumen-ui-types`](packages/lumen-types) | The view model: view config, formulas, domains and joins, the data catalog, frames, chart formulas |
 
+## Pages people can rearrange
+
+Give `LumenLayout` an `onConfigChange` and every page can be changed by the person using it: **Edit layout** moves and sizes the widgets on a 6-column grid, and each widget's **Edit widget** changes its type, fields and controls. Both write back into the view config.
+
+| Edit layout | Edit widget |
+|---|---|
+| <img src=".github/assets/edit-layout.gif" alt="Edit layout: the Donut narrows to two columns, the Bar list slides over and widens, then the layout is saved" width="440" /> | <img src=".github/assets/edit-widget.gif" alt="Edit widget: the Donut's menu opens Edit widget, its By field changes from Region to Format, and the saved donut shows formats" width="440" /> |
+
+Try both live on the docs' [Edit layout](https://lumen-ui.columenlabs.com/docs/?path=/docs/blocks-edit-layout--docs) and [Edit widget](https://lumen-ui.columenlabs.com/docs/?path=/docs/blocks-edit-widget--docs) pages.
+
 > **Status: 0.x.** Any minor version may break things until 1.0.
 
 **For coding agents:** read [`llms.txt`](https://lumen-ui.columenlabs.com/docs/llms.txt) or the [component manifest](https://lumen-ui.columenlabs.com/docs/manifests/components.json). `bun run --filter=lumen-docs dev` also serves Storybook's MCP at `http://localhost:6006/mcp`.

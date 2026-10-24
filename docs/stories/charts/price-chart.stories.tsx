@@ -7,7 +7,7 @@ const chosen = ['sma_20', 'sma_50', 'rsi_14'].flatMap((id) => resolveIndicator(i
 const values = computeIndicators(bars, chosen);
 
 const meta = {
-  title: 'Charts/PriceChart',
+  title: 'Components/Charts/PriceChart',
   component: PriceChart,
   parameters: {
     docs: {

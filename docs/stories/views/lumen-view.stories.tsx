@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { STORES, STORE_DOMAIN, storeView } from '../sample';
 
 const meta = {
-  title: 'Pages and views/LumenView',
+  title: 'Components/Pages and views/LumenView',
   component: LumenView,
   parameters: {
     docs: {

@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { PlusIcon } from 'lucide-react';
 
 const meta = {
-  title: 'Base parts/Button',
+  title: 'Components/Base parts/Button',
   component: Button,
   args: { children: 'Save', variant: 'default', size: 'default' },
   argTypes: {

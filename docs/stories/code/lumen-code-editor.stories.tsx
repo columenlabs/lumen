@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useArgs } from 'storybook/preview-api';
 
 const meta = {
-  title: 'Code/LumenCodeEditor',
+  title: 'Components/Code/LumenCodeEditor',
   component: LumenCodeEditor,
   parameters: {
     docs: {

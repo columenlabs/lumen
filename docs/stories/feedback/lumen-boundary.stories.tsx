@@ -6,7 +6,7 @@ function Broken(): never {
 }
 
 const meta = {
-  title: 'Feedback/LumenBoundary',
+  title: 'Components/Feedback/LumenBoundary',
   component: LumenBoundary,
   parameters: {
     docs: {
