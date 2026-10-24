@@ -1,7 +1,9 @@
-// Writes dist/docs/llms.txt for coding agents from what the Storybook build just made: every
-// component's props (manifests/components.json), its usage snippets, and the reference pages
-// (manifests/docs.json). Nothing here is written by hand, so it stays as current as the build.
-// It first strips the build machine's own folder from every file: docgen records absolute paths.
+// Writes the files coding agents read at the site's root, from the READMEs and what the Storybook
+// build just made: /llms.txt (the index), /<package>.md (each package's README) and /llms-full.txt
+// (every README, then every component's props, usage snippet and the reference pages from
+// manifests/components.json and manifests/docs.json). Nothing here is written by hand, so it stays
+// as current as the build. It first strips the build machine's own folder from every file: docgen
+// records absolute paths.
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +27,8 @@ type Component = {
 type Doc = { id: string; title: string; content: string };
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const out = join(root, 'dist/docs');
+const dist = join(root, 'dist');
+const out = join(dist, 'docs');
 const repo = fileURLToPath(new URL('../..', import.meta.url));
 
 for (const file of (function walk(dir: string): string[] {
@@ -36,7 +39,9 @@ for (const file of (function walk(dir: string): string[] {
   const text = readFileSync(file, 'utf8');
   if (text.includes(repo)) writeFileSync(file, text.replaceAll(repo, ''));
 }
-const site = 'https://lumen-ui.columenlabs.com/docs';
+const host = 'https://lumen.columenlabs.com';
+const site = `${host}/docs`;
+const github = 'https://github.com/columenlabs/lumen';
 const components: Record<string, Component> = JSON.parse(
   readFileSync(join(out, 'manifests/components.json'), 'utf8'),
 ).components;
@@ -74,28 +79,77 @@ function referenceParts(d: Doc): string {
     .join('\n');
 }
 
-const intro = docs['introduction--docs']?.content ?? '';
-const lede = intro.match(/^# Lumen\n\n(.+)$/m)?.[1] ?? '';
+// A README's relative links and images point into the repo; served alone they need its address.
+function absolute(md: string, dir: string): string {
+  return md.replace(/(\]\(|src=")(?!https?:|#|mailto:)([^)"]+)/g, (_, a, path) => {
+    const url = new URL(path, `${github}/blob/main/${dir}`).href;
+    return `${a}${a === 'src="' ? url.replace('/blob/', '/raw/') : url}`;
+  });
+}
+
+// Every package with a README, by name; a new package shows up by itself.
+const packages = readdirSync(join(repo, 'packages'))
+  .sort()
+  .filter((name) => statSync(join(repo, 'packages', name, 'README.md'), { throwIfNoEntry: false }))
+  .map((name) => {
+    const md = absolute(
+      readFileSync(join(repo, 'packages', name, 'README.md'), 'utf8'),
+      `packages/${name}/`,
+    );
+    const title = md.match(/^# (.+)$/m)?.[1] ?? name;
+    const lede = md.match(/^# .+\n\n(.+)$/m)?.[1] ?? '';
+    return { name, md, title, lede };
+  });
+const readme = absolute(readFileSync(join(repo, 'README.md'), 'utf8'), '');
+for (const p of packages) writeFileSync(join(dist, `${p.name}.md`), p.md);
+
+const index = [
+  '# Lumen',
+  '',
+  "> Columen Labs' shared building blocks for apps, published to npm as `@columenlabs/lumen-<name>`: a React component system for data apps (`lumen-ui`) and its view model (`lumen-ui-types`), with shared backend packages joining as they move out of the apps that run them. Every package ships at one version from one release; pin the same exact version for all of them.",
+  '',
+  'Lumen is MIT and names no product: an app passes its names in through `configureLumen` and its data domains through `registerDomains` (`@columenlabs/lumen-ui-types/registry`). Use Bun (`bun add`).',
+  '',
+  '## Packages',
+  '',
+  ...packages.map(
+    (p) =>
+      `- [${p.title}](${host}/${p.name}.md): ${p.lede.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')}`,
+  ),
+  '',
+  '## Docs',
+  '',
+  `- [Everything in one file](${host}/llms-full.txt): every README, then every component's props and an example`,
+  `- [Live docs](${site}/): Storybook, every component on sample data`,
+  `- [Component manifest](${site}/manifests/components.json): JSON, props and snippets`,
+  `- [Source](${github}): one repo, \`packages/<name>\` per package`,
+  `- [Releases](${github}/releases): what changed in each version`,
+  '',
+];
+writeFileSync(join(dist, 'llms.txt'), `${index.join('\n')}\n`);
+
 const parts: string[] = [
   '# Lumen',
   '',
-  `> ${lede}`,
+  readme
+    .replace(/^[\s\S]*?## Packages/m, '## Packages')
+    .replace(/<\/?(?:div|img|sub|br)\b[^>]*>/g, '')
+    .replace(/^\| Edit layout \| Edit widget \|\n\|---\|---\|\n\|(?:\s*\|)+\n/m, '')
+    .trim(),
+  '',
+  ...packages.flatMap((p) => [p.md.replace(/^# /m, '# Package: ').trim(), '']),
+  '# Components',
   '',
   'Lumen is built on shadcn/ui (Radix UI, Base UI, Tailwind CSS). Install: `bun add @columenlabs/lumen-ui @columenlabs/lumen-ui-types` (one exact version for both), then import `@columenlabs/lumen-ui/theme.css` after Tailwind.',
   '',
-  `- Docs: ${site}/`,
-  `- Component manifest (JSON, props and snippets): ${site}/manifests/components.json`,
-  `- Install guide: ${site}/?path=/docs/install--docs`,
   '- Prefer LumenSelector for every picker, LumenDrawer for side panels, LumenTabs for tabs and LumenConfirm for destructive confirms over the raw ui/* parts.',
-  '',
-  '## Components',
   '',
 ];
 
 for (const c of Object.values(components)) {
   const p = props(c);
   if (!p && !c.stories?.length) continue;
-  parts.push(`### ${c.name}`, '', summary(c), '', `Docs: ${site}/?path=/docs/${c.id}--docs`, '');
+  parts.push(`## ${c.name}`, '', summary(c), '', `Docs: ${site}/?path=/docs/${c.id}--docs`, '');
   const kit = c.import
     ?.split('\n')
     .filter((l) => l.includes("'@columenlabs/"))
@@ -107,7 +161,7 @@ for (const c of Object.values(components)) {
 }
 
 parts.push(
-  '## Reference',
+  '# Reference',
   '',
   'Parts that need an app behind them; their pages list each prop.',
   '',
@@ -115,7 +169,7 @@ parts.push(
 for (const d of Object.values(docs)) {
   if (!d.id.startsWith('reference-')) continue;
   parts.push(
-    `### ${d.title.replace(/^Reference\//, '')}`,
+    `## ${d.title.replace(/^Reference\//, '')}`,
     '',
     `Docs: ${site}/?path=/docs/${d.id}`,
     '',
@@ -124,5 +178,7 @@ for (const d of Object.values(docs)) {
   );
 }
 
-writeFileSync(join(out, 'llms.txt'), `${parts.join('\n').trim()}\n`);
-console.log(`llms.txt: ${Object.keys(components).length} components`);
+writeFileSync(join(dist, 'llms-full.txt'), `${parts.join('\n').trim()}\n`);
+console.log(
+  `llms.txt, llms-full.txt: ${packages.length} packages, ${Object.keys(components).length} components`,
+);
