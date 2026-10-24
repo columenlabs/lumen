@@ -119,6 +119,8 @@ export interface LumenCoverageMapProps<TRaw = unknown, TKey extends QueryKey = Q
   /** Months already queued that a pick can take back out, with the bar's Remove from queue. */
   removable?: (row: string, month: string) => boolean;
   onRemove?: (pick: CoveragePick) => Promise<unknown> | undefined;
+  /** An app's own words for some states, in the tooltip and legend (`{ running: 'Copying' }`). */
+  stateLabels?: Partial<Record<CoverageLevel, string>>;
   /** Picks these months as if clicked (pass a new object each time); nothing is queued until the bar's button. */
   preselect?: CoveragePick;
   /** The drilled block (`2026-09`) and the click that changes it. */
@@ -365,7 +367,7 @@ const MapRow = memo(
   }: {
     r: CoverageRow;
     cols: string[];
-    marks: ({ level: CoverageLevel; canPick: boolean } | null)[];
+    marks: ({ level: CoverageLevel; canPick: boolean; fill?: number } | null)[];
     picks: string[];
     total: { have: number; expected: number };
     look: RowLook;
@@ -406,6 +408,7 @@ const MapRow = memo(
             <CoverageCell
               key={k}
               level={m.level}
+              fill={m.fill}
               label={`${text} · ${blockName(k)}`}
               tip={`${r.row}|${k}`}
               picked={picks.includes(k) || look.drilled === k}
@@ -459,6 +462,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   removable = () => false,
   onRemove,
   preselect,
+  stateLabels,
   drilled = null,
   onDrill,
   groupBy = false,
@@ -569,7 +573,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       detail: (
         <>
           <div>
-            {unitLabel(c.have, c.expected)} · {coverageLabel(c.level)}
+            {unitLabel(c.have, c.expected)} · {stateLabels?.[c.level] ?? coverageLabel(c.level)}
           </div>
           {c.notes.map((n) => (
             <div key={n}>{n}</div>
@@ -657,6 +661,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                   <CoverageCell
                     key={key}
                     level={c.level}
+                    fill={c.expected > 0 ? c.have / c.expected : undefined}
                     label={`${row} · ${blockName(key)}`}
                     tip={`${row}|${key}`}
                     picked={picked.has(`${row}|${key}`) || drilled === key}
@@ -760,7 +765,11 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
               const c = rowCells?.get(k);
               if (!c) return null;
               levels.add(c.level);
-              return { level: c.level, canPick: select === 'backfill' && canPick(r.row, k) };
+              return {
+                level: c.level,
+                canPick: select === 'backfill' && canPick(r.row, k),
+                fill: c.expected > 0 ? c.have / c.expected : undefined,
+              };
             });
             const picks = pickedBy.get(r.row) ?? [];
             out.push(
@@ -787,7 +796,9 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                   cols[0],
                   cols.at(-1),
                   picks.join(),
-                  marks.map((m) => (m ? `${m.level}${m.canPick ? '+' : ''}` : '')).join(),
+                  marks
+                    .map((m) => (m ? `${m.level}${m.canPick ? '+' : ''}${m.fill ?? ''}` : ''))
+                    .join(),
                   JSON.stringify(folded.totals.get(r.row) ?? null),
                 ].join('\u0001')}
               />,
@@ -922,6 +933,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
             <div className="border-t pt-3">
               <CoverageLegend
                 levels={levels}
+                labels={stateLabels}
                 hint={
                   hint ??
                   (select === 'backfill'
