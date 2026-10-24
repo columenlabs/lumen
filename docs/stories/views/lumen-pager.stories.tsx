@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useArgs } from 'storybook/preview-api';
 
 const meta = {
-  title: 'Pages and views/LumenPager',
+  title: 'Components/Pages and views/LumenPager',
   component: LumenPager,
   parameters: {
     docs: {

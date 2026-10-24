@@ -5,7 +5,7 @@ import { Trash2Icon } from 'lucide-react';
 import { fn } from 'storybook/test';
 
 const meta = {
-  title: 'Pickers and panels/LumenConfirm',
+  title: 'Components/Pickers and panels/LumenConfirm',
   component: LumenConfirm,
   parameters: {
     docs: {

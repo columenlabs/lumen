@@ -4,7 +4,7 @@ import { fn } from 'storybook/test';
 import { width } from '../util';
 
 const meta = {
-  title: 'Pickers and panels/LumenForm',
+  title: 'Components/Pickers and panels/LumenForm',
   component: LumenForm,
   decorators: [width(420)],
   parameters: {

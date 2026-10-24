@@ -2,7 +2,7 @@ import { LumenCode } from '@columenlabs/lumen-ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
-  title: 'Code/LumenCode',
+  title: 'Components/Code/LumenCode',
   component: LumenCode,
   parameters: {
     docs: {

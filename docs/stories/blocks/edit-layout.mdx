@@ -1,0 +1,28 @@
+import { Canvas, Meta } from '@storybook/addon-docs/blocks';
+import * as Layout from '../views/lumen-layout.stories';
+
+<Meta title="Blocks/Edit layout" />
+
+# Edit layout
+
+A page built with `LumenLayout` lets the person move and size its widgets. Give the page
+`onConfigChange` and its header shows **Edit layout**. In edit mode each widget gets a drag handle
+and a corner to resize it on the 6-column grid, **+** adds a widget, and **Save layout** hands the
+new places back through `onConfigChange` (Cancel drops them).
+
+<video src="clips/edit-layout.mp4" autoPlay loop muted playsInline controls width="100%" style={{ borderRadius: 8, border: '1px solid var(--border, #263042)' }} />
+
+Here the Donut is narrowed to two columns, the Bar list slides over and widens to four, then the
+layout is saved. Widgets never overlap: the grid packs them upward as they move.
+
+## Try it
+
+Press **Edit layout** in the header of the page below.
+
+<Canvas of={Layout.WithWidgets} layout="fullscreen" />
+
+## What the app does
+
+- Keeps the view config in state (or saves it) and passes it back as `config`.
+- Passes `onConfigChange`; without it the page is read-only and shows no Edit layout.
+- Each card's place is in its config: `w` (1 to 6 columns), and optional `x`, `y`, `h` and a `phone` place.

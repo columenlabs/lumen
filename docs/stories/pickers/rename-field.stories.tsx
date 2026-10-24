@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useArgs } from 'storybook/preview-api';
 
 const meta = {
-  title: 'Pickers and panels/RenameField',
+  title: 'Components/Pickers and panels/RenameField',
   component: RenameField,
   parameters: {
     docs: {

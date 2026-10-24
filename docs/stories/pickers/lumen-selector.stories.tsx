@@ -10,7 +10,7 @@ const cadences = [
 ];
 
 const meta = {
-  title: 'Pickers and panels/LumenSelector',
+  title: 'Components/Pickers and panels/LumenSelector',
   component: LumenSelector,
   parameters: {
     docs: {

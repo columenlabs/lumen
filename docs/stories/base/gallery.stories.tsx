@@ -24,7 +24,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { InfoIcon } from 'lucide-react';
 
 const meta = {
-  title: 'Base parts/Gallery',
+  title: 'Components/Base parts/Gallery',
   parameters: {
     docs: {
       description: {

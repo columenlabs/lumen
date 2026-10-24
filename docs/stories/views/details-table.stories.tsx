@@ -2,7 +2,7 @@ import { DetailsTable, FactsTable } from '@columenlabs/lumen-ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
-  title: 'Pages and views/DetailsTable',
+  title: 'Components/Pages and views/DetailsTable',
   component: DetailsTable,
   subcomponents: { FactsTable },
   parameters: {

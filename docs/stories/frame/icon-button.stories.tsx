@@ -4,7 +4,7 @@ import { PinIcon, RefreshCwIcon } from 'lucide-react';
 import { fn } from 'storybook/test';
 
 const meta = {
-  title: 'Frame/IconButton',
+  title: 'Components/Base parts/IconButton',
   component: IconButton,
   parameters: {
     docs: {

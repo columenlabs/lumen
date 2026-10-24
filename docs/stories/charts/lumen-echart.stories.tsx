@@ -23,7 +23,7 @@ function Demo() {
 }
 
 const meta = {
-  title: 'Charts/LumenEChart',
+  title: 'Components/Charts/LumenEChart',
   component: LumenEChart,
   parameters: {
     docs: {

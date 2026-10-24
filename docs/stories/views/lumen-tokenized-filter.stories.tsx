@@ -26,7 +26,7 @@ function Demo() {
 }
 
 const meta = {
-  title: 'Pages and views/LumenTokenizedFilter',
+  title: 'Components/Pages and views/LumenTokenizedFilter',
   component: LumenTokenizedFilter,
   parameters: {
     docs: {

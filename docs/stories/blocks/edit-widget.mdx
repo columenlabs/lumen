@@ -1,0 +1,27 @@
+import { Canvas, Meta } from '@storybook/addon-docs/blocks';
+import * as Layout from '../views/lumen-layout.stories';
+
+<Meta title="Blocks/Edit widget" />
+
+# Edit widget
+
+Every widget on an editable page has a **⋯** menu with **Edit widget**. It opens one dialog for the
+whole widget: its type (Table, Metric, Allocation or Chart, each with its styles), name, width and
+link colour on the left with its fields, settings, rows, formulas and controls, and on the right
+the data it reads, field by field. **Save** writes the change into the view config through
+`onConfigChange`.
+
+<video src="clips/edit-widget.mp4" autoPlay loop muted playsInline controls width="100%" style={{ borderRadius: 8, border: '1px solid var(--border, #263042)' }} />
+
+Here the Donut is switched from revenue by region to revenue by format, and saved.
+
+## Try it
+
+Open any widget's **⋯** menu below and choose **Edit widget**.
+
+<Canvas of={Layout.WithWidgets} layout="fullscreen" />
+
+## What the app does
+
+- Nothing beyond `onConfigChange`: the dialog, its pickers and checks are the kit's.
+- The menu also offers Duplicate, Move up, Move down and Remove.

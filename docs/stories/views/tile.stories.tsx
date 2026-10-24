@@ -2,7 +2,7 @@ import { Tile, TileRow } from '@columenlabs/lumen-ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
-  title: 'Pages and views/Tile',
+  title: 'Components/Pages and views/Tile',
   component: Tile,
   subcomponents: { TileRow },
   parameters: {

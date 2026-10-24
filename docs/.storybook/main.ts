@@ -21,6 +21,7 @@ const config: StorybookConfig = {
       propFilter: (prop) => !prop.parent || !/node_modules/.test(prop.parent.fileName),
     },
   },
+  staticDirs: ['../public'],
   core: { disableTelemetry: true },
   viteFinal: (vite) => ({ ...vite, plugins: [...(vite.plugins ?? []), tailwindcss()] }),
 };

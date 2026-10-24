@@ -55,7 +55,7 @@ function Demo({ header }: { header: boolean }) {
 }
 
 const meta = {
-  title: 'Pages and views/LumenWidget',
+  title: 'Blocks/Editable widget',
   component: LumenWidget,
   decorators: [width(360)],
   parameters: {
