@@ -5,11 +5,12 @@
 // shadcn has no heatmap, so the grid is a CSS grid of native buttons with shadcn Tooltips.
 import type { QueryKey, UseQueryOptions } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Grid3x3Icon, ListPlusIcon, type LucideIcon, XIcon } from 'lucide-react';
+import { Grid3x3Icon, ListPlusIcon, ListXIcon, type LucideIcon } from 'lucide-react';
 import {
   type ReactNode,
   isValidElement,
   memo,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -27,12 +28,12 @@ import {
 } from './coverage-cells';
 import { FoldChevron, useFolds, usePageKey } from './fold';
 import { useIsMobile } from './hooks/use-mobile';
-import { IconButton } from './icon-button';
 import { cn } from './lib/utils';
 import { LumenStates, useLumenSource } from './lumen-source';
 import { LumenWidget } from './lumen-widget';
 import { LumenPager } from './pager';
 import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 
@@ -106,11 +107,20 @@ export interface LumenCoverageMapProps<TRaw = unknown, TKey extends QueryKey = Q
   unit?: string;
   /** Right-hand columns; a phone keeps Complete only. */
   summary?: CoverageSummary[];
-  /** `backfill`: click, shift-click a range, then Queue backfill. `drill`: a click opens the block. */
+  /** `backfill`: click, shift-click a range, then the selection bar's buttons. `drill`: a click opens the block. */
   select?: 'backfill' | 'drill';
   /** Months a backfill can take (the source's own limits). */
   selectable?: (row: string, month: string) => boolean;
   onQueue?: (pick: CoveragePick) => Promise<unknown> | undefined;
+  /** The selection bar's queue button (`Queue backfill`). */
+  queueLabel?: string;
+  /** What the months to queue come to, shown after their count (`1,240 messages · about 2 h`). */
+  pickNote?: (pick: CoveragePick) => string;
+  /** Months already queued that a pick can take back out, with the bar's Remove from queue. */
+  removable?: (row: string, month: string) => boolean;
+  onRemove?: (pick: CoveragePick) => Promise<unknown> | undefined;
+  /** Picks these months as if clicked (pass a new object each time); nothing is queued until the bar's button. */
+  preselect?: CoveragePick;
   /** The drilled block (`2026-09`) and the click that changes it. */
   drilled?: string | null;
   onDrill?: (row: string, period: string) => void;
@@ -444,6 +454,11 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   select,
   selectable = () => true,
   onQueue,
+  queueLabel = 'Queue backfill',
+  pickNote,
+  removable = () => false,
+  onRemove,
+  preselect,
   drilled = null,
   onDrill,
   groupBy = false,
@@ -465,6 +480,11 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [queueing, setQueueing] = useState(false);
   const anchor = useRef<{ row: string; index: number } | null>(null);
+  // A preselect picks its months as if clicked; it replaces the current pick.
+  useEffect(() => {
+    if (preselect)
+      setPicked(new Set(preselect.flatMap((p) => p.months.map((m) => `${p.row}|${m}`))));
+  }, [preselect]);
   const scroller = useRef<HTMLDivElement>(null);
   const [pageSize, setPageSize] = useState(initialPageSize ?? 0);
   const [pageIndex, setPageIndex] = useState(0);
@@ -506,13 +526,14 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       return next;
     });
 
-  const pickedMonths = (): CoveragePick => {
+  const pickedMonths = (keep = selectable): CoveragePick => {
     const byRow = new Map<string, Set<string>>();
     for (const id of picked) {
-      const [row, key] = id.split('|') as [string, string];
-      const c = folded?.cells.get(row)?.get(key);
+      const cut = id.lastIndexOf('|');
+      const row = id.slice(0, cut);
+      const c = folded?.cells.get(row)?.get(id.slice(cut + 1));
       const set = byRow.get(row) ?? new Set();
-      for (const m of c?.months ?? []) if (selectable(row, m)) set.add(m);
+      for (const m of c?.months ?? []) if (keep(row, m)) set.add(m);
       byRow.set(row, set);
     }
     return [...byRow]
@@ -520,11 +541,12 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       .map(([row, ms]) => ({ row, months: [...ms].sort() }));
   };
 
-  const queue = async () => {
-    if (!onQueue) return;
+  const queue = async (remove = false) => {
+    const act = remove ? onRemove : onQueue;
+    if (!act) return;
     setQueueing(true);
     try {
-      await onQueue(pickedMonths());
+      await act(pickedMonths(remove ? removable : selectable));
       setPicked(new Set());
     } finally {
       setQueueing(false);
@@ -558,6 +580,13 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
     };
   };
 
+  /** A block a pick can take: a month in it can be queued, or taken out of the queue. */
+  const canPick = (row: string, key: string) =>
+    !!folded?.cells
+      .get(row)
+      ?.get(key)
+      ?.months.some((m) => selectable(row, m) || (onRemove !== undefined && removable(row, m)));
+
   // One click handler for every cell: drill, or pick (shift-click picks a range in the row).
   const onCellClick = (e: React.MouseEvent<HTMLElement>) => {
     const el = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-cell]') : null;
@@ -571,10 +600,17 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       return;
     }
     if (select !== 'backfill') return;
-    const i = cols.indexOf(k);
+    // The months layout ranges over its months in time order, across years.
+    const order = layout === 'months' ? [...(folded?.cells.get(row)?.keys() ?? [])].sort() : cols;
+    const i = order.indexOf(k);
     if (e.shiftKey && anchor.current?.row === row) {
       const [lo, hi] = [anchor.current.index, i].sort((x, y) => x - y) as [number, number];
-      toggle(row, cols.slice(lo, hi + 1), 'add');
+      const span = order.slice(lo, hi + 1);
+      toggle(
+        row,
+        span.filter((key) => canPick(row, key)),
+        'add',
+      );
     } else toggle(row, [k], 'toggle');
     anchor.current = { row, index: i };
   };
@@ -623,9 +659,9 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                     level={c.level}
                     label={`${row} · ${blockName(key)}`}
                     tip={`${row}|${key}`}
-                    picked={drilled === key}
-                    pickable={select === 'drill'}
-                    disabled={select !== 'drill'}
+                    picked={picked.has(`${row}|${key}`) || drilled === key}
+                    pickable={select === 'backfill' || select === 'drill'}
+                    disabled={select === 'backfill' ? !canPick(row, key) : select !== 'drill'}
                     className={mobile ? 'h-4' : 'h-5'}
                   />
                 );
@@ -724,8 +760,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
               const c = rowCells?.get(k);
               if (!c) return null;
               levels.add(c.level);
-              const canPick = select === 'backfill' && c.months.some((m) => selectable(r.row, m));
-              return { level: c.level, canPick };
+              return { level: c.level, canPick: select === 'backfill' && canPick(r.row, k) };
             });
             const picks = pickedBy.get(r.row) ?? [];
             out.push(
@@ -765,7 +800,13 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   }
 
   const pick = picked.size ? pickedMonths() : [];
-  const pickedCount = pick.reduce((n, p) => n + p.months.length, 0);
+  const queueCount = pick.reduce((n, p) => n + p.months.length, 0);
+  const unpick = picked.size && onRemove ? pickedMonths(removable) : [];
+  const removeCount = unpick.reduce((n, p) => n + p.months.length, 0);
+  const pickedCount = queueCount + removeCount;
+  const pickedRows = [...new Set([...pick, ...unpick].map((p) => p.row))];
+  const rowName = (row: string) => data?.rows.find((r) => r.row === row)?.label ?? row;
+  const months = (n: number) => `${n} month${n > 1 ? 's' : ''}`;
 
   const head = (
     <>
@@ -850,22 +891,29 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
             {pickedCount > 0 && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
                 <span className="min-w-0 truncate">
-                  <span className="num font-semibold">{pick.map((p) => p.row).join(', ')}</span>
-                  {` · ${pickedCount} month${pickedCount > 1 ? 's' : ''}`}
+                  <span className="num font-semibold">{pickedRows.map(rowName).join(', ')}</span>
+                  {` · ${months(pickedCount)} picked`}
+                  {pickNote && queueCount > 0 ? ` · ${pickNote(pick)}` : ''}
                 </span>
                 <span className="flex-1" />
-                <IconButton
-                  icon={XIcon}
-                  label="Clear selection"
-                  onClick={() => setPicked(new Set())}
-                />
-                <IconButton
-                  icon={ListPlusIcon}
-                  label={`Queue backfill · ${pickedCount} month${pickedCount > 1 ? 's' : ''}`}
-                  variant="default"
-                  disabled={queueing || !onQueue}
-                  onClick={() => void queue()}
-                />
+                <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
+                  Clear
+                </Button>
+                {removeCount > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={queueing}
+                    onClick={() => void queue(true)}
+                  >
+                    <ListXIcon /> Remove from queue · {months(removeCount)}
+                  </Button>
+                )}
+                {queueCount > 0 && (
+                  <Button size="sm" disabled={queueing || !onQueue} onClick={() => void queue()}>
+                    <ListPlusIcon /> {queueLabel} · {months(queueCount)}
+                  </Button>
+                )}
               </div>
             )}
             <div className="border-t pt-3">
@@ -874,7 +922,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                 hint={
                   hint ??
                   (select === 'backfill'
-                    ? 'Click a cell, shift-click for a range, to queue a backfill'
+                    ? 'Click a block, shift-click for a range'
                     : select === 'drill'
                       ? 'Click a block to see its days'
                       : undefined)
