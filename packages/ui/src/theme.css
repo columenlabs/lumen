@@ -392,13 +392,23 @@
   .bg-gap-hatch {
     background: repeating-linear-gradient(135deg, var(--gap) 0 3px, var(--gap-soft) 3px 6px);
   }
+  /* Copying and indexing take their own colours where an app sets --cov-run / --cov-index
+     (and their -soft stripe); left unset, they stay on the coverage ramp. */
   .bg-cov-running {
-    background: repeating-linear-gradient(135deg, var(--cov-full) 0 4px, var(--cov-low) 4px 8px);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--cov-run, var(--cov-full)) 0 4px,
+      var(--cov-run-soft, var(--cov-low)) 4px 8px
+    );
     background-size: 11.3px 11.3px;
     animation: lumen-cov-run 1s linear infinite;
   }
   .bg-cov-indexing {
-    background: repeating-linear-gradient(135deg, var(--cov-high) 0 4px, var(--cov-low) 4px 8px);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--cov-index, var(--cov-high)) 0 4px,
+      var(--cov-index-soft, var(--cov-low)) 4px 8px
+    );
   }
   .bg-cov-canceled {
     background: linear-gradient(
