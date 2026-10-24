@@ -29,7 +29,7 @@ One repo holds the Lumen family. Each folder `packages/<name>` is published as `
 | [`packages/auth`](packages/auth) | [`@columenlabs/lumen-auth`](https://www.npmjs.com/package/@columenlabs/lumen-auth) | Sign-in checks: Cloudflare Access tokens and service tokens, verified in the Worker | Published |
 | [`packages/ops`](packages/ops) | [`@columenlabs/lumen-ops`](https://www.npmjs.com/package/@columenlabs/lumen-ops) | Ops meters to Analytics Engine (every data query by its shape, every tool call with its latency and code hash) and signed webhooks out; later page errors and email | Published |
 | [`packages/ai`](packages/ai) | [`@columenlabs/lumen-ai`](https://www.npmjs.com/package/@columenlabs/lumen-ai) | Serving an MCP server from a Worker, read-only tool sets and metered tool calls; later a product-neutral assistant | Published |
-| `packages/vault` | `@columenlabs/lumen-vault` | Per-person sealing and a per-person Durable Object base with module migrations, alarms, backup and wipe | Planned |
+| [`packages/vault`](packages/vault) | `@columenlabs/lumen-vault` | Per-person sealing: an envelope codec and a regional codec, both byte for byte with what apps store today, and unlock events; later a per-person Durable Object base | Built, not published yet |
 
 A planned package has no folder until its first code moves in. Each package's own README says what it exports and how to use it.
 
