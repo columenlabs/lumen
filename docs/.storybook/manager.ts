@@ -41,7 +41,7 @@ addons.setConfig({
   theme: create({
     base: 'dark',
     brandTitle: 'Lumen',
-    brandUrl: 'https://github.com/columenlabs/lumen-ui',
+    brandUrl: 'https://github.com/columenlabs/lumen',
     appBg: '#0b0f17',
     appContentBg: '#0b0f17',
     barBg: '#0b0f17',

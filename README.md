@@ -9,7 +9,7 @@
 [![docs](https://img.shields.io/badge/docs-live-f59e0b)](https://lumen-ui.columenlabs.com/docs/)
 [![built on shadcn/ui](https://img.shields.io/badge/built%20on-shadcn%2Fui-111)](https://ui.shadcn.com)
 
-[**Docs**](https://lumen-ui.columenlabs.com/docs/) · [**Changelog**](https://github.com/columenlabs/lumen-ui/releases) · [**llms.txt**](https://lumen-ui.columenlabs.com/docs/llms.txt) · [**Install**](#install)
+[**Docs**](https://lumen-ui.columenlabs.com/docs/) · [**Changelog**](https://github.com/columenlabs/lumen/releases) · [**llms.txt**](https://lumen-ui.columenlabs.com/docs/llms.txt) · [**Install**](#install)
 
 <img src=".github/assets/lumen-in-play.png" alt="A sample app built with Lumen: sidebar, summary tiles, a donut and bar list, a filterable table and the status bar, in dark mode" width="900" />
 
@@ -29,8 +29,8 @@
 
 | Package | What it holds |
 |---|---|
-| [`@columenlabs/lumen-ui`](packages/lumen) | The components, the shadcn parts under `ui/*`, and `theme.css` |
-| [`@columenlabs/lumen-ui-types`](packages/lumen-types) | The view model: view config, formulas, domains and joins, the data catalog, frames, chart formulas |
+| [`@columenlabs/lumen-ui`](packages/ui) | The components, the shadcn parts under `ui/*`, and `theme.css` |
+| [`@columenlabs/lumen-ui-types`](packages/ui-types) | The view model: view config, formulas, domains and joins, the data catalog, frames, chart formulas |
 
 ## Pages people can rearrange
 
@@ -85,7 +85,7 @@ Charts use TradingView Lightweight Charts™ with its logo off. Please link to h
 
 ```bash
 bun install
-bun run lint && bun run type-check && bun run build   # build writes out/lumen-types, out/lumen and docs/dist
+bun run lint && bun run type-check && bun run build   # build writes out/ui-types, out/ui and docs/dist
 bun run --filter=lumen-docs dev                       # the docs at http://localhost:6006
 ```
 
@@ -95,7 +95,7 @@ To try a change inside an app before it is published, use `bun link` in `out/<pa
 
 ## Releases
 
-Every merge to `main` publishes both packages at the next patch version and tags it ([publish.yml](.github/workflows/publish.yml)), with notes on what changed in each release: see the [releases](https://github.com/columenlabs/lumen-ui/releases). A new minor is cut only by hand (Run workflow with bump = minor).
+Every merge to `main` publishes both packages at the next patch version and tags it ([publish.yml](.github/workflows/publish.yml)), with notes on what changed in each release: see the [releases](https://github.com/columenlabs/lumen/releases). A new minor is cut only by hand (Run workflow with bump = minor).
 
 ## License
 

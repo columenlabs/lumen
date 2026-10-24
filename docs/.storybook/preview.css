@@ -2,5 +2,5 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@columenlabs/lumen-ui/theme.css";
-@source "../../packages/lumen/src";
+@source "../../packages/ui/src";
 @source "../stories";

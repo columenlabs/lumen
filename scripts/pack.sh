@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build both packages into publishable folders: out/lumen-types and out/lumen.
+# Build both packages into publishable folders: out/ui-types and out/ui.
 #   scripts/pack.sh          build into ./out
 #   scripts/pack.sh <dir>    build into <dir>
 #   LUMEN_VERSION=0.1.4 scripts/pack.sh   publish as that version (the publish workflow sets it)
-# Each package compiles with tsc (lumen-types first: lumen's build reads its declarations), relative
+# Each package compiles with tsc (ui-types first: ui's build reads its declarations), relative
 # imports get their file's extension so Node and every bundler resolve them alike, and the
 # published package.json points at dist with workspace dependencies pinned to this version.
 # .github/workflows/publish.yml runs it and publishes what it builds.
@@ -11,7 +11,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$(mkdir -p "${1:-$ROOT/out}" && cd "${1:-$ROOT/out}" && pwd)
 
-for pkg in lumen-types lumen; do
+for pkg in ui-types ui; do
   dir="$ROOT/packages/$pkg"
   rm -rf "$dir/dist" "$OUT/$pkg"
   (cd "$dir" && bunx tsc -p tsconfig.build.json)
@@ -58,9 +58,9 @@ for pkg in lumen-types lumen; do
       exports,
       files: ["dist", "LICENSE", "NOTICE"],
       sideEffects: ["**/*.css"],
-      homepage: "https://github.com/columenlabs/lumen-ui",
-      repository: { type: "git", url: "git+https://github.com/columenlabs/lumen-ui.git", directory },
-      bugs: "https://github.com/columenlabs/lumen-ui/issues",
+      homepage: "https://github.com/columenlabs/lumen",
+      repository: { type: "git", url: "git+https://github.com/columenlabs/lumen.git", directory },
+      bugs: "https://github.com/columenlabs/lumen/issues",
       publishConfig: { access: "public", registry: "https://registry.npmjs.org/" },
       dependencies: pin(p.dependencies),
       ...(p.peerDependencies ? { peerDependencies: p.peerDependencies } : {}),

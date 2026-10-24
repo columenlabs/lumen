@@ -45,7 +45,7 @@ function Changelog() {
           Every release of Lumen, newest first, with its key takeaways. The full notes are on{' '}
           <a
             className="underline underline-offset-2"
-            href="https://github.com/columenlabs/lumen-ui/releases"
+            href="https://github.com/columenlabs/lumen/releases"
           >
             GitHub
           </a>
