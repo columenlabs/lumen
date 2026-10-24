@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build both packages into publishable folders: out/ui-types and out/ui.
+# Build every package into a publishable folder: out/ui-types, out/ui and out/ship.
 #   scripts/pack.sh          build into ./out
 #   scripts/pack.sh <dir>    build into <dir>
 #   LUMEN_VERSION=0.1.4 scripts/pack.sh   publish as that version (the publish workflow sets it)
@@ -11,7 +11,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$(mkdir -p "${1:-$ROOT/out}" && cd "${1:-$ROOT/out}" && pwd)
 
-for pkg in ui-types ui; do
+for pkg in ui-types ui ship; do
   dir="$ROOT/packages/$pkg"
   rm -rf "$dir/dist" "$OUT/$pkg"
   (cd "$dir" && bunx tsc -p tsconfig.build.json)
@@ -36,6 +36,8 @@ for pkg in ui-types ui; do
   cp -R "$dir/dist" "$OUT/$pkg/dist"
   cp "$ROOT/LICENSE" "$ROOT/NOTICE" "$OUT/$pkg/"
   cp "$dir/README.md" "$OUT/$pkg/README.md"
+  # Shell parts (lumen-ship's command and scripts) ship as they are.
+  for extra in bin scripts; do [ -d "$dir/$extra" ] && cp -R "$dir/$extra" "$OUT/$pkg/$extra"; done
   SRC="$dir/package.json" OUT_JSON="$OUT/$pkg/package.json" DIR="packages/$pkg" VERSION="${LUMEN_VERSION:-}" bun -e '
     const { SRC: src, OUT_JSON: out, DIR: directory, VERSION: version } = process.env;
     const p = await Bun.file(src).json();
@@ -56,7 +58,8 @@ for pkg in ui-types ui; do
       main: "./dist/index.js",
       types: "./dist/index.d.ts",
       exports,
-      files: ["dist", "LICENSE", "NOTICE"],
+      ...(p.bin ? { bin: p.bin } : {}),
+      files: ["dist", "LICENSE", "NOTICE", ...(p.bin ? ["bin", "scripts"] : [])],
       sideEffects: ["**/*.css"],
       homepage: "https://github.com/columenlabs/lumen",
       repository: { type: "git", url: "git+https://github.com/columenlabs/lumen.git", directory },

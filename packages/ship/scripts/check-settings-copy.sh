@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A Settings section's description is one line, never wrapped: a plain string
 # of at most 64 characters, which fits the section header on desktop (the header truncates it on a
-# phone). Run from a desk or the shell folder by its lint script.
+# phone). Run from a package folder by its lint script.
 set -euo pipefail
 MAX=64
 bad=$({ grep -rlE "SettingsSectionDef" src --include='*.tsx' || true; } | xargs -r perl -0777 -ne '

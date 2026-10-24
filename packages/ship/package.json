@@ -1,0 +1,16 @@
+{
+  "name": "@columenlabs/lumen-ship",
+  "version": "0.0.0",
+  "description": "Lumen's shipping kit: release notes, the What's new changelog and lint guards.",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": { "lumen-ship": "bin/lumen-ship" },
+  "scripts": {
+    "lint": "biome check src && bash -n bin/lumen-ship scripts/*.sh && scripts/check-kit-neutral.sh src scripts bin README.md package.json",
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./releases": "./src/releases.ts"
+  }
+}

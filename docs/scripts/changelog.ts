@@ -1,5 +1,5 @@
 // Writes stories/changelog/releases.json from the repo's GitHub releases: each release's tag, date
-// and its Key takeaways (the notes scripts/release.sh writes on every publish). Run before the
+// and its Key takeaways (the notes lumen-ship release writes on every publish). Run before the
 // Storybook build so every deploy carries the newest notes. GitHub's public API needs no token; if
 // it can't be reached the committed file stays as it is and the build goes on.
 import { writeFileSync } from 'node:fs';
