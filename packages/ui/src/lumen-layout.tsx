@@ -86,6 +86,7 @@ import {
   DetailsBody,
   LumenView,
   type LumenViewProps,
+  type ServerPaging,
   VIEW_PAGE,
   VIEW_SCROLL,
   mergeRows,
@@ -231,6 +232,9 @@ export interface LumenLayoutViewProps<T> {
   /** Told the filter's tokens whenever they change, so an app can load rows for what they pick
    *  (the Symbols view's `in` filter). */
   onTokens?: (tokens: FilterToken[]) => void;
+  /** The rows are one page of a server's, already filtered by `onTokens`' chips: the table
+   *  shows them as given and its pager pages through the server. */
+  paging?: ServerPaging;
   /** Buttons in the view card's header ("+ Add time"). */
   viewTools?: ReactNode;
   /** False leaves Field out of the header's + Add column (a table whose columns are fixed, a
@@ -586,6 +590,7 @@ function ViewLayout<T extends RowData>({
   rowPick: initialPick,
   groupActions,
   onTokens,
+  paging,
   viewTools,
   columnPicker,
   hideFilter,
@@ -718,8 +723,9 @@ function ViewLayout<T extends RowData>({
   const viewFollowKey = JSON.stringify(viewFollows);
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on what the table follows.
   const viewRows = useMemo(
-    () => narrow(filter.results, viewFollows),
-    [filter.results, viewFollowKey, widgetFields],
+    // A server's page is filtered there: its chips do not narrow it again here.
+    () => narrow(paging ? rows : filter.results, viewFollows),
+    [filter.results, viewFollowKey, widgetFields, paging ? rows : null],
   );
   useEffect(() => onShownRows?.(viewRows), [onShownRows, viewRows]);
   const linksChanged = saved.some((c) => (colors[c.id] ?? null) !== (c.link ?? null));
@@ -1011,6 +1017,7 @@ function ViewLayout<T extends RowData>({
           config={config}
           rows={viewRows}
           total={rows.length}
+          paging={paging}
           groupBy={group.groupField}
           pivot={pivot}
           subgroup={group.sub}

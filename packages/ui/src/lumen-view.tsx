@@ -387,6 +387,23 @@ export function DetailsBody<T extends RowData>({
   );
 }
 
+/**
+ * Rows a server pages: the view shows `rows` as one page, as given (the server already filtered
+ * and sorted them), and the pager turns pages through `onPage`.
+ */
+export interface ServerPaging {
+  /** The page shown, from 0. */
+  page: number;
+  size: number;
+  /** Every row the server has for the filter; null when it does not count them. */
+  total: number | null;
+  /** With no `total`: whether a page follows this one. */
+  more: boolean;
+  onPage: (page: number) => void;
+  onSize?: (size: number) => void;
+  sizes?: readonly number[];
+}
+
 export interface LumenViewProps<T> {
   /** The view's domain, its formula columns included (`withViewFields`). */
   domain: ViewDomain<T>;
@@ -395,6 +412,8 @@ export interface LumenViewProps<T> {
   rows: T[];
   /** Every row before the filter, for "12 of 40 rows"; left out: `rows`. */
   total?: number;
+  /** The rows are one page of a server's: the pager pages through the server. */
+  paging?: ServerPaging;
   /** The grouping the page picked (its Group by switch); null: flat rows. */
   groupBy?: ViewField<T> | null;
   /** Shows the view's pivot instead of its rows. */
@@ -561,6 +580,7 @@ export function LumenView<T extends RowData>({
   config,
   rows,
   total = rows.length,
+  paging: server,
   groupBy = null,
   pivot = false,
   subgroup,
@@ -614,7 +634,8 @@ export function LumenView<T extends RowData>({
   useEffect(() => setPageSize(pagination.size), [pagination.size]);
   const sub = subgroupOf(domain, subgroup === undefined ? config.subgroup : subgroup);
   // Folded lines and their rows stay on one page, so a fold shows every row like a grouping.
-  const paging = pagination.on && on('pager') && !state && !groupBy && !pivot && !sub?.under;
+  const paging =
+    !server && pagination.on && on('pager') && !state && !groupBy && !pivot && !sub?.under;
   // A fit table wraps its text to the width there is; the rest scroll sideways.
   // A phone has no width to fit to: every table scrolls sideways there.
   const fit = config.width === 'fit' && !pivot && !isMobile;
@@ -648,7 +669,18 @@ export function LumenView<T extends RowData>({
       />
     ) : null;
 
-  const pager = paging ? (
+  // A server's page: the pager counts from the server's total, or the rows seen so far.
+  const pager = server ? (
+    <LumenPager
+      total={server.total ?? server.page * server.size + rows.length}
+      page={server.page}
+      size={server.size}
+      onPage={server.onPage}
+      onSize={server.onSize ?? (() => {})}
+      sizes={server.sizes ?? [server.size]}
+      more={server.total === null && server.more}
+    />
+  ) : paging ? (
     <LumenPager
       total={tableRows.length}
       page={page}
