@@ -701,6 +701,7 @@ export function SummaryCardsEditor<T>({
             })}
             {takesFormulas(domain) && !(one && tiles.length) && (
               <Button
+                id="summary-card-add"
                 variant="outline"
                 className="h-auto min-h-16 border-dashed font-normal text-muted-foreground"
                 disabled={ownCount >= MAX_TILES}
