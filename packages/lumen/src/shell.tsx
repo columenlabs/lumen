@@ -239,6 +239,8 @@ export interface LumenShellProps {
   /** Turns on What's new: the app's releases API (`GET ?limit=&before=` answering `{releases}`).
    *  The status bar shows the newest version, which opens each release's Key takeaways. */
   releases?: string;
+  /** What's new's app chips: each app's label by id, matched to a takeaway's `apps`. */
+  releaseApps?: Record<string, ReactNode>;
   /** The app's own Settings sections, listed after General and the product's. */
   settings?: SettingsSectionDef[];
   /** Sections every app of the product shows, listed after General under `sharedLabel`. */
@@ -293,6 +295,7 @@ export function LumenShell({
   health,
   statusEnd,
   releases,
+  releaseApps,
   settings,
   shared,
   sharedLabel,
@@ -397,7 +400,7 @@ export function LumenShell({
                     <div ref={setStatusSlot} className="flex shrink-0 items-center gap-4" />
                     <span className="ml-auto flex shrink-0 items-center gap-1">
                       {health}
-                      {releases && <WhatsNew api={releases} />}
+                      {releases && <WhatsNew api={releases} apps={releaseApps} />}
                       {statusEnd}
                       <StatusTimeZone />
                     </span>
