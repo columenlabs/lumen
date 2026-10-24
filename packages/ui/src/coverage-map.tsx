@@ -74,7 +74,8 @@ export interface CoverageData {
 }
 
 export type CoverageBlock = 'day' | 'week' | 'month' | 'quarter' | 'year';
-export type CoverageSummary = 'complete' | 'first' | 'last' | 'rows';
+/** `rows`: what is in hand; `counts`: in hand / expected (`9,212 / 9,712`). */
+export type CoverageSummary = 'complete' | 'first' | 'last' | 'rows' | 'counts';
 
 /** A backfill pick: each row with the months its picked blocks cover. */
 export type CoveragePick = { row: string; months: string[] }[];
@@ -274,13 +275,18 @@ const SUMMARY_HEAD: Record<CoverageSummary, string> = {
   first: 'First',
   last: 'Last',
   rows: '',
+  counts: '',
 };
 const SUMMARY_WIDTH: Record<CoverageSummary, string> = {
   complete: '5rem',
   first: '6.5rem',
   last: '6.5rem',
   rows: '5rem',
+  counts: '9rem',
 };
+/** In hand / expected; a row with nothing expected shows only what it has. */
+const fmtCounts = (have: number, expected: number) =>
+  expected > 0 ? `${fmtInt(have)} / ${fmtInt(expected)}` : fmtInt(have);
 
 /** A grid-shaped skeleton: label column plus empty cells, so nothing jumps when data lands. */
 function GridSkeleton({ rows = 8 }: { rows?: number }) {
@@ -413,7 +419,9 @@ const MapRow = memo(
                 ? (r.first ?? '—')
                 : s === 'last'
                   ? (r.last ?? '—')
-                  : fmtInt(total.have)}
+                  : s === 'counts'
+                    ? fmtCounts(total.have, total.expected)
+                    : fmtInt(total.have)}
           </span>
         ))}
       </>
@@ -592,7 +600,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
           ))}
           {sums.map((s) => (
             <span key={s} className="pl-3 text-right text-xs text-muted-foreground">
-              {s === 'rows' ? rowsHead : SUMMARY_HEAD[s]}
+              {s === 'rows' || s === 'counts' ? rowsHead : SUMMARY_HEAD[s]}
             </span>
           ))}
           {years.map((y) => {
@@ -630,7 +638,13 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                     s !== 'complete' && 'text-muted-foreground',
                   )}
                 >
-                  {s === 'complete' ? fmtPct(have, expected) : s === 'rows' ? fmtInt(have) : ''}
+                  {s === 'complete'
+                    ? fmtPct(have, expected)
+                    : s === 'rows'
+                      ? fmtInt(have)
+                      : s === 'counts'
+                        ? fmtCounts(have, expected)
+                        : ''}
                 </span>
               )),
             ];
@@ -677,7 +691,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
           ))}
           {sums.map((s) => (
             <span key={s} className="pl-3 text-right text-xs text-muted-foreground">
-              {s === 'rows' ? rowsHead : SUMMARY_HEAD[s]}
+              {s === 'rows' || s === 'counts' ? rowsHead : SUMMARY_HEAD[s]}
             </span>
           ))}
           {rowList.flatMap((r) => {
