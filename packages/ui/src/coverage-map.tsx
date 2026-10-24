@@ -367,7 +367,7 @@ const MapRow = memo(
   }: {
     r: CoverageRow;
     cols: string[];
-    marks: ({ level: CoverageLevel; canPick: boolean } | null)[];
+    marks: ({ level: CoverageLevel; canPick: boolean; fill?: number } | null)[];
     picks: string[];
     total: { have: number; expected: number };
     look: RowLook;
@@ -408,6 +408,7 @@ const MapRow = memo(
             <CoverageCell
               key={k}
               level={m.level}
+              fill={m.fill}
               label={`${text} · ${blockName(k)}`}
               tip={`${r.row}|${k}`}
               picked={picks.includes(k) || look.drilled === k}
@@ -660,6 +661,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                   <CoverageCell
                     key={key}
                     level={c.level}
+                    fill={c.expected > 0 ? c.have / c.expected : undefined}
                     label={`${row} · ${blockName(key)}`}
                     tip={`${row}|${key}`}
                     picked={picked.has(`${row}|${key}`) || drilled === key}
@@ -763,7 +765,11 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
               const c = rowCells?.get(k);
               if (!c) return null;
               levels.add(c.level);
-              return { level: c.level, canPick: select === 'backfill' && canPick(r.row, k) };
+              return {
+                level: c.level,
+                canPick: select === 'backfill' && canPick(r.row, k),
+                fill: c.expected > 0 ? c.have / c.expected : undefined,
+              };
             });
             const picks = pickedBy.get(r.row) ?? [];
             out.push(
@@ -790,7 +796,9 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                   cols[0],
                   cols.at(-1),
                   picks.join(),
-                  marks.map((m) => (m ? `${m.level}${m.canPick ? '+' : ''}` : '')).join(),
+                  marks
+                    .map((m) => (m ? `${m.level}${m.canPick ? '+' : ''}${m.fill ?? ''}` : ''))
+                    .join(),
                   JSON.stringify(folded.totals.get(r.row) ?? null),
                 ].join('\u0001')}
               />,

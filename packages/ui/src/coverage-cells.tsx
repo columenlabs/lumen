@@ -11,10 +11,28 @@ export type CoverageJobState = 'queued' | 'running' | 'indexing' | 'failed' | 'c
 /** One cell's state. Done is not its own state: a finished block simply turns `full`. */
 export type CoverageLevel = 'full' | 'high' | 'low' | 'gap' | 'current' | 'none' | CoverageJobState;
 
-export const COVERAGE_LEVELS: { level: CoverageLevel; label: string; className: string }[] = [
+/** `swatch`: the legend's look when it differs from a cell's (a part-filled cell fills to its share). */
+export const COVERAGE_LEVELS: {
+  level: CoverageLevel;
+  label: string;
+  className: string;
+  swatch?: string;
+}[] = [
   { level: 'full', label: 'Complete', className: 'bg-cov-full' },
-  { level: 'high', label: '95–99%', className: 'bg-cov-high' },
-  { level: 'low', label: 'Under 95%', className: 'bg-cov-low' },
+  {
+    level: 'high',
+    label: '95–99%',
+    className: 'ring-1 ring-inset ring-cov-full',
+    swatch:
+      'bg-[linear-gradient(90deg,var(--cov-full)_0_80%,transparent_80%)] ring-1 ring-inset ring-cov-full',
+  },
+  {
+    level: 'low',
+    label: 'Under 95%',
+    className: 'ring-1 ring-inset ring-cov-full',
+    swatch:
+      'bg-[linear-gradient(90deg,var(--cov-full)_0_40%,transparent_40%)] ring-1 ring-inset ring-cov-full',
+  },
   { level: 'gap', label: 'Missing', className: 'bg-gap-hatch' },
   {
     level: 'current',
@@ -30,7 +48,11 @@ export const COVERAGE_LEVELS: { level: CoverageLevel; label: string; className: 
   },
   { level: 'running', label: 'Running', className: 'bg-cov-running' },
   { level: 'indexing', label: 'Indexing', className: 'bg-cov-indexing' },
-  { level: 'failed', label: 'Failed', className: 'bg-destructive' },
+  {
+    level: 'failed',
+    label: 'Failed',
+    className: 'bg-destructive/15 outline-2 -outline-offset-2 outline-destructive',
+  },
   { level: 'canceled', label: 'Canceled', className: 'bg-cov-canceled' },
 ];
 
@@ -75,7 +97,7 @@ export function CoverageLegend({
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
       {COVERAGE_LEVELS.filter((l) => levels.has(l.level)).map((l) => (
         <span key={l.level} className="flex items-center gap-1.5">
-          <span aria-hidden className={cn('h-3 w-4 rounded-[3px]', l.className)} />
+          <span aria-hidden className={cn('h-3 w-4 rounded-[3px]', l.swatch ?? l.className)} />
           {labels?.[l.level] ?? l.label}
         </span>
       ))}
@@ -98,9 +120,12 @@ export const CoverageCell = memo(function CoverageCell({
   pickable = false,
   onClick,
   className,
+  fill,
 }: {
   level: CoverageLevel;
   label: string;
+  /** The share in hand (0–1): a part-done block fills to it from the left, whatever its state. */
+  fill?: number;
   /** What `CoverageTip` hands back to its `content` for this cell. */
   tip: string;
   picked?: boolean;
@@ -121,16 +146,25 @@ export const CoverageCell = memo(function CoverageCell({
       className={cn(
         'min-w-0 rounded-[3px] p-0 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default',
         coverageClass(level),
+        'relative overflow-hidden',
         // outline-none would also hide the picked outline, so a picked cell must not carry it.
         picked
           ? 'outline-2 outline-offset-1 outline-foreground'
-          : level === 'queued'
+          : level === 'queued' || level === 'failed'
             ? ''
             : 'outline-none',
         pickable && !disabled && 'cursor-pointer',
         className,
       )}
-    />
+    >
+      {fill !== undefined && fill > 0 && fill < 1 && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 bg-cov-full"
+          style={{ width: `${Math.round(fill * 100)}%` }}
+        />
+      )}
+    </button>
   );
 });
 
@@ -187,8 +221,10 @@ export function CoverageTip({
             />
           </TooltipTrigger>
           <TooltipContent className="num max-w-72">
-            <div className="font-medium">{body.label}</div>
-            {body.detail}
+            <div className="flex flex-col gap-0.5">
+              <div className="font-medium">{body.label}</div>
+              {body.detail}
+            </div>
           </TooltipContent>
         </Tooltip>
       )}
