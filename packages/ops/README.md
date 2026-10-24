@@ -93,6 +93,37 @@ GROUP BY fingerprint ORDER BY p95_ms DESC LIMIT 20
 | `queryShape(sql)` | The shape, fingerprint and op of a query |
 | `foldRoute(path)` | A path with id-like segments as `:id` |
 
+## Tool calls
+
+`@columenlabs/lumen-ops/tools` meters each call an assistant or agent makes: one point per call with its latency, outcome and a hash of the code it ran, so slow or failing tools show up and the same script is grouped across runs.
+
+```ts
+import { meteredCall, meterToolCall, setToolSink } from '@columenlabs/lumen-ops/tools';
+
+setToolSink(env.TOOL_CALLS); // an Analytics Engine dataset binding
+
+// Wrap a call: latency and outcome are taken for you.
+const rows = await meteredCall({ app: 'trade', tool: 'portfolio_list', kind: 'call' }, () => run(args));
+
+// Or write one by hand, with the code a script ran.
+meterToolCall({ app: 'trade', tool: 'script', kind: 'script', ok: true, ms: 840, code: source, rows: 120 });
+```
+
+| Column | Holds |
+|---|---|
+| `index1` | app |
+| `blob1`…`blob9` | app, tool, kind, outcome (`ok` or `error`), error kind, code hash, source, tier, run id |
+| `double1`…`double6` | ms, rows, bytes in, bytes out, tokens in, tokens out |
+
+Arguments and results are never written; only their sizes.
+
+| Export | What it does |
+|---|---|
+| `setToolSink(binding)` | The dataset tool points go to; nothing is written until it is set |
+| `meterToolCall(point)` | One point by hand |
+| `meteredCall(point, fn, errorKind?)` | Runs `fn`, timing it and writing its outcome |
+| `codeHash(code)` | A short hash of a script, whitespace folded |
+
 ## Versions
 
 0.x: any minor may break things until 1.0. Every merge to Lumen's `main` publishes the next patch of every Lumen package; see the [releases](https://github.com/columenlabs/lumen/releases).

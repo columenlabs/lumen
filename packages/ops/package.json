@@ -1,7 +1,7 @@
 {
   "name": "@columenlabs/lumen-ops",
   "version": "0.0.0",
-  "description": "Lumen's ops meters: every data query an app runs as one Analytics Engine point, by its shape only.",
+  "description": "Lumen's ops meters: every data query and every tool call an app runs as one Analytics Engine point, by shape and hash only.",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
@@ -11,6 +11,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./points": "./src/points.ts",
-    "./queries": "./src/queries.ts"
+    "./queries": "./src/queries.ts",
+    "./tools": "./src/tools.ts"
   }
 }
