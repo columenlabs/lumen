@@ -56,7 +56,7 @@ import { TooltipProvider } from './ui/tooltip';
 import { WhatsNew } from './whats-new';
 
 interface ShellContext {
-  /** The app this page renders in (`data-app` on <html>). */
+  /** The app this page renders in (`data-app` on the root `<html>`). */
   app: string;
   /** Its name, where Settings lists its own sections. */
   appLabel: string;
@@ -222,7 +222,7 @@ function NavUser({
 }
 
 export interface LumenShellProps {
-  /** The app's id: `data-app` on <html>, which picks its accent. */
+  /** The app's id: `data-app` on the root `<html>`, which picks its accent. */
   app: string;
   /** The app's name, heading its own Settings sections. */
   appLabel: string;
