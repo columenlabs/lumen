@@ -26,6 +26,11 @@ export {
   viewFormulaIsText,
   whyBlank,
 } from './view-formula';
+export {
+  FORMULA_FUNCTIONS,
+  type FormulaFunction,
+  formulaFunctionsText,
+} from './formula-functions';
 
 const viewKey = z.string().regex(/^[a-z][a-z0-9_]{0,31}$/, 'key: lowercase letters, digits and _');
 const MAX_VALUES = 40;

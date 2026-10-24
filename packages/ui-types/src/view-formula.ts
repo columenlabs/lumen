@@ -9,7 +9,10 @@
 // `account.cash`) or a linked domain (`tax_lots.unrealized`); `frame.<frame>.<column>` for an
 // assistant frame; and another formula by its bare key (`value_nonretire`), at any depth, never in a
 // loop. Rows keep their flat field keys; each surface maps a name to its key (`FormulaNames`).
+// Beyond the two sums it calls the date, text and number functions in `FORMULA_FUNCTIONS`
+// (`year(transactions.date)`); any other function is refused by the check.
 import jexl from 'jexl';
+import { FORMULA_FUNCTIONS } from './formula-functions';
 
 /** What a formula can read for one row. */
 export interface ViewFormulaScope {
@@ -19,7 +22,13 @@ export interface ViewFormulaScope {
   totalSum: (key: string) => number;
 }
 
-export const viewFormulaFunctions = ['group_sum', 'total_sum'] as const;
+export const viewFormulaFunctions = [
+  'group_sum',
+  'total_sum',
+  ...FORMULA_FUNCTIONS.map((f) => f.name),
+] as const;
+const knownFunctions = new Set<string>(viewFormulaFunctions);
+const textFunctions = new Set(FORMULA_FUNCTIONS.filter((f) => f.text).map((f) => f.name));
 
 // Functions get only their arguments, so the row being evaluated is set around each evalSync
 // (evaluation is synchronous, so one at a time).
@@ -31,6 +40,7 @@ engine.addFunction('group_sum', (key: unknown) =>
 engine.addFunction('total_sum', (key: unknown) =>
   typeof key === 'string' && current ? current.totalSum(key) : Number.NaN,
 );
+for (const f of FORMULA_FUNCTIONS) engine.addFunction(f.name, f.fn);
 
 type Node = Record<string, unknown> & { type?: string; value?: unknown; from?: Node };
 
@@ -135,6 +145,8 @@ export function whyBlank(expr: string, scope: ViewFormulaScope): string | null {
 
 type Ast = {
   type: string;
+  name?: string;
+  pool?: string;
   value?: unknown;
   operator?: string;
   left?: Ast;
@@ -146,6 +158,7 @@ type Ast = {
 const endsInText = (a: Ast | undefined): boolean => {
   if (!a) return false;
   if (a.type === 'Literal') return typeof a.value === 'string';
+  if (a.type === 'FunctionCall') return textFunctions.has(String(a.name));
   if (a.type === 'ConditionalExpression')
     return endsInText(a.consequent) && endsInText(a.alternate);
   if (a.type === 'BinaryExpression' && a.operator === '+')
@@ -166,38 +179,69 @@ export function viewFormulaIsText(expr: string): boolean {
   }
 }
 
+/** The functions a tree calls that the formula language lacks (a `|transform` is one too). */
+function unknownFunctions(n: unknown, out: Set<string>): Set<string> {
+  if (!n || typeof n !== 'object') return out;
+  if (Array.isArray(n)) {
+    for (const x of n) unknownFunctions(x, out);
+    return out;
+  }
+  const node = n as Ast;
+  if (
+    node.type === 'FunctionCall' &&
+    (node.pool !== 'functions' || !knownFunctions.has(String(node.name)))
+  )
+    out.add(String(node.name));
+  for (const v of Object.values(node)) unknownFunctions(v, out);
+  return out;
+}
+
+/**
+ * The names a tree reads, found in the tree rather than by running it, so a name on a branch that
+ * did not run, or inside a function given nothing, still counts: each name (dotted names folded)
+ * and each quoted group_sum or total_sum argument.
+ */
+function namesIn(n: unknown, out: Set<string>): Set<string> {
+  if (!n || typeof n !== 'object') return out;
+  if (Array.isArray(n)) {
+    for (const x of n) namesIn(x, out);
+    return out;
+  }
+  const node = n as Node & { relative?: boolean; name?: string; args?: Ast[] };
+  if (node.type === 'Identifier' && !node.from && !node.relative) out.add(String(node.value));
+  if (
+    node.type === 'FunctionCall' &&
+    (node.name === 'group_sum' || node.name === 'total_sum') &&
+    node.args?.[0]?.type === 'Literal' &&
+    typeof node.args[0].value === 'string'
+  )
+    out.add(node.args[0].value);
+  for (const v of Object.values(node)) namesIn(v, out);
+  return out;
+}
+
 /** Why a formula can't run on fields `keys` (null: any field), or null when it can. */
 export function checkViewFormula(expr: string, keys: string[] | null): string | null {
-  let run: ReturnType<typeof compileViewFormula>;
+  let ast: unknown;
   try {
-    run = compileViewFormula(expr);
+    ast = compileNamed(expr)._getAst();
   } catch (e) {
     return `syntax: ${e instanceof Error ? e.message : String(e)}`;
   }
-  const unknown = new Set<string>();
-  const known = (k: string) => {
-    if (keys && !keys.includes(k)) unknown.add(k);
-    return 1;
-  };
-  run({ value: known, groupSum: known, totalSum: known });
-  return unknown.size ? `unknown field ${[...unknown].join(', ')}` : null;
+  const missing = [...unknownFunctions(ast, new Set())];
+  if (missing.length)
+    return `unknown function ${missing.join(', ')} (functions: ${viewFormulaFunctions.join(', ')})`;
+  const unknown = keys ? [...namesIn(ast, new Set())].filter((k) => !keys.includes(k)) : [];
+  return unknown.length ? `unknown field ${unknown.join(', ')}` : null;
 }
 
 /** The names a formula reads (fields and formulas, `group_sum` arguments included); [] when it does not parse. */
 export function formulaReads(expr: string): string[] {
-  let run: ReturnType<typeof compileViewFormula>;
   try {
-    run = compileViewFormula(expr);
+    return [...namesIn(compileNamed(expr)._getAst(), new Set())];
   } catch {
     return [];
   }
-  const read = new Set<string>();
-  const note = (k: string) => {
-    read.add(k);
-    return 1;
-  };
-  run({ value: note, groupSum: note, totalSum: note });
-  return [...read];
 }
 
 /**

@@ -1,4 +1,4 @@
-import { renameFormula } from '@columenlabs/lumen-ui-types/views';
+import { FORMULA_FUNCTIONS, renameFormula } from '@columenlabs/lumen-ui-types/views';
 // Formula box with autocomplete: a formula reads fields by name, where they
 // come from and their key (`symbol.price`, `frame.earnings_next_week.eps`, a formula's bare key),
 // but people know fields by their labels (Price). Typing a word opens a LumenSelectorList under
@@ -9,20 +9,29 @@ import type { LumenOption, LumenSelectorListHandle } from './lumen-selector';
 import { LumenSelectorList, fuzzyScore } from './lumen-selector';
 import { Textarea } from './ui/textarea';
 
-/** The roll-ups a formula can call, offered beside the fields. */
+/**
+ * The functions a formula can call, offered beside the fields: the two roll-ups, then the date,
+ * text and number functions, each with how to call it under its name.
+ */
 const FUNCTIONS: LumenOption[] = [
   {
     value: 'group_sum("")',
     label: 'group_sum',
-    detail: 'a field summed over its group',
-    group: 'Functions',
+    description: 'group_sum("field") · a field summed over its group',
+    group: 'Sums',
   },
   {
     value: 'total_sum("")',
     label: 'total_sum',
-    detail: 'a field summed over every row',
-    group: 'Functions',
+    description: 'total_sum("field") · a field summed over every row',
+    group: 'Sums',
   },
+  ...FORMULA_FUNCTIONS.map((f) => ({
+    value: `${f.name}()`,
+    label: f.name,
+    description: `${f.call} · ${f.detail}`,
+    group: `${f.group} functions`,
+  })),
 ];
 
 /** The name the caret is in (dots included), from its start to the caret. */
@@ -77,10 +86,11 @@ export function FormulaInput({
   const pick = (o: LumenOption) => {
     if (caret === null) return;
     const end = wordEnd(value, caret);
-    const fn = o.value.endsWith('("")');
+    const back = o.value.endsWith('("")') ? 2 : o.value.endsWith('()') ? 1 : 0;
     const next = value.slice(0, start) + o.value + value.slice(end);
-    // A function's caret goes between its quotes, ready for the field it sums.
-    moveTo.current = start + (fn ? o.value.length - 2 : o.value.length);
+    // A function's caret goes inside it: between a sum's quotes, ready for the field it sums, or
+    // between the brackets, ready for its arguments.
+    moveTo.current = start + o.value.length - back;
     onChange(next);
   };
   const track = () => setCaret(box.current?.selectionStart ?? null);

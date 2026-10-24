@@ -12,6 +12,7 @@
     ".": "./src/index.ts",
     "./views": "./src/views.ts",
     "./view-formula": "./src/view-formula.ts",
+    "./formula-functions": "./src/formula-functions.ts",
     "./domains": "./src/domains.ts",
     "./market": "./src/market.ts",
     "./chart-formula": "./src/chart-formula.ts",
@@ -22,6 +23,8 @@
     "./registry": "./src/registry.ts"
   },
   "dependencies": {
+    "@date-fns/utc": "2.1.0",
+    "date-fns": "4.1.0",
     "jexl": "2.3.0",
     "zod": "^4.3.6"
   },
