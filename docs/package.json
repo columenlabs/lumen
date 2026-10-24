@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "storybook dev -p 6006",
     "build": "rm -rf dist && bun scripts/changelog.ts && storybook build --quiet -o dist/docs && bun scripts/llms.ts && cp _redirects dist/",
-    "lint": "biome check .storybook stories scripts && ../scripts/check-kit-neutral.sh .storybook stories scripts package.json",
+    "lint": "biome check .storybook stories scripts && ../packages/ship/scripts/check-kit-neutral.sh .storybook stories scripts package.json",
     "type-check": "tsc --noEmit",
     "deploy": "wrangler deploy"
   },

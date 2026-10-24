@@ -2,7 +2,7 @@
 
 # Lumen
 
-**Columen Labs' shared building blocks for apps**, published as `@columenlabs/lumen-*`. Today that is a React component system for data apps (an app frame, data-driven pages and views, widgets, charts, drawers and pickers on one theme) and its view model. Shared backend parts join as they move out of the apps that run them.
+**Columen Labs' shared building blocks for apps**, published as `@columenlabs/lumen-*`. Today that is a React component system for data apps (an app frame, data-driven pages and views, widgets, charts, drawers and pickers on one theme), its view model and the release kit. Shared backend parts join as they move out of the apps that run them.
 
 [![npm](https://img.shields.io/npm/v/@columenlabs/lumen-ui?label=%40columenlabs%2Flumen-ui&color=5b8cff)](https://www.npmjs.com/package/@columenlabs/lumen-ui)
 [![license](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
@@ -25,7 +25,7 @@ One repo holds the Lumen family. Each folder `packages/<name>` is published as `
 |---|---|---|---|
 | [`packages/ui`](packages/ui) | [`@columenlabs/lumen-ui`](https://www.npmjs.com/package/@columenlabs/lumen-ui) | The components, the shadcn parts under `ui/*`, and `theme.css` | Published |
 | [`packages/ui-types`](packages/ui-types) | [`@columenlabs/lumen-ui-types`](https://www.npmjs.com/package/@columenlabs/lumen-ui-types) | The view model: view config, formulas, domains and joins, the data catalog, frames, chart formulas. No React | Published |
-| `packages/ship` | `@columenlabs/lumen-ship` | Release notes and changelog, the What's new reader, shared CI and publish workflows, lint guards | Planned |
+| [`packages/ship`](packages/ship) | [`@columenlabs/lumen-ship`](https://www.npmjs.com/package/@columenlabs/lumen-ship) | Release notes written by Claude, the changelog What's new reads, lint guards | Published |
 | `packages/auth` | `@columenlabs/lumen-auth` | Sign-in checks: access tokens, service tokens, OAuth for MCP servers | Planned |
 | `packages/ops` | `@columenlabs/lumen-ops` | Usage meters, page-error logs, email, signed webhooks | Planned |
 | `packages/ai` | `@columenlabs/lumen-ai` | MCP server helpers; later a product-neutral assistant | Planned |
@@ -87,7 +87,7 @@ The docs site (`docs/`) is Storybook over the kit's source plus the files agents
 | `/docs/` | Storybook: every component on sample data, with Controls and Show code |
 | `/llms.txt` | The index for agents ([llmstxt.org](https://llmstxt.org) format) |
 | `/llms-full.txt` | Every README and every component's props in one file |
-| `/<package>.md` | Each package's README (`/ui.md`, `/ui-types.md`) |
+| `/<package>.md` | Each package's README (`/ui.md`, `/ui-types.md`, `/ship.md`) |
 
 All of it is built from the READMEs and the stories (`docs/scripts/llms.ts`), so nothing is written twice. Add or change a story in `docs/stories/` with the part, and keep each package's README current with its exports.
 
