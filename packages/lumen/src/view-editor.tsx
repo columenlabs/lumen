@@ -834,6 +834,17 @@ export function ViewEditDialog<T>({
         },
       ];
     }),
+    // A row of numbers with no card draws nothing (with its header off, not even a frame).
+    ...(widget && isRowCard(widget) && !(widget.tiles ?? viewTiles ?? []).length
+      ? [
+          {
+            where: 'Cards',
+            message: 'Add at least one card',
+            target: 'summary-card-add',
+            reveal: () => open_('settings'),
+          },
+        ]
+      : []),
     ...cardProblems.flatMap((message, j) =>
       message
         ? [

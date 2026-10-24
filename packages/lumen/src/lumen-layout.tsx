@@ -654,6 +654,10 @@ function ViewLayout<T extends RowData>({
   // saves at once.
   const [layout, setLayout] = useState(false);
   const [draft, setDraft] = useState<ViewCard[]>([]);
+  // What Edit widget changes on the view itself (formulas, links, frames) while the layout is
+  // edited: held with the draft and saved with it, never on its own. A save mid-edit made pages
+  // that key on the view's save time remount, which dropped the draft and its new widget.
+  const [draftView, setDraftView] = useState<Partial<CustomViewConfig>>({});
   const [adding, setAdding] = useState(false);
   // Any card but the view's own table, edited in the same editor.
   const [editingWidget, setEditingWidget] = useState<ViewWidget | null>(null);
@@ -1170,6 +1174,7 @@ function ViewLayout<T extends RowData>({
           <LayoutActions
             onCancel={() => {
               setDraft(saved);
+              setDraftView({});
               setLayout(false);
             }}
             onAdd={() => setAdding(true)}
@@ -1183,8 +1188,12 @@ function ViewLayout<T extends RowData>({
             }
             onSave={() => {
               setLayout(false);
-              if (JSON.stringify(draft) !== JSON.stringify(saved))
-                onConfigChange?.({ ...config, cards: draft });
+              setDraftView({});
+              if (
+                JSON.stringify(draft) !== JSON.stringify(saved) ||
+                Object.keys(draftView).length > 0
+              )
+                onConfigChange?.({ ...config, ...draftView, cards: draft });
             }}
           />
         ) : (
@@ -1209,6 +1218,7 @@ function ViewLayout<T extends RowData>({
                 label="Edit layout"
                 onClick={() => {
                   setDraft(saved);
+                  setDraftView({});
                   setLayout(true);
                 }}
               />
@@ -1252,7 +1262,7 @@ function ViewLayout<T extends RowData>({
               open
               onOpenChange={(o) => !o && setEditingWidget(null)}
               domain={joins.domain}
-              config={config}
+              config={layout ? { ...config, ...draftView } : config}
               rows={rows}
               current={[]}
               card={editingWidget}
@@ -1265,7 +1275,7 @@ function ViewLayout<T extends RowData>({
                 const next = i < 0 ? [...cards, c] : cards.map((x, j) => (j === i ? c : x));
                 if (layout) {
                   setDraft(next);
-                  onConfigChange({ ...config, ...view });
+                  setDraftView((d) => ({ ...d, ...view }));
                 } else onConfigChange({ ...config, ...view, cards: next });
               }}
               editor={editor}
