@@ -2,8 +2,9 @@
 # Cut a repo's GitHub releases with notes Claude writes from the merged pull requests, through the
 # GitHub REST API. Run from the repo's root, which holds lumen-ship.json (see the package README).
 #   lumen-ship release            one patch release at main once `cadence.every` first-parent merges
-#                                 landed since the latest v* tag, or on the first merge
-#                                 `cadence.days` days after it; FORCE=1 cuts it now
+#                                 landed since the latest release tag (`tags`, default v[0-9]*),
+#                                 or on the first merge `cadence.days` days after it; FORCE=1
+#                                 cuts it now
 #   lumen-ship release minor      tag main as the next minor; its notes are the hand-written
 #                                 docs/releases/v<major>.<minor>.0.md (required)
 #   lumen-ship release notes      set the latest minor release's notes from its file again
@@ -31,6 +32,8 @@ APPS=$(jq -c '.changelog.apps // {}' "$CONFIG")
 PROMOTE=$(cfg .promote)
 EVERY=${RELEASE_EVERY:-$(cfg .cadence.every)}; EVERY=${EVERY:-10}
 DAYS=$(cfg .cadence.days); DAYS=${DAYS:-7}
+# The release tags, as a git glob: narrow it when the repo keeps tags of an older scheme.
+TAGS=$(cfg .tags); TAGS=${TAGS:-v[0-9]*}
 DRY_RUN=${DRY_RUN:-0}
 FORCE=${FORCE:-0}
 REDO=${REDO:-0}
@@ -164,12 +167,12 @@ release() { # tag sha previous-tag [notes-file]: a new tag and its release
   promote "$sha"
 }
 
-LATEST=$(git tag --list 'v[0-9]*' --sort=-v:refname | head -1)
+LATEST=$(git tag --list "$TAGS" --sort=-v:refname | head -1)
 case "$MODE" in
   tag)
     TAG=${2:?usage: lumen-ship release tag v<version>}
     git rev-parse -q --verify "refs/tags/$TAG" > /dev/null || { echo "no tag $TAG" >&2; exit 1; }
-    PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | awk -v t="$TAG" 'found { print; exit } $0 == t { found = 1 }')
+    PREV=$(git tag --list "$TAGS" --sort=-v:refname | awk -v t="$TAG" 'found { print; exit } $0 == t { found = 1 }')
     SHA=$(git rev-list -n1 "$TAG")
     # A tag with no release answers 404, whose error body gh still prints: keep only an id.
     ID=$(gh api "repos/$REPO/releases/tags/$TAG" --jq .id 2> /dev/null || true)
