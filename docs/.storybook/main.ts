@@ -13,8 +13,8 @@ const config: StorybookConfig = {
     reactDocgen: 'react-docgen-typescript',
     reactDocgenTypescriptOptions: {
       // Document the kit's own source, read through the kit's tsconfig.
-      tsconfigPath: '../packages/lumen/tsconfig.json',
-      include: ['../packages/lumen/src/**/*.tsx'],
+      tsconfigPath: '../packages/ui/tsconfig.json',
+      include: ['../packages/ui/src/**/*.tsx'],
       shouldExtractLiteralValuesFromEnum: true,
       shouldRemoveUndefinedFromOptional: true,
       // Only the kit's own props: leave out the DOM attributes every element inherits.

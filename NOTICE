@@ -8,5 +8,5 @@ chart's own logo, so per that library's NOTICE, an app that shows these charts
 should link to https://www.tradingview.com/ somewhere a user can find it (an
 About page or footer is enough).
 
-The components under packages/lumen/src/ui are based on shadcn/ui
+The components under packages/ui/src/ui are based on shadcn/ui
 (https://ui.shadcn.com), MIT License, Copyright (c) 2023 shadcn.

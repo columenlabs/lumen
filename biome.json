@@ -11,7 +11,7 @@
       "dist",
       "out",
       "**/*.md",
-      "packages/lumen/src/ui/**"
+      "packages/ui/src/ui/**"
     ]
   },
   "organizeImports": {
