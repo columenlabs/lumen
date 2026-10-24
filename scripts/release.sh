@@ -13,7 +13,7 @@ TAG=${1:?usage: scripts/release.sh v<version>}
 DRY_RUN=${DRY_RUN:-0}
 REDO=${REDO:-0}
 MODEL=claude-sonnet-5-5
-REPO=columenlabs/lumen-ui
+REPO=columenlabs/lumen
 git fetch -q origin main --tags
 git rev-parse -q --verify "refs/tags/$TAG" > /dev/null || { echo "no tag $TAG" >&2; exit 1; }
 PREV=$(git tag --list 'v*' --sort=-v:refname | awk -v t="$TAG" 'found { print; exit } $0 == t { found = 1 }')

@@ -6,8 +6,9 @@ Instructions for every coding agent in this repo. `CLAUDE.md` imports this file;
 Lumen is Columen Labs' public React component system (MIT), published to npm as `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types`. Columen's apps install it from npm. This repo is the only place the kit's source lives: change it here, release it, then bump the version in each app.
 
 ## Layout
-- `packages/lumen-types`: the view model (views, formulas, domains and joins, catalog, frames, chart formulas). No React.
-- `packages/lumen`: the components, `ui/*` (shadcn parts) and `theme.css`.
+One repo for the Lumen family: each package is a folder `packages/<name>` published as `@columenlabs/lumen-<name>`, all at one version from one release. Today `ui` and `ui-types`; `ai`, `auth`, `vault`, `ship` and `ops` (shared backend parts) join as they are moved in. A part joins only when two or more apps run it, it names no product, it moves from working code, and it owns no app's data.
+- `packages/ui-types` (`@columenlabs/lumen-ui-types`): the view model (views, formulas, domains and joins, catalog, frames, chart formulas). No React.
+- `packages/ui` (`@columenlabs/lumen-ui`): the components, `ui/*` (shadcn parts) and `theme.css`.
 - `scripts/pack.sh` builds both into `out/`. `.github/workflows/publish.yml` publishes them on every merge to `main` and tags `v<version>`. CI and publishing run on OpenShip's self-hosted runner.
 
 ## Rules

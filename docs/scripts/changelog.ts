@@ -4,7 +4,7 @@
 // it can't be reached the committed file stays as it is and the build goes on.
 import { writeFileSync } from 'node:fs';
 
-const REPO = 'columenlabs/lumen-ui';
+const REPO = 'columenlabs/lumen';
 const OUT = new URL('../stories/changelog/releases.json', import.meta.url);
 const KINDS = ['feature', 'improvement', 'fix', 'performance', 'security'] as const;
 
