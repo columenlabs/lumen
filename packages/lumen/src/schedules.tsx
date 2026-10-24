@@ -630,7 +630,8 @@ export function SchedulesSection({
       )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          Last runs shown in {timeZoneLabel(timeZone)}.{onRuns ? ' Each run is a line in Logs.' : ''}
+          Last runs shown in {timeZoneLabel(timeZone)}.
+          {onRuns ? ' Each run is a line in Logs.' : ''}
         </p>
         {briefs ? (
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
