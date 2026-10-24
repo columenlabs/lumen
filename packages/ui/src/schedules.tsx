@@ -19,7 +19,7 @@ import { LumenConfirm } from './confirm';
 import { useIsMobile } from './hooks/use-mobile';
 import { LumenSelector } from './lumen-selector';
 import { IconButton } from './page';
-import { usePrefs } from './prefs';
+import { timeZoneLabel, usePrefs } from './prefs';
 import { useShell } from './shell';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -597,7 +597,7 @@ export function SchedulesSection({
                     <OnSwitch s={s} onSave={onSave} />
                   </TableCell>
                   <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell className="max-w-36 truncate text-muted-foreground">
+                  <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
                     {s.kind === 'daily' ? '' : `Every ${everyText(s.every)} · `}
                     {when(s)}
                   </TableCell>
@@ -630,7 +630,8 @@ export function SchedulesSection({
       )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          Times shown in {timeZone.replace('_', ' ')}. Each run is a line in Logs.
+          Last runs shown in {timeZoneLabel(timeZone)}.
+          {onRuns ? ' Each run is a line in Logs.' : ''}
         </p>
         {briefs ? (
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>

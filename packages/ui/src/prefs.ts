@@ -61,6 +61,15 @@ export const DEFAULT_PREFS: Prefs = {
   observability: false,
 };
 
+/** The kit's defaults with the app's own (`configureLumen` `defaultPrefs`) over them. */
+const defaults = (): Prefs => ({ ...DEFAULT_PREFS, ...KIT.defaultPrefs });
+
+/** The device's own zone when the picker lists it (`America/Los_Angeles`), else undefined. */
+export function deviceTimeZone(): TimeZoneId | undefined {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return TIME_ZONES.find((z) => z.id === zone)?.id;
+}
+
 const YEAR = 60 * 60 * 24 * 365;
 const listeners = new Set<() => void>();
 
@@ -71,24 +80,25 @@ function cookieDomain() {
 }
 
 function read(): Prefs {
+  const d = defaults();
   try {
     const raw = document.cookie
       .split('; ')
       .find((c) => c.startsWith(`${KIT.prefsCookie}=`))
       ?.slice(KIT.prefsCookie.length + 1);
-    if (!raw) return DEFAULT_PREFS;
+    if (!raw) return d;
     const v = JSON.parse(decodeURIComponent(raw)) as Partial<Prefs>;
     return {
-      theme: THEMES.includes(v.theme as Theme) ? (v.theme as Theme) : DEFAULT_PREFS.theme,
-      glass: v.glass === true,
-      font: FONTS.find((f) => f.id === v.font)?.id ?? DEFAULT_PREFS.font,
-      fontSize: FONT_SIZES.find((f) => f.id === v.fontSize)?.id ?? DEFAULT_PREFS.fontSize,
-      timeZone: TIME_ZONES.find((z) => z.id === v.timeZone)?.id ?? DEFAULT_PREFS.timeZone,
-      hideAmounts: v.hideAmounts === true,
-      observability: v.observability === true,
+      theme: THEMES.includes(v.theme as Theme) ? (v.theme as Theme) : d.theme,
+      glass: typeof v.glass === 'boolean' ? v.glass : d.glass,
+      font: FONTS.find((f) => f.id === v.font)?.id ?? d.font,
+      fontSize: FONT_SIZES.find((f) => f.id === v.fontSize)?.id ?? d.fontSize,
+      timeZone: TIME_ZONES.find((z) => z.id === v.timeZone)?.id ?? d.timeZone,
+      hideAmounts: typeof v.hideAmounts === 'boolean' ? v.hideAmounts : d.hideAmounts,
+      observability: typeof v.observability === 'boolean' ? v.observability : d.observability,
     };
   } catch {
-    return DEFAULT_PREFS;
+    return d;
   }
 }
 

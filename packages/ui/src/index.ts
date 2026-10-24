@@ -179,6 +179,7 @@ export {
 } from './page';
 export {
   DEFAULT_PREFS,
+  deviceTimeZone,
   type Prefs,
   TIME_ZONES,
   type Theme,

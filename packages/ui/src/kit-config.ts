@@ -1,6 +1,8 @@
 // What an app tells the kit about itself (the kit is product-neutral): where
 // people's display preferences live and the line a market widget shows where the app has no feed.
 // Set once at start with `configureLumen`. The assistant's name comes from its provider.
+import type { Prefs } from './prefs';
+
 export interface KitConfig {
   /** The cookie that keeps each person's display preferences. */
   prefsCookie: string;
@@ -8,6 +10,8 @@ export interface KitConfig {
   cookieDomain?: (host: string) => string | undefined;
   /** What a market widget says where the app has no live feed. */
   marketOff: string;
+  /** The app's own defaults for preferences a person has not set (theme, time zone, ...). */
+  defaultPrefs?: Partial<Prefs>;
 }
 
 export const KIT: KitConfig = {
