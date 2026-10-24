@@ -890,9 +890,12 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
             </div>
             {pickedCount > 0 && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
-                <span className="min-w-0 truncate">
-                  <span className="num font-semibold">{pickedRows.map(rowName).join(', ')}</span>
-                  {` · ${months(pickedCount)} picked`}
+                <span className="min-w-0">
+                  {/* The months layout has one row, named in the title already. */}
+                  {layout === 'grid' && (
+                    <span className="num font-semibold">{`${pickedRows.map(rowName).join(', ')} · `}</span>
+                  )}
+                  {`${months(pickedCount)} picked`}
                   {pickNote && queueCount > 0 ? ` · ${pickNote(pick)}` : ''}
                 </span>
                 <span className="flex-1" />
