@@ -11,6 +11,7 @@ export {
   type LumenTableProps,
   LumenView,
   type LumenViewProps,
+  type ServerPaging,
   type ViewCellValue,
   type ViewChipTone,
   type ViewDomain,
