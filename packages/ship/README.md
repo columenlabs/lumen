@@ -20,7 +20,7 @@ Pin it to the same exact version as the other Lumen packages. The command needs 
 
 | Command | What it does |
 |---|---|
-| `lumen-ship release` | One patch release at `main` once `cadence.every` merges landed since the newest `v*` tag, or on the first merge `cadence.days` days after it. `FORCE=1` cuts it now |
+| `lumen-ship release` | One patch release at `main` once `cadence.every` merges landed since the newest release tag, or on the first merge `cadence.days` days after it. `FORCE=1` cuts it now |
 | `lumen-ship release minor` | Tags `main` as the next minor. Its notes are the hand-written `docs/releases/v<major>.<minor>.0.md`, which must be on `main` |
 | `lumen-ship release notes` | Sets the newest minor's notes from its file again |
 | `lumen-ship release tag v1.2.3` | Makes the release of a tag that already exists (for a publish job that tags first). `REDO=1` writes its notes again |
@@ -76,6 +76,7 @@ At the repo root (or the path in `LUMEN_SHIP_CONFIG`):
   "repo": "owner/name",
   "notes": { "prompt": ".github/release-prompt.md", "model": "claude-sonnet-5-5", "maxTokens": 16000 },
   "changelog": { "path": "src/changelog.json", "apps": { "console": "console", "api": "api" } },
+  "tags": "v0.*",
   "promote": "release",
   "cadence": { "every": 10, "days": 7 }
 }
@@ -88,6 +89,7 @@ At the repo root (or the path in `LUMEN_SHIP_CONFIG`):
 | `notes.model`, `notes.maxTokens` | The model and its output limit (the model thinks first, so keep it large) |
 | `changelog.path` | Where the What's new JSON lives on `main`; left out, no changelog |
 | `changelog.apps` | Tag (lower case) → app id, for takeaways about one app |
+| `tags` | The release tags as a git glob, `v[0-9]*` by default; narrow it when older tags of another scheme sort higher |
 | `promote` | A branch fast-forwarded to each new release (a production deploy branch, say) |
 | `cadence.every`, `cadence.days` | When a patch is due. `RELEASE_EVERY` overrides `every` |
 
