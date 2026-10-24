@@ -1,3 +1,6 @@
 {
-  "extends": ["../biome.json"]
+  "extends": ["../biome.json"],
+  "files": {
+    "ignore": ["node_modules", "dist", "**/*.md", "stories/changelog/releases.json"]
+  }
 }
