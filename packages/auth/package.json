@@ -1,0 +1,15 @@
+{
+  "name": "@columenlabs/lumen-auth",
+  "version": "0.0.0",
+  "description": "Lumen's sign-in checks: Cloudflare Access tokens and service tokens, verified in the Worker.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "biome check src && ../ship/scripts/check-kit-neutral.sh",
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./access": "./src/access.ts"
+  }
+}
