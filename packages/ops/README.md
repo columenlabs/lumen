@@ -1,6 +1,6 @@
 # @columenlabs/lumen-ops
 
-Lumen's ops meters for Cloudflare Workers: every data query your app runs becomes one Analytics Engine point, so you can find slow and heavy queries and fix them. The meter wraps your bindings once, so new code is metered without opting in. It writes only each query's shape, never a value.
+Lumen's ops parts for Cloudflare Workers: every data query your app runs becomes one Analytics Engine point, so you can find slow and heavy queries and fix them. The meter wraps your bindings once, so new code is metered without opting in. It writes only each query's shape, never a value. It also meters tool calls (`/tools`) and sends signed webhooks (`/webhooks`).
 
 - Docs: https://lumen.columenlabs.com/docs/
 - For agents: https://lumen.columenlabs.com/llms.txt
@@ -123,6 +123,32 @@ Arguments and results are never written; only their sizes.
 | `meterToolCall(point)` | One point by hand |
 | `meteredCall(point, fn, errorKind?)` | Runs `fn`, timing it and writing its outcome |
 | `codeHash(code)` | A short hash of a script, whitespace folded |
+
+## Webhooks out
+
+`@columenlabs/lumen-ops/webhooks` sends one delivery, signed per the [Standard Webhooks](https://www.standardwebhooks.com) spec when a secret is given, so the receiver can verify it with any Standard Webhooks library. It never throws: the result says how it went, for the app's own delivery log and retries.
+
+```ts
+import { newWebhookSecret, sendWebhook } from '@columenlabs/lumen-ops/webhooks';
+
+const secret = newWebhookSecret(); // whsec_…, shown to its owner once, kept sealed
+const r = await sendWebhook({
+  url: endpoint.url,
+  secret,
+  id: event.id, // the same id on a retry
+  body: JSON.stringify(event.payload),
+  headers: { authorization: `Bearer ${endpoint.token}` },
+  userAgent: 'MyApp-Webhooks/1',
+});
+if (!r.ok) scheduleRetry(event, r.status, r.error);
+```
+
+| Export | What it does |
+|---|---|
+| `sendWebhook(send)` | One POST: `{ ok, status, ms, id, error? }`; status 0 when the endpoint never answered |
+| `newWebhookSecret()` | A new `whsec_` secret, 32 random bytes |
+
+The endpoint's own headers go first, so they can never replace the signature headers. Redirects count as failures unless `redirect` says otherwise; the timeout is 10 s by default.
 
 ## Versions
 

@@ -1,7 +1,7 @@
 {
   "name": "@columenlabs/lumen-ops",
   "version": "0.0.0",
-  "description": "Lumen's ops meters: every data query and every tool call an app runs as one Analytics Engine point, by shape and hash only.",
+  "description": "Lumen's ops parts: every data query and tool call an app runs as one Analytics Engine point (shapes and hashes only), and signed webhooks out.",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
@@ -12,6 +12,10 @@
     ".": "./src/index.ts",
     "./points": "./src/points.ts",
     "./queries": "./src/queries.ts",
-    "./tools": "./src/tools.ts"
+    "./tools": "./src/tools.ts",
+    "./webhooks": "./src/webhooks.ts"
+  },
+  "dependencies": {
+    "standardwebhooks": "1.1.1"
   }
 }
