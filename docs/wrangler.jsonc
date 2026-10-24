@@ -1,5 +1,6 @@
-// The docs site: static files only, no Worker code. `bun run build` writes dist/ (Storybook in
-// dist/docs, plus llms.txt and the component manifest); `/` redirects to /docs/ (_redirects).
+// The docs site at lumen.columenlabs.com: static files only, no Worker code. `bun run build` writes
+// dist/: Storybook and the component manifest in dist/docs, and at the root llms.txt, llms-full.txt
+// and each package's README as <package>.md. `/` redirects to /docs/ (_redirects).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "lumen-docs",
@@ -8,6 +9,6 @@
     "directory": "./dist",
     "html_handling": "auto-trailing-slash"
   },
-  "routes": [{ "pattern": "lumen-ui.columenlabs.com", "custom_domain": true }],
+  "routes": [{ "pattern": "lumen.columenlabs.com", "custom_domain": true }],
   "observability": { "enabled": true }
 }
