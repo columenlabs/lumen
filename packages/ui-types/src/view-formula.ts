@@ -196,41 +196,52 @@ function unknownFunctions(n: unknown, out: Set<string>): Set<string> {
   return out;
 }
 
+/**
+ * The names a tree reads, found in the tree rather than by running it, so a name on a branch that
+ * did not run, or inside a function given nothing, still counts: each name (dotted names folded)
+ * and each quoted group_sum or total_sum argument.
+ */
+function namesIn(n: unknown, out: Set<string>): Set<string> {
+  if (!n || typeof n !== 'object') return out;
+  if (Array.isArray(n)) {
+    for (const x of n) namesIn(x, out);
+    return out;
+  }
+  const node = n as Node & { relative?: boolean; name?: string; args?: Ast[] };
+  if (node.type === 'Identifier' && !node.from && !node.relative) out.add(String(node.value));
+  if (
+    node.type === 'FunctionCall' &&
+    (node.name === 'group_sum' || node.name === 'total_sum') &&
+    node.args?.[0]?.type === 'Literal' &&
+    typeof node.args[0].value === 'string'
+  )
+    out.add(node.args[0].value);
+  for (const v of Object.values(node)) namesIn(v, out);
+  return out;
+}
+
 /** Why a formula can't run on fields `keys` (null: any field), or null when it can. */
 export function checkViewFormula(expr: string, keys: string[] | null): string | null {
-  let run: ReturnType<typeof compileViewFormula>;
+  let ast: unknown;
   try {
-    run = compileViewFormula(expr);
+    ast = compileNamed(expr)._getAst();
   } catch (e) {
     return `syntax: ${e instanceof Error ? e.message : String(e)}`;
   }
-  const missing = [...unknownFunctions(compileNamed(expr)._getAst(), new Set())];
+  const missing = [...unknownFunctions(ast, new Set())];
   if (missing.length)
     return `unknown function ${missing.join(', ')} (functions: ${viewFormulaFunctions.join(', ')})`;
-  const unknown = new Set<string>();
-  const known = (k: string) => {
-    if (keys && !keys.includes(k)) unknown.add(k);
-    return 1;
-  };
-  run({ value: known, groupSum: known, totalSum: known });
-  return unknown.size ? `unknown field ${[...unknown].join(', ')}` : null;
+  const unknown = keys ? [...namesIn(ast, new Set())].filter((k) => !keys.includes(k)) : [];
+  return unknown.length ? `unknown field ${unknown.join(', ')}` : null;
 }
 
 /** The names a formula reads (fields and formulas, `group_sum` arguments included); [] when it does not parse. */
 export function formulaReads(expr: string): string[] {
-  let run: ReturnType<typeof compileViewFormula>;
   try {
-    run = compileViewFormula(expr);
+    return [...namesIn(compileNamed(expr)._getAst(), new Set())];
   } catch {
     return [];
   }
-  const read = new Set<string>();
-  const note = (k: string) => {
-    read.add(k);
-    return 1;
-  };
-  run({ value: note, groupSum: note, totalSum: note });
-  return [...read];
 }
 
 /**
