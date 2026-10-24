@@ -1,15 +1,40 @@
+<div align="center">
+
 # Lumen
 
-Lumen is a React component system from [Columen Labs](https://github.com/columenlabs): an app frame, data-driven pages and views, widgets, charts, drawers and pickers, all sharing one theme. You give it data and config, and it handles the screen.
+**A React component system for data apps**, from [Columen Labs](https://github.com/columenlabs). An app frame, data-driven pages and views, widgets, charts, drawers and pickers, all on one theme. You give it data and a view config; it draws the screen.
+
+[![npm](https://img.shields.io/npm/v/@columenlabs/lumen-ui?label=%40columenlabs%2Flumen-ui&color=5b8cff)](https://www.npmjs.com/package/@columenlabs/lumen-ui)
+[![license](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
+[![docs](https://img.shields.io/badge/docs-live-f59e0b)](https://lumen-ui.columenlabs.com/docs/)
+[![built on shadcn/ui](https://img.shields.io/badge/built%20on-shadcn%2Fui-111)](https://ui.shadcn.com)
+
+[**Docs**](https://lumen-ui.columenlabs.com/docs/) · [**Changelog**](https://github.com/columenlabs/lumen-ui/releases) · [**llms.txt**](https://lumen-ui.columenlabs.com/docs/llms.txt) · [**Install**](#install)
+
+<img src=".github/assets/lumen-in-play.png" alt="A sample app built with Lumen: sidebar, summary tiles, a donut and bar list, a filterable table and the status bar, in dark mode" width="900" />
+
+<sub>A made-up sample app: everything on screen is Lumen.</sub>
+
+</div>
+
+## What's inside
+
+| | Part | What it does |
+|---|---|---|
+| 🪟 | **App shell** | `LumenShell`: sidebar (icons-only collapse, a drawer on phone), header, status bar, Settings, profile menu and ⌘K Find |
+| 🧱 | **Blocks** | `LumenLayout` and `LumenGrid` (a page of cards you can rearrange), `LumenWidget` (a card with its header, link square and controls), sign-in and Security, Settings sections, tabs |
+| 📊 | **Views and charts** | `LumenView` and `LumenTable` (filter, group, pivot, totals), `LumenCard`, `LumenChart`, `LumenEChart`, price and growth charts |
+| 🎛️ | **Pickers and panels** | `LumenSelector`, `LumenDrawer`, `LumenConfirm`, `LumenForm`, `LumenDateInput`, `LumenTabs` |
+| 🧩 | **Primitives** | The shadcn/ui parts under `ui/*` and `theme.css` |
 
 | Package | What it holds |
 |---|---|
-| [`@columenlabs/lumen-ui`](packages/lumen) | Components: `LumenShell` (sidebar, header, status bar, settings), `LumenLayout` and `LumenGrid` (a page of cards), `LumenView` and `LumenTable` (filter, group, pivot), `LumenWidget` and `LumenCard`, `LumenChart` and `LumenEChart`, `LumenDrawer`, `LumenSelector`, `LumenTabs`, `LumenForm`, the shadcn parts under `ui/*`, and `theme.css` |
+| [`@columenlabs/lumen-ui`](packages/lumen) | The components, the shadcn parts under `ui/*`, and `theme.css` |
 | [`@columenlabs/lumen-ui-types`](packages/lumen-types) | The view model: view config, formulas, domains and joins, the data catalog, frames, chart formulas |
 
-Docs: [lumen-ui.columenlabs.com/docs](https://lumen-ui.columenlabs.com/docs/), every component with live props and code, generated from this source on each build. Built on [shadcn/ui](https://ui.shadcn.com). Coding agents can read [`llms.txt`](https://lumen-ui.columenlabs.com/docs/llms.txt) or the [component manifest](https://lumen-ui.columenlabs.com/docs/manifests/components.json); `bun run --filter=lumen-docs dev` also serves Storybook's MCP at `http://localhost:6006/mcp`.
+> **Status: 0.x.** Any minor version may break things until 1.0.
 
-Status: 0.x. Any minor version may break things until 1.0.
+**For coding agents:** read [`llms.txt`](https://lumen-ui.columenlabs.com/docs/llms.txt) or the [component manifest](https://lumen-ui.columenlabs.com/docs/manifests/components.json). `bun run --filter=lumen-docs dev` also serves Storybook's MCP at `http://localhost:6006/mcp`.
 
 ## Install
 
@@ -60,7 +85,7 @@ To try a change inside an app before it is published, use `bun link` in `out/<pa
 
 ## Releases
 
-Every merge to `main` publishes both packages at the next patch version and tags it ([publish.yml](.github/workflows/publish.yml)). A new minor is cut only by hand (Run workflow with bump = minor).
+Every merge to `main` publishes both packages at the next patch version and tags it ([publish.yml](.github/workflows/publish.yml)), with notes on what changed in each release: see the [releases](https://github.com/columenlabs/lumen-ui/releases). A new minor is cut only by hand (Run workflow with bump = minor).
 
 ## License
 
