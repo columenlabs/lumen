@@ -324,7 +324,9 @@ export function FormulaForm({
           id={`${id}-expr`}
           invalid={!!issue}
           fields={fields}
-          placeholder={'Type a field: market_value / group_sum("market_value") * 100'}
+          placeholder={
+            'Type a field or a function: year(date), round(value / group_sum("value") * 100, 1)'
+          }
           value={f.expr}
           onChange={setExpr}
         />
