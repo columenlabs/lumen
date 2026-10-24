@@ -27,7 +27,7 @@ One repo holds the Lumen family. Each folder `packages/<name>` is published as `
 | [`packages/ui-types`](packages/ui-types) | [`@columenlabs/lumen-ui-types`](https://www.npmjs.com/package/@columenlabs/lumen-ui-types) | The view model: view config, formulas, domains and joins, the data catalog, frames, chart formulas. No React | Published |
 | [`packages/ship`](packages/ship) | [`@columenlabs/lumen-ship`](https://www.npmjs.com/package/@columenlabs/lumen-ship) | Release notes written by Claude, the changelog What's new reads, lint guards | Published |
 | [`packages/auth`](packages/auth) | [`@columenlabs/lumen-auth`](https://www.npmjs.com/package/@columenlabs/lumen-auth) | Sign-in checks: Cloudflare Access tokens and service tokens, verified in the Worker | Published |
-| `packages/ops` | `@columenlabs/lumen-ops` | Usage meters, page-error logs, email, signed webhooks | Planned |
+| [`packages/ops`](packages/ops) | [`@columenlabs/lumen-ops`](https://www.npmjs.com/package/@columenlabs/lumen-ops) | Ops meters to Analytics Engine: every data query by its shape; later page errors, email, signed webhooks | Published |
 | `packages/ai` | `@columenlabs/lumen-ai` | MCP server helpers; later a product-neutral assistant | Planned |
 | `packages/vault` | `@columenlabs/lumen-vault` | Per-person sealing and a per-person Durable Object base with module migrations, alarms, backup and wipe | Planned |
 
@@ -87,7 +87,7 @@ The docs site (`docs/`) is Storybook over the kit's source plus the files agents
 | `/docs/` | Storybook: every component on sample data, with Controls and Show code |
 | `/llms.txt` | The index for agents ([llmstxt.org](https://llmstxt.org) format) |
 | `/llms-full.txt` | Every README and every component's props in one file |
-| `/<package>.md` | Each package's README (`/ui.md`, `/ui-types.md`, `/ship.md`, `/auth.md`) |
+| `/<package>.md` | Each package's README (`/ui.md`, `/ui-types.md`, `/ship.md`, `/auth.md`, `/ops.md`) |
 
 All of it is built from the READMEs and the stories (`docs/scripts/llms.ts`), so nothing is written twice. Add or change a story in `docs/stories/` with the part, and keep each package's README current with its exports.
 
