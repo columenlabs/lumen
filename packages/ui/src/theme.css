@@ -397,6 +397,9 @@
     background-size: 11.3px 11.3px;
     animation: lumen-cov-run 1s linear infinite;
   }
+  .bg-cov-indexing {
+    background: repeating-linear-gradient(135deg, var(--cov-high) 0 4px, var(--cov-low) 4px 8px);
+  }
   .bg-cov-canceled {
     background: linear-gradient(
         135deg,

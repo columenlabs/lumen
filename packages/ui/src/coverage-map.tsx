@@ -119,6 +119,8 @@ export interface LumenCoverageMapProps<TRaw = unknown, TKey extends QueryKey = Q
   /** Months already queued that a pick can take back out, with the bar's Remove from queue. */
   removable?: (row: string, month: string) => boolean;
   onRemove?: (pick: CoveragePick) => Promise<unknown> | undefined;
+  /** An app's own words for some states, in the tooltip and legend (`{ running: 'Copying' }`). */
+  stateLabels?: Partial<Record<CoverageLevel, string>>;
   /** Picks these months as if clicked (pass a new object each time); nothing is queued until the bar's button. */
   preselect?: CoveragePick;
   /** The drilled block (`2026-09`) and the click that changes it. */
@@ -459,6 +461,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   removable = () => false,
   onRemove,
   preselect,
+  stateLabels,
   drilled = null,
   onDrill,
   groupBy = false,
@@ -569,7 +572,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       detail: (
         <>
           <div>
-            {unitLabel(c.have, c.expected)} · {coverageLabel(c.level)}
+            {unitLabel(c.have, c.expected)} · {stateLabels?.[c.level] ?? coverageLabel(c.level)}
           </div>
           {c.notes.map((n) => (
             <div key={n}>{n}</div>
@@ -922,6 +925,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
             <div className="border-t pt-3">
               <CoverageLegend
                 levels={levels}
+                labels={stateLabels}
                 hint={
                   hint ??
                   (select === 'backfill'

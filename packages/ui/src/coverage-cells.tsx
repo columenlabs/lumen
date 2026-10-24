@@ -5,7 +5,8 @@ import { cn } from './lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 /** A backfill's state on a block it touches; it wins over coverage while the job runs. */
-export type CoverageJobState = 'queued' | 'running' | 'failed' | 'canceled';
+/** `indexing`: the block's copy is done and a follow-up step (an index, a rollup) is still running on it. */
+export type CoverageJobState = 'queued' | 'running' | 'indexing' | 'failed' | 'canceled';
 
 /** One cell's state. Done is not its own state: a finished block simply turns `full`. */
 export type CoverageLevel = 'full' | 'high' | 'low' | 'gap' | 'current' | 'none' | CoverageJobState;
@@ -28,6 +29,7 @@ export const COVERAGE_LEVELS: { level: CoverageLevel; label: string; className: 
     className: 'outline-1 outline-dashed -outline-offset-1 outline-primary',
   },
   { level: 'running', label: 'Running', className: 'bg-cov-running' },
+  { level: 'indexing', label: 'Indexing', className: 'bg-cov-indexing' },
   { level: 'failed', label: 'Failed', className: 'bg-destructive' },
   { level: 'canceled', label: 'Canceled', className: 'bg-cov-canceled' },
 ];
@@ -39,7 +41,7 @@ const BY_LEVEL = Object.fromEntries(COVERAGE_LEVELS.map((l) => [l.level, l])) as
 export const coverageLabel = (l: CoverageLevel) => BY_LEVEL[l].label;
 export const coverageClass = (l: CoverageLevel) => BY_LEVEL[l].className;
 
-const JOB_ORDER: CoverageJobState[] = ['running', 'queued', 'failed', 'canceled'];
+const JOB_ORDER: CoverageJobState[] = ['running', 'indexing', 'queued', 'failed', 'canceled'];
 
 /** The state of a block from its sums: a job state first, then coverage. */
 export function coverageLevel(
@@ -59,13 +61,22 @@ export const firstJobState = (a: CoverageJobState | null, b: CoverageJobState | 
   !b ? a : !a || JOB_ORDER.indexOf(b) < JOB_ORDER.indexOf(a) ? b : a;
 
 /** The states on screen, in the legend's order, with a hint at the right. */
-export function CoverageLegend({ levels, hint }: { levels: Set<CoverageLevel>; hint?: ReactNode }) {
+export function CoverageLegend({
+  levels,
+  hint,
+  labels,
+}: {
+  levels: Set<CoverageLevel>;
+  hint?: ReactNode;
+  /** An app's own words for some states (`running`: `Copying`). */
+  labels?: Partial<Record<CoverageLevel, string>>;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
       {COVERAGE_LEVELS.filter((l) => levels.has(l.level)).map((l) => (
         <span key={l.level} className="flex items-center gap-1.5">
           <span aria-hidden className={cn('h-3 w-4 rounded-[3px]', l.className)} />
-          {l.label}
+          {labels?.[l.level] ?? l.label}
         </span>
       ))}
       {hint && <span className="ml-auto hidden md:inline">{hint}</span>}
