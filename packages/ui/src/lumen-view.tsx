@@ -435,6 +435,8 @@ export interface ServerGroups {
   more?: () => void;
   /** A group header's click: open or close it. */
   onToggle: (key: string) => void;
+  /** Expand all (true) or Collapse all (false): open or close every group listed. */
+  onToggleAll?: (open: boolean) => void;
 }
 
 export interface LumenViewProps<T> {
@@ -1301,7 +1303,11 @@ function LumenTableRows<T extends RowData>({
     serverGroups ? !!served.get(key)?.open : startsOpen(i) !== flipped.has(key);
   const anyClosed = !!groups?.some(([k], i) => !isOpen(k, i));
   const setAll = (open: boolean) =>
-    setFlipped(new Set((groups ?? []).filter((_, i) => startsOpen(i) !== open).map(([k]) => k)));
+    serverGroups
+      ? serverGroups.onToggleAll?.(open)
+      : setFlipped(
+          new Set((groups ?? []).filter((_, i) => startsOpen(i) !== open).map(([k]) => k)),
+        );
   const keyOf = domain.rowKey;
   const toggle = (keys: string[], on: boolean) => {
     if (!selection) return;
@@ -1548,7 +1554,16 @@ function LumenTableRows<T extends RowData>({
   const servedRows = (list: typeof sorted, key: string) => {
     const g = served.get(key);
     const out = rowsOf(list, key);
-    if (!g?.more && !g?.loading) return out;
+    if (!g?.more && !g?.loading)
+      return out.length
+        ? out
+        : [
+            <TableRow key={`${key}:none`}>
+              <TableCell colSpan={span} className="py-2 text-center text-xs text-muted-foreground">
+                No rows match.
+              </TableCell>
+            </TableRow>,
+          ];
     return [
       ...out,
       <TableRow key={`${key}:more`} data-more>
@@ -1613,7 +1628,7 @@ function LumenTableRows<T extends RowData>({
                         : undefined
                   }
                 >
-                  {i === 0 && groups && !serverGroups && (
+                  {i === 0 && groups && (!serverGroups || serverGroups.onToggleAll) && (
                     // Expand or collapse every group at once.
                     <IconButton
                       icon={anyClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon}
@@ -1659,7 +1674,7 @@ function LumenTableRows<T extends RowData>({
           ))}
         </TableHeader>
         <TableBody>
-          {!rows.length && (
+          {!rows.length && !serverGroups?.list?.length && (
             <TableRow>
               <TableCell colSpan={span} className="py-6 text-center text-muted-foreground">
                 No rows match.
