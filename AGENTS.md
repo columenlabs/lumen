@@ -17,6 +17,7 @@ One repo for the Lumen family: each package is a folder `packages/<name>` publis
 - No hand-rolled components where a shadcn or Radix part fits. Compose them.
 - Every card body sits in `LumenBoundary`. Pickers are `LumenSelector`, drawers `LumenDrawer`, tabs `LumenTabs`.
 - A `useExhaustiveDependencies` suppression needs a reason of three words or more (`lumen-ship check suppressions`). Settings section descriptions are one plain line of 64 characters or less (`lumen-ship check settings-copy`). Hard-coded px/rem class values may only go down (`lumen-ship check magic-numbers`, `scripts/magic-numbers.baseline`).
+- Any field makes a Row of numbers or Number card (`cardAgg`): numbers sum, a percent or weight takes its max (never sum %), text counts its distinct values. A number the app draws with `render` still rolls up from `value`.
 - Table rows are one line: one value per cell (a small bar or tag at most); more goes in a hover tooltip, never stacked text or sub-rows. Prefer a `LumenTokenizedFilter` field over another row of tabs.
 - Header numbers are metric cards: `TileRow fill` of `Tile` / `TileToggleGroup fill`, with `spark` (daily history) where one exists.
 - Metered columns: one number per cell via `UnitValue`; Amount vs % of allowance through `showAs` (saved as `shows`); the other reading in a hover card; Total/group cells via `rollRender` (sum amounts with units, recompute shares, never sum %).
