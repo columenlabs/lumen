@@ -105,6 +105,19 @@ export { ShareMeter } from './share-meter';
 export { METER_LEVEL_COLOR, meterLevel, meterValueTone } from './meter-level';
 export { UnitValue } from './unit-value';
 export {
+  type BurnRate,
+  burnRate,
+  durationText,
+  PACE_WINDOWS,
+  type Pace,
+  type PaceWindow,
+  paceHours,
+  setDefaultPaceWindow,
+  timeToCap,
+  usePaceWindow,
+} from './pace';
+export { PaceWindowPicker, paceText, TimeToCap } from './time-to-cap';
+export {
   COVERAGE_LEVELS,
   CoverageCell,
   type CoverageJobState,

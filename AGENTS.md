@@ -26,6 +26,7 @@ One repo for the Lumen family: each package is a folder `packages/<name>` publis
 - Bulk-action bars: Apply clears the selection and dismisses the bar; Undo (toast) restores the change, not the selection.
 - Share bars are `ShareMeter`: a fixed track and a fixed, right-aligned tabular number, so a column's bars line up.
 - Meter colours are canonical: grey under 75%, amber (`watch`) from 75%, red (`alert`) from 90% of a cap. `ShareMeter` and `UnitValue share` colour themselves; anything else drawing a share of a cap uses `meterLevel` / `METER_LEVEL_COLOR`, never its own numbers. An app moves the levels once with `configureLumen({ meterLevels: { watch, alert } })`; one meter overrides with its `levels` prop.
+- Pace and time to a cap: `burnRate` + `timeToCap`, drawn by `TimeToCap` and picked with `PaceWindowPicker` (6h, 12h, 24h, 7d; `usePaceWindow` shares the choice). Colour is the meter level of where the meter lands at reset; a lone spike hour counts as 3× the window's median. Never hand-roll an ETA.
 - Sidebar: one selected row (best URL match, query included); an open parent is never shown as selected. Sub-items take `icon` + `color` and a `badge` that lines up with the section's counts.
 - What's new ships in every app through `LumenShell`'s `releases` prop and lumen-ship's `listReleases`; it shows an empty state before the first release.
 - Numbers use tabular figures and a true minus `−`. A gain or loss always shows a sign or arrow.
