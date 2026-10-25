@@ -633,6 +633,9 @@ function ViewLayout<T extends RowData>({
     savedSortRef.current = savedSort;
     setHeldSort(config.sort);
   }, [savedSort, config.sort]);
+  // A server's page sorts on the server: it hears each sort held.
+  const onServerSort = paging?.onSort;
+  useEffect(() => onServerSort?.(heldSort ?? null), [onServerSort, heldSort]);
   const [details, setDetails] = useState<T | null>(null);
   const onDetails = onOpen ?? (domain.details?.length ? setDetails : undefined);
   // The assistant sees the view, its data domain, its filter, how many rows show, the first of them and the
@@ -926,7 +929,8 @@ function ViewLayout<T extends RowData>({
   const viewCard = mainTableOf(cards);
   const viewOn = (k: WidgetControl) => !viewCard || controlOn(viewCard, k);
   const showBox = !hideFilter && viewOn('filter');
-  const groupButton = viewOn('group') ? group.button : null;
+  // A server's page cannot be grouped: a group would bucket the one page only.
+  const groupButton = viewOn('group') && !paging ? group.button : null;
   const viewFilter =
     !showBox && !groupButton ? undefined : (
       <>

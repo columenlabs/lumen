@@ -402,6 +402,11 @@ export interface ServerPaging {
   onPage: (page: number) => void;
   onSize?: (size: number) => void;
   sizes?: readonly number[];
+  /** The columns the server sorts by; the rest take no header sort, and the view groups nothing,
+   *  since either would order or bucket one page only. */
+  sorts?: readonly string[];
+  /** Told the sort held (a header click, a revert), to fetch the rows in that order. */
+  onSort?: (sort: CustomViewConfig['sort']) => void;
 }
 
 export interface LumenViewProps<T> {
@@ -581,8 +586,8 @@ export function LumenView<T extends RowData>({
   rows,
   total = rows.length,
   paging: server,
-  groupBy = null,
-  pivot = false,
+  groupBy: pickedGroup = null,
+  pivot: pickedPivot = false,
   subgroup,
   load: sourceLoad,
   state,
@@ -613,6 +618,9 @@ export function LumenView<T extends RowData>({
   // scrolls with the page.
   const inLayout = inScroller && !cell;
   const columns = pick(domain.fields, config.columns);
+  // A server's page groups and pivots nothing: either would cover the one page only.
+  const groupBy = server ? null : pickedGroup;
+  const pivot = server ? false : pickedPivot;
   // Live columns on screen keep their source reading while the market trades (#861).
   const load = useLiveLoad(
     sourceLoad,
@@ -713,6 +721,7 @@ export function LumenView<T extends RowData>({
         groupActions={groupActions}
         sort={sort}
         onSort={onSort}
+        serverSorts={server ? (server.sorts ?? []) : undefined}
         total={config.total !== false}
         add={
           onAddColumn || onColumns
@@ -942,6 +951,9 @@ export interface LumenTableProps<T> {
   sort?: CustomViewConfig['sort'];
   /** Told the sort a header click sets, so a page can hold or save it (rule C). */
   onSort?: (sort: CustomViewConfig['sort']) => void;
+  /** The rows come sorted by a server, which sorts by these columns only: a header click asks
+   *  the server (through `onSort`) and the other headers take no click. */
+  serverSorts?: readonly string[];
   /** The + Add column head at the end of the header. */
   add?: AddColumn & {
     field?: { domain: ViewDomain<T>; columns: ViewField<T>[]; onColumns: (keys: string[]) => void };
@@ -950,6 +962,17 @@ export interface LumenTableProps<T> {
   total?: boolean;
   /** What each row opens under it (`subgroupOf`); null: rows open nothing but their panel. */
   subgroup?: ViewSubgroup<T> | null;
+}
+
+/** The table's sort from a view's: none when its column is not shown, or the server cannot sort
+ *  by it. */
+function sortingOf<T>(
+  sort: CustomViewConfig['sort'] | undefined,
+  columns: ViewField<T>[],
+  serverSorts: readonly string[] | undefined,
+): SortingState {
+  if (!sort || (serverSorts && !serverSorts.includes(sort.key))) return [];
+  return columns.some((f) => f.key === sort.key) ? [{ id: sort.key, desc: sort.desc }] : [];
 }
 
 function LumenTableRows<T extends RowData>({
@@ -967,23 +990,20 @@ function LumenTableRows<T extends RowData>({
   groupActions,
   sort,
   onSort,
+  serverSorts,
   total = true,
   subgroup = null,
   add,
 }: LumenTableProps<T>) {
-  const [sorting, setSorting] = useState<SortingState>(
-    sort && columns.some((f) => f.key === sort.key) ? [{ id: sort.key, desc: sort.desc }] : [],
-  );
+  const [sorting, setSorting] = useState<SortingState>(() => sortingOf(sort, columns, serverSorts));
   // A saved sort patched while the table is open (the assistant's card move) applies at once.
   const savedSort = JSON.stringify(sort ?? null);
   const savedSortRef = useRef(savedSort);
   useEffect(() => {
     if (savedSortRef.current === savedSort) return;
     savedSortRef.current = savedSort;
-    setSorting(
-      sort && columns.some((f) => f.key === sort.key) ? [{ id: sort.key, desc: sort.desc }] : [],
-    );
-  }, [savedSort, sort, columns]);
+    setSorting(sortingOf(sort, columns, serverSorts));
+  }, [savedSort, sort, columns, serverSorts]);
   const paging = page !== null && !groupBy;
   const pagination: PaginationState = {
     pageIndex: paging ? page.index : 0,
@@ -1158,6 +1178,7 @@ function LumenTableRows<T extends RowData>({
           return computed.value(now[i] ?? f, r) ?? undefined;
         },
         sortUndefined: 'last',
+        enableSorting: !serverSorts || serverSorts.includes(f.key),
         header: f.label,
         cell: ({ row }) => {
           const { shown: now, cellOf, inline, chips, computed } = latest.current;
@@ -1177,13 +1198,15 @@ function LumenTableRows<T extends RowData>({
           );
         },
       })),
-    [shownKeys, inlineOn],
+    [shownKeys, inlineOn, serverSorts?.join(',')],
   );
   const table = useTable({
     features: SORTING,
     data: rows,
     columns: defs,
     state: { sorting, pagination },
+    // A server's rows come sorted; the table only shows which column it sorted by.
+    manualSorting: !!serverSorts,
     onSortingChange: (u) => {
       const next = typeof u === 'function' ? u(sorting) : u;
       setSorting(next);
@@ -1521,7 +1544,9 @@ function LumenTableRows<T extends RowData>({
                         size="xs"
                         className={cn('font-medium', !(i === 0 && groups) && '-mx-2')}
                         style={{ color: colorOf(domain, shown[i]) ?? undefined }}
-                        onClick={h.column.getToggleSortingHandler()}
+                        onClick={
+                          h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined
+                        }
                       >
                         {shown[i] ? <FreshnessMark domain={domain} field={shown[i]} /> : null}
                         {flexRender(h.column.columnDef.header, h.getContext())}
