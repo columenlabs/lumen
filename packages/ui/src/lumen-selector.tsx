@@ -119,6 +119,8 @@ export type LumenSelectorProps<V extends string = string> =
 
 const SHOWN = 6;
 const SEARCH_PAST = 8;
+/** Room below a trigger (px) under which its list opens above, when there is more room there. */
+const ROOM_BELOW = 320;
 const CHIPS = 4;
 const CREATE = '\u0000create';
 
@@ -395,8 +397,17 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
   // focus back out of a list portalled to the body, so its search box could never be typed in.
   const markRef = useRef<HTMLSpanElement | null>(null);
   const [host, setHost] = useState<HTMLElement | null>(null);
+  // The list opens below its trigger, or above when the room below is short and there is more
+  // above (a row near the screen's foot); either way it fits the screen, its footer in view.
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [side, setSide] = useState<'bottom' | 'top'>('bottom');
   useLayoutEffect(() => {
-    if (open) setHost(markRef.current?.closest<HTMLElement>('[role="dialog"]') ?? null);
+    if (!open) return;
+    setHost(markRef.current?.closest<HTMLElement>('[role="dialog"]') ?? null);
+    const r = (chipsRef.current ?? triggerRef.current)?.getBoundingClientRect();
+    if (!r) return;
+    const below = window.innerHeight - r.bottom;
+    setSide(below < ROOM_BELOW && r.top > below ? 'top' : 'bottom');
   }, [open]);
   const setOpen = (o: boolean) => {
     setOwnOpen(o);
@@ -470,15 +481,15 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
     </>
   );
 
+  // On a desktop the popup is a column as tall as the screen allows: the search, header and
+  // footer keep their height and the list between them scrolls.
   const list = (
     <>
-      {header}
+      {header && <div className="shrink-0">{header}</div>}
       <Base.List
         className={cn(
-          'overscroll-contain p-1 data-empty:p-0',
-          phone
-            ? 'min-h-0 flex-1 overflow-y-auto pb-4'
-            : 'max-h-[min(22rem,calc(var(--available-height)-3rem))] scroll-pt-8 overflow-y-auto',
+          'min-h-0 overscroll-contain p-1 data-empty:p-0',
+          phone ? 'flex-1 overflow-y-auto pb-4' : 'max-h-88 flex-1 scroll-pt-8 overflow-y-auto',
         )}
       >
         <Rows shown={rows} picked={picked} multiple={multiple} full={full} expand={expand} />
@@ -502,7 +513,7 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
   const searchBox = (
     <div
       className={cn(
-        'flex items-center gap-2 border-b px-2',
+        'flex shrink-0 items-center gap-2 border-b px-2',
         phone ? 'mx-4 h-11 rounded-md border' : 'h-9',
         !searchable && 'sr-only',
       )}
@@ -673,7 +684,7 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
   const popup = (
     <Base.Portal container={host ?? undefined}>
       <Base.Positioner
-        side="bottom"
+        side={side}
         sideOffset={4}
         align={align}
         anchor={inChips ? chipsRef : undefined}
@@ -681,12 +692,12 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
       >
         <Base.Popup
           data-slot="lumen-selector"
-          className="group/selector max-w-(--available-width) min-w-[max(var(--anchor-width),14rem)] origin-(--transform-origin) overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
+          className="group/selector flex max-h-(--available-height) max-w-(--available-width) flex-col min-w-[max(var(--anchor-width),14rem)] origin-(--transform-origin) overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
         >
           {!inChips && searchBox}
           {list}
           {multiple && (
-            <div className="flex items-center gap-3 border-t px-2 py-1.5">
+            <div className="flex shrink-0 items-center gap-3 border-t px-2 py-1.5">
               <span className="text-xs text-muted-foreground">
                 {values.length} picked{max !== undefined ? ` of ${max}` : ''}
               </span>
@@ -730,6 +741,7 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
         <Tooltip>
           <TooltipTrigger asChild>
             <Base.Trigger
+              ref={triggerRef}
               render={
                 <Button variant="ghost" size="icon-sm" aria-label={label} className={className} />
               }
@@ -741,6 +753,7 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
         </Tooltip>
       ) : (
         <Base.Trigger
+          ref={triggerRef}
           id={id}
           data-size={size}
           aria-label={label}

@@ -697,9 +697,23 @@ export function LumenView<T extends RowData>({
   const pages = Math.max(1, Math.ceil(tableRows.length / pageSize));
   const page = Math.min(pageIndex, pages - 1);
   const count = rows.length === total ? `${total} rows` : `${rows.length} of ${total} rows`;
-  // A new filter or page size starts from the first page.
+  // The page holds while rows change in place (a tick, a label edit, a refresh, a bulk apply): only
+  // a new filter (a different set of rows), grouping, sort or page size starts from the first page.
+  // A page past the end after rows go is clamped above (`page`).
+  const rowSet = useMemo(
+    () =>
+      rows
+        .map((r) => domain.rowKey(r))
+        .sort()
+        .join('\u0000'),
+    [rows, domain],
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: resets on these changes only
-  useEffect(() => setPageIndex(0), [rows, pageSize]);
+  useEffect(() => setPageIndex(0), [rowSet, pageSize, groupBy?.key, sort?.key, sort?.desc]);
+  const sorted = (s: CustomViewConfig['sort']) => {
+    setPageIndex(0);
+    onSort?.(s);
+  };
 
   // Checked rows with a chart symbol open one compare chart (up to 8).
   const openChart = useSymbolChart();
@@ -785,7 +799,7 @@ export function LumenView<T extends RowData>({
         selection={selection}
         groupActions={groupActions}
         sort={sort}
-        onSort={onSort}
+        onSort={sorted}
         serverSorts={server ? (server.sorts ?? []) : undefined}
         serverGroups={served}
         total={config.total !== false}
