@@ -105,6 +105,18 @@ export interface ViewField<T> {
   /** Draws the cell instead of its formatted value (a sparkline); sorting and filters still use
    *  `value` (strategy lab). */
   render?: (row: T) => ReactNode;
+  /**
+   * Draws a group or Total row's cell from its rows instead of the rolled-up number: an amount with
+   * its unit, or a share worked out again as the rows' total over their allowance (never a sum of
+   * percents). Only where the field rolls up (`aggregate`).
+   */
+  rollRender?: (rows: T[]) => ReactNode;
+  /**
+   * Ways the column can read, picked per column in Edit view ("Show as"), e.g. an amount or its % of
+   * an allowance. The first is the field as defined; each other one's `field` replaces those parts
+   * of it (value, format, render, aggregate...). The pick saves with the view (`shows`).
+   */
+  showAs?: { id: string; label: string; field?: Partial<Omit<ViewField<T>, 'key' | 'showAs'>> }[];
   /** The ticker a click on the cell charts in the app's chart dialog (an option charts its
    *  underlying); null leaves the row's cell plain. */
   chart?: (row: T) => string | null;
@@ -369,13 +381,24 @@ export function withViewFields<T>(domain: ViewDomain<T>, c: CustomViewConfig): V
   const own = takesFormulas(domain) && formulasOf(c).length ? formulaFields<T>(formulasOf(c)) : [];
   const picked = c.formats ?? {};
   const aggs = c.aggs ?? {};
-  if (!own.length && !Object.keys(picked).length && !Object.keys(aggs).length) return domain;
+  const shows = c.shows ?? {};
+  if (
+    !own.length &&
+    !Object.keys(picked).length &&
+    !Object.keys(aggs).length &&
+    !Object.keys(shows).length
+  )
+    return domain;
   const mine = new Set(own.map((f) => f.key));
   // A text formula groups like any text field: each row's value is the formula
   // over that row alone. One that reads group_sum or total_sum depends on the rows shown, so it
   // cannot pick its own group.
   const rowValue = (f: ViewField<T>) => (r: T) => computedOf(full, [r], null).value(f, r);
-  const fields: ViewField<T>[] = [...domain.fields, ...own].map((f) => {
+  const shown = (f: ViewField<T>): ViewField<T> => {
+    const alt = f.showAs?.find((o) => o.id === shows[f.key]);
+    return alt?.field ? { ...f, ...alt.field } : f;
+  };
+  const fields: ViewField<T>[] = [...domain.fields, ...own].map(shown).map((f) => {
     if (f.format === 'text') {
       if (!mine.has(f.key) || !f.formula) return f;
       if (/\b(group_sum|total_sum)\s*\(/.test(f.formula))

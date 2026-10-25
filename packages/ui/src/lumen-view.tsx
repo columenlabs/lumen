@@ -1342,7 +1342,9 @@ function LumenTableRows<T extends RowData>({
       : shown.findIndex((f, i) => i > 0 && rolls(f)),
   );
   const rollCell = (f: ViewField<T>, members: T[]) =>
-    rollsUp(f) ? (
+    rollsUp(f) && f.rollRender ? (
+      f.rollRender(members)
+    ) : rollsUp(f) ? (
       <ViewValueCell
         value={computed.roll(f, members)}
         format={f.aggregate && isCountAgg(f.aggregate) ? 'rounded' : f.format}

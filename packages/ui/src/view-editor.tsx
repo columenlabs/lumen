@@ -2637,6 +2637,21 @@ function ColumnList<T>({
                       value={placement(f.key)}
                       onChange={(v) => setPlacement(f.key, v)}
                     />
+                  ) : f.showAs && f.showAs.length > 1 ? (
+                    <LumenSelector
+                      label={`Show ${f.label} as`}
+                      size="sm"
+                      className="h-7 w-full"
+                      options={f.showAs.map((o) => ({ value: o.id, label: o.label }))}
+                      value={draft.shows?.[f.key] ?? f.showAs[0]?.id ?? ''}
+                      onChange={(v) => {
+                        const { [f.key]: _, ...rest } = draft.shows ?? {};
+                        setDraft({
+                          ...draft,
+                          shows: v === f.showAs?.[0]?.id ? rest : { ...rest, [f.key]: v },
+                        });
+                      }}
+                    />
                   ) : f.format !== 'text' ? (
                     <LumenSelector
                       label={`Format of ${f.label}`}
