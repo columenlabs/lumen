@@ -74,6 +74,7 @@ Every export, its props and an example are on the [docs](https://lumen.columenla
 - Pickers are `LumenSelector`, side panels `LumenDrawer`, tabs `LumenTabs`, destructive confirms `LumenConfirm`; reach for the raw `ui/*` part only when no Lumen part fits.
 - Every card body sits in `LumenBoundary`, so one crash never blanks a page.
 - Numbers use tabular figures and a true minus `−`; a gain or loss always shows a sign or arrow.
+- Bars in a column line up: use `ShareMeter` (fixed track, fixed right-aligned number), never a bar sized by its label.
 - Table rows are one line. A cell shows one value (with a small bar or tag at most); anything more (other metrics, the allowance, a breakdown) goes in a hover tooltip, never in stacked text or sub-rows.
 - Chart colours are theme tokens (`var(--chart-1)`, `useChartTokens()`), never hex picked for one theme; `LumenEChart` resolves `var(--…)` in its option so sparklines read in light and dark.
 - "No label" filters come built in: `LumenTokenizedFilter` pins a "No <field>" row on any text field where some rows have no value (an `empty` token); don't add your own toggle for it.

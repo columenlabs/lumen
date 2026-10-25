@@ -101,6 +101,7 @@ export {
 export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
 export { LumenSecret } from './lumen-secret';
 export { RankedBars, StackedBars, StackedColumns } from './lumen-widget-charts';
+export { ShareMeter } from './share-meter';
 export {
   COVERAGE_LEVELS,
   CoverageCell,
