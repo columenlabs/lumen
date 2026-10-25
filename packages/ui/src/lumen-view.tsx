@@ -402,11 +402,39 @@ export interface ServerPaging {
   onPage: (page: number) => void;
   onSize?: (size: number) => void;
   sizes?: readonly number[];
-  /** The columns the server sorts by; the rest take no header sort, and the view groups nothing,
-   *  since either would order or bucket one page only. */
+  /** The columns the server sorts by; the rest take no header sort, and the view groups nothing
+   *  (unless `groups`), since either would order or bucket one page only. */
   sorts?: readonly string[];
   /** Told the sort held (a header click, a revert), to fetch the rows in that order. */
   onSort?: (sort: CustomViewConfig['sort']) => void;
+  /** The server groups the rows: the Group button offers the domain's groupable fields, and a
+   *  group's rows load when it opens. Without it a server's page groups nothing. */
+  groups?: ServerGroups;
+}
+
+/** One group a server counted: its key (the group field's value as the view shows it), its row
+ *  count (null: not counted), and, once open, the rows loaded so far. */
+export interface ServerGroup {
+  key: string;
+  n: number | null;
+  open: boolean;
+  /** The rows loaded for an open group, in the server's order. */
+  rows: unknown[];
+  /** The group has rows past those loaded: its Show more row loads the next. */
+  more?: () => void;
+  /** Its rows are loading. */
+  loading?: boolean;
+}
+
+export interface ServerGroups {
+  /** Told the field the person groups by (null: none), to fetch that field's groups. */
+  onGroup: (key: string | null) => void;
+  /** The picked field's groups, in order; null while they load. */
+  list: ServerGroup[] | null;
+  /** Groups past those listed: a More groups row asks for them. */
+  more?: () => void;
+  /** A group header's click: open or close it. */
+  onToggle: (key: string) => void;
 }
 
 export interface LumenViewProps<T> {
@@ -618,8 +646,12 @@ export function LumenView<T extends RowData>({
   // scrolls with the page.
   const inLayout = inScroller && !cell;
   const columns = pick(domain.fields, config.columns);
-  // A server's page groups and pivots nothing: either would cover the one page only.
-  const groupBy = server ? null : pickedGroup;
+  // A server's page groups and pivots nothing (either would cover the one page only), unless the
+  // server groups it.
+  const groupBy = server && !server.groups ? null : pickedGroup;
+  const served = server?.groups && groupBy ? server.groups : null;
+  const onGroup = server?.groups?.onGroup;
+  useEffect(() => onGroup?.(groupBy?.key ?? null), [onGroup, groupBy?.key]);
   const pivot = server ? false : pickedPivot;
   // Live columns on screen keep their source reading while the market trades (#861).
   const load = useLiveLoad(
@@ -630,7 +662,16 @@ export function LumenView<T extends RowData>({
     }),
   );
   const chips = chipsOf(config);
-  const tableRows = useMemo(() => mergeRows(domain, rows, groupBy), [domain, rows, groupBy]);
+  // Server groups: the open groups' rows, each object once (a row in two groups shows in both).
+  const groupRows = useMemo(
+    () =>
+      served ? [...new Set((served.list ?? []).flatMap((g) => (g.open ? g.rows : [])))] : null,
+    [served],
+  ) as T[] | null;
+  const tableRows = useMemo(
+    () => groupRows ?? mergeRows(domain, rows, groupBy),
+    [groupRows, domain, rows, groupBy],
+  );
   const amountsHidden = useAmountsHidden();
   // Flat tables page their rows, 25 a page unless the view says otherwise; the size picker and
   // the page buttons sit in the card's header. Views saved before then
@@ -677,8 +718,13 @@ export function LumenView<T extends RowData>({
       />
     ) : null;
 
-  // A server's page: the pager counts from the server's total, or the rows seen so far.
-  const pager = server ? (
+  // A server's page: the pager counts from the server's total, or the rows seen so far. Server
+  // groups page themselves: the header counts them.
+  const pager = served ? (
+    <span className="num px-2 text-xs text-muted-foreground">
+      {served.list ? `${served.list.length.toLocaleString()}${served.more ? '+' : ''} groups` : ''}
+    </span>
+  ) : server ? (
     <LumenPager
       total={server.total ?? server.page * server.size + rows.length}
       page={server.page}
@@ -722,6 +768,7 @@ export function LumenView<T extends RowData>({
         sort={sort}
         onSort={onSort}
         serverSorts={server ? (server.sorts ?? []) : undefined}
+        serverGroups={served}
         total={config.total !== false}
         add={
           onAddColumn || onColumns
@@ -962,6 +1009,9 @@ export interface LumenTableProps<T> {
   total?: boolean;
   /** What each row opens under it (`subgroupOf`); null: rows open nothing but their panel. */
   subgroup?: ViewSubgroup<T> | null;
+  /** The groups come from a server (`ServerPaging.groups`): their order, counts and open state,
+   *  and each open group's rows. */
+  serverGroups?: ServerGroups | null;
 }
 
 /** The table's sort from a view's: none when its column is not shown, or the server cannot sort
@@ -994,6 +1044,7 @@ function LumenTableRows<T extends RowData>({
   total = true,
   subgroup = null,
   add,
+  serverGroups = null,
 }: LumenTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>(() => sortingOf(sort, columns, serverSorts));
   // A saved sort patched while the table is open (the assistant's card move) applies at once.
@@ -1229,6 +1280,12 @@ function LumenTableRows<T extends RowData>({
   const sorted = table.getRowModel().rows;
   const groups = useMemo(() => {
     if (!groupBy) return null;
+    if (serverGroups) {
+      const byRow = new Map(sorted.map((r) => [r.original as unknown, r]));
+      return (serverGroups.list ?? []).map(
+        (g) => [g.key, g.rows.flatMap((o) => byRow.get(o) ?? [])] as [string, typeof sorted],
+      );
+    }
     const m = new Map<string, typeof sorted>();
     for (const r of sorted) {
       const k = label(groupBy.value(r.original));
@@ -1236,10 +1293,12 @@ function LumenTableRows<T extends RowData>({
       b ? b.push(r) : m.set(k, [r]);
     }
     return [...m];
-  }, [groupBy, sorted]);
+  }, [groupBy, sorted, serverGroups]);
   const span = shown.length + (selection ? 1 : 0);
+  const served = new Map((serverGroups?.list ?? []).map((g) => [g.key, g]));
   const startsOpen = (i: number) => rows.length <= OPEN_ALL || i === 0;
-  const isOpen = (key: string, i: number) => startsOpen(i) !== flipped.has(key);
+  const isOpen = (key: string, i: number) =>
+    serverGroups ? !!served.get(key)?.open : startsOpen(i) !== flipped.has(key);
   const anyClosed = !!groups?.some(([k], i) => !isOpen(k, i));
   const setAll = (open: boolean) =>
     setFlipped(new Set((groups ?? []).filter((_, i) => startsOpen(i) !== open).map(([k]) => k)));
@@ -1265,7 +1324,8 @@ function LumenTableRows<T extends RowData>({
     );
 
   const [openParts, setOpenParts] = useState<Set<string>>(new Set());
-  const hasTotal = total && shown.some(rollsUp);
+  // A server group's roll-ups would add up its loaded rows only, so they and the Total stay off.
+  const hasTotal = total && !serverGroups && shown.some(rollsUp);
   // A group row's label spans the leading columns that roll nothing up.
   const rolls = (f: ViewField<T>) => !f.noRollup && (!!f.aggregate || !!f.rollFormula || !!f.share);
   const lead = Math.max(
@@ -1484,6 +1544,32 @@ function LumenTableRows<T extends RowData>({
       </TableRow>,
     ];
   };
+  // A server group's rows as loaded, then its Show more (the server's next rows) or loading row.
+  const servedRows = (list: typeof sorted, key: string) => {
+    const g = served.get(key);
+    const out = rowsOf(list, key);
+    if (!g?.more && !g?.loading) return out;
+    return [
+      ...out,
+      <TableRow key={`${key}:more`} data-more>
+        <TableCell colSpan={span} className="py-1">
+          {g.loading ? (
+            <span className="px-2 text-xs text-muted-foreground">Loading…</span>
+          ) : (
+            <Button variant="ghost" size="xs" onClick={g.more}>
+              <ChevronsDownIcon />
+              Show more
+              {g.n !== null && (
+                <span className="num font-normal text-muted-foreground">
+                  of {(g.n - list.length).toLocaleString()}
+                </span>
+              )}
+            </Button>
+          )}
+        </TableCell>
+      </TableRow>,
+    ];
+  };
   const box = useRef<HTMLDivElement>(null);
   useFloatingHead(box, !inView);
   return (
@@ -1527,7 +1613,7 @@ function LumenTableRows<T extends RowData>({
                         : undefined
                   }
                 >
-                  {i === 0 && groups && (
+                  {i === 0 && groups && !serverGroups && (
                     // Expand or collapse every group at once.
                     <IconButton
                       icon={anyClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon}
@@ -1616,11 +1702,13 @@ function LumenTableRows<T extends RowData>({
                               aria-expanded={open}
                               aria-label={`${open ? 'Collapse' : 'Expand'} ${key}`}
                               onClick={() =>
-                                setFlipped((c) => {
-                                  const n = new Set(c);
-                                  n.has(key) ? n.delete(key) : n.add(key);
-                                  return n;
-                                })
+                                serverGroups
+                                  ? serverGroups.onToggle(key)
+                                  : setFlipped((c) => {
+                                      const n = new Set(c);
+                                      n.has(key) ? n.delete(key) : n.add(key);
+                                      return n;
+                                    })
                               }
                             >
                               <ChevronRightIcon
@@ -1629,7 +1717,9 @@ function LumenTableRows<T extends RowData>({
                               <groupBy.icon />
                               {key}
                               <span className="num font-normal text-muted-foreground">
-                                {members.length}
+                                {serverGroups
+                                  ? (served.get(key)?.n?.toLocaleString() ?? '')
+                                  : members.length}
                               </span>
                             </Button>
                             {groupActions?.(
@@ -1639,19 +1729,30 @@ function LumenTableRows<T extends RowData>({
                           </TableCell>
                         ) : (
                           <TableCell key={f.key} className={cn(colOf(f), PINNED_GROUP)}>
-                            {rollCell(
-                              f,
-                              members.map((m) => m.original),
-                            )}
+                            {!serverGroups &&
+                              rollCell(
+                                f,
+                                members.map((m) => m.original),
+                              )}
                           </TableCell>
                         ),
                       )}
                     </TableRow>
-                    {open && drawn(members, key)}
+                    {open && (serverGroups ? servedRows(members, key) : drawn(members, key))}
                   </Fragment>
                 );
               })
             : drawn(sorted, '')}
+          {serverGroups?.more && (
+            <TableRow data-more>
+              <TableCell colSpan={span} className="py-1">
+                <Button variant="ghost" size="xs" onClick={serverGroups.more}>
+                  <ChevronsDownIcon />
+                  More groups
+                </Button>
+              </TableCell>
+            </TableRow>
+          )}
           {hasTotal && rows.length > 0 && (
             <TableRow className={cn(ROLLUP, 'border-t-2')} data-total>
               {selection && <TableCell />}
