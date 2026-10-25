@@ -186,6 +186,8 @@ export interface SectionSubItem {
   to: string;
   /** A colour dot before the title, matching the item's line on a chart. */
   color?: string;
+  /** A count on the right, lined up with the section items' badges. */
+  badge?: ReactNode;
 }
 
 const SECTION_BADGE = 'num group-data-[collapsible=icon]:hidden';
@@ -219,7 +221,6 @@ function SectionRow({
         <SidebarMenuBadge
           className={cn(
             SECTION_BADGE,
-            subs.length > 0 && 'right-7',
             // The remove icon shows on hover from md up, and always below it: make room there.
             remove &&
               'max-md:right-7 md:group-focus-within/menu-item:opacity-0 md:group-hover/menu-item:opacity-0',
@@ -256,10 +257,12 @@ function SectionRow({
     >
       <SidebarMenuItem>
         {row}
+        {/* The chevron sits over the item's icon, shown on hover and while open, so every
+            badge in the section lines up at the right edge. */}
         <CollapsibleTrigger asChild>
           <SidebarMenuAction
             aria-label={`Show or hide ${item.title}`}
-            className="data-[state=open]:rotate-90"
+            className="right-auto left-1.5 bg-sidebar opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100 peer-data-[active=true]/menu-button:bg-sidebar-accent [&>svg]:transition-transform data-[state=open]:[&>svg]:rotate-90"
           >
             <ChevronRightIcon />
           </SidebarMenuAction>
@@ -278,6 +281,16 @@ function SectionRow({
                       />
                     )}
                     <span>{sub.title}</span>
+                    {sub.badge !== undefined && sub.badge !== null && (
+                      <span
+                        className={cn(
+                          'ml-auto text-xs text-muted-foreground',
+                          typeof sub.badge === 'number' && 'num',
+                        )}
+                      >
+                        {sub.badge}
+                      </span>
+                    )}
                   </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
