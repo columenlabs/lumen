@@ -926,7 +926,8 @@ function ViewLayout<T extends RowData>({
   const viewCard = mainTableOf(cards);
   const viewOn = (k: WidgetControl) => !viewCard || controlOn(viewCard, k);
   const showBox = !hideFilter && viewOn('filter');
-  const groupButton = viewOn('group') ? group.button : null;
+  // A server's page cannot be grouped: a group would bucket the one page only.
+  const groupButton = viewOn('group') && !paging ? group.button : null;
   const viewFilter =
     !showBox && !groupButton ? undefined : (
       <>
