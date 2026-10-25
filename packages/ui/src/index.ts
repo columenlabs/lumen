@@ -117,6 +117,7 @@ export {
   usePaceWindow,
 } from './pace';
 export { PaceWindowPicker, paceText, TimeToCap } from './time-to-cap';
+export { type TrendChange, TrendValue, trendChange } from './trend-value';
 export {
   COVERAGE_LEVELS,
   CoverageCell,

@@ -3,6 +3,9 @@
 // sizes for a stored amount), what is used so far, the cap and the hours until the cap resets.
 // A lone hot sample (above 3× the window's median, with neither neighbour above it) counts as 3×
 // the median, so one burst can't fake a crisis; a run of hot samples is a real change and counts.
+// Where most samples are empty (median 0), a lone nonzero sample is that burst and counts as 0.
+// Too little use in the window (`minTotal`, by default 0.1% of the cap) gives no time to the cap:
+// three operations in a day say nothing about a million-a-month allowance.
 // `TimeToCap` draws the answer; its colour is where the meter lands at reset, on the meter levels.
 import { useCallback, useSyncExternalStore } from 'react';
 
@@ -23,6 +26,8 @@ export interface BurnRate {
   raw: number;
   /** Lone hot samples that were capped. */
   spikes: number;
+  /** The window's own total, before any spike was capped. */
+  total: number;
 }
 
 const median = (xs: readonly number[]) => {
@@ -39,14 +44,16 @@ export function burnRate(
   { per = 1, gauge = false, damp = true }: { per?: number; gauge?: boolean; damp?: boolean } = {},
 ): BurnRate {
   const n = samples.length;
-  if (!n) return { rate: 0, raw: 0, spikes: 0 };
+  if (!n) return { rate: 0, raw: 0, spikes: 0, total: 0 };
   if (gauge) {
-    const r = n > 1 ? ((samples[n - 1] ?? 0) - (samples[0] ?? 0)) / ((n - 1) * per) : 0;
-    return { rate: r, raw: r, spikes: 0 };
+    const d = n > 1 ? (samples[n - 1] ?? 0) - (samples[0] ?? 0) : 0;
+    const r = n > 1 ? d / ((n - 1) * per) : 0;
+    return { rate: r, raw: r, spikes: 0, total: Math.abs(d) };
   }
   const total = samples.reduce((s, v) => s + v, 0);
+  // With a median of 0, any use is above it: a lone sample among empty ones is damped to 0.
   const cap = median(samples) * 3;
-  const hot = (i: number) => cap > 0 && i >= 0 && i < n && (samples[i] ?? 0) > cap;
+  const hot = (i: number) => i >= 0 && i < n && (samples[i] ?? 0) > cap;
   let kept = 0;
   let spikes = 0;
   for (let i = 0; i < n; i++) {
@@ -56,7 +63,7 @@ export function burnRate(
     } else kept += samples[i] ?? 0;
   }
   const hours = n * per;
-  return { rate: kept / hours, raw: total / hours, spikes };
+  return { rate: kept / hours, raw: total / hours, spikes, total };
 }
 
 export interface Pace extends BurnRate {
@@ -70,19 +77,34 @@ export interface Pace extends BurnRate {
   resetIn: number;
   /** The rate that lands exactly on the cap at reset (0 once there). */
   safe: number;
+  /** The window had too little use to project (below `minTotal`): no time to the cap. */
+  thin: boolean;
 }
 
-/** When `used` reaches `cap` at `rate`, and where it stands when the cap resets in `resetIn` hours. */
-export function timeToCap(rate: BurnRate, used: number, cap: number, resetIn: number): Pace {
+/**
+ * When `used` reaches `cap` at `rate`, and where it stands when the cap resets in `resetIn` hours.
+ * A window whose use is under `minTotal` (default 0.1% of the cap) is `thin`: no projection, so a
+ * handful of operations never reads as a time to the cap. Already at the cap reads as at the cap.
+ */
+export function timeToCap(
+  rate: BurnRate,
+  used: number,
+  cap: number,
+  resetIn: number,
+  { minTotal = cap * 0.001 }: { minTotal?: number } = {},
+): Pace {
   const left = cap - used;
-  const eta = left <= 0 ? 0 : rate.rate > 0 ? left / rate.rate : Number.POSITIVE_INFINITY;
+  const thin = left > 0 && rate.total < minTotal;
+  const r = thin ? 0 : Math.max(rate.rate, 0);
+  const eta = left <= 0 ? 0 : r > 0 ? left / r : Number.POSITIVE_INFINITY;
   return {
     ...rate,
     eta,
-    atReset: cap > 0 ? (used + Math.max(rate.rate, 0) * resetIn) / cap : 0,
+    atReset: cap > 0 ? (used + r * resetIn) / cap : 0,
     hits: eta <= resetIn,
     resetIn,
     safe: left > 0 && resetIn > 0 ? left / resetIn : 0,
+    thin,
   };
 }
 
