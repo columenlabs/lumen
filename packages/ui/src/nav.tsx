@@ -5,7 +5,7 @@
 // the name, a click folds it, the fold is remembered in the browser, and `+` never folds.
 import { Link, useRouterState } from '@tanstack/react-router';
 import { ChevronRightIcon, PlusIcon, Trash2Icon } from 'lucide-react';
-import { type ComponentType, type ReactNode, useState } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { type AssistantPageType, useAssistantPages } from './assistant-screen';
 import { LumenConfirm } from './confirm';
 import { useFolded } from './fold';
@@ -232,16 +232,10 @@ function SectionRow({
   const isActive = activeId === item.id;
   // The open item shows no trash icon.
   const remove = item.fixed || isActive ? undefined : onRemove;
-  const [open, setOpen] = useState(Boolean(item.defaultOpen || subActive || isActive));
   const row = (
     <>
       <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
-        {/* Clicking an item with nested items opens them too, not only the chevron; clicking the
-            item already showing folds them away again. */}
-        <Link
-          to={item.to}
-          onClick={subs.length ? () => setOpen((o) => (isActive ? !o : true)) : undefined}
-        >
+        <Link to={item.to}>
           <item.icon />
           <span>{item.title}</span>
         </Link>
@@ -279,7 +273,11 @@ function SectionRow({
   );
   if (!subs.length) return <SidebarMenuItem>{row}</SidebarMenuItem>;
   return (
-    <Collapsible asChild open={open} onOpenChange={setOpen} className="group/collapsible">
+    <Collapsible
+      asChild
+      defaultOpen={item.defaultOpen || subActive || isActive}
+      className="group/collapsible"
+    >
       <SidebarMenuItem>
         {row}
         {/* The chevron sits over the item's icon and shows only on hover or keyboard focus, so
