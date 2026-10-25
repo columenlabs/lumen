@@ -2,7 +2,8 @@
 // every app): the version in the status bar opens the release notes, newest
 // first, each release's Key takeaways only. An app turns it on with LumenShell's `releases`, its
 // releases API (`GET ?limit=&before=` answering `{releases}`), which leaves out what the person can't
-// open; a host that answers 404 (self-host an app) keeps the version hidden. With `apps`, each
+// open; a host that answers 404 (self-host an app) keeps the button hidden. Until the first release
+// the button reads "What's new" and opens an empty state, so a new app shows it from day one. With `apps`, each
 // takeaway carries a chip of the app it is about (`apps` on the takeaway; none: everyone), and a
 // release where one app has `GROUP_AT` or more is split into one sub-section per app.
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -80,9 +81,10 @@ export function WhatsNew({
     staleTime: 30 * 60_000,
     retry: false,
   });
-  const releases = q.data?.pages.flatMap((p) => p ?? []) ?? [];
+  // Hidden while loading, on an error, and when the host has no releases API (404).
+  if (!q.data || q.data.pages[0] === null) return null;
+  const releases = q.data.pages.flatMap((p) => p ?? []);
   const latest = releases[0];
-  if (!latest) return null;
   const day = (at: string) =>
     new Date(at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone });
   return (
@@ -94,14 +96,14 @@ export function WhatsNew({
         onClick={() => setOpen(true)}
         title="What's new"
       >
-        {latest.tag}
+        {latest?.tag ?? "What's new"}
       </Button>
       <LumenDrawer
         open={open}
         onClose={() => setOpen(false)}
         title="What's new"
         description="Key takeaways of each release, newest first"
-        footerStart={`${releases.length} releases`}
+        footerStart={releases.length ? `${releases.length} releases` : undefined}
         footer={
           <>
             {q.hasNextPage && (
@@ -120,6 +122,11 @@ export function WhatsNew({
           </>
         }
       >
+        {!releases.length && (
+          <p className="py-2 text-muted-foreground text-sm">
+            No releases yet. Each release's key takeaways show here once it ships.
+          </p>
+        )}
         {releases.map((r, i) => (
           <DrawerSection key={r.tag} title={r.tag} hint={day(r.published_at)} defaultOpen={i === 0}>
             {r.takeaways.length ? (

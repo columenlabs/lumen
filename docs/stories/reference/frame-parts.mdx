@@ -21,7 +21,11 @@ The page header: breadcrumbs, title and actions.
 
 ## SidebarSection
 
-A labelled group of sidebar items.
+A labelled group of sidebar items, each with an icon, an optional count and one nested level.
+
+- **One selected row.** Only the row whose link best matches the URL is selected (a link's query counts, so `/resources?label=a` beats `/resources`); on a tie the first wins. An open parent is never selected for being open. Give each item its own route anyway: two items that open the same page read as one.
+- **Counts line up.** Badges, sub-item badges included, sit at the right edge; the collapse chevron shows over the item's icon on hover, never beside the count.
+- **Sub-items** (`SectionSubItem`) carry an `icon` drawn in their `color` (a label's icon in the label's colour), or just a `color` dot, and a `badge` count. Titles stay on one line and truncate, with the full title on hover.
 
 <ArgTypes of={SidebarSection} />
 
@@ -39,7 +43,22 @@ The header's background tasks button with its popover (a sheet on phone).
 
 ## WhatsNew
 
-The status bar's latest release and its drawer of key takeaways.
+The status bar's latest release and its drawer of key takeaways. Turn it on with `LumenShell`'s `releases` prop, never by placing `WhatsNew` yourself. The canonical wiring:
+
+```ts
+// worker: lumen-ship writes changelog.json on each release
+import { listReleases, RELEASES_HEADERS, type Release } from '@columenlabs/lumen-ship/releases';
+import changelog from './changelog.json';
+app.get('/api/releases', (c) =>
+  c.json({ releases: listReleases(changelog as Release[], { limit: c.req.query('limit'), before: c.req.query('before') }) }, 200, RELEASES_HEADERS),
+);
+```
+
+```tsx
+<LumenShell releases="/api/releases" …>
+```
+
+Before the first release the button reads "What's new" and opens an empty state; a host whose releases API answers 404 hides it.
 
 <ArgTypes of={WhatsNew} />
 
