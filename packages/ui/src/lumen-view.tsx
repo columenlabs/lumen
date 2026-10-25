@@ -115,6 +115,7 @@ import { fieldOptions } from './view-formulas';
 import {
   CHIP_TONE,
   FORMULAS_GROUP,
+  type RollLevel,
   type ViewCellValue,
   type ViewChipTone,
   type ViewDomain,
@@ -138,6 +139,7 @@ export type {
   ViewChipTone,
   ViewDomain,
   ViewField,
+  RollLevel,
   ViewFieldGroup,
   ViewSource,
 } from './view-model';
@@ -1140,11 +1142,16 @@ function LumenTableRows<T extends RowData>({
   const col = colPropsOf(units);
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [more, setMore] = useState<Map<string, number>>(new Map());
-  // The grouped field is the group row's label, so its column hides.
+  // Under a sub-group's `flat` grouping each row names itself by its sub-group key instead of
+  // folding; the first column keeps its place to show that name.
+  const flat = !!groupBy && !!subgroup?.flat?.includes(groupBy.key);
+  // The grouped field is the group row's label, so its column hides (a flat lead stays).
   // Each key once: two columns under one React key can lose a cell on a re-render, and every
   // row after it slides left by one.
   const visible = columns.filter(
-    (f, i) => f.key !== groupBy?.key && columns.findIndex((x) => x.key === f.key) === i,
+    (f, i) =>
+      (f.key !== groupBy?.key || (flat && i === 0)) &&
+      columns.findIndex((x) => x.key === f.key) === i,
   );
   // Inline chips sit on the first column, next to the row's name, not in their own.
   const inline = visible.filter(
@@ -1308,7 +1315,7 @@ function LumenTableRows<T extends RowData>({
         },
         sortUndefined: 'last',
         enableSorting: !serverSorts || serverSorts.includes(f.key),
-        header: f.label,
+        header: i === 0 && flat && subgroup ? subgroup.label : f.label,
         cell: ({ row }) => {
           const { shown: now, cellOf, inline, chips, computed } = latest.current;
           const field = now[i] ?? f;
@@ -1335,7 +1342,7 @@ function LumenTableRows<T extends RowData>({
           );
         },
       })),
-    [shownKeys, inlineOn, serverSorts?.join(',')],
+    [shownKeys, inlineOn, serverSorts?.join(','), flat],
   );
   const table = useTable({
     features: SORTING,
@@ -1435,9 +1442,9 @@ function LumenTableRows<T extends RowData>({
     1,
     lead - (isMobile ? shown.slice(0, lead).filter((f) => f.hideOnPhone).length : 0),
   );
-  const rollCell = (f: ViewField<T>, members: T[]) =>
+  const rollCell = (f: ViewField<T>, members: T[], level: RollLevel) =>
     rollsUp(f) && f.rollRender ? (
-      f.rollRender(members)
+      f.rollRender(members, level)
     ) : rollsUp(f) ? (
       <ViewValueCell
         value={computed.roll(f, members)}
@@ -1449,7 +1456,7 @@ function LumenTableRows<T extends RowData>({
   const rollCells = (members: T[]) =>
     shown.map((f) => (
       <TableCell key={f.key} {...col(f)}>
-        {rollCell(f, members)}
+        {rollCell(f, members, 'total')}
       </TableCell>
     ));
 
@@ -1459,7 +1466,14 @@ function LumenTableRows<T extends RowData>({
   const panelOf = (row: T) => domain.panel?.render(row) ?? null;
   const opens = (row: T) => (domain.panel ? panelOf(row) !== null : partsOf(row).length > 1);
   const openLabel = () => domain.panel?.label ?? subgroup?.label.toLowerCase() ?? 'parts';
-  const folds = !domain.panel && !!subgroup?.under;
+  const folds = !domain.panel && !!subgroup?.under && !flat;
+  const flatName = (row: T) =>
+    flat && subgroup?.under ? (
+      <span className="flex min-w-0 items-center gap-1.5">
+        {subgroup.mark?.(subgroup.under(row), [row])}
+        <span className="truncate">{subgroup.under(row)}</span>
+      </span>
+    ) : null;
   const nests = folds || sorted.some((r) => opens(r.original));
   const chevron = (k: string, name: string) => (
     <Button
@@ -1555,6 +1569,8 @@ function LumenTableRows<T extends RowData>({
                 )}
                 {flexRender(c.column.columnDef.cell, c.getContext())}
               </span>
+            ) : i === 0 && flat ? (
+              flatName(r.original)
             ) : (
               flexRender(c.column.columnDef.cell, c.getContext())
             )}
@@ -1594,11 +1610,12 @@ function LumenTableRows<T extends RowData>({
               {i === 0 ? (
                 <span className="flex items-center gap-1">
                   {chevron(k, `${key} ${openLabel()}`)}
+                  {subgroup?.mark?.(key, ms)}
                   <span className="font-medium">{key}</span>
                   <span className="num text-xs text-muted-foreground">{ms.length}</span>
                 </span>
               ) : (
-                rollCell(f, ms)
+                rollCell(f, ms, 'fold')
               )}
             </TableCell>
           ))}
@@ -1829,7 +1846,7 @@ function LumenTableRows<T extends RowData>({
                                 <ChevronRightIcon
                                   className={cn('transition-transform', open && 'rotate-90')}
                                 />
-                                <groupBy.icon />
+                                <GroupMark field={groupBy} value={key} />
                                 {key}
                                 <span className="num font-normal text-muted-foreground">
                                   {serverGroups
@@ -1848,6 +1865,7 @@ function LumenTableRows<T extends RowData>({
                                 rollCell(
                                   f,
                                   members.map((m) => m.original),
+                                  'group',
                                 )}
                             </TableCell>
                           ),
@@ -1989,4 +2007,19 @@ function PivotTable<T>({
       </Table>
     </div>
   );
+}
+
+/** A group heading's mark: its value's icon in its colour, else its colour's dot, else the
+ *  field's icon. */
+function GroupMark<T>({ field, value }: { field: ViewField<T>; value: string }) {
+  const color = field.color?.(value);
+  const Icon = field.iconOf?.(value);
+  if (Icon)
+    return (
+      <span className="inline-flex" style={color ? { color } : undefined}>
+        <Icon className="size-3.5" />
+      </span>
+    );
+  if (color) return <ColorDot color={color} />;
+  return <field.icon />;
 }

@@ -108,9 +108,10 @@ export interface ViewField<T> {
   /**
    * Draws a group or Total row's cell from its rows instead of the rolled-up number: an amount with
    * its unit, or a share worked out again as the rows' total over their allowance (never a sum of
-   * percents). Only where the field rolls up (`aggregate`).
+   * percents). Only where the field rolls up (`aggregate`). `level` says which line it draws: a
+   * group heading, a sub-group's folded line or the Total (a split bar on a fold only).
    */
-  rollRender?: (rows: T[]) => ReactNode;
+  rollRender?: (rows: T[], level: RollLevel) => ReactNode;
   /**
    * Ways the column can read, picked per column in Edit view ("Show as"), e.g. an amount or its % of
    * an allowance. The first is the field as defined; each other one's `field` replaces those parts
@@ -129,7 +130,8 @@ export interface ViewField<T> {
    * cell, its chip and the edit picker. A CSS colour; a theme token reads in light and dark.
    */
   color?: (value: string) => string | undefined;
-  /** A text value's icon (a label's), drawn in its `color` on its chip and in the edit picker. */
+  /** A text value's icon (a label's, a product's), drawn in its `color` on its chip, in the edit
+   *  picker and on its group's heading. */
   iconOf?: (value: string) => ComponentType<{ className?: string }> | undefined;
   /** The cell's background, a theme colour mix (a P/L heat grid). */
   tint?: (row: T) => string | undefined;
@@ -303,6 +305,9 @@ export interface ViewDomain<T> {
  *  every row (no filter of its own, no linked chips). */
 export const summaryCash = (card: { cash?: boolean }, narrowed: boolean) => card.cash ?? !narrowed;
 
+/** The line a `rollRender` draws: a group heading, a sub-group's folded line, the Total. */
+export type RollLevel = 'group' | 'fold' | 'total';
+
 /** One choice of a domain's "Each row opens". */
 export interface ViewSubgroup<T> {
   key: string;
@@ -315,6 +320,13 @@ export interface ViewSubgroup<T> {
   always?: boolean;
   /** Rows start open, their parts showing (a meter's labels); a click still closes one. */
   open?: boolean;
+  /** Drawn before a folded line's key (a meter's product icon, in its colour). */
+  mark?: (key: string, rows: T[]) => ReactNode;
+  /**
+   * Group fields under which rows do not fold: each row is one line named by its `under` key (and
+   * `mark`) instead of its first column (grouped by label, a label's meters).
+   */
+  flat?: string[];
 }
 
 /**
