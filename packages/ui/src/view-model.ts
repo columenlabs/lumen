@@ -187,6 +187,8 @@ export interface ViewDomain<T> {
   /** Why its rows can't group at all (a server pages them, so a group would cover one page):
    *  Edit view greys the Group and Pivot shapes and every Group box with it. */
   groupNote?: string;
+  /** Why its rows can't pivot (a server pages them): Edit view greys the Pivot shape with it. */
+  pivotNote?: string;
   /**
    * The keys its rows carry (views from data domains): a reader per key, null
    * for a row without one (cash). The shell's `useJoins` attaches the registry's join fields for

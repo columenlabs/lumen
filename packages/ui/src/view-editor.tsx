@@ -2198,7 +2198,11 @@ function DetailsSection<T>({
         >
           {SHAPES.map((s) => {
             const Icon = shapeIcon(s.value);
-            const off = s.value !== 'table' && !!domain.groupNote && draft.shape !== s.value;
+            const note =
+              s.value === 'table'
+                ? null
+                : (domain.groupNote ?? (s.value === 'pivot' ? domain.pivotNote : null));
+            const off = !!note && draft.shape !== s.value;
             const item = (
               <ToggleGroupItem key={s.value} value={s.value} aria-label={s.label} disabled={off}>
                 <Icon />
@@ -2206,7 +2210,7 @@ function DetailsSection<T>({
               </ToggleGroupItem>
             );
             return off ? (
-              <WhyOff key={s.value} note={domain.groupNote ?? ''}>
+              <WhyOff key={s.value} note={note}>
                 {item}
               </WhyOff>
             ) : (
