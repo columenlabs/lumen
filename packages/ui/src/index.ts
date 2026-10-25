@@ -101,7 +101,8 @@ export {
 export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
 export { LumenSecret } from './lumen-secret';
 export { RankedBars, StackedBars, StackedColumns } from './lumen-widget-charts';
-export { ShareMeter } from './share-meter';
+export { type ShareSegment, ShareMeter } from './share-meter';
+export { type Pool, poolShare } from './pool-share';
 export { METER_LEVEL_COLOR, meterLevel, meterValueTone } from './meter-level';
 export { UnitValue } from './unit-value';
 export {
