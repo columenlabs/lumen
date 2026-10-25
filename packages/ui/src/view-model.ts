@@ -11,7 +11,7 @@ import {
   whyBlank,
 } from '@columenlabs/lumen-ui-types/views';
 import type { LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ChartBand, ChartMarker, Series } from './growth-chart';
 import { formulaFields } from './view-formulas';
 
@@ -117,6 +117,8 @@ export interface ViewField<T> {
    * cell, its chip and the edit picker. A CSS colour; a theme token reads in light and dark.
    */
   color?: (value: string) => string | undefined;
+  /** A text value's icon (a label's), drawn in its `color` on its chip and in the edit picker. */
+  iconOf?: (value: string) => ComponentType<{ className?: string }> | undefined;
   /** The cell's background, a theme colour mix (a P/L heat grid). */
   tint?: (row: T) => string | undefined;
   /** Left out on phones, where the table has no room for it (a returns table's longer windows). */

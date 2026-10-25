@@ -2,7 +2,8 @@
 // for charts Recharts does not draw (heat landscapes, parallel lines, small multiples). ECharts
 // loads in its own chunk the first time a page draws one. Colours come from the theme's tokens
 // (`useChartTokens`), so callers build options from tokens and the chart redraws when the theme
-// flips. It sizes to its box and follows it.
+// flips. A `var(--token)` colour in an option works too: it is resolved before drawing, so a
+// sparkline in `var(--chart-1)` reads in light and dark. It sizes to its box and follows it.
 import type { ECharts, EChartsCoreOption } from 'echarts/core';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from './lib/utils';
@@ -100,6 +101,24 @@ export function baseOption(t: ChartTokens): EChartOption {
   };
 }
 
+/** `option` with every `var(--name)` string (also inside `color-mix()`) replaced by its value. */
+function resolveVars<T>(option: T): T {
+  const css = getComputedStyle(document.documentElement);
+  const walk = (v: unknown): unknown => {
+    if (typeof v === 'string')
+      return v.includes('var(--')
+        ? v.replace(/var\((--[\w-]+)(?:,\s*([^)]+))?\)/g, (_, name: string, fb?: string) => {
+            return css.getPropertyValue(name).trim() || fb?.trim() || '';
+          })
+        : v;
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype)
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
+    return v;
+  };
+  return walk(option) as T;
+}
+
 /** An axis in the theme's colours (merge into xAxis or yAxis). */
 export function axisStyle(t: ChartTokens) {
   return {
@@ -151,9 +170,13 @@ export function LumenEChart({
     };
   }, []);
 
+  // Canvas can't read CSS variables: `var(--chart-1)` in an option would draw black. Each one is
+  // swapped for its value, again whenever the theme flips.
+  const tokens = useChartTokens();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tokens change when the theme flips.
   useEffect(() => {
-    if (ready) chart.current?.setOption(option, { notMerge: true });
-  }, [ready, option]);
+    if (ready) chart.current?.setOption(resolveVars(option), { notMerge: true });
+  }, [ready, option, tokens]);
 
   const names = Object.keys(on ?? {}).join();
   useEffect(() => {
