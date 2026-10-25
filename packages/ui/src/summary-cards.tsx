@@ -350,7 +350,9 @@ export function SummaryTiles<T>({
 }) {
   const shown = tiles.filter((t) => isOwnTile(t) || tile);
   if (!shown.length) return null;
-  const grid = 'grid grid-cols-2 gap-(--shell-section-gap) md:auto-cols-fr md:grid-flow-col';
+  // Each card fills its column, as a header's metric cards do (`TileRow fill`), not the fixed tile width.
+  const grid =
+    'grid grid-cols-2 gap-(--shell-section-gap) md:auto-cols-fr md:grid-flow-col lg:*:*:w-auto';
   if (loading)
     return (
       <div data-slot="view-tiles" aria-busy="true" className={grid}>
