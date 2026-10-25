@@ -309,6 +309,7 @@ export {
   TileChip,
   type TileOption,
   TileRow,
+  TileSpark,
   TileToggleGroup,
 } from './tile';
 export {

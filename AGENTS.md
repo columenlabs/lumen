@@ -18,6 +18,7 @@ One repo for the Lumen family: each package is a folder `packages/<name>` publis
 - Every card body sits in `LumenBoundary`. Pickers are `LumenSelector`, drawers `LumenDrawer`, tabs `LumenTabs`.
 - A `useExhaustiveDependencies` suppression needs a reason of three words or more (`lumen-ship check suppressions`). Settings section descriptions are one plain line of 64 characters or less (`lumen-ship check settings-copy`). Hard-coded px/rem class values may only go down (`lumen-ship check magic-numbers`, `scripts/magic-numbers.baseline`).
 - Table rows are one line: one value per cell (a small bar or tag at most); more goes in a hover tooltip, never stacked text or sub-rows. Prefer a `LumenTokenizedFilter` field over another row of tabs.
+- Header numbers are metric cards: `TileRow fill` of `Tile` / `TileToggleGroup fill`, with `spark` (daily history) where one exists.
 - Share bars are `ShareMeter`: a fixed track and a fixed, right-aligned tabular number, so a column's bars line up.
 - Sidebar: one selected row (best URL match, query included); an open parent is never shown as selected. Sub-items take `icon` + `color` and a `badge` that lines up with the section's counts.
 - What's new ships in every app through `LumenShell`'s `releases` prop and lumen-ship's `listReleases`; it shows an empty state before the first release.
