@@ -313,6 +313,8 @@ export interface ViewSubgroup<T> {
   name?: (row: T) => string;
   /** `under` folds a key even when one row has it (a field's second level of grouping). */
   always?: boolean;
+  /** Rows start open, their parts showing (a meter's labels); a click still closes one. */
+  open?: boolean;
 }
 
 /**
