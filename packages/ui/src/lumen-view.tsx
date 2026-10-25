@@ -967,6 +967,30 @@ const colPropsOf =
     'data-units': f && units.has(f.key) ? '' : undefined,
   });
 
+/**
+ * A column's widest cell (`maxWidth`): the first column defaults to `--lead-col-max` (18rem in
+ * theme.css), so one long name never pushes the other columns off screen; `false` lifts it.
+ */
+const capOf = <T,>(f: ViewField<T>, i: number) =>
+  f.maxWidth === false ? undefined : (f.maxWidth ?? (i === 0 ? 'var(--lead-col-max)' : undefined));
+/** Holds a cell to its column's cap on one line: text past it ends in an ellipsis. */
+function CappedCell({
+  max,
+  title,
+  children,
+}: { max: string | undefined; title?: string; children: ReactNode }) {
+  if (!max) return children;
+  return (
+    <div
+      className="flex min-w-0 *:min-w-0 *:max-w-full *:truncate"
+      style={{ maxWidth: max }}
+      title={title}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** The flat or grouped table: sortable headers, a Total row, group rows that collapse. */
 // Sorting, and paging of flat tables (the page is LumenView's, set right of the row count).
 const SORTING = tableFeatures({
@@ -1259,17 +1283,25 @@ function LumenTableRows<T extends RowData>({
           const { shown: now, cellOf, inline, chips, computed } = latest.current;
           const field = now[i] ?? f;
           const chip = chips.some((c) => c.key === field.key);
-          return i === 0 && inline.length ? (
-            <FirstCell
-              value={cellOf(field, row.original, chip)}
-              chips={inline.flatMap((x) => {
-                const v = computed.value(x, row.original);
-                if (!x.edit && (v === null || v === '')) return [];
-                return [{ key: x.key, node: cellOf(x, row.original, true) }];
-              })}
-            />
-          ) : (
-            cellOf(field, row.original, chip)
+          const v = computed.value(field, row.original);
+          return (
+            <CappedCell
+              max={capOf(field, i)}
+              title={!field.render && typeof v === 'string' ? v : undefined}
+            >
+              {i === 0 && inline.length ? (
+                <FirstCell
+                  value={cellOf(field, row.original, chip)}
+                  chips={inline.flatMap((x) => {
+                    const v = computed.value(x, row.original);
+                    if (!x.edit && (v === null || v === '')) return [];
+                    return [{ key: x.key, node: cellOf(x, row.original, true) }];
+                  })}
+                />
+              ) : (
+                cellOf(field, row.original, chip)
+              )}
+            </CappedCell>
           );
         },
       })),
@@ -1429,13 +1461,15 @@ function LumenTableRows<T extends RowData>({
             <span className="flex items-center gap-2">
               <CornerDownRightIcon className="size-3.5 shrink-0" />
               {/* A field sub-group names no part: its rows show their own first column. */}
-              {name
-                ? name(p)
-                : cellOf(
-                    f,
-                    p,
-                    chips.some((c) => c.key === f.key),
-                  )}
+              <CappedCell max={capOf(f, 0)}>
+                {name
+                  ? name(p)
+                  : cellOf(
+                      f,
+                      p,
+                      chips.some((c) => c.key === f.key),
+                    )}
+              </CappedCell>
             </span>
           ) : (
             cellOf(
