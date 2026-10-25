@@ -57,7 +57,11 @@ export function Tile({
   valueClassName?: string;
 }) {
   return (
-    <Card size="sm" className={cn('min-w-0 gap-0.5 px-3', className)}>
+    // One width for every tile in a row: fixed from lg up, two to a row (growing) below it.
+    <Card
+      size="sm"
+      className={cn('min-w-0 flex-1 basis-2/5 gap-0.5 px-3 lg:basis-auto', TILE_WIDTH, className)}
+    >
       <TileBody
         label={label}
         value={value}

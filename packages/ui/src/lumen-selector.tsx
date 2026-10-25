@@ -10,6 +10,7 @@
 //   - Triggers: `field` (a form select), `chip` (a compact header pill), `icon` (an icon button).
 //     `LumenSelectorList` is the fourth, `none`: the list anchored to a text box (the assistant @ and /).
 //   - Phone: a bottom sheet with the search on top and, for multiple, Done.
+//   - Desktop, multiple: a footer with the count, Clear all and Done (picks save as they're made).
 //   - An option with a `target` (a card or a sidebar page) lights it on the page while hovered.
 import { Combobox as Base } from '@base-ui/react';
 import { CheckIcon, ChevronDownIcon, PlusIcon, SearchIcon, XIcon } from 'lucide-react';
@@ -684,12 +685,15 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
         >
           {!inChips && searchBox}
           {list}
-          {clearAll && (
-            <div className="flex items-center justify-between border-t px-2 py-1.5">
+          {multiple && (
+            <div className="flex items-center gap-3 border-t px-2 py-1.5">
               <span className="text-xs text-muted-foreground">
                 {values.length} picked{max !== undefined ? ` of ${max}` : ''}
               </span>
               {clearAll}
+              <Button size="xs" className="ml-auto" onClick={() => setOpen(false)}>
+                Done
+              </Button>
             </div>
           )}
         </Base.Popup>

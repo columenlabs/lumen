@@ -219,9 +219,10 @@ export function followedBy<T>(
 /** What a card follows, as its title says it: `IRA, Roth`. */
 export function followsText(tokens: FilterToken[]) {
   return tokens
-    .map(
-      (t) =>
-        `${t.not ? 'not ' : ''}${t.op ? `${t.key} ${t.value.replace('..', '–')}` : (t.text ?? t.value)}`,
+    .map((t) =>
+      t.op === 'empty'
+        ? `${t.key} ${t.not ? 'any' : 'none'}`
+        : `${t.not ? 'not ' : ''}${t.op ? `${t.key} ${t.value.replace('..', '–')}` : (t.text ?? t.value)}`,
     )
     .join(', ');
 }

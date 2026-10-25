@@ -24,15 +24,53 @@ export function colorIcon(color: string): ComponentType<{ className?: string }> 
   return icon;
 }
 
-/** A value as a chip in its colour (a label): a tint behind, the colour as text. */
-export function ColorChip({ color, children }: { color?: string; children: ReactNode }) {
+const tinted = new WeakMap<
+  ComponentType<{ className?: string }>,
+  Map<string, ComponentType<{ className?: string }>>
+>();
+
+/** `icon` drawn in `color` (a label's icon in the label's colour), kept per pair so it keeps its identity. */
+export function tintedIcon(
+  icon: ComponentType<{ className?: string }>,
+  color: string | undefined,
+): ComponentType<{ className?: string }> {
+  if (!color) return icon;
+  let byColor = tinted.get(icon);
+  if (!byColor) {
+    byColor = new Map();
+    tinted.set(icon, byColor);
+  }
+  let out = byColor.get(color);
+  if (!out) {
+    const Icon = icon;
+    out = ({ className }) => (
+      <span aria-hidden className="flex shrink-0" style={{ color }}>
+        <Icon className={cn('size-4', className)} />
+      </span>
+    );
+    byColor.set(color, out);
+  }
+  return out;
+}
+
+/** A value as a chip in its colour (a label): a tint behind, the colour as text, its icon first. */
+export function ColorChip({
+  color,
+  icon: Icon,
+  children,
+}: {
+  color?: string;
+  icon?: ComponentType<{ className?: string }>;
+  children: ReactNode;
+}) {
   return (
     <span
-      className="inline-flex h-5 items-center rounded-sm bg-secondary px-1.5 text-xs font-medium whitespace-nowrap text-secondary-foreground"
+      className="inline-flex h-5 shrink-0 items-center gap-1 rounded-sm bg-secondary px-1.5 text-xs font-medium whitespace-nowrap text-secondary-foreground"
       style={
         color ? { background: `color-mix(in oklab, ${color} 18%, transparent)`, color } : undefined
       }
     >
+      {Icon && <Icon className="size-3 shrink-0" />}
       {children}
     </span>
   );

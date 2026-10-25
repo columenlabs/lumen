@@ -1182,6 +1182,7 @@ function LumenTableRows<T extends RowData>({
           unused={options.get(f.key)?.unused}
           note={edit.note?.(row)}
           colorOf={f.color}
+          iconOf={f.iconOf}
           onSave={(values) => many(row, values)}
         />
       );

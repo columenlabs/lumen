@@ -220,6 +220,7 @@ export function StackedColumns({
   // The highest part with a value carries the column's rounded cap.
   const top = (r: Record<string, number | string>) =>
     parts.findLast((p) => Number(r[p.key]) > 0)?.key;
+  const ticks = niceTicks(Math.max(0, ...rows.map(total)));
   return (
     <div className="flex flex-col gap-2">
       <ChartContainer
@@ -242,8 +243,9 @@ export function StackedColumns({
           <YAxis
             tickLine={false}
             axisLine={false}
-            width={36}
-            allowDecimals={false}
+            domain={[0, ticks.at(-1) ?? 'auto']}
+            ticks={ticks}
+            width={axisWidth(ticks.map(fmt))}
             tickFormatter={(v) => fmt(Number(v))}
           />
           <ChartTooltip
@@ -538,3 +540,20 @@ export function AllocationBar({
     </ChartContainer>
   );
 }
+
+/**
+ * Round axis steps (1, 2, 2.5 or 5 times a power of ten) from 0 to just above `max`, about four
+ * of them, so a value axis reads 0, 100k, 200k, 300k rather than 95k, 190k, 285k.
+ */
+function niceTicks(max: number, count = 4): number[] {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / count;
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  const step = ([1, 2, 2.5, 5, 10].find((m) => m * pow >= raw) ?? 10) * pow;
+  const n = Math.ceil(max / step - 1e-9);
+  return Array.from({ length: n + 1 }, (_, i) => Math.round(i * step * 1e6) / 1e6);
+}
+
+/** Room for the widest tick label (about 7px a character at text-xs), so none is clipped. */
+const axisWidth = (labels: string[]) =>
+  Math.max(24, Math.max(0, ...labels.map((l) => l.length)) * 7 + 8);
