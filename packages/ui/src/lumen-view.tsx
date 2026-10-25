@@ -1413,7 +1413,12 @@ function LumenTableRows<T extends RowData>({
       </TableCell>
     );
 
-  const [openParts, setOpenParts] = useState<Set<string>>(new Set());
+  // The rows whose open state the person flipped: a sub-group that starts open (`open`) lists
+  // the closed ones, any other the open ones.
+  const [partFlips, setOpenParts] = useState<Set<string>>(new Set());
+  const openParts = {
+    has: (k: string) => (subgroup?.open && !domain.panel ? !partFlips.has(k) : partFlips.has(k)),
+  };
   // A server group's roll-ups would add up its loaded rows only, so they and the Total stay off.
   const hasTotal = total && !serverGroups && shown.some(rollsUp);
   // A group row's label spans the leading columns that roll nothing up.
