@@ -433,6 +433,9 @@ export interface ServerGroups {
   list: ServerGroup[] | null;
   /** Groups past those listed: a More groups row asks for them. */
   more?: () => void;
+  /** The groups come a page at a time instead: the header's pager turns the page (no More
+   *  groups row), and `list` is the page shown. */
+  pages?: Omit<ServerPaging, 'sorts' | 'onSort' | 'groups'> & { noun?: string };
   /** A group header's click: open or close it. */
   onToggle: (key: string) => void;
   /** Expand all (true) or Collapse all (false): open or close every group listed. */
@@ -722,7 +725,20 @@ export function LumenView<T extends RowData>({
 
   // A server's page: the pager counts from the server's total, or the rows seen so far. Server
   // groups page themselves: the header counts them.
-  const pager = served ? (
+  const pager = served?.pages ? (
+    <LumenPager
+      total={
+        served.pages.total ?? served.pages.page * served.pages.size + (served.list?.length ?? 0)
+      }
+      page={served.pages.page}
+      size={served.pages.size}
+      onPage={served.pages.onPage}
+      onSize={served.pages.onSize ?? (() => {})}
+      sizes={served.pages.sizes ?? [served.pages.size]}
+      noun={served.pages.noun ?? 'groups'}
+      more={served.pages.total === null && served.pages.more}
+    />
+  ) : served ? (
     <span className="num px-2 text-xs text-muted-foreground">
       {served.list ? `${served.list.length.toLocaleString()}${served.more ? '+' : ''} groups` : ''}
     </span>
@@ -1768,7 +1784,7 @@ function LumenTableRows<T extends RowData>({
                 );
               })
             : drawn(sorted, '')}
-          {serverGroups?.more && (
+          {serverGroups?.more && !serverGroups.pages && (
             <TableRow data-more>
               <TableCell colSpan={span} className="py-1">
                 <Button variant="ghost" size="xs" onClick={serverGroups.more}>
