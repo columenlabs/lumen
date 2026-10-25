@@ -395,9 +395,10 @@ const isNumber = <T,>(f: ViewField<T>) => f.format !== 'text';
  * Given the card's `agg`, keeps it when it still fits the field.
  */
 export function cardAgg<T>(f: ViewField<T> | undefined, agg?: ViewAgg): ViewAgg {
-  if (agg && (isCountAgg(agg) || (f && isNumber(f)))) return agg;
+  const share = f?.format === 'percent' || f?.format === 'weight';
+  if (agg && (isCountAgg(agg) || (f && isNumber(f) && !(share && agg === 'sum')))) return agg;
   if (!f || !isNumber(f)) return 'distinct';
-  return f.format === 'percent' || f.format === 'weight' ? 'max' : 'sum';
+  return share ? 'max' : 'sum';
 }
 
 /** What is wrong with each of the cards: a key, a label or a field; null where nothing. */
