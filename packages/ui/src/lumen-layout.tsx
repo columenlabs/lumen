@@ -633,6 +633,9 @@ function ViewLayout<T extends RowData>({
     savedSortRef.current = savedSort;
     setHeldSort(config.sort);
   }, [savedSort, config.sort]);
+  // A server's page sorts on the server: it hears each sort held.
+  const onServerSort = paging?.onSort;
+  useEffect(() => onServerSort?.(heldSort ?? null), [onServerSort, heldSort]);
   const [details, setDetails] = useState<T | null>(null);
   const onDetails = onOpen ?? (domain.details?.length ? setDetails : undefined);
   // The assistant sees the view, its data domain, its filter, how many rows show, the first of them and the

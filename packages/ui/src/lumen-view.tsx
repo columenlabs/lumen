@@ -405,6 +405,8 @@ export interface ServerPaging {
   /** The columns the server sorts by; the rest take no header sort, and the view groups nothing,
    *  since either would order or bucket one page only. */
   sorts?: readonly string[];
+  /** Told the sort held (a header click, a revert), to fetch the rows in that order. */
+  onSort?: (sort: CustomViewConfig['sort']) => void;
 }
 
 export interface LumenViewProps<T> {
