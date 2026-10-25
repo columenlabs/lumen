@@ -15,7 +15,7 @@ export interface ShareSegment {
   value: number;
   /** A theme token or CSS colour (a label's colour). */
   color: string;
-  /** Who it is, read out by screen readers and in the bar's hover (`edgedesk 122%`). */
+  /** Who it is, read out by screen readers and in the bar's hover (`web 122%`). */
   label?: string;
 }
 
