@@ -95,6 +95,8 @@
   --row-h: 28px;
   --cell-x: 8px;
   --cell-y: 4px;
+  /* A UnitValue's unit slot (`GB`, `%`, `/day`), hung in the gutter of a units column. */
+  --unit-slot: 2rem;
 
   --background: #f4f6fa;
   --foreground: #121826;
@@ -386,6 +388,20 @@
   to {
     background-position: 11.3px 0;
   }
+}
+
+/* A table column a UnitValue drew in (`data-units`, set by LumenView): every cell, header and
+   Total included, right-aligns on the numbers' edge; each UnitValue's unit slot hangs in the
+   widened gutter (out of flow, so no wrapper an app puts round it can shift it). One column, one edge, whatever an app's render draws beside it. */
+[data-units] {
+  padding-right: calc(var(--cell-x) + var(--unit-slot));
+}
+[data-units] [data-slot="unit-value"] {
+  position: relative;
+}
+[data-units] [data-slot="unit-value-unit"] {
+  position: absolute;
+  left: 100%;
 }
 
 @layer utilities {
