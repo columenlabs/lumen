@@ -2198,11 +2198,19 @@ function DetailsSection<T>({
         >
           {SHAPES.map((s) => {
             const Icon = shapeIcon(s.value);
-            return (
-              <ToggleGroupItem key={s.value} value={s.value} aria-label={s.label}>
+            const off = s.value !== 'table' && !!domain.groupNote && draft.shape !== s.value;
+            const item = (
+              <ToggleGroupItem key={s.value} value={s.value} aria-label={s.label} disabled={off}>
                 <Icon />
                 {s.label}
               </ToggleGroupItem>
+            );
+            return off ? (
+              <WhyOff key={s.value} note={domain.groupNote ?? ''}>
+                {item}
+              </WhyOff>
+            ) : (
+              item
             );
           })}
         </ToggleGroup>
@@ -2483,6 +2491,7 @@ function ColumnList<T>({
     });
   };
   const groupNote = (f: ViewField<T>) =>
+    domain.groupNote ??
     f.groupNote ??
     (f.format === 'text' ? 'Not offered for grouping.' : 'Numbers can’t be grouped.');
   if (!rows.length)
@@ -2518,7 +2527,7 @@ function ColumnList<T>({
             const g = groupInfo(f);
             const shown = shownKeys.includes(f.key);
             const canF = canFilterKeys.includes(f.key);
-            const canG = groupKeys.includes(f.key);
+            const canG = !domain.groupNote && groupKeys.includes(f.key);
             return (
               <ColumnRow key={f.key} id={f.key} className={grid}>
                 <span className="flex min-w-0 items-center gap-2">
