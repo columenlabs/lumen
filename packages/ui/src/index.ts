@@ -18,6 +18,7 @@ export {
   type ViewChipTone,
   type ViewDomain,
   type ViewField,
+  type RollLevel,
   type ViewFieldGroup,
   type ViewSource,
   CHIP_TONE,
