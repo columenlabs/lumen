@@ -108,6 +108,7 @@ import { Skeleton } from './ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { UnitColumns } from './unit-value';
 import { EditCell, EditInputCell, EditManyCell } from './view-edit-cell';
 import { ViewEditDialog, type ViewEditorSection } from './view-editor';
 import { fieldOptions } from './view-formulas';
@@ -969,6 +970,42 @@ const isDateText = (v: unknown) =>
   typeof v === 'string' && v.length <= 25 && /^\d{4}-\d{2}-\d{2}(?:$|[ T])/.test(v);
 const colOf = <T,>(f: ViewField<T> | undefined) =>
   cn(alignOf(f?.format ?? 'text'), f?.hideOnPhone && 'max-md:hidden');
+/**
+ * A column's cell props: its classes, its key (`data-col`), and `data-units` once a `UnitValue`
+ * has drawn in it. Every cell of such a column (header, dash, Total) then right-aligns on the
+ * numbers' edge while the units hang in the gutter (theme.css), so one column has one edge.
+ */
+const colPropsOf =
+  (units: ReadonlySet<string>) =>
+  <T,>(f: ViewField<T> | undefined, ...more: (string | false | undefined | null)[]) => ({
+    className: cn(colOf(f), ...more),
+    'data-col': f?.key,
+    'data-units': f && units.has(f.key) ? '' : undefined,
+  });
+
+/**
+ * A column's widest cell (`maxWidth`): the first column defaults to `--lead-col-max` (18rem in
+ * theme.css), so one long name never pushes the other columns off screen; `false` lifts it.
+ */
+const capOf = <T,>(f: ViewField<T>, i: number) =>
+  f.maxWidth === false ? undefined : (f.maxWidth ?? (i === 0 ? 'var(--lead-col-max)' : undefined));
+/** Holds a cell to its column's cap on one line: text past it ends in an ellipsis. */
+function CappedCell({
+  max,
+  title,
+  children,
+}: { max: string | undefined; title?: string; children: ReactNode }) {
+  if (!max) return children;
+  return (
+    <div
+      className="flex min-w-0 *:min-w-0 *:max-w-full *:truncate"
+      style={{ maxWidth: max }}
+      title={title}
+    >
+      {children}
+    </div>
+  );
+}
 
 /** The flat or grouped table: sortable headers, a Total row, group rows that collapse. */
 // Sorting, and paging of flat tables (the page is LumenView's, set right of the row count).
@@ -1080,6 +1117,13 @@ function LumenTableRows<T extends RowData>({
     pageSize: paging ? page.size : Math.max(rows.length, 1),
   };
   // Groups whose state differs from where they start: open, or past OPEN_ALL rows only the first.
+  // Columns a UnitValue has drawn in (`UnitColumns`): their cells share the numbers' edge.
+  const [units, setUnits] = useState<ReadonlySet<string>>(() => new Set());
+  const markUnits = useCallback(
+    (key: string) => setUnits((s) => (s.has(key) ? s : new Set(s).add(key))),
+    [],
+  );
+  const col = colPropsOf(units);
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [more, setMore] = useState<Map<string, number>>(new Map());
   // The grouped field is the group row's label, so its column hides.
@@ -1255,17 +1299,25 @@ function LumenTableRows<T extends RowData>({
           const { shown: now, cellOf, inline, chips, computed } = latest.current;
           const field = now[i] ?? f;
           const chip = chips.some((c) => c.key === field.key);
-          return i === 0 && inline.length ? (
-            <FirstCell
-              value={cellOf(field, row.original, chip)}
-              chips={inline.flatMap((x) => {
-                const v = computed.value(x, row.original);
-                if (!x.edit && (v === null || v === '')) return [];
-                return [{ key: x.key, node: cellOf(x, row.original, true) }];
-              })}
-            />
-          ) : (
-            cellOf(field, row.original, chip)
+          const v = computed.value(field, row.original);
+          return (
+            <CappedCell
+              max={capOf(field, i)}
+              title={!field.render && typeof v === 'string' ? v : undefined}
+            >
+              {i === 0 && inline.length ? (
+                <FirstCell
+                  value={cellOf(field, row.original, chip)}
+                  chips={inline.flatMap((x) => {
+                    const v = computed.value(x, row.original);
+                    if (!x.edit && (v === null || v === '')) return [];
+                    return [{ key: x.key, node: cellOf(x, row.original, true) }];
+                  })}
+                />
+              ) : (
+                cellOf(field, row.original, chip)
+              )}
+            </CappedCell>
           );
         },
       })),
@@ -1377,7 +1429,7 @@ function LumenTableRows<T extends RowData>({
     ) : null;
   const rollCells = (members: T[]) =>
     shown.map((f) => (
-      <TableCell key={f.key} className={colOf(f)}>
+      <TableCell key={f.key} {...col(f)}>
         {rollCell(f, members)}
       </TableCell>
     ));
@@ -1420,18 +1472,20 @@ function LumenTableRows<T extends RowData>({
     >
       {selection && <TableCell />}
       {shown.map((f, i) => (
-        <TableCell key={f.key} className={cn(colOf(f), i === 0 && 'pl-12')}>
+        <TableCell key={f.key} {...col(f, i === 0 && 'pl-12')}>
           {i === 0 ? (
             <span className="flex items-center gap-2">
               <CornerDownRightIcon className="size-3.5 shrink-0" />
               {/* A field sub-group names no part: its rows show their own first column. */}
-              {name
-                ? name(p)
-                : cellOf(
-                    f,
-                    p,
-                    chips.some((c) => c.key === f.key),
-                  )}
+              <CappedCell max={capOf(f, 0)}>
+                {name
+                  ? name(p)
+                  : cellOf(
+                      f,
+                      p,
+                      chips.some((c) => c.key === f.key),
+                    )}
+              </CappedCell>
             </span>
           ) : (
             cellOf(
@@ -1470,7 +1524,7 @@ function LumenTableRows<T extends RowData>({
         {r.getAllCells().map((c, i) => (
           <TableCell
             key={c.id}
-            className={cn(colOf(shown[i]), groupBy && i === 0 && 'pl-8')}
+            {...col(shown[i], groupBy && i === 0 && 'pl-8')}
             style={{ background: shown[i]?.tint?.(r.original) }}
           >
             {i === 0 && nests ? (
@@ -1517,7 +1571,7 @@ function LumenTableRows<T extends RowData>({
         <TableRow data-row={k}>
           {selection && <TableCell />}
           {shown.map((f, i) => (
-            <TableCell key={f.key} className={cn(colOf(f), groupBy && i === 0 && 'pl-8')}>
+            <TableCell key={f.key} {...col(f, groupBy && i === 0 && 'pl-8')}>
               {i === 0 ? (
                 <span className="flex items-center gap-1">
                   {chevron(k, `${key} ${openLabel()}`)}
@@ -1621,193 +1675,195 @@ function LumenTableRows<T extends RowData>({
         fit && FIT,
       )}
     >
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((hg) => (
-            <TableRow key={hg.id}>
-              {selection && (
-                <TableHead className={cn('w-8 pr-0', PINNED_HEAD)}>
-                  <Checkbox
-                    checked={allOn ? true : someOn ? 'indeterminate' : false}
-                    onCheckedChange={(on) => toggle(allKeys, on === true)}
-                    aria-label="Select every row"
-                  />
-                </TableHead>
-              )}
-              {hg.headers.map((h, i) => (
-                <TableHead
-                  key={h.id}
-                  className={cn(colOf(shown[i]), PINNED_HEAD)}
-                  style={ruleOf(colorOf(domain, shown[i]))}
-                  onPointerDown={pressStart}
-                  onPointerUp={pressEnd}
-                  onPointerLeave={pressEnd}
-                  onPointerCancel={pressEnd}
-                  onContextMenu={(e) => {
-                    if (press.current) e.preventDefault();
-                  }}
-                  aria-sort={
-                    h.column.getIsSorted() === 'asc'
-                      ? 'ascending'
-                      : h.column.getIsSorted() === 'desc'
-                        ? 'descending'
-                        : undefined
-                  }
-                >
-                  {i === 0 && groups && (!serverGroups || serverGroups.onToggleAll) && (
-                    // Expand or collapse every group at once.
-                    <IconButton
-                      icon={anyClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon}
-                      size="icon-xs"
-                      className="-ml-2 mr-1 align-middle"
-                      label={anyClosed ? 'Expand all groups' : 'Collapse all groups'}
-                      onClick={() => setAll(anyClosed)}
+      <UnitColumns.Provider value={markUnits}>
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((hg) => (
+              <TableRow key={hg.id}>
+                {selection && (
+                  <TableHead className={cn('w-8 pr-0', PINNED_HEAD)}>
+                    <Checkbox
+                      checked={allOn ? true : someOn ? 'indeterminate' : false}
+                      onCheckedChange={(on) => toggle(allKeys, on === true)}
+                      aria-label="Select every row"
                     />
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className={cn('font-medium', !(i === 0 && groups) && '-mx-2')}
-                        style={{ color: colorOf(domain, shown[i]) ?? undefined }}
-                        onClick={
-                          h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined
-                        }
-                      >
-                        {shown[i] ? <FreshnessMark domain={domain} field={shown[i]} /> : null}
-                        {flexRender(h.column.columnDef.header, h.getContext())}
-                        <SortIcon dir={h.column.getIsSorted()} />
-                      </Button>
-                    </TooltipTrigger>
-                    {shown[i] && (domain.groups?.length || freshnessOf(domain, shown[i])) ? (
-                      <TooltipContent>
-                        {domain.groups?.length ? <div>{pathOf(domain, shown[i])}</div> : null}
-                        {freshnessLine(domain, shown[i]) ? (
-                          <div>{freshnessLine(domain, shown[i])}</div>
-                        ) : null}
-                      </TooltipContent>
-                    ) : null}
-                  </Tooltip>
-                </TableHead>
-              ))}
-              {add && (
-                <TableHead className={cn('w-8 pl-1', PINNED_HEAD)}>
-                  <AddColumnMenu add={add} fieldOpen={fieldOpen} onFieldOpen={setFieldOpen} />
-                </TableHead>
-              )}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {!rows.length && !serverGroups?.list?.length && (
-            <TableRow>
-              <TableCell colSpan={span} className="py-6 text-center text-muted-foreground">
-                No rows match.
-              </TableCell>
-            </TableRow>
-          )}
-          {groups && groupBy
-            ? groups.map(([key, members], gi) => {
-                const open = isOpen(key, gi);
-                return (
-                  <Fragment key={key}>
-                    <TableRow className={ROLLUP} data-group={key}>
-                      {selection && (
-                        <TableCell className={cn('w-8 pr-0', PINNED_GROUP)}>
-                          <Checkbox
-                            checked={
-                              members.every((m) => selection.keys.has(keyOf(m.original)))
-                                ? true
-                                : members.some((m) => selection.keys.has(keyOf(m.original)))
-                                  ? 'indeterminate'
-                                  : false
-                            }
-                            onCheckedChange={(on) =>
-                              toggle(
-                                members.map((m) => keyOf(m.original)),
-                                on === true,
-                              )
-                            }
-                            aria-label={`Select every row of ${key}`}
-                          />
-                        </TableCell>
-                      )}
-                      {shown.slice(lead - 1).map((f, i) =>
-                        i === 0 ? (
-                          <TableCell key={f.key} colSpan={leadSpan} className={PINNED_GROUP}>
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              className="-mx-2 hover:bg-transparent aria-expanded:bg-transparent"
-                              aria-expanded={open}
-                              aria-label={`${open ? 'Collapse' : 'Expand'} ${key}`}
-                              onClick={() =>
-                                serverGroups
-                                  ? serverGroups.onToggle(key)
-                                  : setFlipped((c) => {
-                                      const n = new Set(c);
-                                      n.has(key) ? n.delete(key) : n.add(key);
-                                      return n;
-                                    })
+                  </TableHead>
+                )}
+                {hg.headers.map((h, i) => (
+                  <TableHead
+                    key={h.id}
+                    {...col(shown[i], PINNED_HEAD)}
+                    style={ruleOf(colorOf(domain, shown[i]))}
+                    onPointerDown={pressStart}
+                    onPointerUp={pressEnd}
+                    onPointerLeave={pressEnd}
+                    onPointerCancel={pressEnd}
+                    onContextMenu={(e) => {
+                      if (press.current) e.preventDefault();
+                    }}
+                    aria-sort={
+                      h.column.getIsSorted() === 'asc'
+                        ? 'ascending'
+                        : h.column.getIsSorted() === 'desc'
+                          ? 'descending'
+                          : undefined
+                    }
+                  >
+                    {i === 0 && groups && (!serverGroups || serverGroups.onToggleAll) && (
+                      // Expand or collapse every group at once.
+                      <IconButton
+                        icon={anyClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon}
+                        size="icon-xs"
+                        className="-ml-2 mr-1 align-middle"
+                        label={anyClosed ? 'Expand all groups' : 'Collapse all groups'}
+                        onClick={() => setAll(anyClosed)}
+                      />
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className={cn('font-medium', !(i === 0 && groups) && '-mx-2')}
+                          style={{ color: colorOf(domain, shown[i]) ?? undefined }}
+                          onClick={
+                            h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined
+                          }
+                        >
+                          {shown[i] ? <FreshnessMark domain={domain} field={shown[i]} /> : null}
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          <SortIcon dir={h.column.getIsSorted()} />
+                        </Button>
+                      </TooltipTrigger>
+                      {shown[i] && (domain.groups?.length || freshnessOf(domain, shown[i])) ? (
+                        <TooltipContent>
+                          {domain.groups?.length ? <div>{pathOf(domain, shown[i])}</div> : null}
+                          {freshnessLine(domain, shown[i]) ? (
+                            <div>{freshnessLine(domain, shown[i])}</div>
+                          ) : null}
+                        </TooltipContent>
+                      ) : null}
+                    </Tooltip>
+                  </TableHead>
+                ))}
+                {add && (
+                  <TableHead className={cn('w-8 pl-1', PINNED_HEAD)}>
+                    <AddColumnMenu add={add} fieldOpen={fieldOpen} onFieldOpen={setFieldOpen} />
+                  </TableHead>
+                )}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {!rows.length && !serverGroups?.list?.length && (
+              <TableRow>
+                <TableCell colSpan={span} className="py-6 text-center text-muted-foreground">
+                  No rows match.
+                </TableCell>
+              </TableRow>
+            )}
+            {groups && groupBy
+              ? groups.map(([key, members], gi) => {
+                  const open = isOpen(key, gi);
+                  return (
+                    <Fragment key={key}>
+                      <TableRow className={ROLLUP} data-group={key}>
+                        {selection && (
+                          <TableCell className={cn('w-8 pr-0', PINNED_GROUP)}>
+                            <Checkbox
+                              checked={
+                                members.every((m) => selection.keys.has(keyOf(m.original)))
+                                  ? true
+                                  : members.some((m) => selection.keys.has(keyOf(m.original)))
+                                    ? 'indeterminate'
+                                    : false
                               }
-                            >
-                              <ChevronRightIcon
-                                className={cn('transition-transform', open && 'rotate-90')}
-                              />
-                              <groupBy.icon />
-                              {key}
-                              <span className="num font-normal text-muted-foreground">
-                                {serverGroups
-                                  ? (served.get(key)?.n?.toLocaleString() ?? '')
-                                  : members.length}
-                              </span>
-                            </Button>
-                            {groupActions?.(
-                              key,
-                              members.map((m) => m.original),
-                            )}
+                              onCheckedChange={(on) =>
+                                toggle(
+                                  members.map((m) => keyOf(m.original)),
+                                  on === true,
+                                )
+                              }
+                              aria-label={`Select every row of ${key}`}
+                            />
                           </TableCell>
-                        ) : (
-                          <TableCell key={f.key} className={cn(colOf(f), PINNED_GROUP)}>
-                            {!serverGroups &&
-                              rollCell(
-                                f,
+                        )}
+                        {shown.slice(lead - 1).map((f, i) =>
+                          i === 0 ? (
+                            <TableCell key={f.key} colSpan={leadSpan} className={PINNED_GROUP}>
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                className="-mx-2 hover:bg-transparent aria-expanded:bg-transparent"
+                                aria-expanded={open}
+                                aria-label={`${open ? 'Collapse' : 'Expand'} ${key}`}
+                                onClick={() =>
+                                  serverGroups
+                                    ? serverGroups.onToggle(key)
+                                    : setFlipped((c) => {
+                                        const n = new Set(c);
+                                        n.has(key) ? n.delete(key) : n.add(key);
+                                        return n;
+                                      })
+                                }
+                              >
+                                <ChevronRightIcon
+                                  className={cn('transition-transform', open && 'rotate-90')}
+                                />
+                                <groupBy.icon />
+                                {key}
+                                <span className="num font-normal text-muted-foreground">
+                                  {serverGroups
+                                    ? (served.get(key)?.n?.toLocaleString() ?? '')
+                                    : members.length}
+                                </span>
+                              </Button>
+                              {groupActions?.(
+                                key,
                                 members.map((m) => m.original),
                               )}
-                          </TableCell>
-                        ),
-                      )}
-                    </TableRow>
-                    {open && (serverGroups ? servedRows(members, key) : drawn(members, key))}
-                  </Fragment>
-                );
-              })
-            : drawn(sorted, '')}
-          {serverGroups?.more && !serverGroups.pages && (
-            <TableRow data-more>
-              <TableCell colSpan={span} className="py-1">
-                <Button variant="ghost" size="xs" onClick={serverGroups.more}>
-                  <ChevronsDownIcon />
-                  More groups
-                </Button>
-              </TableCell>
-            </TableRow>
-          )}
-          {hasTotal && rows.length > 0 && (
-            <TableRow className={cn(ROLLUP, 'border-t-2')} data-total>
-              {selection && <TableCell />}
-              {rollCells(rows).map((cell, i) =>
-                i === 0 && !(shown[0] && rollsUp(shown[0])) ? (
-                  <TableCell key="total">Total</TableCell>
-                ) : (
-                  cell
-                ),
-              )}
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+                            </TableCell>
+                          ) : (
+                            <TableCell key={f.key} {...col(f, PINNED_GROUP)}>
+                              {!serverGroups &&
+                                rollCell(
+                                  f,
+                                  members.map((m) => m.original),
+                                )}
+                            </TableCell>
+                          ),
+                        )}
+                      </TableRow>
+                      {open && (serverGroups ? servedRows(members, key) : drawn(members, key))}
+                    </Fragment>
+                  );
+                })
+              : drawn(sorted, '')}
+            {serverGroups?.more && !serverGroups.pages && (
+              <TableRow data-more>
+                <TableCell colSpan={span} className="py-1">
+                  <Button variant="ghost" size="xs" onClick={serverGroups.more}>
+                    <ChevronsDownIcon />
+                    More groups
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )}
+            {hasTotal && rows.length > 0 && (
+              <TableRow className={cn(ROLLUP, 'border-t-2')} data-total>
+                {selection && <TableCell />}
+                {rollCells(rows).map((cell, i) =>
+                  i === 0 && !(shown[0] && rollsUp(shown[0])) ? (
+                    <TableCell key="total">Total</TableCell>
+                  ) : (
+                    cell
+                  ),
+                )}
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </UnitColumns.Provider>
     </div>
   );
 }

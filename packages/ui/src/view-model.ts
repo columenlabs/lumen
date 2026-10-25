@@ -133,6 +133,12 @@ export interface ViewField<T> {
   iconOf?: (value: string) => ComponentType<{ className?: string }> | undefined;
   /** The cell's background, a theme colour mix (a P/L heat grid). */
   tint?: (row: T) => string | undefined;
+  /**
+   * The column's widest cell, a CSS length (`14rem`): past it the cell ends in an ellipsis on one
+   * line, the full text in its hover. The first column defaults to `--lead-col-max` (18rem);
+   * `false` lets it grow.
+   */
+  maxWidth?: string | false;
   /** Left out on phones, where the table has no room for it (a returns table's longer windows). */
   hideOnPhone?: boolean;
   /**
