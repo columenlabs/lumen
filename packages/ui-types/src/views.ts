@@ -82,17 +82,26 @@ export const viewPivotSchema = z.object({
   value: viewKey.nullable().default(null),
   agg: z.enum(viewAggs).default('mean'),
 });
-/** A number condition on a number field: `value` is a number, or `a..b` for between. */
-export const viewTokenOps = ['gt', 'lt', 'eq', 'between'] as const;
+/**
+ * A number condition on a number field: `value` is a number, or `a..b` for between. `empty` is for
+ * a text field: the rows with no value for it (`not`: the rows with any); its `value` is `∅`.
+ */
+export const viewTokenOps = ['gt', 'lt', 'eq', 'between', 'empty'] as const;
+/** The value an `empty` token carries. */
+export const EMPTY_VALUE = '∅';
 export type ViewTokenOp = (typeof viewTokenOps)[number];
 const NUM = '-?\\d+(?:\\.\\d+)?';
 const numberToken = (t: { value: string; op?: ViewTokenOp }) =>
-  !t.op || new RegExp(t.op === 'between' ? `^${NUM}\\.\\.${NUM}$` : `^${NUM}$`).test(t.value);
+  !t.op ||
+  t.op === 'empty' ||
+  new RegExp(t.op === 'between' ? `^${NUM}\\.\\.${NUM}$` : `^${NUM}$`).test(t.value);
 /**
  * A filter token, `key:value` (symbol:QQQ); `not: true` excludes the value. On one key a row must
  * have one of its included values (if any) and none of its excluded ones; tokens on different keys
  * must all match. Text matches without case, a number by its value. With `op`, a number field
  * keeps the rows above (`gt`), below (`lt`), at (`eq`) or `between` the value (`a..b`, inclusive).
+ * `op: 'empty'` keeps the rows with no value on that key (`not`: with any value); next to included
+ * values it reads as "none or one of these".
  */
 export const viewTokenSchema = z
   .object({

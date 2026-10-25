@@ -32,7 +32,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The filter box: type to search, or pick `field:value` chips grouped by field with counts. Number fields take one condition (`> 100`, `a..b`). `useLumenFilter` holds the state and returns the matching rows.',
+          'The filter box: type to search, or pick `field:value` chips grouped by field with counts. Number fields take one condition (`> 100`, `a..b`). A text field where some rows have no value pins a "No <field>" row above its values: Include keeps the rows with none, Exclude the rows with any (token `{ key, value: \'∅\', op: \'empty\', not? }`); typing "no…" or "empty" offers it as a quick filter. Use it for many-valued fields like labels, never a separate tab. `useLumenFilter` holds the state and returns the matching rows.',
       },
     },
   },
