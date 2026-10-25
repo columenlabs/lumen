@@ -16,8 +16,9 @@ import {
 } from './ui/table';
 
 export interface DetailsTableProps {
-  /** `grow` marks the column that takes the spare width; the last column does by default. */
-  head: { label: string; right?: boolean; grow?: boolean }[];
+  /** `grow` marks the column that takes the spare width; the last column does by default.
+   *  `hideOnPhone` drops a column on a phone, so the rest fit without scrolling sideways. */
+  head: { label: string; right?: boolean; grow?: boolean; hideOnPhone?: boolean }[];
   rows: { key: string; cells: ReactNode[] }[];
   /** An optional total row, one cell per column. */
   foot?: ReactNode[];
@@ -30,7 +31,13 @@ export interface DetailsTableProps {
 export function DetailsTable({ head, rows, foot, selected, onSelect }: DetailsTableProps) {
   const marked = head.findIndex((h) => h.grow);
   const grow = marked >= 0 ? marked : head.length - 1;
-  const cell = (i: number) => cn('num', head[i]?.right && 'text-right', i !== grow && 'w-px');
+  const cell = (i: number) =>
+    cn(
+      'num',
+      head[i]?.right && 'text-right',
+      i !== grow && 'w-px',
+      head[i]?.hideOnPhone && 'max-md:hidden',
+    );
   return (
     <div className="-mx-1 overflow-x-auto overflow-y-hidden rounded-md border">
       <Table>
@@ -39,7 +46,11 @@ export function DetailsTable({ head, rows, foot, selected, onSelect }: DetailsTa
             {head.map((h, i) => (
               <TableHead
                 key={h.label}
-                className={cn(h.right && 'text-right', i !== grow && 'w-px')}
+                className={cn(
+                  h.right && 'text-right',
+                  i !== grow && 'w-px',
+                  h.hideOnPhone && 'max-md:hidden',
+                )}
               >
                 {h.label}
               </TableHead>
