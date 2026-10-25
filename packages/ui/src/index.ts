@@ -102,6 +102,7 @@ export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
 export { LumenSecret } from './lumen-secret';
 export { RankedBars, StackedBars, StackedColumns } from './lumen-widget-charts';
 export { ShareMeter } from './share-meter';
+export { UnitValue } from './unit-value';
 export {
   COVERAGE_LEVELS,
   CoverageCell,
@@ -309,6 +310,7 @@ export {
   TileChip,
   type TileOption,
   TileRow,
+  TileSpark,
   TileToggleGroup,
 } from './tile';
 export {

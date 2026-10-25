@@ -574,6 +574,7 @@ export const viewTableLayoutSchema = z.object({
   chips: z.array(viewChipSchema).max(MAX_FIELDS).default([]),
   formats: z.record(fieldKey, z.enum(viewNumberFormats)).optional(),
   aggs: z.record(fieldKey, z.enum(viewTotalAggs)).optional(),
+  shows: z.record(fieldKey, z.string().min(1).max(32)).optional(),
   group: z
     .object({
       fields: z.array(fieldKey).max(MAX_FIELDS).default([]),
@@ -1164,6 +1165,11 @@ export const customViewConfigSchema = z.object({
    * over the field's own, or `none` for blank. A formula keeps its own `agg`. Left out: the field's.
    */
   aggs: z.record(fieldKey, z.enum(viewTotalAggs)).optional(),
+  /**
+   * A column's "Show as" picked in Edit view, for a field that offers several (`showAs`: an amount
+   * or its % of an allowance). Left out: the field's first.
+   */
+  shows: z.record(fieldKey, z.string().min(1).max(32)).optional(),
   /** The sidebar icon, a lucide name or an emoji; null = the shape's icon. */
   icon: viewIconSchema.nullable().default(null),
   /** The summary tiles, in order: the domain's (`{key}`) and the view's own. */
