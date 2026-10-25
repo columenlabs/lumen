@@ -46,8 +46,8 @@ export function LumenPager({
             aria-label="Rows per page"
           >
             {pages > 1
-              ? `${page * size + 1}–${Math.min((page + 1) * size, total)} of ${total}${more ? '+' : ''}`
-              : `${total} ${noun}`}
+              ? `${(page * size + 1).toLocaleString()}–${Math.min((page + 1) * size, total).toLocaleString()} of ${total.toLocaleString()}${more ? '+' : ''}`
+              : `${total.toLocaleString()} ${noun}`}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
