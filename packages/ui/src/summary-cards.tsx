@@ -2,6 +2,7 @@ import {
   type CardStyle,
   MAX_TILE_LINES,
   type MeterKind,
+  type ViewAgg,
   type ViewFormat,
   type ViewOwnTile,
   type ViewTile,
@@ -349,7 +350,9 @@ export function SummaryTiles<T>({
 }) {
   const shown = tiles.filter((t) => isOwnTile(t) || tile);
   if (!shown.length) return null;
-  const grid = 'grid grid-cols-2 gap-(--shell-section-gap) md:auto-cols-fr md:grid-flow-col';
+  // Each card fills its column, as a header's metric cards do (`TileRow fill`), not the fixed tile width.
+  const grid =
+    'grid grid-cols-2 gap-(--shell-section-gap) md:auto-cols-fr md:grid-flow-col lg:*:*:w-auto';
   if (loading)
     return (
       <div data-slot="view-tiles" aria-busy="true" className={grid}>
@@ -383,7 +386,20 @@ export function SummaryTiles<T>({
 
 const dragOptions = { activationConstraint: { distance: 4 } };
 
-const isNumber = <T,>(f: ViewField<T>) => f.format !== 'text' && !f.render;
+// A number the page draws its own way (a meter, a unit) still reads its raw value, so it rolls up.
+const isNumber = <T,>(f: ViewField<T>) => f.format !== 'text';
+
+/**
+ * The roll-up a card over `f` starts with, so any field makes a sensible number: text counts its
+ * different values, a percent or weight takes its highest (shares never add up), the rest sum.
+ * Given the card's `agg`, keeps it when it still fits the field.
+ */
+export function cardAgg<T>(f: ViewField<T> | undefined, agg?: ViewAgg): ViewAgg {
+  const share = f?.format === 'percent' || f?.format === 'weight';
+  if (agg && (isCountAgg(agg) || (f && isNumber(f) && !(share && agg === 'sum')))) return agg;
+  if (!f || !isNumber(f)) return 'distinct';
+  return share ? 'max' : 'sum';
+}
 
 /** What is wrong with each of the cards: a key, a label or a field; null where nothing. */
 export function summaryCardIssues(tiles: ViewTile[], fields: string[], domainTiles: string[]) {
@@ -644,7 +660,7 @@ export function SummaryCardsEditor<T>({
     tiles.find(isOwnTile)?.key ?? tiles[0]?.key ?? null,
   );
   const nums = domain.fields.filter(isNumber);
-  const pickable = domain.fields.filter((f) => !f.render);
+  const pickable = domain.fields;
   const fieldOf = (k: string) => domain.fields.find((f) => f.key === k);
   const i = tiles.findIndex((t) => t.key === current);
   const picked = tiles[i];

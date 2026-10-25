@@ -23,7 +23,7 @@ import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { FilterField } from './lumen-filter';
 import { LumenSelector } from './lumen-selector';
-import { SummaryCardsEditor, summaryCardIssues } from './summary-cards';
+import { SummaryCardsEditor, cardAgg, summaryCardIssues } from './summary-cards';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
@@ -45,7 +45,8 @@ export function EditorRow({ label, children }: { label: string; children: ReactN
 }
 
 export const isTextField = <T,>(f: ViewField<T>) => f.format === 'text' && !f.render;
-export const isNumberField = <T,>(f: ViewField<T>) => f.format !== 'text' && !f.render;
+// A number the page draws its own way (a meter, a unit) still reads its raw value, so it rolls up.
+export const isNumberField = <T,>(f: ViewField<T>) => f.format !== 'text';
 const DATE_LIKE = /(^|_)(date|day|at|time|month|week|year)($|_)/i;
 /** A trend's date candidates: text fields, the date-like ones first. */
 export const dateFields = <T,>(domain: ViewDomain<T>) => {
@@ -86,7 +87,8 @@ const freeTileKey = (tiles: ViewTile[], taken: string[]) => {
 
 /** A widget's slots, in the order the editor lists them; none for a chart of symbols. */
 export function widgetSlots<T>(card: WidgetDraft, domain: ViewDomain<T>): WidgetSlot<T>[] {
-  const label = (k: string) => domain.fields.find((f) => f.key === k)?.label ?? k;
+  const fieldOf = (k: string) => domain.fields.find((f) => f.key === k);
+  const label = (k: string) => fieldOf(k)?.label ?? k;
   const text = { accepts: isTextField<T>, why: 'Takes a text field' };
   const number = { accepts: isNumberField<T>, why: 'Takes a number' };
   if ('by' in card)
@@ -159,19 +161,20 @@ export function widgetSlots<T>(card: WidgetDraft, domain: ViewDomain<T>): Widget
         id: 'number',
         label: 'Number',
         max: 1,
-        ...number,
+        accepts: () => true,
+        why: '',
         keys: isOwnTile(t) ? [t.field] : [],
         set: ([field]) =>
           field
             ? {
                 ...card,
                 tile: isOwnTile(t)
-                  ? { ...t, field }
+                  ? { ...t, field, agg: cardAgg(fieldOf(field), t.agg) }
                   : {
                       key: t.key,
                       label: label(field),
                       field,
-                      agg: 'sum',
+                      agg: cardAgg(fieldOf(field)),
                       filter: [],
                       sign: false,
                       lines: [],
@@ -189,9 +192,10 @@ export function widgetSlots<T>(card: WidgetDraft, domain: ViewDomain<T>): Widget
         id: 'cards',
         label: 'Cards',
         max: MAX_TILES,
-        ...number,
+        accepts: () => true,
+        why: '',
         keys: tiles.filter(isOwnTile).map((t) => t.field),
-        // A field ticked adds a card of its sum; one unticked takes its cards out.
+        // A field ticked adds a card of its roll-up (`cardAgg`); one unticked takes its cards out.
         set: (keys) => {
           const kept = tiles.filter((t) => !isOwnTile(t) || keys.includes(t.field));
           const next = [...kept];
@@ -201,7 +205,7 @@ export function widgetSlots<T>(card: WidgetDraft, domain: ViewDomain<T>): Widget
               key: freeTileKey(next, builtIns),
               label: label(field),
               field,
-              agg: 'sum',
+              agg: cardAgg(fieldOf(field)),
               filter: [],
               sign: false,
               lines: [],
