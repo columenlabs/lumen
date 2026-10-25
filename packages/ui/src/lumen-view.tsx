@@ -1048,6 +1048,7 @@ function LumenTableRows<T extends RowData>({
   add,
   serverGroups = null,
 }: LumenTableProps<T>) {
+  const isMobile = useIsMobile();
   const [sorting, setSorting] = useState<SortingState>(() => sortingOf(sort, columns, serverSorts));
   // A saved sort patched while the table is open (the assistant's card move) applies at once.
   const savedSort = JSON.stringify(sort ?? null);
@@ -1340,6 +1341,12 @@ function LumenTableRows<T extends RowData>({
     shown.findIndex((f, i) => i > 0 && rolls(f)) < 0
       ? shown.length
       : shown.findIndex((f, i) => i > 0 && rolls(f)),
+  );
+  // On a phone the hideOnPhone columns are gone, so the label spans only the leading ones still
+  // drawn; spanning the hidden ones too pushed the group's totals right of their headers.
+  const leadSpan = Math.max(
+    1,
+    lead - (isMobile ? shown.slice(0, lead).filter((f) => f.hideOnPhone).length : 0),
   );
   const rollCell = (f: ViewField<T>, members: T[]) =>
     rollsUp(f) && f.rollRender ? (
@@ -1712,7 +1719,7 @@ function LumenTableRows<T extends RowData>({
                       )}
                       {shown.slice(lead - 1).map((f, i) =>
                         i === 0 ? (
-                          <TableCell key={f.key} colSpan={lead} className={PINNED_GROUP}>
+                          <TableCell key={f.key} colSpan={leadSpan} className={PINNED_GROUP}>
                             <Button
                               variant="ghost"
                               size="xs"
