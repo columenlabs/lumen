@@ -400,10 +400,21 @@ export type CardStyle = (typeof cardStyles)[number];
  */
 export const meterKinds = ['health', 'usage'] as const;
 export type MeterKind = (typeof meterKinds)[number];
-/** Each meter's default bands, in % of the target. */
+/**
+ * Where a share of a cap (0 to 1) starts to need a look (`watch`, amber) and action (`alert`,
+ * red). The kit's canonical levels; an app moves them with `configureLumen({ meterLevels })`.
+ */
+export interface MeterLevels {
+  watch: number;
+  alert: number;
+}
+export const METER_LEVELS: MeterLevels = { watch: 0.75, alert: 0.9 };
+/** A share's level: `ok` (grey) under `watch`, `watch` (amber) from it, `alert` (red) from `alert`. */
+export type MeterLevel = 'ok' | 'watch' | 'alert';
+/** Each meter's default bands, in % of the target (`usage` follows `METER_LEVELS`). */
 export const METER_BANDS: Record<MeterKind, { warn: number; bad: number }> = {
   health: { warn: 100, bad: 90 },
-  usage: { warn: 75, bad: 90 },
+  usage: { warn: METER_LEVELS.watch * 100, bad: METER_LEVELS.alert * 100 },
 };
 /** The theme tone a share of the target (%) reads as, or null with no meter. */
 export function meterTone(

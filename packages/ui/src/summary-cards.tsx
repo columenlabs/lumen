@@ -41,6 +41,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { PolarAngleAxis, RadialBar, RadialBarChart } from 'recharts';
 import { LumenConfirm } from './confirm';
 import { IconButton } from './icon-button';
+import { KIT } from './kit-config';
 import { cn } from './lib/utils';
 import {
   type FilterField,
@@ -213,7 +214,7 @@ export function LumenCard<T>({
     style !== 'number' && target && typeof v === 'number'
       ? Math.max(0, Math.min(100, (v / target) * 100))
       : null;
-  const tone = meterTone(meter, share, bands);
+  const tone = meterTone(meter, share, bands ?? (meter === 'usage' ? usageBands() : undefined));
   const of = target ? (
     <ViewValueCell value={target} format={figs.main.format} amount={figs.main.amount} />
   ) : null;
@@ -268,6 +269,12 @@ export function LumenCard<T>({
     </div>
   );
 }
+
+/** A usage meter's bands from the app's `meterLevels`, in %. */
+const usageBands = () => ({
+  warn: KIT.meterLevels.watch * 100,
+  bad: KIT.meterLevels.alert * 100,
+});
 
 /** A meter's tone on a bar's fill (theme tokens, no glow). */
 const TONE_BAR = {
