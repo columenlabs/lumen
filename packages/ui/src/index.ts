@@ -102,6 +102,7 @@ export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
 export { LumenSecret } from './lumen-secret';
 export { RankedBars, StackedBars, StackedColumns } from './lumen-widget-charts';
 export { ShareMeter } from './share-meter';
+export { METER_LEVEL_COLOR, meterLevel, meterValueTone } from './meter-level';
 export { UnitValue } from './unit-value';
 export {
   COVERAGE_LEVELS,

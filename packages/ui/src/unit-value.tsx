@@ -2,13 +2,17 @@
 // figures, the unit in a fixed, muted slot after it, and a fixed slot for a status dot. One
 // number per cell; a second measure (the share of an allowance) goes in a hover card, never in
 // brackets beside it.
+import type { MeterLevels } from '@columenlabs/lumen-ui-types/views';
 import type { ReactNode } from 'react';
 import { cn } from './lib/utils';
+import { meterValueTone } from './meter-level';
 
 export function UnitValue({
   value,
   unit,
-  tone,
+  tone: toneProp,
+  share,
+  levels,
   title,
   className,
 }: {
@@ -18,9 +22,14 @@ export function UnitValue({
   unit?: ReactNode;
   /** Near (`warning`) or past (`loss`) a limit: tints the number and shows a dot. */
   tone?: 'warning' | 'loss';
+  /** Its share of a cap (0 to 1): sets `tone` by `meterLevel` (amber from 75%, red from 90%). */
+  share?: number;
+  /** This value's own levels; left out, the app's `meterLevels`. */
+  levels?: Partial<MeterLevels>;
   title?: string;
   className?: string;
 }) {
+  const tone = toneProp ?? (share === undefined ? undefined : meterValueTone(share, levels));
   return (
     <span
       title={title}
