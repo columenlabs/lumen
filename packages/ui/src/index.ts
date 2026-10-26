@@ -162,6 +162,13 @@ export {
   type LumenCodeLang,
 } from './lumen-code-editor';
 export { RenameField, type RenameFieldProps } from './rename-field';
+export {
+  LumenStackedList,
+  type LumenStackedListProps,
+  LumenStackedRow,
+  type LumenStackedRowProps,
+  type StackedColumn,
+} from './lumen-stacked-list';
 export { ResetButton, type ResetButtonProps } from './reset-button';
 export {
   type ChartBand,
