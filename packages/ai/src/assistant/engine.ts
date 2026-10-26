@@ -76,19 +76,47 @@ import {
 } from './tools';
 import { type AccessToken, type WebFetchOptions, scrapeqlTools, webFetchTools } from './web';
 
+/** An app's slash command (`/story <words>`). */
+export interface AssistantCommandDef {
+  /** Typed after the slash, letters, digits and `-`: `story`. */
+  name: string;
+  /** One line in the list. */
+  about: string;
+  /** What follows the name, shown in the list (`<words>`). Without it, picking it sends it. */
+  args?: string;
+  /** What the model is asked: `{args}` is the words after the name. */
+  prompt: string | ((args: string, caller: Caller) => string | Promise<string>);
+}
+
 /** Who is asking: their id (the store's scope for their things) and whether they are an admin. */
 export interface Caller {
   id: string;
   admin: boolean;
 }
 
-/** A group of the app's tools the person sets Off, Read or Read + draft. */
+/** A change a write tool made at once, as `undo` gets it. */
+export interface AssistantWrite {
+  /** The tool's own name (not the `group__tool` the model calls). */
+  tool: string;
+  args: unknown;
+  /** What the tool returned. */
+  result: unknown;
+}
+
+/** A group of the app's tools the person sets Off, Read, Read + draft or Read + write. */
 export interface ToolGroup {
   id: string;
   label: string;
   about: string;
   /** Where a person starts: `read` by default. */
   access?: AssistantAccess;
+  /**
+   * Offers Read + write: its write tools then run at once, without a card, each with Undo in the
+   * chat when `undo` is set. Off by default, so a group only drafts.
+   */
+  writes?: boolean;
+  /** Takes back one change a write made at once (Undo on its line in the chat). */
+  undo?: (caller: Caller, write: AssistantWrite) => Promise<void>;
   tools: (caller: Caller) => ToolSource | ToolSource[];
 }
 
@@ -125,6 +153,12 @@ export interface AssistantOptions {
   name: string;
   /** The app's instructions: what it is, what its tools are for. */
   system: string | ((caller: Caller) => string | Promise<string>);
+  /**
+   * The app's slash commands, listed in the composer when the person types `/`. A message
+   * `/name words` is sent to the model as `prompt` with `{args}` replaced by the words (or what the
+   * function returns); the chat shows what the person typed.
+   */
+  commands?: AssistantCommandDef[];
   /** The app's tiers, smallest first. */
   tiers: TierDef[];
   /** Tasks a person picks a starting tier for; the chat on the smallest tier by default. */
@@ -195,8 +229,10 @@ interface ChatDoc {
   items: ChatItem[];
   history: Turn[];
   usage?: ChatUsage;
-  /** Draft ids whose outcome the model has been told. */
+  /** Draft ids whose outcome the model has been told, and writes undone it has been told of. */
   told?: string[];
+  /** What each write made at once ran with and returned, by its step id: what Undo needs. */
+  writes?: Record<string, AssistantWrite & { group: string }>;
 }
 
 type Emit = (event: string, data: unknown) => void;
@@ -234,11 +270,12 @@ interface LoopArgs {
   advisor?: { session: Session; asked: number };
 }
 
-/** One tool the model may call: where it came from and whether it only drafts. */
+/** One tool the model may call: where it came from, and whether a write drafts or runs at once. */
 interface Fn {
   group: string;
   def: ToolDef;
   draft: boolean;
+  write: boolean;
   open: OpenTools;
 }
 
@@ -293,6 +330,13 @@ function untilStopped<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
 
 const newId = (prefix: string) =>
   `${prefix}_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`;
+
+/** Every tool line in a chat, those in hand-off sections included. */
+function stepsOf(items: ChatItem[]): StepItem[] {
+  return items.flatMap((i) =>
+    i.kind === 'step' ? [i] : i.kind === 'handoff' ? stepsOf(i.items) : [],
+  );
+}
 
 /** Every draft in a chat, those in hand-off sections included. */
 function draftsOf(items: ChatItem[]): DraftItem[] {
@@ -414,7 +458,12 @@ export class Assistant {
   }
 
   private access(p: { access?: Record<string, AssistantAccess> }, g: ToolGroup) {
-    return p.access?.[g.id] ?? g.access ?? 'read';
+    const a = p.access?.[g.id] ?? g.access ?? 'read';
+    return a === 'write' && !g.writes ? 'draft' : a;
+  }
+
+  private groupById(id: string) {
+    return this.groups.find((g) => g.id === id);
   }
 
   // ---------------------------------------------------------------- status and settings
@@ -467,6 +516,11 @@ export class Assistant {
     );
     return {
       name: this.name,
+      commands: (this.o.commands ?? []).map((c) => ({
+        name: c.name,
+        about: c.about,
+        ...(c.args ? { args: c.args } : {}),
+      })),
       wait,
       ...(wait ? { wait_provider: mainModel.provider } : {}),
       admin: caller.admin,
@@ -490,6 +544,7 @@ export class Assistant {
         about: g.about,
         access: this.access(p, g),
         drafts: true,
+        writes: !!g.writes,
       })),
       hand_off: p.hand_off ?? 'next',
       advice: p.advice && (p.advice === 'off' || this.tierById(p.advice)) ? p.advice : 'off',
@@ -586,11 +641,14 @@ export class Assistant {
     const fns = new Map<string, Fn>();
     for (const o of opened)
       for (const def of o.open.tools) {
-        if (!def.read && o.access !== 'draft') continue;
+        if (!def.read && o.access !== 'draft' && o.access !== 'write') continue;
+        // Read + write on a group that offers no writes drafts.
+        const write = !def.read && o.access === 'write' && !!this.groupById(o.group)?.writes;
         fns.set(toolName(o.group, def.name), {
           group: o.group,
           def,
-          draft: !def.read,
+          draft: !def.read && !write,
+          write,
           open: o.open,
         });
       }
@@ -605,7 +663,7 @@ export class Assistant {
     return [...fns.entries()].map(([name, f]) => ({
       name,
       description:
-        `${f.draft ? "DRAFT ONLY: this call changes nothing. It puts a card on the person's screen that they Save or Dismiss. " : ''}${f.def.title ? `${f.def.title}. ` : ''}${f.def.description ?? ''}`.slice(
+        `${f.draft ? "DRAFT ONLY: this call changes nothing. It puts a card on the person's screen that they Save or Dismiss. " : f.write ? 'WRITES AT ONCE: this call makes the change now; the person can undo it. ' : ''}${f.def.title ? `${f.def.title}. ` : ''}${f.def.description ?? ''}`.slice(
           0,
           4000,
         ),
@@ -667,6 +725,7 @@ export class Assistant {
       history: [],
     };
     const compactOnly = message === '/compact';
+    const asked = await this.expand(caller, message);
     if (!compactOnly)
       doc.items.push({
         kind: 'user',
@@ -679,7 +738,14 @@ export class Assistant {
     const start = doc.items.length;
     emit('chat', { id: chatId, title: doc.title });
 
-    const main = await this.session(caller, await this.mainTier(caller));
+    // `tier` on a message: a higher one takes it as a task in its own section (handTo below); the
+    // same or a lower one answers it as the main tier, for this message only.
+    const picked = await this.mainTier(caller);
+    const lower =
+      req.tier && !this.above(picked).some((t) => t.id === req.tier)
+        ? this.tierById(req.tier)
+        : undefined;
+    const main = await this.session(caller, lower ?? picked);
     const { paying, wait } = await this.state.paying(caller.id, main.model.provider);
     if (!paying) {
       const code = wait ?? 'not_connected';
@@ -713,7 +779,8 @@ export class Assistant {
     const handTo = req.tier ? this.above(main.tier).find((t) => t.id === req.tier) : undefined;
     const tools = await this.openTools(caller, p);
     const runs: Ran[] = [];
-    const counts = { steps: 0, handoffs: 0, advice: 0, end: main.tier };
+    doc.writes ??= {};
+    const counts = { steps: 0, handoffs: 0, advice: 0, end: main.tier, writes: doc.writes };
     let outcome: 'ok' | 'stopped' | 'error' = 'ok';
     try {
       const appSystem =
@@ -757,7 +824,7 @@ export class Assistant {
       const page =
         this.cardNews(doc) +
         (req.refs?.length
-          ? `The person points at: ${JSON.stringify(req.refs).slice(0, 2000)}\n\n`
+          ? `The person points at: ${JSON.stringify(req.refs).slice(0, 8000)}\n\n`
           : '') +
         (req.context
           ? `Page: ${req.context.label}${req.context.note === undefined ? '' : `\n${JSON.stringify(req.context.note).slice(0, 4000)}`}\n\n`
@@ -767,7 +834,7 @@ export class Assistant {
         : '';
       const messages: Anthropic.MessageParam[] = [
         ...doc.history.map((t) => ({ role: t.role, content: t.content })),
-        { role: 'user', content: `${page}${lead}${message}` },
+        { role: 'user', content: `${page}${lead}${asked}` },
       ];
       const escalateTool = this.escalateTool(main.tier);
       let answer = await this.loop({
@@ -791,7 +858,7 @@ export class Assistant {
             ? this.handOff(use, {
                 caller,
                 clients,
-                message,
+                message: asked,
                 handTo,
                 page,
                 policy,
@@ -819,7 +886,7 @@ export class Assistant {
         emit('text', { delta: answer });
         emit('text_end', {});
       }
-      doc.history.push({ role: 'user', content: `${page}${message}` });
+      doc.history.push({ role: 'user', content: `${page}${asked}` });
       doc.history.push({ role: 'assistant', content: this.remember(answer, runs) });
     } catch (err) {
       if (signal?.aborted) {
@@ -831,7 +898,7 @@ export class Assistant {
           .map((i) => i.text)
           .join('\n\n');
         if (!compactOnly) {
-          doc.history.push({ role: 'user', content: message });
+          doc.history.push({ role: 'user', content: asked });
           doc.history.push({ role: 'assistant', content: said || '(stopped before answering)' });
         }
       } else {
@@ -896,6 +963,7 @@ export class Assistant {
       `You are ${this.name}. Today is ${new Date().toISOString().slice(0, 10)}.`,
       'Answer in short plain sentences. Use the tools for facts; never guess a number a tool can give you. Call several tools at once when they do not depend on each other.',
       'A tool marked DRAFT ONLY makes a card the person saves or dismisses; it changes nothing by itself. Say what the card will do; never claim it is done. The next message tells you how each card ended.',
+      'A tool marked WRITES AT ONCE makes its change when you call it; the person can undo it from the chat. Change only what they asked for, and say what you changed.',
     ];
     if (!fns.size)
       lines.push('No tools are on now: the person can turn them on in Settings ▸ Tools.');
@@ -957,6 +1025,17 @@ export class Assistant {
         required: ['tier', 'why', 'task'],
       },
     };
+  }
+
+  /** What the model is asked: an app command's prompt, else the message as typed. */
+  private async expand(caller: Caller, message: string) {
+    const m = /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(message);
+    const c = m && this.o.commands?.find((x) => x.name === m[1]);
+    if (!c) return message;
+    const args = (m?.[2] ?? '').trim();
+    return typeof c.prompt === 'function'
+      ? c.prompt(args, caller)
+      : c.prompt.replaceAll('{args}', args);
   }
 
   /** The tiers the person's message asks for by name ("go deeper" is the next one up). */
@@ -1095,7 +1174,7 @@ export class Assistant {
     sink: ChatItem[],
     emit: Emit,
     runs: Ran[],
-    counts: { steps: number },
+    counts: { steps: number; writes?: NonNullable<ChatDoc['writes']> },
     session: Session,
     handoff: boolean,
     signal?: AbortSignal,
@@ -1139,6 +1218,8 @@ export class Assistant {
         withDeadline(title, 60_000, f.open.call(f.def.name, use.input)),
         signal,
       );
+      if (f.write && counts.writes)
+        counts.writes[id] = { group: f.group, tool: f.def.name, args: use.input, result };
       rows = rowCount(result);
       out = typeof result === 'string' ? result : JSON.stringify(result);
     } catch (err) {
@@ -1158,6 +1239,9 @@ export class Assistant {
       ms,
       ...(rows !== undefined ? { rows } : {}),
       ...(error ? { error } : {}),
+      ...(f.write && ok
+        ? { write: { undo: !!this.groupById(f.group)?.undo, status: 'done' as const } }
+        : {}),
     };
     sink.push(item);
     emit('step', item);
@@ -1516,9 +1600,16 @@ export class Assistant {
   private cardNews(doc: ChatDoc) {
     const told = new Set(doc.told ?? []);
     const news = draftsOf(doc.items).filter((d) => d.status !== 'open' && !told.has(d.id));
-    if (!news.length) return '';
-    doc.told = [...told, ...news.map((d) => d.id)];
-    return `Cards since your last answer:\n${news
+    const undone = stepsOf(doc.items).filter(
+      (x) => x.write?.status === 'undone' && !told.has(x.id),
+    );
+    if (!news.length && !undone.length) return '';
+    doc.told = [...told, ...news.map((d) => d.id), ...undone.map((x) => x.id)];
+    const back = undone.length
+      ? `The person undid these changes you made: ${undone.map((x) => `${x.title} ${JSON.stringify(doc.writes?.[x.id]?.args ?? {}).slice(0, 300)}`).join('; ')}. Do not make them again unless asked.\n\n`
+      : '';
+    if (!news.length) return back;
+    return `${back}Cards since your last answer:\n${news
       .map(
         (d) =>
           `- ${d.title} ${JSON.stringify(d.args).slice(0, 300)}: ${d.status}${d.error ? ` (${d.error})` : ''}${d.result !== undefined ? ` → ${JSON.stringify(d.result).slice(0, 300)}` : ''}`,
@@ -1639,9 +1730,9 @@ export class Assistant {
       const tools = await this.openTools(caller, p);
       try {
         const f = tools.fns.get(d.tool);
-        if (!f?.draft) {
+        if (!f || f.def.read) {
           d.status = 'failed';
-          d.error = 'Its tools are no longer on Read + draft in Settings ▸ Tools.';
+          d.error = 'Its tools are no longer on Read + draft or Read + write in Settings ▸ Tools.';
         } else {
           try {
             d.result = await withDeadline(d.title, 60_000, f.open.call(f.def.name, d.args));
@@ -1657,6 +1748,31 @@ export class Assistant {
     }
     await this.writeChat(caller, chatId, doc);
     return d;
+  }
+
+  /** Takes back one change a write made at once, through its group's `undo`. */
+  async undoWrite(caller: Caller, chatId: string, stepId: string) {
+    const doc = await this.state.docs.read<ChatDoc>(caller.id, `chat:${chatId}`);
+    if (!doc) throw new AssistantError('That chat is gone.', 'not_found', 404);
+    const step = stepsOf(doc.items).find((x) => x.id === stepId);
+    const w = doc.writes?.[stepId];
+    if (!step?.write || !w) throw new AssistantError('That change is gone.', 'not_found', 404);
+    if (step.write.status === 'undone')
+      throw new AssistantError('That change is already undone.', 'settled', 409);
+    const g = this.groupById(w.group);
+    if (!g?.undo) throw new AssistantError('That change cannot be undone here.', 'no_undo', 400);
+    try {
+      await withDeadline(`Undo ${step.title}`, 60_000, g.undo(caller, w));
+      step.write = { ...step.write, status: 'undone' };
+    } catch (err) {
+      throw new AssistantError(
+        err instanceof Error ? err.message.slice(0, 300) : 'Undo failed.',
+        'undo_failed',
+        502,
+      );
+    }
+    await this.writeChat(caller, chatId, doc);
+    return step;
   }
 }
 

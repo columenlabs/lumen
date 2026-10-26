@@ -7,6 +7,7 @@ import type {
   ChatUsage,
   DraftItem,
   HandOffItem,
+  StepItem,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorText } from '../integrations';
@@ -31,6 +32,8 @@ export interface AssistantChatState {
   open: (id: string) => Promise<void>;
   reset: () => void;
   settle: (draft: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
+  /** Takes back a change the assistant made at once (Undo on its line). */
+  undo: (step: StepItem) => Promise<void>;
 }
 
 /** Where an event lands: the chat, or the last hand-off section when it came from inside one. */
@@ -240,22 +243,35 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     [client],
   );
 
+  // Puts a settled card or an undone line back in place, in a hand-off section too.
+  const replace = useCallback((next: DraftItem | StepItem) => {
+    const swap = (list: LiveItem[]): LiveItem[] =>
+      list.map((i) =>
+        i.kind === next.kind && i.id === next.id
+          ? next
+          : i.kind === 'handoff'
+            ? { ...i, items: swap(i.items as LiveItem[]) }
+            : i,
+      );
+    setItems(swap);
+  }, []);
+
   const settle = useCallback(
     async (draft: DraftItem, action: 'save' | 'dismiss') => {
       const id = idRef.current;
       if (!id) return;
-      const next = await client.settleDraft(id, draft.id, action);
-      const swap = (list: LiveItem[]): LiveItem[] =>
-        list.map((i) =>
-          i.kind === 'draft' && i.id === next.id
-            ? next
-            : i.kind === 'handoff'
-              ? { ...i, items: swap(i.items as LiveItem[]) }
-              : i,
-        );
-      setItems(swap);
+      replace(await client.settleDraft(id, draft.id, action));
     },
-    [client],
+    [client, replace],
+  );
+
+  const undo = useCallback(
+    async (step: StepItem) => {
+      const id = idRef.current;
+      if (!id) return;
+      replace(await client.undoWrite(id, step.id));
+    },
+    [client, replace],
   );
 
   return {
@@ -271,5 +287,6 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     open,
     reset,
     settle,
+    undo,
   };
 }

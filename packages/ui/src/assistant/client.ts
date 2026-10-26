@@ -10,6 +10,7 @@ import type {
   AssistantStatus,
   DraftItem,
   KeyState,
+  StepItem,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { ApiError, apiJson } from '../api-fetch';
 
@@ -47,6 +48,8 @@ export interface AssistantAdapter {
     signal?: AbortSignal,
   ): Promise<void>;
   settleDraft(chatId: string, draftId: string, action: 'save' | 'dismiss'): Promise<DraftItem>;
+  /** Takes back a change the assistant made at once. */
+  undoWrite(chatId: string, stepId: string): Promise<StepItem>;
 }
 
 /** Reads `event:` / `data:` blocks off a server-sent event stream. */
@@ -114,6 +117,11 @@ export function assistantClient(base: string): AssistantAdapter {
       send('POST', `/chats/${encodeURIComponent(chatId)}/drafts/${encodeURIComponent(draftId)}`, {
         action,
       }),
+    undoWrite: (chatId, stepId) =>
+      send(
+        'POST',
+        `/chats/${encodeURIComponent(chatId)}/writes/${encodeURIComponent(stepId)}/undo`,
+      ),
     async send(msg, onEvent, signal) {
       const url = `${root}/chat`;
       const res = await fetch(url, {

@@ -5,12 +5,18 @@ import type {
   AssistantStatus,
   ChatItem,
   DraftItem,
+  StepItem,
 } from '@columenlabs/lumen-ui-types/assistant';
 import {
   type AssistantAdapter,
+  type AssistantSource,
   assistantSettingsSections,
+  composeAssistant,
+  selectionRef,
+  useAssistantSource,
   useLumenAssistantDock,
 } from '@columenlabs/lumen-ui/assistant';
+import { Button } from '@columenlabs/lumen-ui/ui/button';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { BookOpenIcon, HomeIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -18,8 +24,26 @@ import { useEffect, useState } from 'react';
 const NOW = Date.UTC(2026, 9, 26, 17);
 const wait = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
+const NOTES = ['Launch plan', 'Q3 review', 'Hiring loop', 'Pricing ideas'];
+const NOTES_SOURCE: AssistantSource = {
+  id: 'notes',
+  label: 'Notes',
+  icon: BookOpenIcon,
+  items: (q) =>
+    NOTES.filter((n) => n.toLowerCase().includes(q.toLowerCase())).map((n) => ({
+      id: n,
+      label: n,
+      detail: 'Note',
+      ref: { kind: 'note', label: n },
+    })),
+};
+
 const STATUS: AssistantStatus = {
   name: 'Helper',
+  commands: [
+    { name: 'find', about: 'Find notes about something', args: '<words>' },
+    { name: 'tidy', about: 'Tidy the open note' },
+  ],
   wait: null,
   admin: true,
   tier: 'fast',
@@ -66,9 +90,10 @@ const STATUS: AssistantStatus = {
     {
       id: 'notes',
       label: 'Notes',
-      about: 'Read your notes and draft new ones',
+      about: 'Read your notes, draft or make changes',
       access: 'draft',
       drafts: true,
+      writes: true,
     },
     {
       id: 'contacts',
@@ -76,6 +101,7 @@ const STATUS: AssistantStatus = {
       about: 'Read the people you work with',
       access: 'read',
       drafts: true,
+      writes: false,
     },
   ],
   hand_off: 'next',
@@ -205,6 +231,48 @@ const CHAT: AssistantChat = {
   },
 };
 
+const REMINDERS = [
+  ['Remind Sam about the Q4 numbers', 'Friday'],
+  ['Book the venue for the offsite', 'Monday'],
+  ['Send the hiring loop feedback', 'Tuesday'],
+  ['Review the pricing ideas with Lee', 'Wednesday'],
+  ['Renew the design tool licence', 'Thursday'],
+];
+
+/** A chat with a change made at once (Undo) and five drafted cards in one stack. */
+const MANY: AssistantChat = {
+  id: 'c_2',
+  title: 'Reminders for the week',
+  at: NOW,
+  items: [
+    {
+      kind: 'user',
+      text: 'Rename the launch note, then draft a reminder for each open ask.',
+      at: NOW - 90_000,
+    },
+    {
+      kind: 'step',
+      id: 'w1',
+      tool: 'notes__note_rename',
+      title: 'Rename a note',
+      ok: true,
+      ms: 240,
+      write: { undo: true, status: 'done' },
+    },
+    { kind: 'text', text: 'I renamed the note to **Launch plan v2** and drafted five reminders.' },
+    ...REMINDERS.map(
+      ([title, due], i): DraftItem => ({
+        kind: 'draft',
+        id: `r${i}`,
+        tool: 'notes__reminder_write',
+        title: 'Add a reminder',
+        args: { title, due, list: 'Work' },
+        status: i === 0 ? 'saved' : 'open',
+      }),
+    ),
+  ] as ChatItem[],
+};
+
 /** An answer with a step, a hand off to Steady and the reply, streamed word by word. */
 const SCRIPT: AssistantEvent[] = [
   { event: 'step_start', data: { id: 's9', tool: 'notes__note_search', title: 'Search notes' } },
@@ -250,9 +318,11 @@ const SCRIPT: AssistantEvent[] = [
   },
 ];
 
-function mockAdapter(o: { status?: Partial<AssistantStatus> } = {}): AssistantAdapter {
+function mockAdapter(
+  o: { status?: Partial<AssistantStatus>; chat?: AssistantChat } = {},
+): AssistantAdapter {
   let status: AssistantStatus = { ...STATUS, ...o.status };
-  const chat = structuredClone(CHAT);
+  const chat = structuredClone(o.chat ?? CHAT);
   const done = (patch: Partial<AssistantStatus>) => {
     status = { ...status, ...patch };
     return Promise.resolve(status);
@@ -348,7 +418,7 @@ function mockAdapter(o: { status?: Partial<AssistantStatus> } = {}): AssistantAd
       return { ...ok, detail: 'ScrapeQL answered with 4 tools.' };
     },
     chats: async () => [
-      { id: 'c_1', title: CHAT.title, at: NOW },
+      { id: chat.id, title: chat.title, at: NOW },
       { id: 'c_0', title: 'Plan the offsite', at: NOW - 2 * 86_400_000 },
     ],
     chat: async () => chat,
@@ -360,6 +430,14 @@ function mockAdapter(o: { status?: Partial<AssistantStatus> } = {}): AssistantAd
       ) as DraftItem;
       d.status = action === 'save' ? 'saved' : 'dismissed';
       return { ...d };
+    },
+    undoWrite: async (_c, id) => {
+      await wait(400);
+      const st = chat.items.find(
+        (i): i is StepItem => i.kind === 'step' && i.id === id,
+      ) as StepItem;
+      st.write = { undo: true, status: 'undone' };
+      return { ...st };
     },
     async send(msg, on, signal) {
       on({ event: 'chat', data: { id: chat.id, title: chat.title } });
@@ -406,19 +484,33 @@ function Docked({
   adapter,
   openChat,
   openPanel = true,
+  chatId = 'c_1',
 }: {
   adapter: AssistantAdapter;
   openChat: boolean;
   openPanel?: boolean;
+  chatId?: string;
 }) {
-  const dock = useLumenAssistantDock(adapter, { name: 'Helper', context: { label: 'Home' } });
+  const dock = useLumenAssistantDock(adapter, {
+    name: 'Helper',
+    context: { label: 'Home' },
+    sources: [NOTES_SOURCE],
+  });
+  // The page's own things, listed under # while it is shown.
+  useAssistantSource({
+    id: 'page',
+    label: 'On this page',
+    items: () => [
+      { id: 'welcome', label: 'Welcome card', ref: { kind: 'card', label: 'Welcome card' } },
+    ],
+  });
   const [sections] = useState<SettingsSectionDef[]>(() =>
     assistantSettingsSections({ client: adapter, name: 'Helper' }),
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: open the story's chat once on mount
   useEffect(() => {
     dock.setOpen(openPanel);
-    if (openChat) void dock.chat.open('c_1');
+    if (openChat) void dock.chat.open(chatId);
   }, []);
   return (
     <LumenShell
@@ -432,7 +524,31 @@ function Docked({
       shared={sections}
       sharedLabel="All apps"
     >
-      <div className="p-6 text-muted-foreground text-sm">The app's page sits here.</div>
+      <div className="flex flex-col gap-3 p-6 text-sm">
+        <p className="text-muted-foreground">The app's page sits here.</p>
+        <p data-assistant-where="Launch plan ▸ Goals" className="max-w-prose">
+          Ship the beta to forty teams by March, then open sign-ups once support can answer within a
+          day.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="self-start"
+          onClick={() =>
+            composeAssistant({
+              refs: [
+                selectionRef({
+                  text: 'Ship the beta to forty teams by March',
+                  where: 'Launch plan ▸ Goals',
+                }),
+              ],
+              text: '',
+            })
+          }
+        >
+          Ask Helper about the goal
+        </Button>
+      </div>
     </LumenShell>
   );
 }
@@ -453,6 +569,14 @@ export const Chat: StoryObj = {
   render: () => {
     const [adapter] = useState(() => mockAdapter());
     return <Docked adapter={adapter} openChat />;
+  },
+};
+
+/** Many cards: drafts in a row stack into one list with Save all; a change made at once has Undo. */
+export const ManyCards: StoryObj = {
+  render: () => {
+    const [adapter] = useState(() => mockAdapter({ chat: MANY }));
+    return <Docked adapter={adapter} openChat chatId="c_2" />;
   },
 };
 
