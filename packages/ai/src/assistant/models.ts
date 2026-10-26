@@ -75,14 +75,19 @@ export const ALL_MODELS: ModelDef[] = [...CLAUDE_MODELS, ...OPENAI_MODELS];
 /** How Settings names each provider, how its keys start and where a person makes one. */
 export const PROVIDERS: Record<
   AssistantProvider,
-  { label: string; prefix: string; keysUrl: string }
+  { label: string; prefix: string; keysUrl: string; signin?: 'chatgpt' }
 > = {
   anthropic: {
     label: 'Anthropic',
     prefix: 'sk-ant-',
     keysUrl: 'https://console.anthropic.com/settings/keys',
   },
-  openai: { label: 'OpenAI', prefix: 'sk-', keysUrl: 'https://platform.openai.com/api-keys' },
+  openai: {
+    label: 'OpenAI',
+    prefix: 'sk-',
+    keysUrl: 'https://platform.openai.com/api-keys',
+    signin: 'chatgpt',
+  },
 };
 
 /** A tier as the app defines it. `out` caps each model call's output tokens. */
@@ -141,13 +146,14 @@ export class Meter {
     readonly model: ModelDef,
     readonly label: string,
   ) {}
-  add(usage: TokenUsage) {
+  /** `free`: the call ran on a plan sign-in, so it counts tokens and no dollars. */
+  add(usage: TokenUsage, free = false) {
     const p = priced(this.model, usage);
     this.calls += 1;
     this.in += p.in;
     this.read += p.read;
     this.out += p.out;
-    this.usd += p.usd;
+    if (!free) this.usd += p.usd;
   }
   part(): UsagePart {
     const { label, calls, read, out, usd } = this;

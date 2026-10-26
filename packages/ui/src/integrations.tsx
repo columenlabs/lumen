@@ -3,6 +3,7 @@
 // the Test line that runs it again. A saved key says nothing; each row shows whether it works.
 import { AlertTriangleIcon, CheckIcon, ChevronRightIcon, RefreshCwIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { LumenExpandRow } from './expand-list';
 import { IconButton } from './icon-button';
 import { cn } from './lib/utils';
 import { usePrefs } from './prefs';
@@ -48,48 +49,8 @@ export function ErrorLine({ error }: { error: unknown }) {
   );
 }
 
-/** One integration: a row that expands in place. */
-export function IntegrationRow({
-  name,
-  meta,
-  badge,
-  open,
-  onOpenChange,
-  children,
-}: {
-  name: string;
-  meta: string;
-  badge: ReactNode;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  children: ReactNode;
-}) {
-  return (
-    <Collapsible open={open} onOpenChange={onOpenChange} className="border-b last:border-b-0">
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 px-1 py-3 text-left hover:bg-muted/50"
-        >
-          <span className="min-w-0 flex-1">
-            <span className="block font-medium">{name}</span>
-            <span className="block truncate text-xs text-muted-foreground">{meta}</span>
-          </span>
-          {badge}
-          <ChevronRightIcon
-            className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform',
-              open && 'rotate-90',
-            )}
-          />
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="grid grid-cols-1 gap-5 px-1 pt-1 pb-5">
-        {children}
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
+/** One integration: a row that expands in place (LumenExpandRow, kept under its old name). */
+export const IntegrationRow = LumenExpandRow;
 
 /**
  * One linked connection (a bank, a broker) and its accounts (an app banks and

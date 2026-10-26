@@ -7,7 +7,9 @@
  *   scrapeql (the app's scope)   ScrapeQL's Access service token, tested before it is kept, sealed
  *   settings (a person's scope)  their tiers, start tiers, hand off, advice, tool access, web, payer,
  *                                and the monthly cap on their own keys
- *   key, key:<p> (a person's)    their own key of each provider, sealed
+ *   key, key:<p> (a person's)    their own key of each provider, sealed; OpenAI's may be a ChatGPT
+ *                                plan sign-in, refreshed before it runs out
+ *   signin:<p>   (a person's)    the app's sign-in registration for them, kept across sign-outs
  *   spend:YYYY-MM                what each tier cost them this month, by payer
  *
  * Who pays: the person's pick (the app's keys by default) while it has a key for the provider the
@@ -24,6 +26,7 @@ import type {
   KeyState,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
+import { type ChatgptTokens, refreshChatgpt, staleChatgpt } from './chatgpt';
 import { PROVIDERS, keyHint } from './models';
 import { APP_SCOPE, type Docs } from './store';
 
@@ -39,6 +42,8 @@ export interface KeyDoc {
   test: KeyTest | null;
   /** USD a month: a person's own Anthropic key before the cap moved to their settings. */
   cap_usd?: number;
+  /** A ChatGPT plan sign-in in place of an API key (`api_key` is then its access token). */
+  chatgpt?: ChatgptTokens;
 }
 
 /** Where a provider's key is kept: `key` for Anthropic, `key:<provider>` for the rest. */
@@ -87,9 +92,11 @@ export function monthIn(timeZone: string, at = new Date()) {
 
 export function keyState(d: KeyDoc | TokenDoc | null, secret: (d: KeyDoc | TokenDoc) => string) {
   if (!d) return { set: false } satisfies KeyState;
+  const plan = 'chatgpt' in d ? d.chatgpt : undefined;
   return {
     set: true,
-    hint: keyHint(secret(d)),
+    hint: plan ? (plan.email ?? 'ChatGPT plan') : keyHint(secret(d)),
+    ...(plan ? { via: 'chatgpt' as const } : {}),
     saved_at: d.saved_at,
     ...(d.test ? { test: d.test } : {}),
   } satisfies KeyState;
@@ -101,6 +108,8 @@ export interface Paying {
   apiKey: string;
   /** The payer's key of every provider it has one for (a hand-off may run on another). */
   keys: Partial<Record<AssistantProvider, string>>;
+  /** Providers whose key is a plan sign-in: their use costs the payer nothing. */
+  plans: Partial<Record<AssistantProvider, boolean>>;
   /** USD left this month under the payer's cap. */
   left: number;
   cap: number;
@@ -113,6 +122,7 @@ export class State {
       timeZone: string;
       defaultCap: number;
       appKey?: (provider: AssistantProvider) => Promise<string | null | undefined>;
+      fetch?: typeof fetch;
     },
   ) {}
 
@@ -151,6 +161,28 @@ export class State {
   }
   ownKey(id: string, provider: AssistantProvider) {
     return this.docs.read<KeyDoc>(id, keyDocName(provider));
+  }
+  /** The person's own key, a plan sign-in refreshed first when it is about to run out. */
+  async ownApiKey(id: string, provider: AssistantProvider) {
+    const d = await this.ownKey(id, provider);
+    if (!d) return null;
+    if (!d.chatgpt) return { key: d.api_key, plan: false };
+    if (!staleChatgpt(d.chatgpt)) return { key: d.chatgpt.access_token, plan: true };
+    try {
+      const t = await refreshChatgpt(d.chatgpt, this.o.fetch ?? fetch);
+      await this.docs.write<KeyDoc>(id, keyDocName(provider), {
+        ...d,
+        api_key: t.access_token,
+        chatgpt: t,
+      });
+      return { key: t.access_token, plan: true };
+    } catch (err) {
+      await this.docs.write<KeyDoc>(id, keyDocName(provider), {
+        ...d,
+        test: { at: Date.now(), ok: false, detail: (err as Error).message },
+      });
+      return null;
+    }
   }
   /** USD a month on the person's own keys. */
   async ownCap(id: string) {
@@ -196,22 +228,24 @@ export class State {
     });
   }
 
-  /** The payer's key of each provider, those set. */
+  /** The payer's key of each provider, those set, and which are plan sign-ins. */
   async keysOf(id: string, payer: AssistantPayer) {
     const ids = Object.keys(PROVIDERS) as AssistantProvider[];
     const found = await Promise.all(
       ids.map((p) =>
         payer === 'app'
-          ? this.appApiKey(p).then((k) => k?.key)
-          : this.ownKey(id, p).then((k) => k?.api_key),
+          ? this.appApiKey(p).then((k) => (k ? { key: k.key, plan: false } : null))
+          : this.ownApiKey(id, p),
       ),
     );
     const keys: Partial<Record<AssistantProvider, string>> = {};
+    const plans: Partial<Record<AssistantProvider, boolean>> = {};
     ids.forEach((p, i) => {
       const k = found[i];
-      if (k) keys[p] = k;
+      if (k) keys[p] = k.key;
+      if (k?.plan) plans[p] = true;
     });
-    return keys;
+    return { keys, plans };
   }
 
   /** Who pays the person's next answer on `provider`'s model, or why nobody can. */
@@ -229,14 +263,14 @@ export class State {
     ]);
     const spent = (p: AssistantPayer) =>
       spend.rows.filter((r) => r.payer === p).reduce((a, r) => a + r.usd, 0);
-    const app = appKeys[provider];
-    const own = ownKeys[provider];
+    const app = appKeys.keys[provider];
+    const own = ownKeys.keys[provider];
     const sources: Record<AssistantPayer, Paying | null> = {
       app: app
         ? {
             payer: 'app',
             apiKey: app,
-            keys: appKeys,
+            ...appKeys,
             cap: appCap,
             left: appCap - spent('app'),
           }
@@ -245,7 +279,7 @@ export class State {
         ? {
             payer: 'own',
             apiKey: own,
-            keys: ownKeys,
+            ...ownKeys,
             cap: ownCap,
             left: ownCap - spent('own'),
           }

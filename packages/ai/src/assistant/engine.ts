@@ -38,6 +38,14 @@ import type {
 import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
 import OpenAI from 'openai';
 import {
+  CHATGPT_REDIRECT,
+  type ChatgptRegistration,
+  SigninError,
+  finishChatgpt,
+  startChatgpt,
+  testChatgpt,
+} from './chatgpt';
+import {
   ALL_MODELS,
   DEFAULT_OUT,
   Meter,
@@ -47,7 +55,15 @@ import {
   type TierDef,
   effortParams,
 } from './models';
-import { DEFAULT_CAP, type Paying, State, keyState, waitText } from './state';
+import {
+  DEFAULT_CAP,
+  type KeyDoc,
+  type Paying,
+  State,
+  keyDocName,
+  keyState,
+  waitText,
+} from './state';
 import { type AssistantStore, Docs, type Sealer } from './store';
 import {
   type OpenTools,
@@ -189,6 +205,8 @@ type Emit = (event: string, data: unknown) => void;
 interface Clients {
   anthropic?: Anthropic;
   openai?: OpenAI;
+  /** The OpenAI key is a ChatGPT plan sign-in: the plan's request rules apply, and it costs nothing. */
+  openaiPlan?: boolean;
 }
 
 interface Session {
@@ -331,6 +349,7 @@ export class Assistant {
       timeZone: o.timeZone ?? 'UTC',
       defaultCap: o.defaultCap ?? DEFAULT_CAP,
       ...(o.appKey ? { appKey: o.appKey } : {}),
+      ...(o.fetch ? { fetch: o.fetch } : {}),
     });
   }
 
@@ -338,14 +357,18 @@ export class Assistant {
     const f = this.o.fetch;
     return new Anthropic({ apiKey, maxRetries: 1, ...(f ? { fetch: f } : {}) });
   }
-  private openai(apiKey: string) {
+  private openai(apiKey: string, plan = false) {
     const f = this.o.fetch;
-    return new OpenAI({ apiKey, maxRetries: 1, ...(f ? { fetch: f } : {}) });
+    // A plan sign-in's calls are not retried: a usage limit is final for now.
+    return new OpenAI({ apiKey, maxRetries: plan ? 0 : 1, ...(f ? { fetch: f } : {}) });
   }
-  private clients(keys: Partial<Record<AssistantProvider, string>>): Clients {
+  private clients(paying: Pick<Paying, 'keys' | 'plans'>): Clients {
+    const { keys, plans } = paying;
     return {
       ...(keys.anthropic ? { anthropic: this.anthropic(keys.anthropic) } : {}),
-      ...(keys.openai ? { openai: this.openai(keys.openai) } : {}),
+      ...(keys.openai
+        ? { openai: this.openai(keys.openai, !!plans.openai), openaiPlan: !!plans.openai }
+        : {}),
     };
   }
   /** The providers the app's models run on, in the order the models list them. */
@@ -416,6 +439,7 @@ export class Assistant {
             label: PROVIDERS[id].label,
             prefix: PROVIDERS[id].prefix,
             keys_url: PROVIDERS[id].keysUrl,
+            ...(PROVIDERS[id].signin ? { signin: PROVIDERS[id].signin } : {}),
             app: { ...app, ...(key?.fromEnv ? { from_env: true } : {}) },
             own: keyState(own, (d) => (d as { api_key: string }).api_key),
           };
@@ -669,7 +693,7 @@ export class Assistant {
     const p = await this.state.person(caller.id);
     const policy: HandOffPolicy = p.hand_off ?? 'next';
     const advisor = await this.advisorFor(caller, p.advice, main);
-    const clients = this.clients(paying.keys);
+    const clients = this.clients(paying);
     const live: Meter[] = [main.meter, ...(advisor ? [advisor.session.meter] : [])];
     const before = doc.usage ?? NO_USAGE;
     let context = before.context;
@@ -1163,7 +1187,7 @@ export class Assistant {
     if (provider === 'openai') {
       if (!o.clients.openai)
         throw new AssistantError(`No ${label} key is set for this answer.`, 'not_connected');
-      return this.loopOpenAI({ ...o, client: o.clients.openai });
+      return this.loopOpenAI({ ...o, client: o.clients.openai, plan: !!o.clients.openaiPlan });
     }
     if (!o.clients.anthropic)
       throw new AssistantError(`No ${label} key is set for this answer.`, 'not_connected');
@@ -1171,8 +1195,8 @@ export class Assistant {
   }
 
   /** The loop on OpenAI's Responses API: the same tools, Stop, caps and rounds as Claude's. */
-  private async loopOpenAI(o: LoopArgs & { client: OpenAI }): Promise<string> {
-    const { client, session, tools, sink, emit, signal } = o;
+  private async loopOpenAI(o: LoopArgs & { client: OpenAI; plan: boolean }): Promise<string> {
+    const { client, session, tools, sink, emit, signal, plan } = o;
     const instructions = o.system.map((b) => b.text).join('\n\n');
     const fnTools: OpenAI.Responses.FunctionTool[] = tools.map((t) => ({
       type: 'function',
@@ -1197,20 +1221,38 @@ export class Assistant {
       | OpenAI.Responses.ToolChoiceOptions
       | OpenAI.Responses.ToolChoiceFunction
       | undefined = o.first?.type === 'tool' ? { type: 'function', name: o.first.name } : undefined;
+    // A plan sign-in takes function tools only inside a namespace and no output cap.
+    const sent = (only?: string) => {
+      const fns = only ? fnTools.filter((t) => t.name === only) : fnTools;
+      if (!plan) return { tools: fns, max_output_tokens: session.tier.out ?? DEFAULT_OUT };
+      return {
+        tools: [
+          {
+            type: 'namespace',
+            name: 'app',
+            description: `${this.name}'s tools`,
+            tools: fns.map(({ strict: _, ...t }) => t),
+          } as OpenAI.Responses.NamespaceTool,
+        ],
+      };
+    };
     for (let round = 0; round < MAX_ROUNDS; round++) {
       signal?.throwIfAborted();
       const effort = session.effort === 'default' ? undefined : session.effort;
+      // On a plan a forced call is the one tool offered, with any call required.
+      const only = plan && typeof force === 'object' ? force.name : undefined;
+      const choice = only ? 'required' : force;
       const stream = client.responses.stream(
         {
           model: session.model.id,
           instructions,
           input,
-          tools: fnTools,
+          ...sent(only),
           store: false,
+          stream: true,
           include: ['reasoning.encrypted_content'],
-          max_output_tokens: session.tier.out ?? DEFAULT_OUT,
           ...(effort ? { reasoning: { effort } } : {}),
-          ...(force ? { tool_choice: force } : {}),
+          ...(choice ? { tool_choice: choice } : {}),
         } as OpenAI.Responses.ResponseCreateParamsStreaming,
         signal ? { signal } : {},
       );
@@ -1223,16 +1265,29 @@ export class Assistant {
         if (signal?.aborted && partial) sink.push({ kind: 'text', text: partial });
         throw err;
       });
+      if (res.status === 'failed') {
+        if (partial) sink.push({ kind: 'text', text: partial });
+        const code = res.error?.code ?? '';
+        throw new AssistantError(
+          /usage_limit/.test(code)
+            ? 'Your ChatGPT plan reached its usage limit for now: try again later, or pick another model.'
+            : 'OpenAI could not finish the answer.',
+          'upstream',
+        );
+      }
       const u = res.usage;
       if (u) {
         const read = u.input_tokens_details?.cached_tokens ?? 0;
         const written = u.input_tokens_details?.cache_write_tokens ?? 0;
-        session.meter.add({
-          input_tokens: Math.max(0, u.input_tokens - read - written),
-          output_tokens: u.output_tokens,
-          cache_read_input_tokens: read,
-          cache_creation_input_tokens: written,
-        });
+        session.meter.add(
+          {
+            input_tokens: Math.max(0, u.input_tokens - read - written),
+            output_tokens: u.output_tokens,
+            cache_read_input_tokens: read,
+            cache_creation_input_tokens: written,
+          },
+          plan,
+        );
         o.context?.(u.input_tokens + u.output_tokens);
       }
       o.called();
@@ -1486,6 +1541,54 @@ export class Assistant {
   }
 
   // ---------------------------------------------------------------- keys
+
+  /** Starts a person's ChatGPT plan sign-in: the address to open in a new tab. */
+  async startSignin(caller: Caller, provider: AssistantProvider) {
+    if (PROVIDERS[provider].signin !== 'chatgpt')
+      throw new AssistantError(`${PROVIDERS[provider].label} has no sign-in.`, 'no_signin', 404);
+    const name = `signin:${provider}`;
+    const { url, reg } = await startChatgpt(
+      await this.state.docs.read<ChatgptRegistration>(caller.id, name),
+      this.name,
+    );
+    await this.state.docs.write(caller.id, name, reg);
+    return { url, redirect: CHATGPT_REDIRECT };
+  }
+
+  /** Finishes it from the address it ended on; the plan then stands in for the person's own key. */
+  async finishSignin(caller: Caller, provider: AssistantProvider, pasted: string) {
+    const name = `signin:${provider}`;
+    try {
+      const { tokens, reg } = await finishChatgpt(
+        await this.state.docs.read<ChatgptRegistration>(caller.id, name),
+        pasted,
+        this.o.fetch ?? fetch,
+      );
+      await this.state.docs.write(caller.id, name, reg);
+      const test = await testChatgpt(tokens, this.o.fetch ?? fetch);
+      await this.state.docs.write<KeyDoc>(caller.id, keyDocName(provider), {
+        api_key: tokens.access_token,
+        saved_at: Date.now(),
+        test,
+        chatgpt: tokens,
+      });
+    } catch (err) {
+      if (err instanceof SigninError) throw new AssistantError(err.message, 'signin_failed');
+      throw err;
+    }
+  }
+
+  /** Tests a person's own key, refreshing a plan sign-in first. */
+  async testOwn(caller: Caller, provider: AssistantProvider) {
+    const d = await this.state.ownKey(caller.id, provider);
+    if (!d) return null;
+    if (!d.chatgpt) return this.testKey(provider, d.api_key);
+    const fresh = await this.state.ownApiKey(caller.id, provider);
+    const now = await this.state.ownKey(caller.id, provider);
+    if (!fresh || !now?.chatgpt)
+      return now?.test ?? { ok: false, detail: 'Sign in again.', at: Date.now() };
+    return testChatgpt(now.chatgpt, this.o.fetch ?? fetch);
+  }
 
   /** One free call (reading a model) that says whether the provider takes the key. */
   async testKey(

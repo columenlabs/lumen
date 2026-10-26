@@ -108,6 +108,7 @@ const STATUS: AssistantStatus = {
       label: 'OpenAI',
       prefix: 'sk-',
       keys_url: 'https://platform.openai.com/api-keys',
+      signin: 'chatgpt',
       app: { set: false },
       own: { set: false },
     },
@@ -310,6 +311,28 @@ function mockAdapter(o: { status?: Partial<AssistantStatus> } = {}): AssistantAd
     testOwnKey: async () => {
       await wait(500);
       return ok;
+    },
+    startSignin: async () => ({
+      url: 'https://auth.openai.com/api/accounts/authorize?client_id=dynamic_agent_client',
+      redirect: 'http://127.0.0.1:1455/auth/callback',
+    }),
+    finishSignin: async (id) => {
+      await wait(600);
+      return done({
+        providers: status.providers.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                own: {
+                  set: true,
+                  via: 'chatgpt' as const,
+                  hint: 'ada@example.com',
+                  test: { ...ok, detail: 'ChatGPT plan sign-in works.' },
+                },
+              }
+            : p,
+        ),
+      });
     },
     scrapeql: async (t) =>
       done({

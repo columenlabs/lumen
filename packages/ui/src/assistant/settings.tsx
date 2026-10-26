@@ -15,6 +15,7 @@ import type {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  CheckIcon,
   ExternalLinkIcon,
   GlobeIcon,
   KeyRoundIcon,
@@ -25,6 +26,7 @@ import {
   WrenchIcon,
 } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
+import { LumenExpandList, LumenExpandRow } from '../expand-list';
 import { type FormIssue, SaveButton } from '../form-issues';
 import { IconButton } from '../icon-button';
 import { InfoLabel } from '../info-tip';
@@ -202,10 +204,13 @@ function KeyBlock({
   onSave,
   onRemove,
   onTest,
+  keysUrl,
 }: {
   label: string;
   prefix: string;
   provider: string;
+  /** Where a key is made: a link that opens in a new tab beside the empty field. */
+  keysUrl?: string;
   state: KeyState & { from_env?: boolean };
   canEdit: boolean;
   onSave: (key: string) => Promise<boolean>;
@@ -256,6 +261,14 @@ function KeyBlock({
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />
+          {keysUrl && (
+            <IconButton
+              icon={ExternalLinkIcon}
+              label={`Get an ${provider} key`}
+              href={keysUrl}
+              variant="outline"
+            />
+          )}
           {replacing && (
             <IconButton
               icon={Trash2Icon}
@@ -326,45 +339,211 @@ function CapInput({
   );
 }
 
-/** One provider: its name, where to make a key (a new tab), the app's key and the person's. */
+/** A person's ChatGPT plan sign-in: opens in a new tab, finished by pasting back where it ended. */
+function ChatgptSignin({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
+  const { apply, refresh } = useApply(client);
+  const id = useId();
+  const [started, setStarted] = useState<string | null>(null);
+  const [pasted, setPasted] = useState('');
+  const [busy, setBusy] = useState(false);
+  const signedIn = p.own.via === 'chatgpt';
+  const start = async () => {
+    // Open the tab inside the click, or the browser blocks it; point it once the address is known.
+    const tab = window.open('about:blank', '_blank');
+    if (tab) tab.opener = null;
+    try {
+      const { url, redirect } = await client.startSignin(p.id);
+      if (tab) tab.location.href = url;
+      else window.open(url, '_blank', 'noopener');
+      setStarted(redirect);
+    } catch (e) {
+      tab?.close();
+      lumenToast.error(errorText(e));
+    }
+  };
+  const finish = async () => {
+    setBusy(true);
+    if (
+      await apply(`signin:${p.id}`, () => client.finishSignin(p.id, pasted.trim()), 'Signed in')
+    ) {
+      setPasted('');
+      setStarted(null);
+    }
+    setBusy(false);
+  };
+  const issues: FormIssue[] = [];
+  if (pasted.trim() && started && !pasted.trim().startsWith(started.split('/auth')[0] ?? ''))
+    issues.push({ where: 'Address', message: `It starts with ${started}`, target: id });
+  if (signedIn)
+    return (
+      <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
+        <div className="flex items-center gap-2">
+          <span className="flex-1 font-medium text-sm">Your ChatGPT plan</span>
+          <span className="text-muted-foreground text-xs">{p.own.hint}</span>
+          {p.own.test && <TestBadge test={p.own.test} />}
+        </div>
+        <KeyTestLine test={testOf(p.own)} run={() => client.testOwnKey(p.id).finally(refresh)} />
+        <div className="flex justify-end gap-2">
+          <IconButton
+            icon={Trash2Icon}
+            label="Sign out of ChatGPT"
+            variant="outline"
+            onClick={() => void apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Signed out')}
+          />
+          <SaveButton issues={[]} icon={KeyRoundIcon} label="Sign in again" onSave={start} />
+        </div>
+        {started && (
+          <SigninPaste
+            id={id}
+            redirect={started}
+            pasted={pasted}
+            setPasted={setPasted}
+            issues={issues}
+            busy={busy}
+            finish={finish}
+          />
+        )}
+      </div>
+    );
+  return (
+    <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
+      <div className="flex items-center gap-2">
+        <InfoLabel
+          className="flex-1 font-medium text-sm"
+          info="Run OpenAI models on your own ChatGPT plan instead of an API key."
+        >
+          Your ChatGPT plan
+        </InfoLabel>
+        <Badge variant="outline">Not signed in</Badge>
+      </div>
+      <div className="flex justify-end">
+        <SaveButton
+          issues={[]}
+          icon={ExternalLinkIcon}
+          label={started ? 'Open the sign-in again' : 'Sign in with ChatGPT'}
+          onSave={start}
+        />
+      </div>
+      {started && (
+        <SigninPaste
+          id={id}
+          redirect={started}
+          pasted={pasted}
+          setPasted={setPasted}
+          issues={issues}
+          busy={busy}
+          finish={finish}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Where the sign-in tab ends, and the box its address is pasted into. */
+function SigninPaste({
+  id,
+  redirect,
+  pasted,
+  setPasted,
+  issues,
+  busy,
+  finish,
+}: {
+  id: string;
+  redirect: string;
+  pasted: string;
+  setPasted: (s: string) => void;
+  issues: FormIssue[];
+  busy: boolean;
+  finish: () => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>
+        <InfoLabel
+          info={`The sign-in ends on ${redirect}, a page that does not load. That is expected: copy the whole address from that tab's address bar.`}
+        >
+          Paste the address the sign-in ended on
+        </InfoLabel>
+      </Label>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          autoComplete="off"
+          placeholder={`${redirect}?code=…`}
+          className="font-code text-xs"
+          value={pasted}
+          onChange={(e) => setPasted(e.target.value)}
+        />
+        <SaveButton
+          issues={issues}
+          busy={busy}
+          disabled={!pasted.trim()}
+          label="Finish"
+          onSave={finish}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** One provider, collapsed to a row: where to make a key (a new tab), the app's key and the person's. */
 function ProviderKeys({
   client,
   p,
   admin,
 }: { client: AssistantAdapter; p: AssistantProviderRow; admin: boolean }) {
   const { apply, refresh } = useApply(client);
+  const appOn = p.app.set || !!p.app.from_env;
+  const plan = p.own.via === 'chatgpt';
+  const meta = [
+    appOn ? 'App key set' : 'No app key',
+    plan ? 'your ChatGPT plan' : p.own.set ? 'your own key' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const failed = [p.app, p.own].some((k) => k.set && k.test && !k.test.ok);
+  const badge = failed ? (
+    <TestBadge test={{ ok: false }} />
+  ) : appOn || p.own.set ? (
+    <Badge variant="outline" className="text-gain">
+      <CheckIcon />
+      Ready
+    </Badge>
+  ) : (
+    <Badge variant="outline">Not set</Badge>
+  );
+  const ownKey = (
+    <KeyBlock
+      label={p.signin && !p.own.set ? 'Or your own API key' : 'Your own key'}
+      prefix={p.prefix}
+      provider={p.label}
+      state={p.own}
+      canEdit
+      keysUrl={p.keys_url}
+      onSave={(k) => apply(`own:${p.id}`, () => client.ownKey(p.id, k), 'Key saved')}
+      onRemove={() => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed')}
+      onTest={() => client.testOwnKey(p.id).finally(refresh)}
+    />
+  );
   return (
-    <div className="flex flex-col border-b pb-2 last:border-b-0">
-      <div className="flex items-center gap-2 pt-3">
-        <span className="flex-1 font-semibold text-sm">{p.label}</span>
-        <IconButton
-          icon={ExternalLinkIcon}
-          label={`Get an ${p.label} key`}
-          href={p.keys_url}
-          variant="ghost"
+    <LumenExpandRow id={p.id} name={p.label} meta={meta} badge={badge}>
+      <div className="flex flex-col">
+        <KeyBlock
+          label="App key"
+          prefix={p.prefix}
+          provider={p.label}
+          state={p.app}
+          canEdit={admin}
+          keysUrl={p.keys_url}
+          onSave={(k) => apply(`app:${p.id}`, () => client.appKey(p.id, k), 'Key saved')}
+          onRemove={() => apply(`app:${p.id}`, () => client.appKey(p.id, null), 'Key removed')}
+          onTest={() => client.testAppKey(p.id).finally(refresh)}
         />
+        {p.signin === 'chatgpt' && (!p.own.set || plan) && <ChatgptSignin client={client} p={p} />}
+        {!plan && ownKey}
       </div>
-      <KeyBlock
-        label="App key"
-        prefix={p.prefix}
-        provider={p.label}
-        state={p.app}
-        canEdit={admin}
-        onSave={(k) => apply(`app:${p.id}`, () => client.appKey(p.id, k), 'Key saved')}
-        onRemove={() => apply(`app:${p.id}`, () => client.appKey(p.id, null), 'Key removed')}
-        onTest={() => client.testAppKey(p.id).finally(refresh)}
-      />
-      <KeyBlock
-        label="Your own key"
-        prefix={p.prefix}
-        provider={p.label}
-        state={p.own}
-        canEdit
-        onSave={(k) => apply(`own:${p.id}`, () => client.ownKey(p.id, k), 'Key saved')}
-        onRemove={() => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed')}
-        onTest={() => client.testOwnKey(p.id).finally(refresh)}
-      />
-    </div>
+    </LumenExpandRow>
   );
 }
 
@@ -376,9 +555,11 @@ function Providers({ client }: { client: AssistantAdapter }) {
         const ownSet = s.providers.some((p) => p.own.set);
         return (
           <div className="flex flex-col">
-            {s.providers.map((p) => (
-              <ProviderKeys key={p.id} client={client} p={p} admin={s.admin} />
-            ))}
+            <LumenExpandList>
+              {s.providers.map((p) => (
+                <ProviderKeys key={p.id} client={client} p={p} admin={s.admin} />
+              ))}
+            </LumenExpandList>
             {s.admin && (
               <Row label="Each person may spend" info="On the app's keys, every provider together.">
                 <CapInput

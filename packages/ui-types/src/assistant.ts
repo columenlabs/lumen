@@ -197,6 +197,8 @@ export interface AssistantProviderRow {
   prefix: string;
   /** Where a person makes a key. */
   keys_url: string;
+  /** A person may sign in with their plan in place of their own key (`chatgpt`). */
+  signin?: 'chatgpt';
   /** The app's key: its state for admins; for others only whether one is set. */
   app: KeyState & { from_env?: boolean };
   own: KeyState;
@@ -205,8 +207,10 @@ export interface AssistantProviderRow {
 /** A sealed key as Settings shows it: never the key, only its last characters and last check. */
 export interface KeyState {
   set: boolean;
-  /** `sk-ant-…7Qx2` */
+  /** `sk-ant-…7Qx2`, or the signed-in account's email */
   hint?: string;
+  /** Set when it is a plan sign-in, not a key. */
+  via?: 'chatgpt';
   saved_at?: number;
   test?: { at: number; ok: boolean; detail: string };
 }

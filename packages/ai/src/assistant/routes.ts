@@ -12,6 +12,8 @@
  *   DELETE /key, POST /key/test     admin, `?provider=` the same
  *   PUT    /my-key {api_key}, DELETE /my-key, POST /my-key/test   the person's own, `?provider=`
  *   PUT    /my-key/cap {cap_usd}    what the person may spend a month on their own keys
+ *   POST   /my-signin               starts a ChatGPT plan sign-in (`?provider=openai`): {url, redirect}
+ *   POST   /my-signin/finish {url}  finishes it from the 127.0.0.1 address the sign-in ended on
  *   PUT    /web/scrapeql {client_id, client_secret}, DELETE /web/scrapeql, POST /web/test   admin
  *   POST   /chat                    one answer as server-sent events; closing the request stops it
  *   GET    /chats, GET|DELETE /chats/:id
@@ -161,7 +163,7 @@ export function assistantRoutes(
     const status = async () => json(await a.status(caller));
     const asked = url.searchParams.get('provider') ?? 'anthropic';
     const provider = a.providers.find((p) => p === asked) as AssistantProvider | undefined;
-    const keyRoute = /^(PUT|DELETE|POST) \/(my-)?key(\/test)?$/.test(route);
+    const keyRoute = /^(PUT|DELETE|POST) \/(my-)?(key|signin)(\/test|\/finish)?$/.test(route);
     if (keyRoute && !provider) return fail(`This app runs no ${asked} models.`, 404);
     const prov = provider ?? 'anthropic';
     const docName = keyDocName(prov);
@@ -224,19 +226,31 @@ export function assistantRoutes(
           return status();
         }
 
-        case 'POST /key/test':
+        case 'POST /my-signin':
+          return json(await a.startSignin(caller, prov));
+
+        case 'POST /my-signin/finish': {
+          const pasted = str((await body(req)).url, 4000);
+          if (!pasted) return fail('Paste the address the sign-in ended on.');
+          await a.finishSignin(caller, prov, pasted);
+          return status();
+        }
+
         case 'POST /my-key/test': {
-          const mine = route === 'POST /my-key/test';
-          if (!mine) {
-            const no = admin();
-            if (no) return no;
-          }
-          const scope = mine ? caller.id : APP_SCOPE;
-          const d = await docs.read<KeyDoc>(scope, docName);
-          const key = d?.api_key ?? (mine ? null : (await a.state.appApiKey(prov))?.key);
+          const test = await a.testOwn(caller, prov);
+          if (!test) return fail('No key is set.', 404);
+          await docs.update<KeyDoc>(caller.id, docName, (d) => (d ? { ...d, test } : null));
+          return json(test);
+        }
+
+        case 'POST /key/test': {
+          const no = admin();
+          if (no) return no;
+          const d = await docs.read<KeyDoc>(APP_SCOPE, docName);
+          const key = d?.api_key ?? (await a.state.appApiKey(prov))?.key;
           if (!key) return fail('No key is set.', 404);
           const test = await a.testKey(prov, key);
-          if (d) await docs.write<KeyDoc>(scope, docName, { ...d, test });
+          if (d) await docs.write<KeyDoc>(APP_SCOPE, docName, { ...d, test });
           return json(test);
         }
 
