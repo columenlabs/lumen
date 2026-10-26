@@ -1498,7 +1498,7 @@ function LumenTableRows<T extends RowData>({
     <TableRow
       key={`part:${keyOf(p)}`}
       className={cn(
-        'bg-muted/30 text-muted-foreground hover:bg-muted/40',
+        'bg-muted/30 text-muted-foreground hover:bg-muted',
         onDetails && 'cursor-pointer',
       )}
       onClick={onDetails ? () => onDetails(p) : undefined}
@@ -1603,7 +1603,18 @@ function LumenTableRows<T extends RowData>({
     const ms = members.map((m) => m.original);
     return (
       <Fragment key={k}>
-        <TableRow data-row={k}>
+        {/* The whole folded line opens and closes its rows. */}
+        <TableRow
+          data-row={k}
+          className="cursor-pointer hover:bg-muted has-aria-expanded:hover:bg-muted"
+          onClick={() =>
+            setOpenParts((o) => {
+              const n = new Set(o);
+              n.has(k) ? n.delete(k) : n.add(k);
+              return n;
+            })
+          }
+        >
           {selection && <TableCell />}
           {shown.map((f, i) => (
             <TableCell key={f.key} {...col(f, groupBy && i === 0 && 'pl-8')}>
