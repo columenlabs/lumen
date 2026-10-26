@@ -64,6 +64,13 @@
         "standardwebhooks": "1.1.1",
       },
     },
+    "packages/people": {
+      "name": "@columenlabs/lumen-people",
+      "version": "0.0.0",
+      "dependencies": {
+        "@columenlabs/lumen-ui-types": "workspace:*",
+      },
+    },
     "packages/ship": {
       "name": "@columenlabs/lumen-ship",
       "version": "0.0.0",
@@ -271,6 +278,8 @@
     "@columenlabs/lumen-auth": ["@columenlabs/lumen-auth@workspace:packages/auth"],
 
     "@columenlabs/lumen-ops": ["@columenlabs/lumen-ops@workspace:packages/ops"],
+
+    "@columenlabs/lumen-people": ["@columenlabs/lumen-people@workspace:packages/people"],
 
     "@columenlabs/lumen-ship": ["@columenlabs/lumen-ship@workspace:packages/ship"],
 
