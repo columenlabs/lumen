@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./ui/*": "./src/ui/*.tsx",
     "./people": "./src/people/index.ts",
+    "./assistant": "./src/assistant/index.ts",
     "./theme.css": "./src/theme.css"
   },
   "scripts": {

@@ -1,0 +1,752 @@
+// The assistant's Settings sections, for any app on `@columenlabs/lumen-ai/assistant`: the assistant
+// itself (tier, hand off, advice), then Model providers (the app's Claude key, a person's own key,
+// who pays), Models (each tier's model and effort, each task's starting tier), Tools (each group
+// Off, Read or Read + draft), Web (fetch, ScrapeQL's token) and Spend (this month). Keys and tokens
+// are tested before they are kept and never shown again, only their last characters.
+import type {
+  AssistantAccess,
+  AssistantEffort,
+  AssistantPayer,
+  AssistantSettingsPatch,
+  AssistantStatus,
+  HandOffPolicy,
+  KeyState,
+} from '@columenlabs/lumen-ui-types/assistant';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  GlobeIcon,
+  KeyRoundIcon,
+  LayersIcon,
+  ReceiptIcon,
+  SparklesIcon,
+  Trash2Icon,
+  WrenchIcon,
+} from 'lucide-react';
+import { type ReactNode, useId, useState } from 'react';
+import { type FormIssue, SaveButton } from '../form-issues';
+import { IconButton } from '../icon-button';
+import { InfoLabel } from '../info-tip';
+import { KeyTestLine, TestBadge, errorText } from '../integrations';
+import { LumenSelector } from '../lumen-selector';
+import { lumenToast } from '../lumen-toast';
+import type { SettingsSectionDef } from '../settings';
+import { Badge } from '../ui/badge';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
+import type { AssistantAdapter } from './client';
+import { assistantStatusKey, usd, useAssistantStatus } from './lumen-assistant';
+
+const EFFORTS: { value: AssistantEffort; label: string }[] = [
+  { value: 'default', label: 'Model default' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'max', label: 'Max' },
+];
+
+const HAND_OFF: { value: HandOffPolicy; label: string }[] = [
+  { value: 'next', label: 'Next tier up' },
+  { value: 'any', label: 'Any higher tier' },
+  { value: 'ask', label: 'Only when I ask' },
+];
+
+const ACCESS: { value: AssistantAccess; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'read', label: 'Read' },
+  { value: 'draft', label: 'Read + draft' },
+];
+
+/** Runs a change and keeps the status it returns, or says why it failed. */
+function useApply(client: AssistantAdapter) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+  const apply = async (what: string, run: () => Promise<AssistantStatus>, done?: string) => {
+    setBusy(what);
+    try {
+      qc.setQueryData(assistantStatusKey(client), await run());
+      if (done) lumenToast.success(done);
+      return true;
+    } catch (e) {
+      lumenToast.error(errorText(e));
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  };
+  const refresh = () => qc.invalidateQueries({ queryKey: assistantStatusKey(client) });
+  return { apply, busy, refresh };
+}
+
+/** The section's body once the status loads. */
+function WithStatus({
+  client,
+  children,
+}: {
+  client: AssistantAdapter;
+  children: (s: AssistantStatus) => ReactNode;
+}) {
+  const q = useAssistantStatus(client);
+  if (!q.data)
+    return (
+      <p className="text-muted-foreground text-sm">{q.isError ? errorText(q.error) : 'Loading…'}</p>
+    );
+  return <>{children(q.data)}</>;
+}
+
+/** One setting: its label (with an (i) when `info` says more) and its control. */
+function Row({ label, info, children }: { label: string; info?: ReactNode; children: ReactNode }) {
+  return (
+    <div
+      data-slot="setting-row"
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-3 last:border-b-0"
+    >
+      <Label className="min-w-0 flex-1">
+        <InfoLabel info={info}>{label}</InfoLabel>
+      </Label>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+const testOf = (k: KeyState) =>
+  k.test
+    ? {
+        at: new Date(k.test.at).toISOString(),
+        ok: k.test.ok,
+        detail: k.test.detail,
+        error: k.test.ok ? null : k.test.detail,
+      }
+    : null;
+
+// ---------------------------------------------------------------- the assistant
+
+function General({ client }: { client: AssistantAdapter }) {
+  const { apply } = useApply(client);
+  const set = (patch: AssistantSettingsPatch) => apply('settings', () => client.settings(patch));
+  return (
+    <WithStatus client={client}>
+      {(s) => {
+        const above = s.tiers.slice(s.tiers.findIndex((t) => t.id === s.tier) + 1);
+        return (
+          <div className="flex flex-col">
+            <Row label="Tier">
+              <LumenSelector
+                label="Tier"
+                size="sm"
+                className="w-44"
+                value={s.tier}
+                options={s.tiers.map((t) => ({
+                  value: t.id,
+                  label: t.label,
+                  detail: t.model_label,
+                }))}
+                onChange={(tier) => void set({ tier })}
+              />
+            </Row>
+            {s.tiers.length > 1 && (
+              <Row
+                label="Hand off the work"
+                info="On its own, a higher tier takes one task in its own section of the chat and sends back a memo. It costs more."
+              >
+                <LumenSelector
+                  label="Hand off the work"
+                  size="sm"
+                  className="w-44"
+                  value={s.hand_off}
+                  options={HAND_OFF}
+                  onChange={(hand_off) => void set({ hand_off })}
+                />
+              </Row>
+            )}
+            {s.tiers.length > 1 && (
+              <Row
+                label="Ask for advice"
+                info="A bigger tier reads the chat and sends a plan before hard questions. It runs no tools, at most twice an answer."
+              >
+                <LumenSelector
+                  label="Ask for advice"
+                  size="sm"
+                  className="w-44"
+                  value={s.advice}
+                  options={[
+                    { value: 'off', label: 'Off' },
+                    ...(above.length ? above : s.tiers).map((t) => ({
+                      value: t.id,
+                      label: t.label,
+                    })),
+                  ]}
+                  onChange={(advice) => void set({ advice })}
+                />
+              </Row>
+            )}
+          </div>
+        );
+      }}
+    </WithStatus>
+  );
+}
+
+// ---------------------------------------------------------------- model providers
+
+/** Paste a key, Save tests it first; then its hint, Test and Remove. */
+function KeyBlock({
+  label,
+  state,
+  canEdit,
+  onSave,
+  onRemove,
+  onTest,
+  extra,
+}: {
+  label: string;
+  state: KeyState & { from_env?: boolean };
+  canEdit: boolean;
+  onSave: (key: string) => Promise<boolean>;
+  onRemove: () => Promise<boolean>;
+  onTest: () => Promise<unknown>;
+  extra?: ReactNode;
+}) {
+  const id = useId();
+  const [key, setKey] = useState('');
+  const [replacing, setReplacing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const editing = canEdit && (!state.set || replacing);
+  const issues: FormIssue[] = [];
+  if (editing && key.trim() && !key.trim().startsWith('sk-ant-'))
+    issues.push({ where: label, message: 'A Claude key starts with sk-ant-', target: id });
+  const save = async () => {
+    setBusy(true);
+    if (await onSave(key.trim())) {
+      setKey('');
+      setReplacing(false);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
+      <div className="flex items-center gap-2">
+        <span className="flex-1 font-medium text-sm">{label}</span>
+        {state.set ? (
+          state.hint ? (
+            <span className="font-code text-muted-foreground text-xs">{state.hint}</span>
+          ) : (
+            <Badge variant="secondary">Set</Badge>
+          )
+        ) : state.from_env ? (
+          <Badge variant="secondary">From the server</Badge>
+        ) : (
+          <Badge variant="outline">Not set</Badge>
+        )}
+        {state.set && state.test && <TestBadge test={state.test} />}
+      </div>
+      {editing ? (
+        <div className="flex gap-2">
+          <Input
+            id={id}
+            type="password"
+            autoComplete="off"
+            placeholder="sk-ant-…"
+            className="font-code text-xs"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+          />
+          {replacing && (
+            <IconButton
+              icon={Trash2Icon}
+              label="Keep the saved key"
+              onClick={() => setReplacing(false)}
+            />
+          )}
+          <SaveButton
+            issues={issues}
+            busy={busy}
+            disabled={!key.trim()}
+            label="Test and save"
+            onSave={save}
+          />
+        </div>
+      ) : (
+        state.set &&
+        canEdit && (
+          <>
+            <KeyTestLine test={testOf(state)} run={onTest} />
+            <div className="flex justify-end gap-2">
+              <IconButton
+                icon={Trash2Icon}
+                label={`Remove ${label.toLowerCase()}`}
+                variant="outline"
+                onClick={() => void onRemove()}
+              />
+              <SaveButton
+                issues={[]}
+                icon={KeyRoundIcon}
+                label="Replace"
+                onSave={() => setReplacing(true)}
+              />
+            </div>
+          </>
+        )
+      )}
+      {extra}
+    </div>
+  );
+}
+
+/** A dollar cap a month, saved on Enter or leaving the field. */
+function CapInput({
+  label,
+  value,
+  onSave,
+}: { label: string; value: number; onSave: (n: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const commit = () => {
+    const n = Number(text);
+    if (Number.isFinite(n) && n >= 0 && n !== value) onSave(Math.round(n * 100) / 100);
+    else setText(String(value));
+  };
+  return (
+    <div className="flex items-center gap-1 text-sm">
+      <span className="text-muted-foreground">$</span>
+      <Input
+        aria-label={label}
+        inputMode="decimal"
+        className="h-8 w-20 text-right tabular-nums"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && commit()}
+      />
+      <span className="text-muted-foreground">/ month</span>
+    </div>
+  );
+}
+
+function Providers({ client }: { client: AssistantAdapter }) {
+  const { apply, refresh } = useApply(client);
+  return (
+    <WithStatus client={client}>
+      {(s) => (
+        <div className="flex flex-col">
+          <KeyBlock
+            label="App key"
+            state={s.keys.app}
+            canEdit={s.admin}
+            onSave={(k) => apply('app', () => client.appKey(k), 'Key saved')}
+            onRemove={() => apply('app', () => client.appKey(null), 'Key removed')}
+            onTest={() => client.testAppKey().finally(refresh)}
+            extra={
+              s.admin && (
+                <Row label="Each person may spend">
+                  <CapInput
+                    label="Cap per person"
+                    value={s.keys.app.cap}
+                    onSave={(n) => void apply('cap', () => client.appCap(n))}
+                  />
+                </Row>
+              )
+            }
+          />
+          <KeyBlock
+            label="Your own key"
+            state={s.keys.own}
+            canEdit
+            onSave={(k) => apply('own', () => client.ownKey(k), 'Key saved')}
+            onRemove={() => apply('own', () => client.ownKey(null), 'Key removed')}
+            onTest={() => client.testOwnKey().finally(refresh)}
+            extra={
+              s.keys.own.set && (
+                <Row label="Your key may spend">
+                  <CapInput
+                    label="Your monthly cap"
+                    value={s.keys.own.cap}
+                    onSave={(n) => void apply('own', () => client.ownCap(n))}
+                  />
+                </Row>
+              )
+            }
+          />
+          <Row
+            label="Pay with first"
+            info="When it reaches its cap this month, the other key pays."
+          >
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              value={s.pay}
+              aria-label="Pay with"
+              onValueChange={(v) =>
+                v && void apply('pay', () => client.settings({ pay: v as AssistantPayer }))
+              }
+            >
+              <ToggleGroupItem value="app">App key</ToggleGroupItem>
+              <ToggleGroupItem value="own" disabled={!s.keys.own.set}>
+                Your key
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </Row>
+        </div>
+      )}
+    </WithStatus>
+  );
+}
+
+// ---------------------------------------------------------------- models
+
+function Models({ client }: { client: AssistantAdapter }) {
+  const { apply } = useApply(client);
+  const set = (patch: AssistantSettingsPatch) =>
+    void apply('settings', () => client.settings(patch));
+  return (
+    <WithStatus client={client}>
+      {(s) => {
+        const models = s.models.map((m) => ({ value: m.id, label: m.label, group: m.group }));
+        const tiers = s.tiers.map((t) => ({ value: t.id, label: t.label }));
+        return (
+          <div className="flex flex-col">
+            {s.tiers.map((t) => (
+              <Row key={t.id} label={t.label} info={t.about}>
+                <div className="flex gap-2">
+                  <LumenSelector
+                    label={`${t.label} model`}
+                    size="sm"
+                    className="w-44"
+                    value={t.model}
+                    options={models}
+                    onChange={(model) => set({ tiers: { [t.id]: { model } } })}
+                  />
+                  <LumenSelector
+                    label={`${t.label} effort`}
+                    size="sm"
+                    className="w-32"
+                    value={t.effort}
+                    options={EFFORTS}
+                    onChange={(effort) => set({ tiers: { [t.id]: { effort } } })}
+                  />
+                </div>
+              </Row>
+            ))}
+            {s.tasks.length > 1 &&
+              s.tasks.map((task) => (
+                <Row key={task.id} label={`${task.label} starts on`}>
+                  <LumenSelector
+                    label={`${task.label} starts on`}
+                    size="sm"
+                    className="w-44"
+                    value={task.tier}
+                    options={tiers}
+                    onChange={(tier) => set({ tasks: { [task.id]: tier } })}
+                  />
+                </Row>
+              ))}
+          </div>
+        );
+      }}
+    </WithStatus>
+  );
+}
+
+// ---------------------------------------------------------------- tools
+
+function Tools({ client }: { client: AssistantAdapter }) {
+  const { apply } = useApply(client);
+  return (
+    <WithStatus client={client}>
+      {(s) =>
+        s.groups.length ? (
+          <div className="flex flex-col">
+            {s.groups.map((g) => (
+              <Row key={g.id} label={g.label} info={g.about}>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  spacing={0}
+                  value={g.access}
+                  aria-label={g.label}
+                  onValueChange={(v) =>
+                    v &&
+                    void apply('access', () =>
+                      client.settings({ access: { [g.id]: v as AssistantAccess } }),
+                    )
+                  }
+                >
+                  {ACCESS.filter((a) => a.value !== 'draft' || g.drafts).map((a) => (
+                    <ToggleGroupItem key={a.value} value={a.value}>
+                      {a.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </Row>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            This app gives the assistant no tools yet.
+          </p>
+        )
+      }
+    </WithStatus>
+  );
+}
+
+// ---------------------------------------------------------------- web
+
+function ScrapeqlBlock({ client, s }: { client: AssistantAdapter; s: AssistantStatus }) {
+  const { apply, refresh } = useApply(client);
+  const ids = useId();
+  const [id, setId] = useState('');
+  const [secret, setSecret] = useState('');
+  const [replacing, setReplacing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const state = s.web.scrapeql;
+  if (!state) return null;
+  const editing = s.admin && (!state.set || replacing);
+  const issues: FormIssue[] = [];
+  if (editing && id && !secret)
+    issues.push({
+      where: 'Client Secret',
+      message: 'Paste the secret too',
+      target: `${ids}-secret`,
+    });
+  const save = async () => {
+    setBusy(true);
+    if (
+      await apply(
+        'scrapeql',
+        () => client.scrapeql({ client_id: id.trim(), client_secret: secret.trim() }),
+        'Token saved',
+      )
+    ) {
+      setId('');
+      setSecret('');
+      setReplacing(false);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
+      <div className="flex items-center gap-2">
+        <span className="flex-1 font-medium text-sm">
+          <InfoLabel info="Search and pages that need a real browser. Paste a Cloudflare Access service token that ScrapeQL lets in.">
+            ScrapeQL
+          </InfoLabel>
+        </span>
+        {state.set ? (
+          state.hint ? (
+            <span className="font-code text-muted-foreground text-xs">{state.hint}</span>
+          ) : (
+            <Badge variant="secondary">Set</Badge>
+          )
+        ) : (
+          <Badge variant="outline">Not set</Badge>
+        )}
+        {state.set && state.test && <TestBadge test={state.test} />}
+      </div>
+      {editing ? (
+        <div className="grid grid-cols-1 gap-2">
+          <Input
+            id={`${ids}-id`}
+            aria-label="Client ID"
+            placeholder="Client ID"
+            autoComplete="off"
+            className="font-code text-xs"
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+          />
+          <Input
+            id={`${ids}-secret`}
+            aria-label="Client Secret"
+            placeholder="Client Secret"
+            type="password"
+            autoComplete="off"
+            className="font-code text-xs"
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            {replacing && (
+              <IconButton
+                icon={Trash2Icon}
+                label="Keep the saved token"
+                onClick={() => setReplacing(false)}
+              />
+            )}
+            <SaveButton
+              issues={issues}
+              busy={busy}
+              disabled={!id.trim() || !secret.trim()}
+              label="Test and save"
+              onSave={save}
+            />
+          </div>
+        </div>
+      ) : (
+        state.set &&
+        s.admin && (
+          <>
+            <KeyTestLine test={testOf(state)} run={() => client.testScrapeql().finally(refresh)} />
+            <div className="flex justify-end gap-2">
+              <IconButton
+                icon={Trash2Icon}
+                label="Remove the token"
+                variant="outline"
+                onClick={() => void apply('scrapeql', () => client.scrapeql(null), 'Token removed')}
+              />
+              <SaveButton
+                issues={[]}
+                icon={KeyRoundIcon}
+                label="Replace"
+                onSave={() => setReplacing(true)}
+              />
+            </div>
+          </>
+        )
+      )}
+    </div>
+  );
+}
+
+function Web({ client }: { client: AssistantAdapter }) {
+  const { apply } = useApply(client);
+  return (
+    <WithStatus client={client}>
+      {(s) => (
+        <div className="flex flex-col">
+          <Row
+            label="Read the web"
+            info="A plain fetch of public pages and APIs from the server, never the app's own pages."
+          >
+            <Switch
+              aria-label="Read the web"
+              checked={s.web.fetch}
+              onCheckedChange={(fetch) =>
+                void apply('web', () => client.settings({ web: { fetch } }))
+              }
+            />
+          </Row>
+          <ScrapeqlBlock client={client} s={s} />
+        </div>
+      )}
+    </WithStatus>
+  );
+}
+
+// ---------------------------------------------------------------- spend
+
+function Spend({ client }: { client: AssistantAdapter }) {
+  return (
+    <WithStatus client={client}>
+      {(s) => {
+        const sp = s.spend;
+        return (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-baseline gap-2">
+              <span className="font-semibold text-2xl tabular-nums">{usd(sp.usd)}</span>
+              <span className="text-muted-foreground text-sm">
+                {sp.month}
+                {sp.cap != null &&
+                  sp.payer &&
+                  ` · ${usd(sp.cap)} cap on ${sp.payer === 'app' ? 'the app key' : 'your key'}`}
+              </span>
+            </div>
+            {sp.rows.length ? (
+              <div className="flex flex-col text-sm">
+                {sp.rows.map((r) => (
+                  <div
+                    key={`${r.label}:${r.payer}`}
+                    className="flex items-center gap-2 border-b py-2 last:border-b-0"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {r.payer === 'app' ? 'App key' : 'Your key'}
+                    </span>
+                    <span className="w-16 text-right text-muted-foreground text-xs tabular-nums">
+                      {r.calls} calls
+                    </span>
+                    <span className="w-16 text-right tabular-nums">{usd(r.usd)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">Nothing spent this month.</p>
+            )}
+          </div>
+        );
+      }}
+    </WithStatus>
+  );
+}
+
+/**
+ * The assistant's Settings sections: the assistant, then Model providers, Models, Tools, Web and
+ * Spend under it. Pass them to LumenShell's `shared` (or an app's own `settings`).
+ */
+export function assistantSettingsSections({
+  client,
+  name,
+  web = true,
+}: {
+  client: AssistantAdapter;
+  /** The assistant's name, the parent section's title. */
+  name: string;
+  /** Show the Web section (the app set up `web` on the server). */
+  web?: boolean;
+}): SettingsSectionDef[] {
+  return [
+    {
+      id: 'assistant',
+      title: name,
+      icon: SparklesIcon,
+      description: 'Which tier answers, and when it asks a bigger one',
+      content: <General client={client} />,
+    },
+    {
+      id: 'assistant-providers',
+      title: 'Model providers',
+      icon: KeyRoundIcon,
+      sub: true,
+      description: 'Claude keys and who pays',
+      content: <Providers client={client} />,
+    },
+    {
+      id: 'assistant-models',
+      title: 'Models',
+      icon: LayersIcon,
+      sub: true,
+      description: "Each tier's model and effort",
+      content: <Models client={client} />,
+    },
+    {
+      id: 'assistant-tools',
+      title: 'Tools',
+      icon: WrenchIcon,
+      sub: true,
+      description: 'What the assistant may read and draft',
+      content: <Tools client={client} />,
+    },
+    ...(web
+      ? [
+          {
+            id: 'assistant-web',
+            title: 'Web',
+            icon: GlobeIcon,
+            sub: true,
+            description: 'Reading public pages and search',
+            content: <Web client={client} />,
+          },
+        ]
+      : []),
+    {
+      id: 'assistant-spend',
+      title: 'Spend',
+      icon: ReceiptIcon,
+      sub: true,
+      description: 'What answers cost this month',
+      content: <Spend client={client} />,
+    },
+  ];
+}
