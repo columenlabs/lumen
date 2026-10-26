@@ -63,6 +63,26 @@ const device = (): 'phone' | 'desktop' =>
 
 const code = (s: string | undefined) => (s && CODE.test(s) ? s : undefined);
 
+/** An API address as a route: no host or query, and id-like segments as `:id`. */
+export function apiRoute(url: string): string {
+  let path = url;
+  try {
+    path = new URL(url, 'http://x').pathname;
+  } catch {}
+  return path
+    .split('/')
+    .map((seg) =>
+      /^[a-z]{1,4}_[A-Za-z0-9]+$/.test(seg) ||
+      seg.length >= 20 ||
+      (seg.length >= 8 && /\d/.test(seg)) ||
+      /[^A-Za-z0-9_.-]/.test(seg)
+        ? ':id'
+        : seg,
+    )
+    .join('/')
+    .slice(0, 64);
+}
+
 function flush() {
   if (!app || queue.length === 0) return;
   const points = queue.splice(0, MAX_BATCH);
@@ -82,8 +102,9 @@ function flush() {
   if (queue.length) flush();
 }
 
-/** Queues one point; the batch goes out every 15 s, at 50 points, or when the tab is hidden. */
+/** Queues one point (nothing is kept until `useLumenTelemetry` has named the app); the batch goes out every 15 s, at 50 points, or when the tab is hidden. */
 export function reportClient(p: Omit<ClientPoint, 'device' | 'route'> & { route?: string }) {
+  if (!started) return;
   queue.push({
     ...p,
     route: p.route ?? route,

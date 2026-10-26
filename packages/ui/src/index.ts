@@ -243,6 +243,7 @@ export {
   type ClientPoint,
   type ClientPointKind,
   type LumenTelemetryOptions,
+  apiRoute,
   reportClient,
   reportClientError,
   reportFailedFetch,
