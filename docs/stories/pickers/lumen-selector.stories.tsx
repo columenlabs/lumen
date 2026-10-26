@@ -46,3 +46,28 @@ export const AddNew: Story = {
   name: 'Add new values',
   args: { search: true, create: (q: string) => (q.trim() ? q.trim().toLowerCase() : null) },
 };
+
+const cities = [
+  'Amsterdam',
+  'Berlin',
+  'Copenhagen',
+  'Dublin',
+  'Edinburgh',
+  'Florence',
+  'Geneva',
+  'Helsinki',
+  'Istanbul',
+  'Krakow',
+  'Lisbon',
+  'Madrid',
+  'Naples',
+  'Oslo',
+  'Prague',
+  'Vienna',
+].map((c) => ({ value: c.toLowerCase(), label: c }));
+
+/** A long list: on a phone the sheet stops short of the top, and its X, a tap above it, a swipe
+ *  down on its handle, Esc or back close it. */
+export const LongList: Story = {
+  args: { options: cities, value: 'lisbon', label: 'City' },
+};
