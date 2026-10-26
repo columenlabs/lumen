@@ -22,6 +22,7 @@ import {
   type SyncStatus,
   levelLabel,
   levelOf,
+  normEmail,
 } from '@columenlabs/lumen-ui-types/people';
 import {
   type EmailOptions,
@@ -336,17 +337,19 @@ export function peopleRoutes(o: PeopleRoutesOptions): (req: Request) => Promise<
       const r = await resolveDraft(email, req, draft);
       if (!r.ok) return fail(r.error);
       if (m === 'POST' && (parts[1] === 'check' || parts[1] === 'test') && parts.length === 2) {
+        const to = draft.testTo ? normEmail(draft.testTo) : actor.email;
+        if (!to) return fail('Enter one email address to send the test to.');
         const res =
           parts[1] === 'check'
             ? await checkResend(r.config, r.where)
-            : await testResend(r.config, r.where, actor.email, o.appName);
+            : await testResend(r.config, r.where, to, o.appName);
         const t = { ...res, by: actor.email };
         await email.store.putTest?.(req, t);
         await people.log(via, {
           kind: 'mail',
           op: t.kind,
           target: 'Email',
-          detail: `${t.kind === 'test' ? 'Test email' : 'Connection check'} ${t.ok ? 'passed' : 'failed'} · ${r.where}`,
+          detail: `${t.kind === 'test' ? `Test email to ${to}` : 'Connection check'} ${t.ok ? 'passed' : 'failed'} · ${r.where}`,
           ...(t.ok ? {} : { refused: t.steps.find((s) => s.ok === false)?.text ?? 'failed' }),
         });
         return json(t);
