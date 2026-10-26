@@ -630,15 +630,16 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent
             side="bottom"
-            showCloseButton={false}
             aria-labelledby={sheetTitle}
             // No ring on the first button: the person taps what they want.
             onOpenAutoFocus={(e) => e.preventDefault()}
-            className="group/selector flex max-h-[85dvh] flex-col gap-2 rounded-t-xl pt-2"
+            className="group/selector flex flex-col gap-2"
           >
-            <span aria-hidden className="mx-auto h-1 w-9 rounded-full bg-border" />
-            <div className="flex items-center justify-between px-4">
-              <SheetTitle id={sheetTitle}>{label ?? placeholder}</SheetTitle>
+            {/* The sheet brings its grab handle and X; the title row stops short of the X. */}
+            <div className="mt-2 flex min-h-8 items-center justify-between gap-2 pr-12 pl-4">
+              <SheetTitle id={sheetTitle} className="truncate">
+                {label ?? placeholder}
+              </SheetTitle>
               {multiple && (
                 <Button size="sm" onClick={() => setOpen(false)}>
                   Done

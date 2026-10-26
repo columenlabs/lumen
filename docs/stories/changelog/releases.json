@@ -1,5 +1,202 @@
 [
   {
+    "tag": "v0.1.75",
+    "date": "2026-10-26T20:36:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Pick the lightest action form that still reads at a glance",
+        "body": "In the Lumen design guidelines, the new \"Actions: icon first\" pattern tells you to build an action in `@columenlabs/lumen-ui` as an icon alone, then an icon with a tooltip, then an icon with text, and only then an icon with text and a detail tooltip."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Edit changeable values in place",
+        "body": "The new guidance says to use `EditInputCell` from `@columenlabs/lumen-ui` for any value a person can change, so a hand-edited value shows the ✎ mark and clearing the box restores the original."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Row actions appear on hover or focus",
+        "body": "Under the same pattern, row actions in your tables show inline on hover or keyboard focus, nothing stands on the row at rest, and one or two actions never go behind a ⋯ menu."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.74",
+    "date": "2026-10-26T20:31:40Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Lines over time with `TimeLines`",
+        "body": "From `@columenlabs/lumen-ui`, `TimeLines` takes the same props as `StackedColumns` (`rows`, `x`, `lines`, `label`, `tick`, `fmt`, `legend`), and a line with `right` is drawn against a second axis."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Drop-in file picking with `LumenFileField`",
+        "body": "From `@columenlabs/lumen-ui`, `LumenFileField` is a controlled field (`file`, `onFile`) where users drop or choose a file, and `accept` is enforced on drop as well as in the picker."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Bot check and plain-words sign-in errors",
+        "body": "From `@columenlabs/lumen-ui`, `LumenBotCheck` adds a bot check to a sign-in form, and `authErrorText` with `LumenAuthError` turns the sign-in server's error codes into readable messages."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`RankedBars` handles funnels and empty states",
+        "body": "In `RankedBars`, `share` now accepts `'total'` (default), `'first'` (funnel) or `false`, and the new `empty` and `label` props cover the no-bars case and the heading."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Header-less cards with `LumenLayoutCard`",
+        "body": "Setting `header: false` on a `LumenLayoutCard` drops its title row so the card shows only its body, like a saved widget with Header off."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.73",
+    "date": "2026-10-26T19:31:08Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant server",
+        "body": "From `@columenlabs/lumen-ai/assistant`, `createAssistant` now runs a chat assistant on your app's own tiers, with tier names and models taken from your config, so a person can set each tier's model and effort and the tier each task starts on."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tool groups from any MCP source",
+        "body": "In `createAssistant`, you can now supply tools through `mcpServerTools`, `mcpFetchTools` (any SDK, served as a fetch handler), `remoteMcpTools` or `plainTools`, and set each group to Off, Read or Read + draft."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Writes are drafts first",
+        "body": "In `createAssistant`, a write tool now only produces a draft card, and the change runs as the signed-in person when they press Save, after access is checked again."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Web access with safe limits",
+        "body": "The assistant's `fetch` tool is a plain GET capped at 10 seconds and 2 MB that can never reach your app's own hosts or private addresses, and scraping goes through an external service's existing MCP API using a service token an admin pastes in."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Shared assistant types",
+        "body": "From `@columenlabs/lumen-ui-types/assistant`, you can now import the types for tiers, access, hand-off policy, chat items, SSE events, status and settings changes, so your server and UI agree on one contract."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.72",
+    "date": "2026-10-26T16:55:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Group apps under their own headings",
+        "body": "In `LumenAppSwitcher` from @columenlabs/lumen-ui, the new `group` field on a `LumenApp` puts that app under its own heading, and apps with no `group` still lead the menu under `menuLabel`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "List apps that live on other sites",
+        "body": "Set `external` on a `LumenApp` and its `LumenAppSwitcher` row shows the app's host (truncated, with the name kept whole) and an ↗ arrow."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Show the same menu in a suite your app doesn't run",
+        "body": "`LumenSuiteSwitcher({ source, current })` reads `{ apps: [{ id, name, url, icon?, iconUrl?, group? }] }` from `source`, so an app that joins a suite can show the suite's menu with the current page's entry marked."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "App icons are now optional",
+        "body": "`LumenApp.icon` is optional and typed as `NavIcon`, and with no `icon` the mark falls back to `iconUrl` (for example another site's favicon) and then to the first letter of the name."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.71",
+    "date": "2026-10-26T16:52:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Line charts no longer go blank under the tooltip",
+        "body": "In `@columenlabs/lumen-ui`, `LumenEChart` no longer replays the series entry animation when your app re-renders on a hover or refetch, so lines and fills stay visible while the tooltip moves."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Equal chart options are not drawn again",
+        "body": "`LumenEChart` now serializes the resolved `option` and skips the redraw when it matches the last one, so you can pass a fresh option object on every render without extra chart work."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Softer focus ring on drawer headers",
+        "body": "In `@columenlabs/lumen-ui`, the header trigger of `DrawerSection` now shows a lighter focus ring (`ring-2 ring-ring/25`, no border), so keyboard focus is still visible without the heavy outline."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.70",
+    "date": "2026-10-26T16:47:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Invite drawer starts each scope at its own level",
+        "body": "In `@columenlabs/lumen-ui`, `InviteDrawer` now starts each scope at that scope's `inviteLevel` instead of always at the lowest level, so an app whose invites only make sense with access no longer needs the admin to switch it on for every invite."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose the invite starting level per scope",
+        "body": "In `@columenlabs/lumen-ui-types/people`, the new optional `Scope.inviteLevel` names the level the invite drawer starts at for that scope. If you leave it out, the lowest level is used, so existing apps see no change."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Compute the starting grants yourself",
+        "body": "The new `inviteGrants(scopes)` returns the starting grants, meaning the app-wide scopes whose `inviteLevel` names one of their levels, and `InviteDrawer` both starts with them and resets to them."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.69",
     "date": "2026-10-26T16:11:23Z",
     "takeaways": [

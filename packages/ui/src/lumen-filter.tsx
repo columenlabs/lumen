@@ -1182,7 +1182,7 @@ export function LumenTokenizedFilter<T>({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="mr-8 ml-auto font-normal text-muted-foreground"
+                  className="ml-auto font-normal text-muted-foreground"
                   onClick={clear}
                 >
                   Clear all

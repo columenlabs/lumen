@@ -282,7 +282,7 @@ export function TasksButton() {
           <SheetHeader className="flex-row items-baseline gap-2 border-b px-4 py-3">
             <SheetTitle>Tasks</SheetTitle>
             <SheetDescription>last 7 days</SheetDescription>
-            <span className="mr-8 ml-auto flex items-center gap-2 self-center">
+            <span className="ml-auto flex items-center gap-2 self-center">
               {list.active > 0 && (
                 <span className="text-xs text-muted-foreground">{list.active} running</span>
               )}

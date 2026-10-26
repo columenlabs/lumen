@@ -95,7 +95,7 @@ export function LumenDrawer({
     <Sheet open={open} onOpenChange={(o) => !o && onClose()} modal={isMobile}>
       {isMobile ? (
         <SheetContent side="bottom" className="max-h-[85svh] gap-0 overflow-hidden">
-          <SheetHeader className="order-first shrink-0 border-b">{head}</SheetHeader>
+          <SheetHeader className="order-first shrink-0 border-b pt-3">{head}</SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
           {!plain && foot}
         </SheetContent>
