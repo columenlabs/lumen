@@ -20,6 +20,7 @@
     "./frames": "./src/frames.ts",
     "./workspaces": "./src/workspaces.ts",
     "./tasks": "./src/tasks.ts",
+    "./people": "./src/people.ts",
     "./registry": "./src/registry.ts"
   },
   "dependencies": {

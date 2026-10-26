@@ -72,6 +72,7 @@ export {
 export { LumenGeoMap } from './lumen-geo-map';
 export { LumenWidget, type CardControls, type CardLink, LumenSavedWidget } from './lumen-widget';
 export { LumenConfirm, type LumenConfirmProps } from './confirm';
+export { InfoLabel, InfoTip } from './info-tip';
 export {
   type LumenAuthPoint,
   LumenAuthHeading,
