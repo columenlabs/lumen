@@ -10,6 +10,7 @@ import type {
 import {
   type AssistantAdapter,
   type AssistantSource,
+  assistantAdminSections,
   assistantSettingsSections,
   composeAssistant,
   selectionRef,
@@ -505,7 +506,11 @@ function Docked({
     ],
   });
   const [sections] = useState<SettingsSectionDef[]>(() =>
-    assistantSettingsSections({ client: adapter, name: 'Helper' }),
+    // The admin's shared keys sit in the app's admin settings; the story lists them last.
+    [
+      ...assistantSettingsSections({ client: adapter, name: 'Helper' }),
+      ...assistantAdminSections({ client: adapter }),
+    ],
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: open the story's chat once on mount
   useEffect(() => {
