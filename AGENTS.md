@@ -12,7 +12,7 @@ One repo for the Lumen family: each package is a folder `packages/<name>` publis
 - `scripts/pack.sh` builds both into `out/`. `.github/workflows/publish.yml` publishes them on every merge to `main` and tags `v<version>`. CI and publishing run on OpenShip's self-hosted runner.
 
 ## Rules
-- Design patterns live in [`DESIGN.md`](DESIGN.md) (helper text goes in an `InfoTip`, used sparingly) and what blocks a merge in [`REVIEW.md`](REVIEW.md). Read both before UI work or a PR.
+- Design patterns live in [`DESIGN.md`](DESIGN.md) (helper text goes in an `InfoTip`, and most labels need none) and what blocks a merge in [`REVIEW.md`](REVIEW.md). Read both before UI work or a PR.
 - Neutral kit: no app's or product's names anywhere in the kit, comments included, and no import of an app's own packages. An app passes its names through `configureLumen` and its data through `registerDomains`. `packages/ship/scripts/check-kit-neutral.sh` fails lint on the names in the repository variable `LUMEN_FORBIDDEN_NAMES` (set it in your shell to run the check locally); the list itself never goes in the repo.
 - General over specific: a part one app needs should be built so any app could use it, through props or slots, never by checking which app is running.
 - No hand-rolled components where a shadcn or Radix part fits. Compose them.
