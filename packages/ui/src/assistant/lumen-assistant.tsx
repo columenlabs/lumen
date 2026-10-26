@@ -5,6 +5,7 @@
 // with Stop, a queued message and the chat's cost and context under it.
 import type {
   AssistantMessage,
+  AssistantRefNote,
   AssistantStatus,
   ChatItem,
   ChatUsage,
@@ -16,16 +17,19 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpIcon,
   CheckIcon,
+  ChevronRightIcon,
   CircleAlertIcon,
   CornerDownRightIcon,
   LightbulbIcon,
+  PencilIcon,
   PlusIcon,
   SparklesIcon,
   SquareIcon,
+  Undo2Icon,
   WrenchIcon,
   XIcon,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import {
   LumenAssistantButton,
@@ -37,14 +41,27 @@ import {
 import { IconButton } from '../icon-button';
 import { errorText } from '../integrations';
 import { cn } from '../lib/utils';
-import { LumenSelector } from '../lumen-selector';
+import {
+  type LumenOption,
+  LumenSelector,
+  LumenSelectorList,
+  type LumenSelectorListHandle,
+} from '../lumen-selector';
 import { lumenToast } from '../lumen-toast';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Spinner } from '../ui/spinner';
 import { Textarea } from '../ui/textarea';
 import type { AssistantAdapter } from './client';
+import {
+  type AssistantSource,
+  selectionRef,
+  useComposeRequest,
+  usePageSelection,
+  useShownAssistantSources,
+} from './sources';
 import { type AssistantChatState, type LiveItem, useAssistantChat } from './use-assistant-chat';
 
 /** The main model's context drawn full (tokens); the mark sits where the assistant compacts. */
@@ -84,6 +101,27 @@ export interface LumenAssistantProps {
   onClose?: () => void;
   /** An outside chat state (the dock shares one between the button and the panel). */
   chat?: AssistantChatState;
+  /**
+   * The app's own slash commands, listed before the server's (`createAssistant` `commands`) and the
+   * kit's: /compact, /clear, /model and /escalate.
+   */
+  commands?: AssistantCommand[];
+  /** What `#` lists everywhere; a page adds its own with `useAssistantSource`. */
+  sources?: readonly AssistantSource[];
+}
+
+/** A slash command: typing `/` in the composer lists them. */
+export interface AssistantCommand {
+  /** Typed after the slash: `story`. */
+  name: string;
+  /** One line in the list. */
+  about: string;
+  /** What follows the name, shown in the list (`<words>`). Without it, picking it runs it. */
+  args?: string;
+  /** Choices for the words after it, listed as they are typed (a tier, a saved search). */
+  options?: () => LumenOption[];
+  /** Runs it: a string is sent as the message; nothing when the command acted itself. */
+  run: (args: string) => string | undefined | Promise<string | undefined>;
 }
 
 /** The assistant's chat: header, messages and composer. */
@@ -94,6 +132,8 @@ export function LumenAssistant({
   keepDays = 30,
   onClose,
   chat: outside,
+  commands = [],
+  sources = [],
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
@@ -119,8 +159,69 @@ export function LumenAssistant({
     }
   };
 
+  const tiers = s?.tiers ?? [];
+  const above = tiers.slice(tiers.findIndex((t) => t.id === s?.tier) + 1);
+  // The kit's commands; the app's own (`commands`, then the server's) come first and win a name.
+  const builtIns: AssistantCommand[] = [
+    {
+      name: 'compact',
+      about: 'Summarise the chat so far to free up context',
+      run: () => '/compact',
+    },
+    {
+      name: 'clear',
+      about: 'Start a new chat',
+      run: () => {
+        chat.reset();
+        return undefined;
+      },
+    },
+    ...(tiers.length > 1
+      ? [
+          {
+            name: 'model',
+            about: 'Answer on another tier from now on',
+            args: '<tier>',
+            options: () =>
+              tiers.map((t) => ({ value: t.id, label: t.label, detail: t.model_label })),
+            run: (arg: string) => {
+              const t = tiers.find(
+                (x) => x.id === arg || x.label.toLowerCase() === arg.toLowerCase(),
+              );
+              if (t) void setTier(t.id);
+              else lumenToast.error(`No tier is called ${arg || 'that'}.`);
+              return undefined;
+            },
+          },
+        ]
+      : []),
+    ...(above[0]
+      ? [
+          {
+            name: 'escalate',
+            about: `Hand a task to ${above[0].label}`,
+            args: '<task>',
+            run: (task: string) => {
+              if (task.trim())
+                chat.send(task, { ...(context ? { context } : {}), tier: above[0]?.id as string });
+              return undefined;
+            },
+          },
+        ]
+      : []),
+  ];
+  const served: AssistantCommand[] = (s?.commands ?? []).map((c) => ({
+    ...c,
+    run: (args: string) => `/${c.name}${args ? ` ${args}` : ''}`,
+  }));
+  const allCommands: AssistantCommand[] = [];
+  for (const c of [...commands, ...served, ...builtIns])
+    if (!allCommands.some((x) => x.name === c.name)) allCommands.push(c);
+  const shown = useShownAssistantSources();
+  const allSources = [...shown, ...sources.filter((x) => !shown.some((y) => y.id === x.id))];
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div data-assistant="" className="flex h-full min-h-0 flex-col">
       <div className="flex h-12 shrink-0 items-center gap-1 border-b px-3">
         <SparklesIcon className="size-4 text-edge" />
         <span className="min-w-0 flex-1 truncate font-medium">
@@ -165,7 +266,10 @@ export function LumenAssistant({
         busy={chat.busy}
         queued={chat.queued}
         disabled={!s || !!s.wait}
-        onSend={(text) => chat.send(text, context ? { context } : undefined)}
+        commands={allCommands}
+        tiers={tiers}
+        sources={allSources}
+        onSend={(text, extra) => chat.send(text, { ...(context ? { context } : {}), ...extra })}
         onStop={chat.stop}
       />
       <UsageLine usage={chat.usage} />
@@ -215,7 +319,11 @@ function Messages({
           Ask {status?.name ?? 'the assistant'} anything.
         </p>
       ) : (
-        <Items items={chat.items} onSettle={chat.settle} busy={chat.busy} />
+        <TierNames.Provider value={(id) => status?.tiers.find((t) => t.id === id)?.label ?? id}>
+          <UndoWrite.Provider value={chat.undo}>
+            <Items items={chat.items} onSettle={chat.settle} busy={chat.busy} />
+          </UndoWrite.Provider>
+        </TierNames.Provider>
       )}
       {chat.busy && !chat.items.some(isLive) && (
         <p className="flex items-center gap-2 py-1 text-muted-foreground text-sm">
@@ -243,6 +351,11 @@ const WAIT: Record<
   own_cap: () => 'Your own keys reached their monthly cap. Raise it in Settings ▸ Model providers.',
 };
 
+/** A tier's name for a message's `@` chip. */
+const TierNames = createContext<(id: string) => string>((id) => id);
+/** Takes back a change made at once (Undo on its line). */
+const UndoWrite = createContext<((s: StepItem) => Promise<void>) | null>(null);
+
 function Items({
   items,
   onSettle,
@@ -252,12 +365,25 @@ function Items({
   onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
   busy: boolean;
 }) {
+  // Cards drafted one after another sit in one stack, so many of them skim as lines.
+  const rows: ({ at: number; item: LiveItem } | { at: number; drafts: DraftItem[] })[] = [];
+  items.forEach((item, at) => {
+    const last = rows[rows.length - 1];
+    const prev = items[at - 1];
+    if (item.kind === 'draft' && prev?.kind === 'draft' && last) {
+      if ('drafts' in last) last.drafts.push(item);
+      else rows[rows.length - 1] = { at: last.at, drafts: [prev as DraftItem, item] };
+    } else rows.push({ at, item: item as LiveItem });
+  });
   return (
     <div className="flex flex-col gap-3">
-      {items.map((item, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: items only append; index is their identity.
-        <Item key={i} item={item as LiveItem} onSettle={onSettle} busy={busy} />
-      ))}
+      {rows.map((r) =>
+        'drafts' in r ? (
+          <DraftStack key={r.at} drafts={r.drafts} onSettle={onSettle} busy={busy} />
+        ) : (
+          <Item key={r.at} item={r.item} onSettle={onSettle} busy={busy} />
+        ),
+      )}
     </div>
   );
 }
@@ -271,10 +397,19 @@ function Item({
   onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
   busy: boolean;
 }) {
+  const tierName = useContext(TierNames);
   switch (item.kind) {
     case 'user':
       return (
         <div className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap">
+          {(item.tier || item.refs?.length) && (
+            <span className="mb-1 flex flex-wrap gap-1">
+              {item.tier && <ComposerChip sign="@" label={tierName(item.tier)} />}
+              {item.refs?.map((r, i) => (
+                <ComposerChip key={`${r.kind}:${r.label}:${i}`} sign="#" label={r.label} />
+              ))}
+            </span>
+          )}
           {item.text}
           {item.context && (
             <span className="mt-1 block text-muted-foreground text-xs">on {item.context}</span>
@@ -333,6 +468,20 @@ const Rule = ({ children }: { children: ReactNode }) => (
 );
 
 function Step({ step, live }: { step: StepItem; live: boolean }) {
+  const undo = useContext(UndoWrite);
+  const [undoing, setUndoing] = useState(false);
+  const w = step.write;
+  const take = async () => {
+    if (!undo) return;
+    setUndoing(true);
+    try {
+      await undo(step);
+    } catch (e) {
+      lumenToast.error(errorText(e));
+    } finally {
+      setUndoing(false);
+    }
+  };
   return (
     <p
       className={cn(
@@ -342,6 +491,8 @@ function Step({ step, live }: { step: StepItem; live: boolean }) {
     >
       {live ? (
         <Spinner className="size-3" />
+      ) : w ? (
+        <PencilIcon className="size-3.5 shrink-0" />
       ) : step.ok ? (
         <WrenchIcon className="size-3.5 shrink-0" />
       ) : (
@@ -355,6 +506,23 @@ function Step({ step, live }: { step: StepItem; live: boolean }) {
         </span>
       )}
       {step.error && <span className="truncate">· {step.error}</span>}
+      {w?.status === 'undone' ? (
+        <span className="shrink-0">· Undone</span>
+      ) : (
+        w?.undo &&
+        undo && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto h-6 shrink-0 px-2 text-xs"
+            disabled={undoing}
+            onClick={() => void take()}
+          >
+            {undoing ? <Spinner /> : <Undo2Icon />}
+            Undo
+          </Button>
+        )
+      )}
     </p>
   );
 }
@@ -368,17 +536,29 @@ function argLines(args: unknown): [string, string][] {
   ]);
 }
 
-function Draft({
-  draft,
-  onSettle,
-  busy,
-}: {
-  draft: DraftItem;
-  onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
-  busy: boolean;
-}) {
+/** One line that says what a card would change: its first few values. */
+const argSummary = (args: unknown) =>
+  argLines(args)
+    .slice(0, 3)
+    .map(([, v]) => v)
+    .join(' · ');
+
+function DraftStatus({ draft }: { draft: DraftItem }) {
+  return draft.status === 'saved' ? (
+    <span className="flex shrink-0 items-center gap-1 text-gain text-xs">
+      <CheckIcon className="size-3.5" /> Saved
+    </span>
+  ) : draft.status === 'dismissed' ? (
+    <span className="shrink-0 text-muted-foreground text-xs">Dismissed</span>
+  ) : draft.status === 'failed' ? (
+    <span className="shrink-0 text-loss text-xs">Failed</span>
+  ) : null;
+}
+
+/** Saves or dismisses a card, a toast on failure. */
+function useSettle(onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>) {
   const [pending, setPending] = useState<'save' | 'dismiss' | null>(null);
-  const go = async (action: 'save' | 'dismiss') => {
+  const go = async (draft: DraftItem, action: 'save' | 'dismiss') => {
     setPending(action);
     try {
       await onSettle(draft, action);
@@ -388,50 +568,178 @@ function Draft({
       setPending(null);
     }
   };
+  return { pending, go };
+}
+
+/**
+ * A drafted change. Open, it shows what it would run with and Save or Dismiss; settled, or as a
+ * row in a stack of cards, it is one line that opens in place.
+ */
+function Draft({
+  draft,
+  onSettle,
+  busy,
+  row,
+}: {
+  draft: DraftItem;
+  onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
+  busy: boolean;
+  /** One line in a stack of cards. */
+  row?: boolean;
+}) {
+  const { pending, go } = useSettle(onSettle);
+  const [open, setOpen] = useState(!row && draft.status === 'open');
+  const lines = argLines(draft.args);
+  const actions = draft.status === 'open' && (
+    <div className="flex shrink-0 justify-end gap-1">
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={!!pending || busy}
+        onClick={() => void go(draft, 'dismiss')}
+      >
+        Dismiss
+      </Button>
+      <Button size="sm" disabled={!!pending || busy} onClick={() => void go(draft, 'save')}>
+        {pending === 'save' ? <Spinner /> : <CheckIcon />}
+        Save
+      </Button>
+    </div>
+  );
   return (
-    <div
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
       data-slot="assistant-draft"
-      className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm"
+      className={cn(
+        'flex flex-col text-sm',
+        row ? 'border-b px-1 py-1.5 last:border-b-0' : 'gap-2 rounded-lg border bg-card p-3',
+      )}
     >
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-medium">{draft.title}</span>
-        {draft.status === 'saved' ? (
-          <span className="flex items-center gap-1 text-gain text-xs">
-            <CheckIcon className="size-3.5" /> Saved
-          </span>
-        ) : draft.status === 'dismissed' ? (
-          <span className="text-muted-foreground text-xs">Dismissed</span>
-        ) : draft.status === 'failed' ? (
-          <span className="text-loss text-xs">Failed</span>
-        ) : null}
+      <div className="flex min-w-0 items-center gap-2">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${open ? 'Hide' : 'Show'} ${draft.title}`}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          >
+            <ChevronRightIcon
+              className={cn(
+                'size-3.5 shrink-0 text-muted-foreground transition-transform',
+                open && 'rotate-90',
+              )}
+            />
+            <span className="shrink-0 font-medium">{draft.title}</span>
+            {!open && (
+              <span className="min-w-0 truncate text-muted-foreground text-xs">
+                {argSummary(draft.args)}
+              </span>
+            )}
+          </button>
+        </CollapsibleTrigger>
+        <DraftStatus draft={draft} />
+        {row && draft.status === 'open' && (
+          <>
+            <IconButton
+              icon={XIcon}
+              label={`Dismiss ${draft.title}`}
+              size="icon-xs"
+              disabled={!!pending || busy}
+              onClick={() => void go(draft, 'dismiss')}
+            />
+            <IconButton
+              icon={pending === 'save' ? Spinner : CheckIcon}
+              label={`Save ${draft.title}`}
+              size="icon-xs"
+              variant="outline"
+              disabled={!!pending || busy}
+              onClick={() => void go(draft, 'save')}
+            />
+          </>
+        )}
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-        {argLines(draft.args)
-          .slice(0, 8)
-          .map(([k, v]) => (
+      <CollapsibleContent className={cn('flex flex-col gap-2', row && 'pt-1.5 pl-5')}>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+          {lines.slice(0, 12).map(([k, v]) => (
             <div key={k} className="contents">
               <dt className="text-muted-foreground">{k}</dt>
-              <dd className="truncate font-code">{v}</dd>
+              <dd className="font-code break-words">{v}</dd>
             </div>
           ))}
-      </dl>
+        </dl>
+        {!row && actions}
+      </CollapsibleContent>
       {draft.error && <p className="text-loss text-xs">{draft.error}</p>}
-      {draft.status === 'open' && (
-        <div className="flex justify-end gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!!pending || busy}
-            onClick={() => void go('dismiss')}
-          >
-            Dismiss
-          </Button>
-          <Button size="sm" disabled={!!pending || busy} onClick={() => void go('save')}>
-            {pending === 'save' ? <Spinner /> : <CheckIcon />}
-            Save
-          </Button>
-        </div>
-      )}
+    </Collapsible>
+  );
+}
+
+/** Two or more cards in a row: one stack with a count, Save all and Dismiss all, a line each. */
+function DraftStack({
+  drafts,
+  onSettle,
+  busy,
+}: {
+  drafts: DraftItem[];
+  onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
+  busy: boolean;
+}) {
+  const [all, setAll] = useState<'save' | 'dismiss' | null>(null);
+  const open = drafts.filter((d) => d.status === 'open');
+  const saved = drafts.filter((d) => d.status === 'saved').length;
+  const failed = drafts.filter((d) => d.status === 'failed').length;
+  // One at a time, in order: a later change may build on an earlier one.
+  const settleAll = async (action: 'save' | 'dismiss') => {
+    setAll(action);
+    try {
+      for (const d of open) await onSettle(d, action);
+    } catch (e) {
+      lumenToast.error(errorText(e));
+    } finally {
+      setAll(null);
+    }
+  };
+  return (
+    <div
+      data-slot="assistant-draft-stack"
+      className="flex flex-col rounded-lg border bg-card p-2 text-sm"
+    >
+      <div className="flex items-center gap-2 px-1 pb-1.5">
+        <span className="min-w-0 flex-1 text-xs">
+          <span className="font-medium">{drafts.length} changes</span>
+          <span className="text-muted-foreground">
+            {' · '}
+            {[
+              open.length && `${open.length} to review`,
+              saved && `${saved} saved`,
+              failed && `${failed} failed`,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'all settled'}
+          </span>
+        </span>
+        {open.length > 1 && (
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!!all || busy}
+              onClick={() => void settleAll('dismiss')}
+            >
+              Dismiss all
+            </Button>
+            <Button size="sm" disabled={!!all || busy} onClick={() => void settleAll('save')}>
+              {all === 'save' ? <Spinner /> : <CheckIcon />}
+              Save all
+            </Button>
+          </>
+        )}
+      </div>
+      <div className="flex flex-col border-t">
+        {drafts.map((d) => (
+          <Draft key={d.id} draft={d} onSettle={onSettle} busy={busy || !!all} row />
+        ))}
+      </div>
     </div>
   );
 }
@@ -468,12 +776,53 @@ function HandOff({
   );
 }
 
-/** The message box: Enter sends, Shift+Enter breaks a line; Stop while an answer runs. */
+/** A chip over the message box: a tier picked with `@` or a thing pointed at with `#`. */
+function ComposerChip({
+  sign,
+  label,
+  onRemove,
+}: {
+  sign: '@' | '#';
+  label: string;
+  onRemove?: () => void;
+}) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-xs">
+      <span className="text-muted-foreground">{sign}</span>
+      <span className="truncate">{label}</span>
+      {onRemove && (
+        <button
+          type="button"
+          aria-label={`Remove ${label}`}
+          className="text-muted-foreground hover:text-foreground"
+          onClick={onRemove}
+        >
+          <XIcon className="size-3" />
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** What the composer sends with the text: the tier picked with `@` and the things pointed at with `#`. */
+export interface ComposerExtra {
+  tier?: string;
+  refs?: AssistantRefNote[];
+}
+
+/**
+ * The message box: Enter sends, Shift+Enter breaks a line; Stop while an answer runs. Three
+ * triggers list what can follow them as it is typed: `/` at the start a command, `@` a tier for
+ * this message, `#` a thing to point at (the `sources`); a picked tier or thing shows as a chip.
+ */
 export function LumenComposer({
   name,
   busy,
   queued,
   disabled,
+  commands = [],
+  tiers = [],
+  sources = [],
   onSend,
   onStop,
 }: {
@@ -481,16 +830,148 @@ export function LumenComposer({
   busy: boolean;
   queued: string | null;
   disabled?: boolean;
-  onSend: (text: string) => void;
+  commands?: AssistantCommand[];
+  /** What `@` lists. */
+  tiers?: { id: string; label: string; model_label?: string }[];
+  /** What `#` lists, a group each. */
+  sources?: readonly AssistantSource[];
+  onSend: (text: string, extra: ComposerExtra) => void;
   onStop: () => void;
 }) {
   const [text, setText] = useState('');
+  const [caret, setCaret] = useState(0);
+  const [closed, setClosed] = useState<string | null>(null);
+  const [tier, setTier] = useState<string | null>(null);
+  const [refs, setRefs] = useState<AssistantRefNote[]>([]);
+  const list = useRef<LumenSelectorListHandle>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const selection = usePageSelection();
+  // An app's compose request (`composeAssistant`): its chips and text, ready to finish.
+  const [request, take] = useComposeRequest();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new request fills the box.
+  useEffect(() => {
+    if (!request) return;
+    take();
+    if (request.refs?.length) setRefs((p) => [...p, ...(request.refs ?? [])]);
+    if (request.tier) setTier(request.tier);
+    if (request.text !== undefined) {
+      setText(request.text);
+      setCaret(request.text.length);
+    }
+    requestAnimationFrame(() => box.current?.focus());
+  }, [request]);
+
+  const m = /^\/(\S*)(?:\s(.*))?$/s.exec(text);
+  const cmd = m && m[2] !== undefined ? commands.find((c) => c.name === m[1]) : undefined;
+  // `@` or `#` as the word the caret is in: `pick #sto|` lists the sources' items matching "sto".
+  const word = /(^|\s)([@#])([^\s@#]*)$/.exec(text.slice(0, caret));
+  const trigger = word ? (word[2] as '@' | '#') : null;
+  const asked = word?.[3] ?? '';
+  const open = closed !== `${text}|${caret}`;
+  const slash =
+    m && commands.length ? (m[2] === undefined ? 'command' : cmd?.options ? 'arg' : null) : null;
+  const at =
+    trigger === '@' && tiers.length > 1
+      ? '@'
+      : trigger === '#' && (sources.length || selection)
+        ? '#'
+        : null;
+  const picking = open ? (slash ?? at) : null;
+
+  const extra = (): ComposerExtra => ({
+    ...(tier ? { tier } : {}),
+    ...(refs.length ? { refs } : {}),
+  });
+  const clear = () => {
+    setText('');
+    setCaret(0);
+    setTier(null);
+    setRefs([]);
+  };
+  const run = async (c: AssistantCommand, args: string) => {
+    const keep = extra();
+    clear();
+    try {
+      const out = await c.run(args.trim());
+      if (out) onSend(out, keep);
+    } catch (e) {
+      lumenToast.error(errorText(e));
+    }
+  };
   const send = () => {
     if (!text.trim() || disabled) return;
-    onSend(text);
-    setText('');
+    const c = m ? commands.find((x) => x.name === m[1]) : undefined;
+    if (c) {
+      void run(c, m?.[2] ?? '');
+      return;
+    }
+    onSend(text, extra());
+    clear();
   };
-  const slash = text.startsWith('/') && !text.includes(' ');
+  const pickCommand = (o: LumenOption) => {
+    const c = commands.find((x) => x.name === o.value);
+    if (!c) return;
+    if (c.args) {
+      setText(`/${c.name} `);
+      setCaret(c.name.length + 2);
+      box.current?.focus();
+    } else void run(c, '');
+  };
+  // Takes the `@word` or `#word` out of the text once its pick is a chip.
+  const dropWord = () => {
+    if (!word) return;
+    const start = caret - 1 - asked.length;
+    const next = text.slice(0, start) + text.slice(caret).replace(/^ /, '');
+    setText(next);
+    setCaret(start);
+    requestAnimationFrame(() => {
+      box.current?.focus();
+      box.current?.setSelectionRange(start, start);
+    });
+  };
+
+  const sourceItems = new Map<string, AssistantRefNote>();
+  const picked = selection ? selectionRef(selection) : null;
+  if (picked) sourceItems.set('selection', picked);
+  const sourceOptions: LumenOption[] =
+    picking === '#'
+      ? [
+          ...(picked
+            ? [
+                {
+                  value: 'selection',
+                  label: picked.label,
+                  group: 'Selected text',
+                  ...(selection?.where ? { detail: selection.where } : {}),
+                  ...(refs.some((r) => sameRef(r, picked)) ? { disabled: 'Added' } : {}),
+                },
+              ]
+            : []),
+          ...sources.flatMap((s) =>
+            s.items(asked).map((i) => {
+              const value = `${s.id}:${i.id}`;
+              sourceItems.set(value, i.ref);
+              return {
+                value,
+                label: i.label,
+                group: s.label,
+                ...(i.detail ? { detail: i.detail } : {}),
+                ...(s.icon ? { icon: s.icon } : {}),
+                ...(i.keywords ? { keywords: i.keywords } : {}),
+                ...(i.target ? { target: i.target } : {}),
+                ...(refs.some((r) => sameRef(r, i.ref)) ? { disabled: 'Added' } : {}),
+              };
+            }),
+          ),
+        ]
+      : [];
+  const tierLabel = tiers.find((t) => t.id === tier)?.label;
+  const hints = [
+    commands.length && '/',
+    tiers.length > 1 && '@',
+    (sources.length || selection) && '#',
+  ].filter(Boolean);
+
   return (
     <div className="shrink-0 border-t p-3">
       {queued && (
@@ -498,25 +979,100 @@ export function LumenComposer({
           Queued: <span className="text-foreground">{queued}</span>
         </p>
       )}
-      {slash && (
-        <button
-          type="button"
-          className="mb-2 flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs hover:bg-muted"
-          onClick={() => setText('/compact')}
-        >
-          <span className="font-code">/compact</span>
-          <span className="text-muted-foreground">Summarise the chat so far</span>
-        </button>
+      {picking === 'command' && (
+        <LumenSelectorList
+          handle={list}
+          label="Commands"
+          className="mb-2"
+          fuzzy
+          query={m?.[1] ?? ''}
+          options={commands.map((c) => ({
+            value: c.name,
+            label: `/${c.name}`,
+            ...(c.args ? { detail: c.args } : {}),
+            description: c.about,
+          }))}
+          empty="No command matches"
+          onPick={pickCommand}
+          onClose={() => setClosed(`${text}|${caret}`)}
+        />
+      )}
+      {picking === 'arg' && cmd?.options && (
+        <LumenSelectorList
+          handle={list}
+          label={`/${cmd.name}`}
+          className="mb-2"
+          fuzzy
+          query={m?.[2] ?? ''}
+          options={cmd.options()}
+          onPick={(o) => void run(cmd, o.value)}
+          onClose={() => setClosed(`${text}|${caret}`)}
+        />
+      )}
+      {picking === '@' && (
+        <LumenSelectorList
+          handle={list}
+          label="Answer this message on"
+          className="mb-2"
+          fuzzy
+          query={asked}
+          options={tiers.map((t) => ({
+            value: t.id,
+            label: t.label,
+            ...(t.model_label ? { detail: t.model_label } : {}),
+          }))}
+          empty="No tier matches"
+          onPick={(o) => {
+            setTier(o.value);
+            dropWord();
+          }}
+          onClose={() => setClosed(`${text}|${caret}`)}
+        />
+      )}
+      {picking === '#' && (
+        <LumenSelectorList
+          handle={list}
+          label="Point at"
+          className="mb-2"
+          query={asked}
+          options={sourceOptions}
+          empty="Nothing matches"
+          onPick={(o) => {
+            const r = sourceItems.get(o.value);
+            if (r) setRefs((p) => [...p, r]);
+            dropWord();
+          }}
+          onClose={() => setClosed(`${text}|${caret}`)}
+        />
+      )}
+      {(tierLabel || refs.length > 0) && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {tierLabel && <ComposerChip sign="@" label={tierLabel} onRemove={() => setTier(null)} />}
+          {refs.map((r, i) => (
+            <ComposerChip
+              key={`${r.kind}:${r.label}:${i}`}
+              sign="#"
+              label={r.label}
+              onRemove={() => setRefs((p) => p.filter((_, j) => j !== i))}
+            />
+          ))}
+        </div>
       )}
       <div className="relative">
         <Textarea
+          ref={box}
           aria-label={`Message ${name}`}
-          placeholder={`Ask ${name}…`}
+          placeholder={`Ask ${name}…${hints.length ? ` (${hints.join(' ')})` : ''}`}
           className="max-h-48 min-h-11 resize-none pr-11"
           value={text}
           disabled={disabled}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setCaret(e.target.selectionStart);
+          }}
+          onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
           onKeyDown={(e) => {
+            if (picking && list.current?.key(e)) return;
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               send();
@@ -547,6 +1103,9 @@ export function LumenComposer({
     </div>
   );
 }
+
+const sameRef = (a: AssistantRefNote, b: AssistantRefNote) =>
+  a.kind === b.kind && JSON.stringify(a) === JSON.stringify(b);
 
 /** The chat's cost and tokens (a popup splits them per part), and how full the context is. */
 function UsageLine({ usage }: { usage: ChatUsage | null }) {
@@ -611,6 +1170,10 @@ export function useLumenAssistantDock(
 ) {
   const open = assistantOpen.use();
   const chat = useAssistantChat(client);
+  const [request] = useComposeRequest();
+  useEffect(() => {
+    if (request && !assistantOpen.get()) assistantOpen.write(true);
+  }, [request]);
   const [unread, setUnread] = useState(false);
   const wasBusy = useRef(false);
   useEffect(() => {

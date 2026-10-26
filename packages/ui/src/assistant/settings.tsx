@@ -60,6 +60,7 @@ const ACCESS: { value: AssistantAccess; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 'read', label: 'Read' },
   { value: 'draft', label: 'Read + draft' },
+  { value: 'write', label: 'Read + write' },
 ];
 
 /** Runs a change and keeps the status it returns, or says why it failed. */
@@ -699,7 +700,9 @@ function Tools({ client }: { client: AssistantAdapter }) {
                     )
                   }
                 >
-                  {ACCESS.filter((a) => a.value !== 'draft' || g.drafts).map((a) => (
+                  {ACCESS.filter(
+                    (a) => (a.value !== 'draft' || g.drafts) && (a.value !== 'write' || g.writes),
+                  ).map((a) => (
                     <ToggleGroupItem key={a.value} value={a.value}>
                       {a.label}
                     </ToggleGroupItem>

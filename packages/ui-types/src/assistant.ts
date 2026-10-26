@@ -11,8 +11,8 @@
 export const ASSISTANT_EFFORTS = ['default', 'low', 'medium', 'high', 'max'] as const;
 export type AssistantEffort = (typeof ASSISTANT_EFFORTS)[number];
 
-/** What the assistant may do with a group of tools: nothing, read, or read and draft changes. */
-export const ASSISTANT_ACCESS = ['off', 'read', 'draft'] as const;
+/** What the assistant may do with a group of tools: nothing, read, read and draft changes, or read and make them at once. */
+export const ASSISTANT_ACCESS = ['off', 'read', 'draft', 'write'] as const;
 export type AssistantAccess = (typeof ASSISTANT_ACCESS)[number];
 
 /**
@@ -56,7 +56,7 @@ export interface ChatUsage extends Omit<UsagePart, 'label'> {
   context?: number;
 }
 
-/** Something the person pointed at with @ (a page, a card, a row): its label and how to find it. */
+/** Something the person pointed at with `#` (a page, a card, a row, a story): its label and how to find it. */
 export interface AssistantRefNote {
   kind: string;
   label: string;
@@ -76,6 +76,8 @@ export interface StepItem {
   /** Rows in a list result, when it was one. */
   rows?: number;
   error?: string;
+  /** A change it made at once (its group is on Read + write), with whether it can be undone. */
+  write?: { undo: boolean; status: 'done' | 'undone' | 'failed'; error?: string };
 }
 
 /** A change the assistant drafted: nothing happens until the person presses Save. */
@@ -166,7 +168,7 @@ export interface AssistantMessage {
   /** The page the person is on: a label and a short note of what it shows. */
   context?: { label: string; note?: unknown };
   refs?: AssistantRefNote[];
-  /** A higher tier the person handed this message to. */
+  /** The tier the person picked for this message (`@`): a higher one takes it as a task, the same or a lower one answers it. */
   tier?: string;
 }
 
@@ -228,6 +230,8 @@ export interface SpendState {
 /** Everything the assistant's settings sections show, for one person. */
 export interface AssistantStatus {
   name: string;
+  /** The app's slash commands (the composer adds its own: /compact, /clear, /model, /escalate). */
+  commands?: { name: string; about: string; args?: string }[];
   /** Null when the assistant can answer now. */
   wait: AssistantWait | null;
   /** The provider the wait is about: the one the person's tier runs on. */
@@ -237,7 +241,15 @@ export interface AssistantStatus {
   tiers: AssistantTierRow[];
   models: AssistantModelRow[];
   tasks: { id: string; label: string; about: string; tier: string }[];
-  groups: { id: string; label: string; about: string; access: AssistantAccess; drafts: boolean }[];
+  groups: {
+    id: string;
+    label: string;
+    about: string;
+    access: AssistantAccess;
+    drafts: boolean;
+    /** Whether the group offers Read + write. */
+    writes: boolean;
+  }[];
   hand_off: HandOffPolicy;
   /** The tier asked for advice, or off. */
   advice: string;

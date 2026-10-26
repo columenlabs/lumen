@@ -18,6 +18,7 @@
  *   POST   /chat                    one answer as server-sent events; closing the request stops it
  *   GET    /chats, GET|DELETE /chats/:id
  *   POST   /chats/:id/drafts/:draft {action: save | dismiss}
+ *   POST   /chats/:id/writes/:step/undo
  *
  * Writes must be same-origin JSON: a signed-in browser session is a cookie, so a foreign page's
  * form or fetch is refused before it reaches a rule. Keys and tokens are write-only: no route
@@ -329,6 +330,8 @@ export function assistantRoutes(
           if (action !== 'save' && action !== 'dismiss') return fail('action is save or dismiss.');
           return json(await a.settleDraft(caller, id, parts[3] as string, action));
         }
+        if (parts.length === 5 && parts[2] === 'writes' && parts[4] === 'undo' && m === 'POST')
+          return json(await a.undoWrite(caller, id, parts[3] as string));
       }
       return fail('Not found.', 404);
     } catch (err) {
