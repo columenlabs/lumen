@@ -264,6 +264,7 @@ export {
   SettingRow,
   SettingsActions,
   SettingsFooter,
+  type SettingsGroupDef,
   type SettingsSectionDef,
 } from './settings';
 export { LumenCard } from './summary-cards';

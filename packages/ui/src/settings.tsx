@@ -78,6 +78,12 @@ export interface SettingsSectionDef {
   footer?: ReactNode;
 }
 
+/** A labelled group of sections in Settings: one per app when a product shows several apps' settings together. */
+export interface SettingsGroupDef {
+  label: string;
+  sections: SettingsSectionDef[];
+}
+
 /** The Settings search text; rows that do not match it hide. */
 const SearchContext = createContext('');
 const matches = (query: string, ...texts: ReactNode[]) =>
@@ -279,19 +285,31 @@ const GENERAL: SettingsSectionDef[] = [
   },
 ];
 
-/** Every Settings section in the order the dialog lists them: General, the product's, the app's. */
+function generalSettings(
+  profile: ReactNode | undefined,
+  security?: ReactNode,
+): SettingsSectionDef[] {
+  return [
+    ...(profile ? [{ ...PROFILE, content: profile }] : []),
+    ...(security ? [{ ...SECURITY, content: security }] : []),
+    ...GENERAL,
+  ];
+}
+
+/** Every Settings section in the order the dialog lists them: General, the product's, the groups', the app's. */
 export function allSettings(
   profile: ReactNode | undefined,
   shared: SettingsSectionDef[] = [],
   sections: SettingsSectionDef[] = [],
   security?: ReactNode,
+  groups: SettingsGroupDef[] = [],
 ): SettingsSectionDef[] {
-  const general = [
-    ...(profile ? [{ ...PROFILE, content: profile }] : []),
-    ...(security ? [{ ...SECURITY, content: security }] : []),
-    ...GENERAL,
+  return [
+    ...generalSettings(profile, security),
+    ...shared,
+    ...groups.flatMap((g) => g.sections),
+    ...sections,
   ];
-  return [...general, ...shared, ...sections];
 }
 
 export function LumenSettings({
@@ -305,6 +323,7 @@ export function LumenSettings({
   sections = [],
   shared = [],
   sharedLabel = 'All apps',
+  groups = [],
 }: {
   open: boolean;
   /** The section shown; unknown ids show Profile. */
@@ -321,9 +340,11 @@ export function LumenSettings({
   /** Sections the product adds to every app (the assistant), listed under `sharedLabel` after General. */
   shared?: SettingsSectionDef[];
   sharedLabel?: string;
+  /** More labelled groups (one per app), listed after the shared ones and before the app's own. */
+  groups?: SettingsGroupDef[];
 }) {
-  const all = allSettings(profile, shared, sections, security);
-  const general = all.slice(0, all.length - shared.length - sections.length);
+  const all = allSettings(profile, shared, sections, security, groups);
+  const general = generalSettings(profile, security);
   const current = all.find((s) => s.id === section) ?? (all[0] as SettingsSectionDef);
   // The assistant opens Settings at a section (it never changes a setting); Undo puts it back as it was.
   useAssistantMoves('settings', {
@@ -364,9 +385,10 @@ export function LumenSettings({
     onOpen(id);
   };
 
-  const groups = [
+  const navGroups = [
     { label: 'General', items: general.filter(shown) },
     { label: sharedLabel, items: shared.filter(shown) },
+    ...groups.map((g) => ({ label: g.label, items: g.sections.filter(shown) })),
     ...(sections.length ? [{ label: appLabel, items: sections.filter(shown) }] : []),
   ].filter((g) => g.items.length);
 
@@ -449,7 +471,7 @@ export function LumenSettings({
           className="hidden w-56 shrink-0 flex-col border-r bg-sidebar py-2 md:flex"
         >
           <div className="px-2 pt-1 pb-1">{search}</div>
-          {groups.map((g) => (
+          {navGroups.map((g) => (
             <SidebarGroup key={g.label} className="py-1">
               <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
               <SidebarGroupContent>
@@ -477,7 +499,7 @@ export function LumenSettings({
             <LumenSelector
               label="Settings section"
               className="w-full"
-              groups={groups.map((g) => ({
+              groups={navGroups.map((g) => ({
                 label: g.label,
                 options: g.items.map((s) => ({
                   value: s.id,
