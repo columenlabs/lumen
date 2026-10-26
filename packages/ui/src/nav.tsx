@@ -370,7 +370,7 @@ export function SidebarSection({
   loading?: boolean;
   /** Shown when there are no items. */
   empty?: ReactNode;
-  /** Extra content under the items (a search box, a retry line). */
+  /** Extra content under the items (a search box, a retry line); left out on the icon rail. */
   children?: ReactNode;
   /** What its items stand for in the assistant's @ picker; plain pages by default. */
   pageType?: AssistantPageType;
@@ -436,7 +436,8 @@ export function SidebarSection({
             </li>
           )}
         </SidebarMenu>
-        {children}
+        {/* Extra content has no icon form, so the rail leaves it out. */}
+        {children && <div className="group-data-[collapsible=icon]:hidden">{children}</div>}
       </SidebarGroupContent>
     </FoldGroup>
   );
