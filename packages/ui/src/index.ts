@@ -84,7 +84,10 @@ export {
   LumenEmailField,
   LumenPasswordField,
   LumenStepBar,
+  type LumenAuthError,
+  authErrorText,
 } from './lumen-auth';
+export { LumenBotCheck } from './lumen-bot-check';
 export {
   LumenBackupCodes,
   type LumenCodeMethod,
@@ -101,8 +104,9 @@ export {
   stepDate,
 } from './lumen-date-input';
 export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
+export { LumenFileField, type LumenFileFieldProps } from './lumen-file-field';
 export { LumenSecret } from './lumen-secret';
-export { RankedBars, StackedBars, StackedColumns } from './lumen-widget-charts';
+export { RankedBars, StackedBars, StackedColumns, TimeLines } from './lumen-widget-charts';
 export { type ShareSegment, ShareMeter } from './share-meter';
 export { type Pool, poolShare } from './pool-share';
 export { METER_LEVEL_COLOR, meterLevel, meterValueTone } from './meter-level';

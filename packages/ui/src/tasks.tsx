@@ -259,7 +259,7 @@ export function TasksButton() {
       data-slot="tasks-button"
     >
       {list.active > 0 ? <Ring share={share} /> : <ListChecksIcon />}
-      {list.active > 0 && <span className="font-mono text-xs tabular-nums">{list.active}</span>}
+      {list.active > 0 && <span className="font-num text-xs tabular-nums">{list.active}</span>}
       {list.unseen > 0 && (
         <span
           aria-hidden
@@ -470,7 +470,7 @@ function TaskRow({ task: t, onClose }: { task: Task; onClose: () => void }) {
       {t.state === 'running' && t.total ? (
         <>
           <Progress value={pct ?? 0} />
-          <div className="flex gap-2.5 font-mono text-[11.5px] text-muted-foreground tabular-nums">
+          <div className="flex gap-2.5 font-num text-[11.5px] text-muted-foreground tabular-nums">
             <span>
               {done.toLocaleString('en-US')} / {t.total.toLocaleString('en-US')}
               {t.unit ? ` ${t.unit}` : ''}
@@ -482,7 +482,7 @@ function TaskRow({ task: t, onClose }: { task: Task; onClose: () => void }) {
       ) : t.state === 'running' ? (
         <>
           <Progress />
-          <div className="font-mono text-[11.5px] text-muted-foreground tabular-nums">
+          <div className="font-num text-[11.5px] text-muted-foreground tabular-nums">
             {done ? `${done.toLocaleString('en-US')}${t.unit ? ` ${t.unit}` : ''} · ` : ''}
             running {took(Date.parse(t.started_at ?? t.created_at), now)}
           </div>
@@ -522,7 +522,7 @@ function Line({
     <div
       className={cn(
         'flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted-foreground',
-        mono && 'font-mono tabular-nums',
+        mono && 'font-num tabular-nums',
         className,
       )}
     >

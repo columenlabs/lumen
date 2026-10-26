@@ -16,6 +16,10 @@
   --font-heading: var(--font-sans);
   --font-sans: var(--app-font);
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* `font-code`: code, keys and one-time codes. Always mono, whatever numbers use. */
+  --font-code: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* `font-num` (and `.num`): numbers in tables, tiles and charts. */
+  --font-num: var(--num-font);
   --color-gain: var(--gain);
   --color-kind-declarative: var(--kind-declarative);
   --color-kind-script: var(--kind-script);
@@ -90,6 +94,9 @@
   --shell-max-width: 1400px;
   /* The text font, picked in Settings ▸ Appearance (`data-font` on <html>, prefs.ts). */
   --app-font: "Manrope Variable", Manrope, ui-sans-serif, system-ui, sans-serif;
+  /* The numbers font. An app that wants its numbers in the text font sets
+     `--num-font: var(--app-font)`; tabular figures keep them lined up either way. */
+  --num-font: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   /* Compact density, the only density. */
   --card-pad: 12px;
   --row-h: 28px;
@@ -455,7 +462,7 @@
   }
 
   .num {
-    font-family: var(--font-mono);
+    font-family: var(--num-font);
     font-variant-numeric: tabular-nums;
   }
 }
@@ -595,7 +602,7 @@ body[data-spotlight="nav"] [data-spotlit] {
     margin: 0;
     padding: 0.5rem 0.75rem;
     background: transparent !important;
-    font-family: var(--font-mono);
+    font-family: var(--font-code);
     counter-reset: line;
   }
   .lumen-code.lumen-code-numbers pre {
@@ -626,7 +633,7 @@ body[data-spotlight="nav"] [data-spotlit] {
   }
   .lumen-code-editor .cm-editor {
     height: 100%;
-    font-family: var(--font-mono);
+    font-family: var(--font-code);
   }
   .lumen-code-editor .cm-editor.cm-focused {
     outline: none;

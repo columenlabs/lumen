@@ -270,3 +270,36 @@ export function LumenStepBar({ at, of }: { at: number; of: number }) {
     </div>
   );
 }
+
+/** An error from the sign-in server (a `code` such as Better Auth's, a status, a message). */
+export type LumenAuthError = { code?: string; message?: string; status?: number };
+
+const AUTH_ERROR_TEXT: Record<string, string> = {
+  INVALID_EMAIL_OR_PASSWORD: 'That email and password don’t match.',
+  INVALID_CODE: 'That code doesn’t match. Check the latest one and try again.',
+  INVALID_OTP: 'That code doesn’t match. Check the latest one and try again.',
+  INVALID_TWO_FACTOR_AUTHENTICATION: 'That code doesn’t match. Check the latest one and try again.',
+  OTP_HAS_EXPIRED: 'That code has expired. Send a new one.',
+  OTP_EXPIRED: 'That code has expired. Send a new one.',
+  TOO_MANY_ATTEMPTS: 'Too many tries. Send a new code.',
+  TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE: 'Too many tries. Send a new code.',
+  INVALID_TWO_FACTOR_COOKIE: 'That took too long. Sign in again.',
+  MISSING_RESPONSE: 'The bot check didn’t pass. Wait a moment and try again.',
+  VERIFICATION_FAILED: 'The bot check didn’t pass. Wait a moment and try again.',
+};
+
+/**
+ * A sign-in error in plain words, for `LumenAuthProblem`. Known codes get the kit's line, a 429 asks
+ * the person to wait, and anything else shows the server's message or `fallback`. An app passes
+ * `own` for codes of its own, checked first.
+ */
+export function authErrorText(
+  e: LumenAuthError | null | undefined,
+  fallback = 'That didn’t work. Try again.',
+  own: Record<string, string> = {},
+) {
+  const known = e?.code ? (own[e.code] ?? AUTH_ERROR_TEXT[e.code]) : undefined;
+  if (known) return known;
+  if (e?.status === 429) return 'Too many tries. Wait a minute and try again.';
+  return e?.message || fallback;
+}

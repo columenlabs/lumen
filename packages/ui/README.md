@@ -29,6 +29,8 @@ bun add -d tailwindcss @tailwindcss/vite tw-animate-css shadcn
 
 /* your accent, per app (LumenShell sets data-app on <html>) */
 :root[data-app="myapp"] { --primary: oklch(0.55 0.15 160); }
+/* optional: numbers in the text font instead of mono (code stays mono via `font-code`) */
+:root[data-app="myapp"] { --num-font: var(--app-font); }
 ```
 
 At start, before anything renders, tell the kit about your app. The kit names no product: your names and data come in here.
@@ -57,13 +59,13 @@ Use `createDeskQueryClient()` for the app's TanStack Query client: data stays fr
 
 ## What's inside
 
-**Frame.** `LumenShell` (sidebar with icons-only collapse and a drawer on phone, header, status bar, Settings, profile menu, ⌘K Find), `LumenAppSwitcher` and `LumenSuiteSwitcher` (groups, apps on other sites, a list read from an address), `WhatsNew` (release notes in a drawer), `TasksButton` and `TasksProvider` (background work in the header), `NotificationsSettings`, `McpSettings`, sign-in screens (`LumenAuthStage`, `LumenSecondStep`, `LumenSignInMethods`, `LumenBackupCodes`), `StatusHealth`, `LumenBoundary` (keeps a crash inside its card), `LumenPageState` (loading, empty and error), `lumenToast`.
+**Frame.** `LumenShell` (sidebar with icons-only collapse and a drawer on phone, header, status bar, Settings, profile menu, ⌘K Find), `LumenAppSwitcher` and `LumenSuiteSwitcher` (groups, apps on other sites, a list read from an address), `WhatsNew` (release notes in a drawer), `TasksButton` and `TasksProvider` (background work in the header), `NotificationsSettings`, `McpSettings`, sign-in screens (`LumenAuthStage`, `LumenSecondStep`, `LumenSignInMethods`, `LumenBackupCodes`, `LumenBotCheck` for Cloudflare Turnstile, `authErrorText` for errors in plain words), `StatusHealth`, `LumenBoundary` (keeps a crash inside its card), `LumenPageState` (loading, empty and error), `lumenToast`.
 
-**Pages and views.** `LumenLayout` (a page of cards from one view config: filter, tiles, widgets; Edit layout and Edit widget when you pass `onConfigChange`), `LumenGrid` (the 6-column grid under it), `LumenView` and `LumenViewCard` (a table that filters, groups, pivots and totals the rows you load), `LumenTable`, `LumenTokenizedFilter`, `LumenWidget` and `LumenSavedWidget` (the frame every card sits in, with its link square and controls), `LumenCard` (one number and its lines), `LumenPager`, `DetailsTable`, `LumenTree`, `useAppView` (a page whose layout each person can change and reset).
+**Pages and views.** `LumenLayout` (a page of cards from one view config: filter, tiles, widgets; Edit layout and Edit widget when you pass `onConfigChange`; a card with `header: false` is its body alone), `LumenGrid` (the 6-column grid under it), `LumenView` and `LumenViewCard` (a table that filters, groups, pivots and totals the rows you load), `LumenTable`, `LumenTokenizedFilter`, `LumenWidget` and `LumenSavedWidget` (the frame every card sits in, with its link square and controls), `LumenCard` (one number and its lines), `LumenPager`, `DetailsTable`, `LumenTree`, `useAppView` (a page whose layout each person can change and reset).
 
-**Charts.** `LumenChart` (one or more symbols' prices, with indicators), `LumenEChart`, `LumenGeoMap`, growth and price charts, `StackedBars`, `StackedColumns`, `RankedBars`.
+**Charts.** `LumenChart` (one or more symbols' prices, with indicators), `LumenEChart`, `LumenGeoMap`, growth and price charts, `StackedBars`, `StackedColumns`, `TimeLines` (lines over time, with an optional right axis), `RankedBars` (with each bar's share of the total or of the first bar, and an empty state).
 
-**Pickers and panels.** `LumenSelector` (every picker), `LumenDrawer` with `DrawerSection` (a side panel on desktop, a sheet on phone), `LumenTabs`, `LumenConfirm` (destructive confirms), `LumenForm`, `LumenDateInput`, `LumenChoice`, `LumenSecret`, `RenameField`, `ResetButton`, `SaveButton` with `FormIssue` (a Save that says why it can't), `IconPicker`.
+**Pickers and panels.** `LumenSelector` (every picker), `LumenDrawer` with `DrawerSection` (a side panel on desktop, a sheet on phone), `LumenTabs`, `LumenConfirm` (destructive confirms), `LumenForm`, `LumenDateInput`, `LumenChoice`, `LumenSecret`, `LumenFileField` (drop or pick a file), `RenameField`, `ResetButton`, `SaveButton` with `FormIssue` (a Save that says why it can't), `IconPicker`.
 
 **Primitives.** The shadcn parts under `@columenlabs/lumen-ui/ui/*` (`ui/button`, `ui/badge`, `ui/input`, ...) and `theme.css` (light and dark tokens).
 

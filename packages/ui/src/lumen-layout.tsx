@@ -143,6 +143,8 @@ export interface LumenLayoutCard {
   rows?: number;
   /** Buttons or links in the card's header, before its ↻ ("All jobs"). */
   tools?: ReactNode;
+  /** false: the card is its body alone, no title row (Edit layout still shows it). */
+  header?: boolean;
   /** ⓘ How to read: a few lines on what the card shows and what to look for. */
   help?: ReactNode;
   /** What ✦ Ask the assistant adds to its question (the record to read); false: no ✦ on this card. */
@@ -300,6 +302,7 @@ function CodeCard({
       icon={card.icon ?? (card.kind === 'table' ? TableIcon : undefined)}
       title={card.title}
       controls={controls}
+      shown={card.header === false ? { header: false } : undefined}
       load={card.load}
       rows={card.rows}
       tools={card.tools}
