@@ -48,6 +48,7 @@ import {
   DownloadIcon,
   Grid3x3Icon,
   LayoutDashboardIcon,
+  ListCollapseIcon,
   PencilIcon,
   PlusIcon,
   Settings2Icon,
@@ -1467,6 +1468,21 @@ function LumenTableRows<T extends RowData>({
   const opens = (row: T) => (domain.panel ? panelOf(row) !== null : partsOf(row).length > 1);
   const openLabel = () => domain.panel?.label ?? subgroup?.label.toLowerCase() ?? 'parts';
   const folds = !domain.panel && !!subgroup?.under && !flat;
+  // Every folded line's key, so the header's menu can open or close them all at once.
+  const foldKeys = (): string[] => {
+    const under = folds ? subgroup?.under : undefined;
+    if (!under || !groups) return [];
+    return groups.flatMap(([g, ms]) => {
+      const counts = new Map<string, number>();
+      for (const r of ms) counts.set(under(r.original), (counts.get(under(r.original)) ?? 0) + 1);
+      return [...counts]
+        .filter(([, n]) => n > 1 || subgroup?.always)
+        .map(([k]) => `under:${g}\u0000${k}`);
+    });
+  };
+  const anyFoldClosed = folds && foldKeys().some((k) => !openParts.has(k));
+  const setAllParts = (open: boolean) =>
+    setOpenParts(new Set(open === !!subgroup?.open ? [] : foldKeys()));
   const flatName = (row: T) =>
     flat && subgroup?.under ? (
       <span className="flex min-w-0 items-center gap-1.5">
@@ -1756,16 +1772,56 @@ function LumenTableRows<T extends RowData>({
                           : undefined
                     }
                   >
-                    {i === 0 && groups && (!serverGroups || serverGroups.onToggleAll) && (
-                      // Expand or collapse every group at once.
-                      <IconButton
-                        icon={anyClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon}
-                        size="icon-xs"
-                        className="-ml-2 mr-1 align-middle"
-                        label={anyClosed ? 'Expand all groups' : 'Collapse all groups'}
-                        onClick={() => setAll(anyClosed)}
-                      />
+                    {i === 0 && groups && folds && !serverGroups && (
+                      // Groups and their folded lines: open everything, close the folded lines
+                      // only, or close every group.
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <IconButton
+                            icon={
+                              anyClosed || anyFoldClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon
+                            }
+                            size="icon-xs"
+                            className="-ml-2 mr-1 align-middle"
+                            label="Expand or collapse rows"
+                          />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-52">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setAll(true);
+                              setAllParts(true);
+                            }}
+                          >
+                            <ChevronsUpDownIcon /> Expand all
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setAll(true);
+                              setAllParts(false);
+                            }}
+                          >
+                            <ListCollapseIcon /> Close every {subgroup?.label.toLowerCase()}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setAll(false)}>
+                            <ChevronsDownUpIcon /> Collapse all
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
+                    {i === 0 &&
+                      groups &&
+                      !(folds && !serverGroups) &&
+                      (!serverGroups || serverGroups.onToggleAll) && (
+                        // Expand or collapse every group at once.
+                        <IconButton
+                          icon={anyClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon}
+                          size="icon-xs"
+                          className="-ml-2 mr-1 align-middle"
+                          label={anyClosed ? 'Expand all groups' : 'Collapse all groups'}
+                          onClick={() => setAll(anyClosed)}
+                        />
+                      )}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
