@@ -270,7 +270,14 @@ export {
 } from './settings';
 export { LumenCard } from './summary-cards';
 export { WhatsNew } from './whats-new';
-export { type LumenApp, LumenAppSwitcher } from './app-switcher';
+export {
+  type LumenApp,
+  LumenAppSwitcher,
+  LumenSuiteSwitcher,
+  type SuiteApp,
+  type SuiteList,
+  suiteApps,
+} from './app-switcher';
 export {
   type BriefActions,
   type BriefChange,

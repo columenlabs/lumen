@@ -1,5 +1,330 @@
 [
   {
+    "tag": "v0.1.69",
+    "date": "2026-10-26T16:11:23Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Email Check connection fails on a redirect",
+        "body": "`reachAndKey` now treats any 3xx answer as a failure, so an email API sitting behind a sign-in page no longer shows \"Reached\" and \"API key accepted\" when the key was never checked."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Send test explains a redirect",
+        "body": "the send-test helper now fails with \"The address redirects to `<host>` (a sign-in page?), not to the email API\" instead of the bare \"The server answered 302\", so you can see that the configured address needs correcting."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.68",
+    "date": "2026-10-26T15:41:19Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Saved email key survives route changes",
+        "body": "In `LumenEmailSettings` from @columenlabs/lumen-ui, switching the route (for example from the public internet to a tunnel) no longer empties the API key, so Save no longer shows a false \"1 to fix\" and you can change routes without re-entering the key."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose where the test email goes",
+        "body": "`LumenEmailSettings` now has a \"Send a test email to\" field, pre-filled with the signed-in admin's address, and the address you type is carried on the new `EmailDraft.testTo` field from @columenlabs/lumen-ui-types/people."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Test address is checked on the server",
+        "body": "`peopleRoutes` (lumen-people) now sends the test email to `testTo`, normalised with `normEmail` and refused unless it is exactly one address, and it names that address in the audit line."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.67",
+    "date": "2026-10-26T14:36:59Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Switching email routes keeps what you typed",
+        "body": "In `LumenEmailSettings` from @columenlabs/lumen-ui, each route (for example tunnel and public) now remembers its own server address, API key and key mode, so switching away and back restores your input instead of overwriting it with the route's default."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Refetching no longer wipes the form",
+        "body": "`LumenEmailSettings` now resets its draft only when the saved settings change (`updatedAt`, route or URL), so a refetch that returns the same data no longer clears what a user is typing."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "\"Keep\" key button only appears on the saved route",
+        "body": "In `LumenEmailSettings`, the \"Keep\" option for the saved API key now shows only on the route the key was saved for, so a user on another route has to enter a key for that route's server."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.66",
+    "date": "2026-10-26T07:03:41Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A ready-made people and access screen",
+        "body": "Import `LumenPeople` from `@columenlabs/lumen-ui/people` to give an app a user directory with a People table, bulk actions (set level, make admin, resend, disable, remove with Undo), an Invites tab and an audit log."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A new package for the people backend",
+        "body": "`@columenlabs/lumen-people` provides `store` (SQL over any `exec`-style driver), `service` (grants, invites, audit), `routes` (a plain Web `fetch` handler) and `mailer`, so you can run the backend for `LumenPeople` without writing it yourself."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Invite email settings with a connection check",
+        "body": "Render `LumenEmailSettings` from `@columenlabs/lumen-ui/people` and use the `email` module of `@columenlabs/lumen-people` to send invites through a Resend-style REST API (`POST {url}/emails`), with Check connection, Send test and a write-only key."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Shared access types and rules",
+        "body": "From `@columenlabs/lumen-ui-types/people` you can import the types for scopes, levels, grants, people, invites, audit and email settings, plus the rules `can`, `levelOf`, `atLeast`, `checkAdminFloor`, `inviteExpired` and `emailsIn`."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Safer invites and admin access",
+        "body": "In `@columenlabs/lumen-people`, `service` hashes invites at rest, always keeps one active admin, and audits every change and refusal, while `routes` accepts writes only as same-origin JSON."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.65",
+    "date": "2026-10-26T06:31:38Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One place for design patterns",
+        "body": "The repository's new `DESIGN.md` is where Lumen design patterns are written, so a developer building with `@columenlabs/lumen-ui` can check it before inventing a pattern of their own."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Helper text goes behind an InfoTip",
+        "body": "The first pattern in `DESIGN.md`, \"Details on demand: InfoTip\", says helper text belongs behind an (i) next to a label rather than on the screen, and a label gets no (i) unless a reader would otherwise guess wrong."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clear merge rules for contributors",
+        "body": "The new `REVIEW.md` lists what blocks a merge and points to the Rules in `AGENTS.md` and to `DESIGN.md` instead of repeating them. The Rules in `AGENTS.md` now carry one line pointing to both files, so contributors and coding agents find them."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.64",
+    "date": "2026-10-26T05:44:55Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One labelled Settings group per app",
+        "body": "In `LumenShell` from @columenlabs/lumen-ui, the new optional `settingsGroups` prop takes `{ label, sections }` entries, so a product with several apps can show General first and then one labelled group per app in a single Settings dialog."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "LumenSettings takes the same groups",
+        "body": "`LumenSettings` has a new `groups` prop that accepts the same `SettingsGroupDef[]`, so you can render grouped settings when you use it on its own."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Find searches every group",
+        "body": "`allSettings` now includes the entries from `settingsGroups`, so Find in Settings returns matches from each app's group as well as the shared and app sections."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Typed group definitions",
+        "body": "`SettingsGroupDef` is now exported, so you can type the array you pass to `settingsGroups` or `groups`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.63",
+    "date": "2026-10-26T01:20:23Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Brand subtitle stays inside the collapsed icon rail",
+        "body": "In `LumenShell` from `@columenlabs/lumen-ui`, with the sidebar set to `collapsible=\"icon\"`, a brand with a subtitle no longer wraps word by word or spills a stray last word over the top bar."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Sidebar header and footer clip to the rail",
+        "body": "`SidebarHeader` and `SidebarFooter` now stay on one line and clip to the rail width when collapsed, so custom header and footer content can't overflow into the page header."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Section extra content is hidden on the rail",
+        "body": "`SidebarSection` now hides its `children` (for example a \"New tag\" button) when the sidebar is collapsed to icons, so only the icons show. Nothing changes in your app code."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.62",
+    "date": "2026-10-26T00:47:11Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Header menu for grouped tables with sub-groups",
+        "body": "In grouped tables from `@columenlabs/lumen-ui` whose view sets `ViewSubgroup.under`, the header expand/collapse button is now a menu with Expand all, Close every sub-group, and Collapse all."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Close every sub-group in one click",
+        "body": "The new menu entry is named from `ViewSubgroup.label` (for example \"Close every meter\"), so you can open all groups and fold all their lines without any extra props."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer header icon, same behavior elsewhere",
+        "body": "The header icon shows ⇕ while anything is closed, and tables without a `ViewSubgroup` and server-grouped tables keep the single expand/collapse button, so no app changes are needed."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.61",
+    "date": "2026-10-26T00:38:22Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Sub-group part rows highlight on hover",
+        "body": "In `@columenlabs/lumen-ui`, part rows inside a view sub-group now show the `hover:bg-muted` highlight, which the `bg-muted/30` base used to hide, so you no longer need a style override to make them feel interactive."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Folded lines highlight on hover, even when open",
+        "body": "A folded line, which is a `ViewSubgroup` with `under` set, now highlights on hover in both its closed and open states, so users can see which line they are pointing at."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Click anywhere on a folded line to open or close it",
+        "body": "In `@columenlabs/lumen-ui`, a click anywhere on a `ViewSubgroup` `under` line now toggles its rows, and the chevron still works as before, so you get a larger click target with no prop changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.60",
+    "date": "2026-10-25T23:44:48Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Group headings show colour marks",
+        "body": "In grouped tables and views, a group heading now draws the grouped field's `iconOf(value)` in its `color(value)` (for example a product's icon or a label's icon), and falls back to a colour dot, then to the field's icon."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Marks on folded sub-group lines",
+        "body": "The new `ViewSubgroup.mark(key, rows)` option, from `@columenlabs/lumen-ui-types`, draws a mark before a folded line's key, such as a meter's product icon."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Flat sub-groups",
+        "body": "The new `ViewSubgroup.flat: string[]` option lists the group fields under which rows don't fold, so each row becomes one line named by its `under` key, with the first column kept and headed by the sub-group's label."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Level-aware `rollRender`",
+        "body": "`rollRender(rows, level)` now receives a `RollLevel` (`'group' | 'fold' | 'total'`), so an app can draw a split bar on a sub-group's folded line only; existing `rollRender(rows)` callers keep working unchanged."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.59",
+    "date": "2026-10-25T23:27:39Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Split a shared cap by part in one bar",
+        "body": "In `ShareMeter` from @columenlabs/lumen-ui, the new `segments` prop (`[{ value, color, label }]`) stacks each part's share of the cap in its own colour, so you can show an allowance split by who used it."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Pooled roll-ups for caps shared by several rows",
+        "body": "From @columenlabs/lumen-ui, `poolShare(rows, { pool, used, cap })` works inside a field's `rollRender` and computes each pool's share as its rows' use over the shared cap, instead of summing or taking the max of the rows' own percentages."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Split bars line up and read clearly past the cap",
+        "body": "With `segments` set, `ShareMeter` keeps the same fixed track width as a plain bar (or `wide`), so a column mixing split and plain meters stays aligned. Past the cap, the track reads as the total and a tick marks the cap."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Each part is announced and shown on hover",
+        "body": "When `ShareMeter` has `segments`, its `aria-label` and hover text list every part with its percentage, so the split is available to screen readers and mouse users."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.58",
     "date": "2026-10-25T22:10:13Z",
     "takeaways": [
