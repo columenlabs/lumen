@@ -24,7 +24,13 @@ import { cn } from './lib/utils';
 import { LumenFinder, type LumenFinderConfig } from './lumen-finder';
 import { usePrefs } from './prefs';
 import { withRefreshToken } from './refresh';
-import { LumenSettings, type SettingsSectionDef, ThemeToggle, allSettings } from './settings';
+import {
+  LumenSettings,
+  type SettingsGroupDef,
+  type SettingsSectionDef,
+  ThemeToggle,
+  allSettings,
+} from './settings';
 import { SourceHealthProvider } from './source-health';
 import { StatusTimeZone } from './status';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -246,6 +252,8 @@ export interface LumenShellProps {
   /** Sections every app of the product shows, listed after General under `sharedLabel`. */
   shared?: SettingsSectionDef[];
   sharedLabel?: string;
+  /** More labelled Settings groups (one per app of a product), listed after `shared`, before the app's own. */
+  settingsGroups?: SettingsGroupDef[];
   /** Who is signed in (the profile button); null while it loads. */
   user?: ShellUser | null;
   /** Where Sign out goes; no Sign out without it. */
@@ -299,6 +307,7 @@ export function LumenShell({
   settings,
   shared,
   sharedLabel,
+  settingsGroups,
   user = null,
   signOutUrl,
   profile,
@@ -342,7 +351,10 @@ export function LumenShell({
   }, [app]);
   // Find lists every Settings section by name.
   const sectionNames = JSON.stringify(
-    allSettings(profile, shared, settings, security).map((s) => ({ id: s.id, title: s.title })),
+    allSettings(profile, shared, settings, security, settingsGroups).map((s) => ({
+      id: s.id,
+      title: s.title,
+    })),
   );
   const findSettings = useMemo(
     () => JSON.parse(sectionNames) as { id: string; title: string }[],
@@ -418,6 +430,7 @@ export function LumenShell({
                   sections={settings}
                   shared={shared}
                   sharedLabel={sharedLabel}
+                  groups={settingsGroups}
                 />
                 <Toaster position="bottom-right" />
               </LumenFinder>
