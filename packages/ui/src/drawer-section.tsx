@@ -50,7 +50,7 @@ export function DrawerSection({
         variant="ghost"
         size="sm"
         // No background, grey only on hover, open or not.
-        className="w-full justify-start px-1 aria-expanded:bg-transparent aria-expanded:hover:bg-muted"
+        className="w-full justify-start px-1 focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-ring/25 aria-expanded:bg-transparent aria-expanded:hover:bg-muted"
       >
         <ChevronRightIcon className="text-muted-foreground transition-transform group-data-[state=open]/section:rotate-90" />
         {Icon && <Icon className="text-muted-foreground" />}
