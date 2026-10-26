@@ -142,7 +142,7 @@ meterEvent({ event: 'sync.done', ok: true, subject: accountId, ref: connectionId
 | `blob1` … `blob10` | App, event, code, outcome, ref, trigger, request id, upstream id, env, version |
 | `double1` … `double6` | ms, status, count1, count2, count3, attempt |
 
-`upstream: true` adds the call's time to the request's `upstream ms`. In a Durable Object, pass `app`, `requestId` and `env` yourself.
+`upstream: true` adds the call's time to the request's `upstream ms`. In a Durable Object no request is in scope: give `setEventSink(binding, { app, env, version })` the defaults, and pass a `requestId` the caller sent if you have one.
 
 ## Browser telemetry
 

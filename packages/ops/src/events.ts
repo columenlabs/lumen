@@ -39,11 +39,22 @@ export interface EventPoint {
   version?: string;
 }
 
-let sink: PointSink | undefined;
+export interface EventDefaults {
+  app?: string;
+  env?: string;
+  version?: string;
+}
 
-/** The entry point (and each Durable Object) sets the dataset once per isolate. */
-export function setEventSink(s: PointSink | undefined) {
+let sink: PointSink | undefined;
+let defaults: EventDefaults = {};
+
+/**
+ * The entry point (and each Durable Object) sets the dataset once per isolate, with the app, env
+ * and version its points carry when no request is in scope (an object's alarm, a job).
+ */
+export function setEventSink(s: PointSink | undefined, d: EventDefaults = {}) {
   sink = s;
+  defaults = d;
 }
 
 /**
@@ -56,10 +67,10 @@ export function meterEvent(p: EventPoint) {
     const r = currentRequest();
     if (p.upstream && p.ms !== undefined) addUpstream(p.ms);
     const fields = {
-      app: p.app ?? r?.app,
+      app: p.app ?? r?.app ?? defaults.app,
       requestId: p.requestId ?? r?.requestId,
-      env: p.env ?? r?.env,
-      version: p.version ?? r?.version,
+      env: p.env ?? r?.env ?? defaults.env,
+      version: p.version ?? r?.version ?? defaults.version,
     };
     const code = codeOf(p.code);
     sink?.writeDataPoint({
