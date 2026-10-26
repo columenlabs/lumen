@@ -21,7 +21,7 @@ const PENDING_MS = 15 * 60_000;
 
 /** The app's registration with OpenAI for one person, kept across sign-outs. */
 export interface ChatgptRegistration {
-  /** An opaque id of this app for this person, the same on every sign-in. */
+  /** This app's host id for this person (`urn:uuid:<uuid>`), the same on every sign-in. */
   host_id: string;
   /** The client id OpenAI issued on the first sign-in. */
   client_id?: string;
@@ -45,6 +45,7 @@ const b64url = (bytes: ArrayBuffer | Uint8Array) =>
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
+const HOST_ID = /^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const random = (n = 32) => b64url(crypto.getRandomValues(new Uint8Array(n)));
 
 export class SigninError extends Error {}
@@ -58,7 +59,14 @@ export async function startChatgpt(
   const challenge = b64url(
     await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pending.verifier)),
   );
-  const next: ChatgptRegistration = { host_id: reg?.host_id ?? random(18), ...reg, pending };
+  // OpenAI refuses any other host id shape (`invalid_authorize_request`, param ext_agent_host_id),
+  // so a registration made before this shape gets a new one; it never finished, so has no client id.
+  const kept = reg && HOST_ID.test(reg.host_id) ? reg : null;
+  const next: ChatgptRegistration = {
+    ...kept,
+    host_id: kept?.host_id ?? `urn:uuid:${crypto.randomUUID()}`,
+    pending,
+  };
   const q = new URLSearchParams({
     client_id: next.client_id ?? 'dynamic_agent_client',
     ...(next.client_id ? {} : { agent_name_hint: appName }),
