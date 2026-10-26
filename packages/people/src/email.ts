@@ -62,6 +62,15 @@ async function call(c: ResendConfig, path: string, init: RequestInit) {
   }
 }
 
+/** A 3xx: the address leads to a sign-in page (Cloudflare Access, a login proxy), not the API. */
+const redirected = (res: Response) => {
+  let to = '';
+  try {
+    to = new URL(res.headers.get('location') ?? '').host;
+  } catch {}
+  return `The address redirects${to ? ` to ${to}` : ''} (a sign-in page?), not to the email API`;
+};
+
 const refused = (status: number) =>
   status === 401 || status === 403
     ? 'The server refused the API key'
@@ -85,6 +94,7 @@ export async function sendResend(c: ResendConfig, msg: MailMessage): Promise<Mai
   });
   if (!res) return { ok: false, detail: 'Could not reach the email server' };
   await res.body?.cancel();
+  if (res.status >= 300 && res.status < 400) return { ok: false, detail: redirected(res) };
   return res.ok
     ? { ok: true, detail: `Emailed ${msg.to}` }
     : { ok: false, detail: refused(res.status) };
@@ -102,6 +112,8 @@ async function reachAndKey(c: ResendConfig, where: string): Promise<EmailCheckSt
   if (!res) return [{ id: 'reach', ok: false, text: `Could not reach ${where}`, ms }];
   await res.body?.cancel();
   const reach: EmailCheckStep = { id: 'reach', ok: true, text: `Reached ${where}`, ms };
+  if (res.status >= 300 && res.status < 400)
+    return [{ ...reach, ok: false, text: redirected(res) }];
   if (res.status === 404 || res.status === 405)
     return [{ ...reach, ok: false, text: `${where} has no email API at this address` }];
   if (res.status === 401 || res.status === 403)
