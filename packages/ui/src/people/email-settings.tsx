@@ -81,7 +81,18 @@ function EmailForm({
   const [replacing, setReplacing] = useState(!view.current);
   const [result, setResult] = useState<{ for: EmailDraft; check: EmailCheck } | null>(null);
   const [busy, setBusy] = useState<'check' | 'test' | 'save' | null>(null);
-  useEffect(() => setDraft(blank(view)), [view]);
+  // Each route keeps what was typed for it, so switching back and forth loses nothing.
+  const [perRoute, setPerRoute] = useState<
+    Record<string, { url: string; apiKey: string; replacing: boolean }>
+  >({});
+  // Start over only when the saved settings change, never on a refetch of the same ones.
+  const savedKey = `${view.current?.updatedAt ?? ''}|${view.current?.route ?? ''}|${view.current?.url ?? ''}`;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the saved settings change
+  useEffect(() => {
+    setDraft(blank(view));
+    setReplacing(!view.current);
+    setPerRoute({});
+  }, [savedKey]);
   if (!api) return null;
 
   const route = view.routes.find((r) => r.id === draft.route);
@@ -160,6 +171,7 @@ function EmailForm({
           onClick={() => {
             setDraft(blank(view));
             setReplacing(!view.current);
+            setPerRoute({});
             setResult(null);
           }}
         >
@@ -194,8 +206,18 @@ function EmailForm({
             ),
           }))}
           onValueChange={(id) => {
+            if (id === draft.route) return;
+            setPerRoute((m) => ({
+              ...m,
+              [draft.route]: { url: draft.url, apiKey: draft.apiKey ?? '', replacing },
+            }));
+            const kept = perRoute[id];
             const next = view.routes.find((r) => r.id === id);
-            set({ route: id, ...(next?.url && id !== draft.route ? { url: next.url } : {}) });
+            // A saved key belongs to the saved route's server: another route needs its own key.
+            const onSaved = !!view.current && view.current.route === id;
+            const url = kept?.url ?? (onSaved ? view.current?.url : undefined) ?? next?.url ?? '';
+            setReplacing(kept?.replacing ?? !onSaved);
+            set({ route: id, url, apiKey: kept?.apiKey ?? '' });
           }}
         />
       </Step>
@@ -223,7 +245,7 @@ function EmailForm({
                 value={draft.apiKey ?? ''}
                 onChange={(e) => set({ apiKey: e.target.value })}
               />
-              {view.current && (
+              {view.current && view.current.route === draft.route && (
                 <Button
                   size="sm"
                   variant="ghost"
