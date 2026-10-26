@@ -52,12 +52,21 @@ export interface QueryPoint {
 }
 
 let sink: PointSink | undefined;
+let rowCap = 0;
 let callerOf: (() => QueryCaller | undefined) | undefined;
 const scope = new AsyncLocalStorage<QueryCaller>();
 
 /** The entry point sets the dataset once per isolate. */
 export function setQuerySink(s: PointSink | undefined) {
   sink = s;
+}
+
+/**
+ * The most rows one statement should return (an app's page size cap); a statement that returns
+ * more is marked `capped`, so a query that dodged paging shows up. 0 turns the check off.
+ */
+export function setQueryRowCap(n: number | undefined) {
+  rowCap = n && n > 0 ? n : 0;
 }
 
 /** How to name the request in scope when no job is (the app's request telemetry). */
@@ -162,7 +171,8 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : N
 
 /**
  * Column order is the contract with whoever reads the dataset back: index1 engine; blobs
- * engine, app, kind, route, tool, op, fingerprint, sql shape, outcome, method; doubles wall ms,
+ * engine, app, kind, route, tool, op, fingerprint, sql shape, outcome, method, cap (`capped` when
+ * it returned more rows than `setQueryRowCap` allows); doubles wall ms,
  * engine ms, rows read, bytes read, rows out, rows written, bytes out, status.
  */
 export function meterQuery(p: QueryPoint) {
@@ -183,6 +193,7 @@ export function meterQuery(p: QueryPoint) {
         shape.text,
         p.ok ? 'ok' : 'error',
         p.method,
+        rowCap && num(p.rowsOut) > rowCap ? 'capped' : '',
       ],
       doubles: [
         p.ms,

@@ -1,6 +1,6 @@
 # @columenlabs/lumen-ops
 
-Lumen's ops parts for Cloudflare Workers: every data query your app runs becomes one Analytics Engine point, so you can find slow and heavy queries and fix them. The meter wraps your bindings once, so new code is metered without opting in. It writes only each query's shape, never a value. It also meters tool calls (`/tools`) and sends signed webhooks (`/webhooks`).
+Lumen's ops parts for Cloudflare Workers: every request your app answers, every event and every data query becomes one Analytics Engine point, so you can find errors, mismatches and slow or heavy queries and fix them. The meter wraps your bindings once, so new code is metered without opting in. It writes only each query's shape, never a value. It also meters tool calls (`/tools`) and sends signed webhooks (`/webhooks`).
 
 - Docs: https://lumen.columenlabs.com/docs/
 - For agents: https://lumen.columenlabs.com/llms.txt
@@ -92,6 +92,79 @@ GROUP BY fingerprint ORDER BY p95_ms DESC LIMIT 20
 | `meterQuery(point)` | One point by hand, for any other engine |
 | `queryShape(sql)` | The shape, fingerprint and op of a query |
 | `foldRoute(path)` | A path with id-like segments as `:id` |
+| `setQueryRowCap(n)` | The most rows one statement should return; one that returns more is marked `capped` in `blob11` |
+
+## Requests
+
+`@columenlabs/lumen-ops/hono` meters every request a Hono app answers: mount it once, first, and every route the app has or adds later writes one point with its route template, status, outcome code and time. It names the request in scope, so events and queries inside carry its id.
+
+```ts
+import { requestId } from 'hono/request-id';
+import { requestMeter } from '@columenlabs/lumen-ops/hono';
+import { setRequestSink } from '@columenlabs/lumen-ops/requests';
+
+app.use('*', async (c, next) => {
+  setRequestSink(c.env.REQUESTS, { log: true }); // also one JSON line per point in Workers Logs
+  await next();
+});
+app.use('*', requestId());
+app.use('*', requestMeter({
+  app: 'myapp',
+  env: (c) => c.env.DEPLOY_ENV,
+  describe: (c) => ({ surface: 'api', subject: c.get('accountId'), callerKind: 'key' }),
+}));
+```
+
+| Column | Holds |
+|---|---|
+| `index1` | Subject: an opaque id the app makes for who called, or `anon` |
+| `blob1` … `blob7` | App, surface, method, route template, outcome (`ok`, an `error` code from a JSON answer, `exception`, `http_<status>`), caller kind, caller id |
+| `blob8` … `blob13` | Region, env, version, colo, country, request id |
+| `double1` … `double6` | Status, ms, bytes in, bytes out, upstream ms, subrequests |
+
+A path no route matched is written as `*`, so a scanner's junk never lands. Without Hono, wrap the handler in `withRequest(scope, route, fn)` and call `meterRequest(point)` yourself.
+
+## Events
+
+`@columenlabs/lumen-ops/events` writes what an app does that isn't a request it answers: a call to another service, a webhook in or out, a sync's start and end, a sign-in. With the request points they show whether what came in was acted on.
+
+```ts
+import { meterEvent, setEventSink } from '@columenlabs/lumen-ops/events';
+
+setEventSink(env.EVENTS);
+meterEvent({ event: 'bank.call', code: '/accounts/get', ok: res.ok, ms, status: res.status, upstream: true });
+meterEvent({ event: 'sync.done', ok: true, subject: accountId, ref: connectionId, counts: [added, modified, removed] });
+```
+
+| Column | Holds |
+|---|---|
+| `index1` | Subject, or `anon` |
+| `blob1` … `blob10` | App, event, code, outcome, ref, trigger, request id, upstream id, env, version |
+| `double1` … `double6` | ms, status, count1, count2, count3, attempt |
+
+`upstream: true` adds the call's time to the request's `upstream ms`. In a Durable Object, pass `app`, `requestId` and `env` yourself.
+
+## Browser telemetry
+
+`useLumenTelemetry` in `@columenlabs/lumen-ui` sends screens opened, uncaught errors (class and a hash of the stack, never the message), failed requests and Web Vitals in batches to `/api/t`. The Worker checks and writes them:
+
+```ts
+import { meterClientBatch, setClientSink } from '@columenlabs/lumen-ops/client';
+
+setClientSink(env.CLIENT);
+app.post('/api/t', async (c) => {
+  meterClientBatch(await c.req.json().catch(() => null), { app: 'console', subject: c.get('accountId') });
+  return c.body(null, 204);
+});
+```
+
+| Column | Holds |
+|---|---|
+| `index1` | Subject, or `anon` |
+| `blob1` … `blob9` | App, kind (`view`, `error`, `fetch_fail`, `vital`), route template, name, stack fingerprint, request id, version, device, env |
+| `double1`, `double2` | Value (ms or score), status |
+
+A batch that fails the schema is dropped whole; only codes, templates and numbers pass.
 
 ## Tool calls
 

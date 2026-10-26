@@ -15,6 +15,7 @@ import { type ErrorComponentProps, useRouter } from '@tanstack/react-router';
 import { ChevronRight, RefreshCw, RotateCcw, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { reportClientError } from './telemetry';
 import { Button } from './ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import {
@@ -183,6 +184,7 @@ export function reportError(error: unknown, outcome: 'reload' | 'retry' | 'shown
   const key = `${where ?? 'page'} ${outcome} ${err.message}`;
   if (Date.now() - (sent.get(key) ?? 0) < GAP_MS) return;
   sent.set(key, Date.now());
+  reportClientError(err);
   const body = JSON.stringify({
     message: err.message.slice(0, 500),
     stack: (err.stack ?? '').slice(0, 2000),
