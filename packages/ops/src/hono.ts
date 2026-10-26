@@ -47,8 +47,10 @@ export function requestMeter(opts: RequestMeterOptions): MiddlewareHandler {
     await withRequest(scope, foldRoute(c.req.path), async () => {
       await next();
       try {
-        // The handler's own template; a path no route matched is `*`, so junk never lands.
-        const route = routePath(c, -1) || '*';
+        // The template of the deepest route that ran (Hono leaves its index set once the chain
+        // unwinds); `-1` would name the last route that merely matched, a catch-all say. A path
+        // only this middleware matched is `/*`, so junk never lands.
+        const route = routePath(c) || '*';
         const outcome = c.error
           ? 'exception'
           : await (opts.outcome ? opts.outcome(c) : errorCode(c));
