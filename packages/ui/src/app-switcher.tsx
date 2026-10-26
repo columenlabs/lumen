@@ -109,7 +109,7 @@ export function LumenAppSwitcher({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="min-w-56 max-w-80 rounded-lg"
+            className="min-w-56 max-w-96 rounded-lg"
             align="start"
             side={isMobile ? 'bottom' : 'right'}
             sideOffset={4}
@@ -130,7 +130,7 @@ export function LumenAppSwitcher({
                       <div className="flex size-6 shrink-0 items-center justify-center rounded-md border">
                         <AppMark app={a} className="size-3.5 shrink-0" />
                       </div>
-                      <span className="truncate">{a.label ?? a.name}</span>
+                      <span className={cn('truncate', a.external && 'shrink-0')}>{a.label ?? a.name}</span>
                       {a.external && (
                         <>
                           <span className="ml-auto min-w-0 truncate text-xs text-muted-foreground">
