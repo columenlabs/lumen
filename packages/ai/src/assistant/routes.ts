@@ -6,10 +6,14 @@
  *
  *   GET    /status                  what the panel and Settings show
  *   PUT    /settings                the person's tiers, tasks, hand off, advice, tool access, web, payer
- *   PUT    /app {cap_usd}           admin: what each person may spend a month on the app's key
- *   PUT    /key {api_key}           admin: the app's Claude key, tested before it is kept
- *   DELETE /key, POST /key/test     admin
- *   PUT    /my-key {api_key, cap_usd?}, PUT /my-key/cap {cap_usd}, DELETE /my-key, POST /my-key/test
+ *   PUT    /app {cap_usd}           admin: what each person may spend a month on the app's keys
+ *   PUT    /key {api_key}           admin: the app's key of `?provider=` (anthropic by default,
+ *                                   or openai), tested before it is kept
+ *   DELETE /key, POST /key/test     admin, `?provider=` the same
+ *   PUT    /my-key {api_key}, DELETE /my-key, POST /my-key/test   the person's own, `?provider=`
+ *   PUT    /my-key/cap {cap_usd}    what the person may spend a month on their own keys
+ *   POST   /my-signin               starts a ChatGPT plan sign-in (`?provider=openai`): {url, redirect}
+ *   POST   /my-signin/finish {url}  finishes it from the 127.0.0.1 address the sign-in ended on
  *   PUT    /web/scrapeql {client_id, client_secret}, DELETE /web/scrapeql, POST /web/test   admin
  *   POST   /chat                    one answer as server-sent events; closing the request stops it
  *   GET    /chats, GET|DELETE /chats/:id
@@ -24,11 +28,13 @@ import {
   ASSISTANT_EFFORTS,
   ASSISTANT_PAYERS,
   type AssistantMessage,
+  type AssistantProvider,
   type AssistantSettingsPatch,
   HAND_OFF_POLICIES,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { type Assistant, AssistantError, type Caller } from './engine';
-import type { KeyDoc, PersonDoc, TokenDoc } from './state';
+import { PROVIDERS } from './models';
+import { type KeyDoc, type PersonDoc, type TokenDoc, keyDocName } from './state';
 import { APP_SCOPE } from './store';
 
 type Awaitable<T> = T | Promise<T>;
@@ -155,6 +161,12 @@ export function assistantRoutes(
     if (!caller) return fail('Sign in first.', 403, 'forbidden');
     const admin = () => (caller.admin ? null : fail('Admins only.', 403, 'forbidden'));
     const status = async () => json(await a.status(caller));
+    const asked = url.searchParams.get('provider') ?? 'anthropic';
+    const provider = a.providers.find((p) => p === asked) as AssistantProvider | undefined;
+    const keyRoute = /^(PUT|DELETE|POST) \/(my-)?(key|signin)(\/test|\/finish)?$/.test(route);
+    if (keyRoute && !provider) return fail(`This app runs no ${asked} models.`, 404);
+    const prov = provider ?? 'anthropic';
+    const docName = keyDocName(prov);
 
     try {
       switch (route) {
@@ -187,27 +199,19 @@ export function assistantRoutes(
           }
           const b = await body(req);
           const key = str(b.api_key, 400);
-          if (!key) return fail('Paste the key (sk-ant-…).');
-          const c = b.cap_usd === undefined ? undefined : cap(b.cap_usd);
-          if (c === null) return fail(`cap_usd is a number of dollars, 0 to ${MAX_CAP}.`);
-          const test = await a.testKey(key);
+          const { prefix, label } = PROVIDERS[prov];
+          if (!key?.startsWith(prefix)) return fail(`Paste the ${label} key (${prefix}…).`);
+          const test = await a.testKey(prov, key);
           if (!test.ok) return fail(test.detail, 400, 'key_refused');
           const scope = mine ? caller.id : APP_SCOPE;
-          await docs.update<KeyDoc>(scope, 'key', (d) => ({
-            api_key: key,
-            saved_at: Date.now(),
-            test,
-            ...(mine ? { cap_usd: c ?? d?.cap_usd ?? a.state.defaultCap } : {}),
-          }));
+          await docs.write<KeyDoc>(scope, docName, { api_key: key, saved_at: Date.now(), test });
           return status();
         }
 
         case 'PUT /my-key/cap': {
           const c = cap((await body(req)).cap_usd);
           if (c === null) return fail(`cap_usd is a number of dollars, 0 to ${MAX_CAP}.`);
-          const d = await a.state.ownKey(caller.id);
-          if (!d) return fail('Add your key first.', 404);
-          await docs.write<KeyDoc>(caller.id, 'key', { ...d, cap_usd: c });
+          await a.state.setPerson(caller.id, (d) => ({ ...d, own_cap: c }));
           return status();
         }
 
@@ -218,23 +222,35 @@ export function assistantRoutes(
             const no = admin();
             if (no) return no;
           }
-          await docs.remove(mine ? caller.id : APP_SCOPE, 'key');
+          await docs.remove(mine ? caller.id : APP_SCOPE, docName);
           return status();
         }
 
-        case 'POST /key/test':
+        case 'POST /my-signin':
+          return json(await a.startSignin(caller, prov));
+
+        case 'POST /my-signin/finish': {
+          const pasted = str((await body(req)).url, 4000);
+          if (!pasted) return fail('Paste the address the sign-in ended on.');
+          await a.finishSignin(caller, prov, pasted);
+          return status();
+        }
+
         case 'POST /my-key/test': {
-          const mine = route === 'POST /my-key/test';
-          if (!mine) {
-            const no = admin();
-            if (no) return no;
-          }
-          const scope = mine ? caller.id : APP_SCOPE;
-          const d = await docs.read<KeyDoc>(scope, 'key');
-          const key = d?.api_key ?? (mine ? null : (await a.state.appApiKey())?.key);
+          const test = await a.testOwn(caller, prov);
+          if (!test) return fail('No key is set.', 404);
+          await docs.update<KeyDoc>(caller.id, docName, (d) => (d ? { ...d, test } : null));
+          return json(test);
+        }
+
+        case 'POST /key/test': {
+          const no = admin();
+          if (no) return no;
+          const d = await docs.read<KeyDoc>(APP_SCOPE, docName);
+          const key = d?.api_key ?? (await a.state.appApiKey(prov))?.key;
           if (!key) return fail('No key is set.', 404);
-          const test = await a.testKey(key);
-          if (d) await docs.write<KeyDoc>(scope, 'key', { ...d, test });
+          const test = await a.testKey(prov, key);
+          if (d) await docs.write<KeyDoc>(APP_SCOPE, docName, { ...d, test });
           return json(test);
         }
 

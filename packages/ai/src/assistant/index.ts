@@ -1,6 +1,6 @@
 /**
- * An assistant for any app: a chat side panel's server. Claude on the app's tiers (named by the
- * app), the app's tools from any MCP server, the web (a plain fetch and ScrapeQL over its API),
+ * An assistant for any app: a chat side panel's server. Claude or OpenAI models on the app's tiers
+ * (named by the app), the app's tools from any MCP server, the web (a plain fetch and ScrapeQL over its API),
  * hand off to a higher tier, advice, drafts the person saves, and a monthly spend cap per person.
  *
  *   const assistant = createAssistant({ name, system, tiers, groups, store, sealer, appKey });
@@ -15,6 +15,7 @@ export * from './routes';
 export {
   DEFAULT_CAP,
   type KeyDoc,
+  keyDocName,
   type KeyTest,
   monthIn,
   type Paying,
@@ -22,6 +23,7 @@ export {
   type SpendDoc,
   State,
   type TokenDoc,
+  waitText,
 } from './state';
 export * from './store';
 export * from './tools';

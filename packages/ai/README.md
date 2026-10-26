@@ -57,7 +57,7 @@ Every merge to `main` publishes the next patch of every Lumen package at once.
 
 ## A chat assistant
 
-`@columenlabs/lumen-ai/assistant` is the server behind a chat side panel: Claude on the app's own tiers, the app's tools from any MCP server, the web, drafts the person saves, hand off to a higher tier, advice, and a monthly spend cap per person. The panel and Settings sections are `@columenlabs/lumen-ui`'s; the shared types are `@columenlabs/lumen-ui-types/assistant`.
+`@columenlabs/lumen-ai/assistant` is the server behind a chat side panel: Claude or OpenAI models on the app's own tiers, the app's tools from any MCP server, the web, drafts the person saves, hand off to a higher tier, advice, and a monthly spend cap per person. The panel and Settings sections are `@columenlabs/lumen-ui`'s; the shared types are `@columenlabs/lumen-ui-types/assistant`.
 
 ```ts
 import {
@@ -83,7 +83,8 @@ const assistant = createAssistant({
   web: { fetch: { blockHosts: ['app.example.com'] }, scrapeql: { url: 'https://scrapeql.example.com/mcp' } },
   store: sqlAssistantStore(doSql(ctx.storage.sql)), // or d1Sql(env.DB)
   sealer, // the app's own sealing: keys and chats are stored sealed
-  appKey: async () => env.ANTHROPIC_API_KEY, // when no key is set in Settings
+  // A provider's key when none is set in Settings.
+  appKey: async (provider) => (provider === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY),
 });
 
 const routes = assistantRoutes(assistant, {
@@ -93,8 +94,10 @@ const routes = assistantRoutes(assistant, {
 app.all('/api/assistant/*', (c) => routes(c.req.raw));
 ```
 
-- **Keys.** An admin pastes the app's Claude key (`PUT /key`); it is tested with one free call before it is kept, then sealed, and no route returns it. A person may add their own (`PUT /my-key`) with its own monthly cap.
-- **Who pays.** The person's pick (the app's key by default) while it has money left this month under its cap (an admin sets the app key's cap per person, `PUT /app`), else the other; with neither the panel says why.
+- **Providers.** A tier runs any model in `models` (Claude's and OpenAI's by default, `CLAUDE_MODELS`, `OPENAI_MODELS`): Claude through Anthropic's Messages API, OpenAI through the Responses API, with the same tools, drafts, Stop and caps. A hand-off may cross providers. The advisor and prompt caching marks are Claude's only.
+- **Keys.** Each provider has its own keys (`?provider=anthropic|openai` on the key routes). An admin pastes the shared key everyone uses (`PUT /key`); it is tested with one free call before it is kept, then sealed, and no route returns it. A person may add their own (`PUT /my-key`), with one monthly cap on their own keys (`PUT /my-key/cap`).
+- **ChatGPT sign-in.** In place of their own OpenAI key a person may sign in with their ChatGPT plan (`POST /my-signin`, then `POST /my-signin/finish {url}`): the sign-in opens in a new tab and ends on `http://127.0.0.1:1455/auth/callback`, a page that does not load, whose address the person pastes back. The tokens are sealed as their own key and refreshed before they run out; answers on the plan count tokens and no dollars.
+- **Who pays.** The person's pick (the shared keys by default) while it has a key for the tier's provider and money left this month under its cap (an admin sets the shared keys' cap per person, `PUT /app`), else the other; with neither the panel says why.
 - **Tools.** Each group is Off, Read or Read + draft per person. A tool is a read when its MCP `readOnlyHint` is set; a write only drafts a card, and runs as the person when they press Save, after access is checked again. Use `mcpServerTools` (an SDK `McpServer`), `mcpFetchTools` (a server served as a fetch handler, any SDK), `remoteMcpTools` or `plainTools`.
 - **Web.** `fetch` is a plain GET from the Worker (10 s, 2 MB, never the app's own hosts or private addresses). ScrapeQL's own tools join over its MCP API once an admin pastes a Cloudflare Access service token (`PUT /web/scrapeql`).
 - **Hand off and advice.** The `escalate` tool hands one task to a higher tier (the person sets next, any or only when asked); Anthropic's advisor tool lets a higher tier send a plan, at most two an answer.

@@ -236,6 +236,7 @@ export {
   errorText,
   useClock,
 } from './integrations';
+export { LumenExpandList, LumenExpandRow } from './expand-list';
 export { LumenPager } from './pager';
 export { createDeskQueryClient } from './query-client';
 export { refreshHeaders, withRefreshToken } from './refresh';

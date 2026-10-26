@@ -1,26 +1,33 @@
 /**
  * The assistant's settings, keys and spend, as stored documents.
  *
- *   app      (the app's scope)   the cap per person on the app's key
+ *   app      (the app's scope)   the cap per person on the app's keys
  *   key      (the app's scope)   the app's Anthropic key, tested before it is kept, sealed
+ *   key:<p>  (the app's scope)   the app's key of another provider (`key:openai`), the same
  *   scrapeql (the app's scope)   ScrapeQL's Access service token, tested before it is kept, sealed
- *   settings (a person's scope)  their tiers, start tiers, hand off, advice, tool access, web, payer
- *   key      (a person's scope)  their own Anthropic key and its monthly cap, sealed
+ *   settings (a person's scope)  their tiers, start tiers, hand off, advice, tool access, web, payer,
+ *                                and the monthly cap on their own keys
+ *   key, key:<p> (a person's)    their own key of each provider, sealed; OpenAI's may be a ChatGPT
+ *                                plan sign-in, refreshed before it runs out
+ *   signin:<p>   (a person's)    the app's sign-in registration for them, kept across sign-outs
  *   spend:YYYY-MM                what each tier cost them this month, by payer
  *
- * Who pays: the person's pick (the app's key by default) while it has money left this month, else
- * the other; with neither the assistant waits and says why.
+ * Who pays: the person's pick (the app's keys by default) while it has a key for the provider the
+ * tier runs on and money left this month, else the other; with neither the assistant waits and says
+ * why. A cap covers every provider of its payer.
  */
 import type {
   AssistantAccess,
   AssistantEffort,
   AssistantPayer,
+  AssistantProvider,
   AssistantWait,
   HandOffPolicy,
   KeyState,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
-import { keyHint } from './models';
+import { type ChatgptTokens, refreshChatgpt, staleChatgpt } from './chatgpt';
+import { PROVIDERS, keyHint } from './models';
 import { APP_SCOPE, type Docs } from './store';
 
 export interface KeyTest {
@@ -33,9 +40,15 @@ export interface KeyDoc {
   api_key: string;
   saved_at: number;
   test: KeyTest | null;
-  /** USD a month: the person's own key only. */
+  /** USD a month: a person's own Anthropic key before the cap moved to their settings. */
   cap_usd?: number;
+  /** A ChatGPT plan sign-in in place of an API key (`api_key` is then its access token). */
+  chatgpt?: ChatgptTokens;
 }
+
+/** Where a provider's key is kept: `key` for Anthropic, `key:<provider>` for the rest. */
+export const keyDocName = (provider: AssistantProvider) =>
+  provider === 'anthropic' ? 'key' : `key:${provider}`;
 
 export interface TokenDoc {
   client_id: string;
@@ -58,6 +71,8 @@ export interface PersonDoc {
   access?: Record<string, AssistantAccess>;
   web?: boolean;
   pay?: AssistantPayer;
+  /** USD a month on their own keys. */
+  own_cap?: number;
 }
 
 export type SpendRow = UsagePart & { payer: AssistantPayer };
@@ -77,9 +92,11 @@ export function monthIn(timeZone: string, at = new Date()) {
 
 export function keyState(d: KeyDoc | TokenDoc | null, secret: (d: KeyDoc | TokenDoc) => string) {
   if (!d) return { set: false } satisfies KeyState;
+  const plan = 'chatgpt' in d ? d.chatgpt : undefined;
   return {
     set: true,
-    hint: keyHint(secret(d)),
+    hint: plan ? (plan.email ?? 'ChatGPT plan') : keyHint(secret(d)),
+    ...(plan ? { via: 'chatgpt' as const } : {}),
     saved_at: d.saved_at,
     ...(d.test ? { test: d.test } : {}),
   } satisfies KeyState;
@@ -87,7 +104,12 @@ export function keyState(d: KeyDoc | TokenDoc | null, secret: (d: KeyDoc | Token
 
 export interface Paying {
   payer: AssistantPayer;
+  /** The key of the provider asked for. */
   apiKey: string;
+  /** The payer's key of every provider it has one for (a hand-off may run on another). */
+  keys: Partial<Record<AssistantProvider, string>>;
+  /** Providers whose key is a plan sign-in: their use costs the payer nothing. */
+  plans: Partial<Record<AssistantProvider, boolean>>;
   /** USD left this month under the payer's cap. */
   left: number;
   cap: number;
@@ -99,7 +121,8 @@ export class State {
     private readonly o: {
       timeZone: string;
       defaultCap: number;
-      appKey?: () => Promise<string | null | undefined>;
+      appKey?: (provider: AssistantProvider) => Promise<string | null | undefined>;
+      fetch?: typeof fetch;
     },
   ) {}
 
@@ -126,18 +149,46 @@ export class State {
     return this.docs.update<AppDoc>(APP_SCOPE, 'app', (d) => change(d ?? {}));
   }
 
-  appKey() {
-    return this.docs.read<KeyDoc>(APP_SCOPE, 'key');
+  appKey(provider: AssistantProvider) {
+    return this.docs.read<KeyDoc>(APP_SCOPE, keyDocName(provider));
   }
   /** The app's key: the stored one, else the app's fallback (a Worker secret). */
-  async appApiKey(): Promise<{ key: string; fromEnv: boolean } | null> {
-    const d = await this.appKey();
+  async appApiKey(provider: AssistantProvider): Promise<{ key: string; fromEnv: boolean } | null> {
+    const d = await this.appKey(provider);
     if (d) return { key: d.api_key, fromEnv: false };
-    const env = await this.o.appKey?.();
+    const env = await this.o.appKey?.(provider);
     return env ? { key: env, fromEnv: true } : null;
   }
-  ownKey(id: string) {
-    return this.docs.read<KeyDoc>(id, 'key');
+  ownKey(id: string, provider: AssistantProvider) {
+    return this.docs.read<KeyDoc>(id, keyDocName(provider));
+  }
+  /** The person's own key, a plan sign-in refreshed first when it is about to run out. */
+  async ownApiKey(id: string, provider: AssistantProvider) {
+    const d = await this.ownKey(id, provider);
+    if (!d) return null;
+    if (!d.chatgpt) return { key: d.api_key, plan: false };
+    if (!staleChatgpt(d.chatgpt)) return { key: d.chatgpt.access_token, plan: true };
+    try {
+      const t = await refreshChatgpt(d.chatgpt, this.o.fetch ?? fetch);
+      await this.docs.write<KeyDoc>(id, keyDocName(provider), {
+        ...d,
+        api_key: t.access_token,
+        chatgpt: t,
+      });
+      return { key: t.access_token, plan: true };
+    } catch (err) {
+      await this.docs.write<KeyDoc>(id, keyDocName(provider), {
+        ...d,
+        test: { at: Date.now(), ok: false, detail: (err as Error).message },
+      });
+      return null;
+    }
+  }
+  /** USD a month on the person's own keys. */
+  async ownCap(id: string) {
+    const p = await this.person(id);
+    if (p.own_cap !== undefined) return p.own_cap;
+    return (await this.ownKey(id, 'anthropic'))?.cap_usd ?? this.o.defaultCap;
   }
   scrapeql() {
     return this.docs.read<TokenDoc>(APP_SCOPE, 'scrapeql');
@@ -177,25 +228,60 @@ export class State {
     });
   }
 
-  /** Who pays the person's next answer, or why nobody can. */
-  async paying(id: string): Promise<{ paying: Paying | null; wait: AssistantWait | null }> {
-    const [person, app, own, spend, appCap] = await Promise.all([
+  /** The payer's key of each provider, those set, and which are plan sign-ins. */
+  async keysOf(id: string, payer: AssistantPayer) {
+    const ids = Object.keys(PROVIDERS) as AssistantProvider[];
+    const found = await Promise.all(
+      ids.map((p) =>
+        payer === 'app'
+          ? this.appApiKey(p).then((k) => (k ? { key: k.key, plan: false } : null))
+          : this.ownApiKey(id, p),
+      ),
+    );
+    const keys: Partial<Record<AssistantProvider, string>> = {};
+    const plans: Partial<Record<AssistantProvider, boolean>> = {};
+    ids.forEach((p, i) => {
+      const k = found[i];
+      if (k) keys[p] = k.key;
+      if (k?.plan) plans[p] = true;
+    });
+    return { keys, plans };
+  }
+
+  /** Who pays the person's next answer on `provider`'s model, or why nobody can. */
+  async paying(
+    id: string,
+    provider: AssistantProvider,
+  ): Promise<{ paying: Paying | null; wait: AssistantWait | null }> {
+    const [person, appKeys, ownKeys, spend, appCap, ownCap] = await Promise.all([
       this.person(id),
-      this.appApiKey(),
-      this.ownKey(id),
+      this.keysOf(id, 'app'),
+      this.keysOf(id, 'own'),
       this.spend(id),
       this.appCap(),
+      this.ownCap(id),
     ]);
     const spent = (p: AssistantPayer) =>
       spend.rows.filter((r) => r.payer === p).reduce((a, r) => a + r.usd, 0);
+    const app = appKeys.keys[provider];
+    const own = ownKeys.keys[provider];
     const sources: Record<AssistantPayer, Paying | null> = {
-      app: app ? { payer: 'app', apiKey: app.key, cap: appCap, left: appCap - spent('app') } : null,
+      app: app
+        ? {
+            payer: 'app',
+            apiKey: app,
+            ...appKeys,
+            cap: appCap,
+            left: appCap - spent('app'),
+          }
+        : null,
       own: own
         ? {
             payer: 'own',
-            apiKey: own.api_key,
-            cap: own.cap_usd ?? this.o.defaultCap,
-            left: (own.cap_usd ?? this.o.defaultCap) - spent('own'),
+            apiKey: own,
+            ...ownKeys,
+            cap: ownCap,
+            left: ownCap - spent('own'),
           }
         : null,
     };
@@ -212,9 +298,11 @@ export class State {
   }
 }
 
-export const WAIT_TEXT: Record<AssistantWait, string> = {
-  not_connected: 'No Claude key is set: an admin adds one in Settings ▸ Model providers.',
-  app_cap:
-    "You reached this month's cap on the app's key. Add your own key, or wait for next month.",
-  own_cap: 'Your own key reached its monthly cap: raise it in Settings ▸ Spend.',
-};
+export function waitText(wait: AssistantWait, provider: AssistantProvider) {
+  const label = PROVIDERS[provider].label;
+  if (wait === 'not_connected')
+    return `No ${label} key is set: add one in Settings ▸ Model providers, or pick another model in Settings ▸ Models.`;
+  if (wait === 'app_cap')
+    return "You reached this month's cap on the shared keys. Add your own key, or wait for next month.";
+  return 'Your own keys reached their monthly cap: raise it in Settings ▸ Model providers.';
+}

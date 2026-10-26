@@ -26,6 +26,10 @@ export type HandOffPolicy = (typeof HAND_OFF_POLICIES)[number];
 export const HAND_OFF_WHYS = ['asked', 'judgement', 'stuck', 'check_failed'] as const;
 export type HandOffWhy = (typeof HAND_OFF_WHYS)[number];
 
+/** Whose models a tier runs, each with its own keys. */
+export const ASSISTANT_PROVIDERS = ['anthropic', 'openai'] as const;
+export type AssistantProvider = (typeof ASSISTANT_PROVIDERS)[number];
+
 /** Who pays for a person's answers: the app's key (under the cap an admin sets) or their own key. */
 export const ASSISTANT_PAYERS = ['app', 'own'] as const;
 export type AssistantPayer = (typeof ASSISTANT_PAYERS)[number];
@@ -173,6 +177,7 @@ export interface AssistantTierRow {
   about: string;
   model: string;
   model_label: string;
+  provider: AssistantProvider;
   effort: AssistantEffort;
 }
 
@@ -181,13 +186,31 @@ export interface AssistantModelRow {
   id: string;
   label: string;
   group: string;
+  provider: AssistantProvider;
+}
+
+/** One provider's keys as Settings shows them: the app's (admins see its state) and the person's. */
+export interface AssistantProviderRow {
+  id: AssistantProvider;
+  label: string;
+  /** How its keys start (`sk-ant-`). */
+  prefix: string;
+  /** Where a person makes a key. */
+  keys_url: string;
+  /** A person may sign in with their plan in place of their own key (`chatgpt`). */
+  signin?: 'chatgpt';
+  /** The app's key: its state for admins; for others only whether one is set. */
+  app: KeyState & { from_env?: boolean };
+  own: KeyState;
 }
 
 /** A sealed key as Settings shows it: never the key, only its last characters and last check. */
 export interface KeyState {
   set: boolean;
-  /** `sk-ant-…7Qx2` */
+  /** `sk-ant-…7Qx2`, or the signed-in account's email */
   hint?: string;
+  /** Set when it is a plan sign-in, not a key. */
+  via?: 'chatgpt';
   saved_at?: number;
   test?: { at: number; ok: boolean; detail: string };
 }
@@ -207,6 +230,8 @@ export interface AssistantStatus {
   name: string;
   /** Null when the assistant can answer now. */
   wait: AssistantWait | null;
+  /** The provider the wait is about: the one the person's tier runs on. */
+  wait_provider?: AssistantProvider;
   admin: boolean;
   tier: string;
   tiers: AssistantTierRow[];
@@ -221,11 +246,10 @@ export interface AssistantStatus {
     /** Null when the app has no ScrapeQL. */
     scrapeql: (KeyState & { tools?: string[] }) | null;
   };
-  keys: {
-    /** The app's key: its state for admins; for others only whether one is set. */
-    app: KeyState & { cap: number; from_env?: boolean };
-    own: KeyState & { cap: number };
-  };
+  /** The providers the app's models run on, each with its keys. */
+  providers: AssistantProviderRow[];
+  /** USD a month: what each person may spend on the app's keys, and on their own keys. */
+  caps: { app: number; own: number };
   pay: AssistantPayer;
   spend: SpendState;
 }
