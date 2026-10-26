@@ -32,6 +32,7 @@ export interface StackedColumn {
 interface StackCtx {
   columns: StackedColumn[];
   depth: number;
+  flat: boolean;
 }
 
 const Ctx = createContext<StackCtx | null>(null);
@@ -40,6 +41,8 @@ export interface LumenStackedListProps {
   columns: StackedColumn[];
   /** The header over the names. */
   lead?: string;
+  /** One level that never folds (a short list in a card): no chevron space, compact rows. */
+  flat?: boolean;
   children: ReactNode;
   'aria-label'?: string;
   className?: string;
@@ -48,11 +51,12 @@ export interface LumenStackedListProps {
 export function LumenStackedList({
   columns,
   lead,
+  flat = false,
   children,
   className,
   ...aria
 }: LumenStackedListProps) {
-  const ctx = useMemo(() => ({ columns, depth: 0 }), [columns]);
+  const ctx = useMemo(() => ({ columns, depth: 0, flat }), [columns, flat]);
   const style = {
     '--stack-cols': `minmax(0,1fr) ${columns.map((c) => c.width).join(' ')}`,
   } as CSSProperties;
@@ -65,7 +69,7 @@ export function LumenStackedList({
             aria-hidden
             className="grid grid-cols-(--stack-cols) items-center gap-x-3 px-3 pb-1.5 text-xs font-medium text-muted-foreground max-sm:hidden"
           >
-            <span className="pl-6">{lead}</span>
+            <span className={cn(!flat && 'pl-7.5')}>{lead}</span>
             <Cells
               columns={columns}
               cells={Object.fromEntries(columns.map((c) => [c.key, c.label]))}
@@ -150,7 +154,7 @@ export function LumenStackedRow({
 }: LumenStackedRowProps) {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('LumenStackedRow outside LumenStackedList');
-  const { columns, depth } = ctx;
+  const { columns, depth, flat } = ctx;
   const [own, setOwn] = useState(defaultOpen);
   const open = openProp ?? own;
   const setOpen = (o: boolean) => {
@@ -158,7 +162,7 @@ export function LumenStackedRow({
     onOpenChange?.(o);
   };
   const has = Boolean(children) || Boolean(notice);
-  const inner = useMemo(() => ({ columns, depth: depth + 1 }), [columns, depth]);
+  const inner = useMemo(() => ({ columns, depth: depth + 1, flat }), [columns, depth, flat]);
   const indent = { paddingInlineStart: `calc(${depth} * var(--spacing) * 6)` } as CSSProperties;
   const line = (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the chevron button is the keyboard control
@@ -166,7 +170,7 @@ export function LumenStackedRow({
       data-stack-row
       className={cn(
         'group/stack grid grid-cols-(--stack-cols) items-center gap-x-3 border-t px-3 max-sm:grid-cols-[minmax(0,1fr)_auto]',
-        depth === 0 ? 'min-h-14 py-2' : 'min-h-10 py-1.5',
+        depth === 0 && !flat ? 'min-h-14 py-2' : 'min-h-10 py-1.5',
         depth === 1 && 'bg-muted/40',
         has && 'cursor-pointer',
         tone === 'muted' && 'text-muted-foreground',
@@ -184,7 +188,7 @@ export function LumenStackedRow({
           >
             <ChevronRightIcon className={cn('size-4 transition-transform', open && 'rotate-90')} />
           </button>
-        ) : (
+        ) : flat ? null : (
           <span className="w-6 shrink-0" aria-hidden />
         )}
         <div className="min-w-0">
