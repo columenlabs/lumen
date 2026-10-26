@@ -10,3 +10,17 @@ Helper text lives behind an (i), not on the screen.
 - No grey hint lines under fields, section titles or options, and no paragraph under a page title. A footer or status line is a word or two ("Test to save", "Passed").
 - The default is none. Most labels explain themselves (Name, Email, API key, Sent from, Test it, a route like Public internet) and get no (i). Add one only where a reader would truly guess wrong without it, such as a server address seen from a tunnel, where localhost means the tunnel's machine. A whole settings page usually has zero or one.
 - The tip itself is one to three plain sentences. Errors and results are never tips: a failed check, a blocked Save (`SaveButton` with `FormIssue`s) or a test's outcome stays on the screen.
+
+## Actions: icon first
+
+An action takes the lightest form a reader still gets right at a glance. Go down this list only as far as the icon needs:
+
+1. **Icon.** The meaning is unmistakable: close ×, search, a chevron that opens a group. It still carries an `aria-label`.
+2. **Icon with a tooltip.** A clear icon whose action is worth naming: rename ✎, copy, refresh, reset. The tooltip is the action's name in two or three words ("Rename", "Reset to original").
+3. **Icon with text.** The icon alone is ambiguous, or it is the screen's main action: "New view", "Save".
+4. **Icon with text and a detail tooltip.** The action's effect needs a sentence before someone clicks it; the sentence goes in the tooltip, not on the screen (as in Details on demand).
+
+Where actions sit:
+- **Edit in place first.** A value the person can change is clicked or tapped to edit (`EditInputCell`), not reached through a button or menu. A value changed by hand carries the kit's small ✎ mark, with the original in its tooltip; clearing the box goes back to the original.
+- **Row actions show on hover, inline.** One or two icons at the end of the row's name, shown on row hover or keyboard focus and hidden at rest, so a page of many rows stays quiet. Never put one or two actions behind a ⋯ or context menu.
+- **No standing icons.** At rest a row shows only its data and, at most, a state mark such as ✎. On a phone (no hover) the tap on the value is the action; an icon shows only on the row being worked on.
