@@ -695,7 +695,9 @@ export function LumenWidget({
   const layout = !!controls?.layout;
   // A small card (one number) shows only its title until the page is in Edit layout.
   const bare = compact && !layout;
-  const on = (k: WidgetControl) => kind === null || controlOn({ kind, style, controls: shown }, k);
+  // A page's own card (kind null) has every control unless `shown` turns one off (its header).
+  const on = (k: WidgetControl) =>
+    kind === null ? shown?.[k] !== false : controlOn({ kind, style, controls: shown }, k);
   // A page's own card (kind null) says it is a table when it draws one (`style` table).
   const styleId = kind
     ? widgetStyleId({ kind, style })
