@@ -1,8 +1,10 @@
 // A name renamed in place (for a broker link accounts; shared so
 // An app's bank accounts rename the same way): Enter or leaving the field saves, Escape undoes,
-// empty or ↺ goes back to the source's own name, shown as the placeholder.
+// empty or ↺ goes back to the source's own name, shown as the placeholder. Quiet at rest
+// (DESIGN.md, Actions: icon first): a renamed name keeps a ✎ mark, the rest shows on hover or focus.
 import { PencilIcon, RotateCcwIcon } from 'lucide-react';
 import { useState } from 'react';
+import { cn } from './lib/utils';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group';
 
 export interface RenameFieldProps {
@@ -43,9 +45,16 @@ export function RenameField({ value, original, originLabel, onSave }: RenameFiel
         className="field-sizing-content min-w-0 px-2 text-sm"
       />
       <InputGroupAddon align="inline-end">
-        <PencilIcon className="size-3" />
+        {/* At rest only a renamed name keeps its ✎; the ✎ and ↺ show on hover or focus. */}
+        <PencilIcon
+          className={cn(
+            'size-3 group-focus-within/input-group:opacity-100 group-hover/input-group:opacity-100',
+            value === original && 'opacity-0',
+          )}
+        />
         {value !== original && (
           <InputGroupButton
+            className="opacity-0 group-focus-within/input-group:opacity-100 group-hover/input-group:opacity-100"
             size="icon-xs"
             aria-label={`Reset to ${original}`}
             title={`Reset to ${original}`}
