@@ -345,4 +345,6 @@ export interface EmailDraft {
   apiKey?: string;
   from: string;
   fromName: string;
+  /** Send test only: where the test goes; the signed-in admin when left out. */
+  testTo?: string;
 }

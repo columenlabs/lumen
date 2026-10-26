@@ -81,6 +81,7 @@ function EmailForm({
   const [replacing, setReplacing] = useState(!view.current);
   const [result, setResult] = useState<{ for: EmailDraft; check: EmailCheck } | null>(null);
   const [busy, setBusy] = useState<'check' | 'test' | 'save' | null>(null);
+  const [testTo, setTestTo] = useState(view.me);
   // Each route keeps what was typed for it, so switching back and forth loses nothing.
   const [perRoute, setPerRoute] = useState<
     Record<string, { url: string; apiKey: string; replacing: boolean }>
@@ -103,7 +104,9 @@ function EmailForm({
   const run = async (kind: 'check' | 'test') => {
     setBusy(kind);
     try {
-      const check = await (kind === 'check' ? api.check(draft) : api.test(draft));
+      const check = await (kind === 'check'
+        ? api.check(draft)
+        : api.test({ ...draft, testTo: testTo.trim() }));
       setResult({ for: draft, check });
     } catch (e) {
       lumenToast.error(errorText(e));
@@ -301,15 +304,27 @@ function EmailForm({
           >
             {busy === 'check' ? <Spinner /> : <PlugZapIcon />} Check connection
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!ready || !!busy}
-            onClick={() => run('test')}
-          >
-            {busy === 'test' ? <Spinner /> : <MailIcon />} Send test to {view.me}
-          </Button>
         </div>
+        <Labelled id={`${ids}-test-to`} label="Send a test email to">
+          <div className="flex gap-2">
+            <Input
+              id={`${ids}-test-to`}
+              type="email"
+              className="text-sm"
+              value={testTo}
+              placeholder={view.me}
+              onChange={(e) => setTestTo(e.target.value)}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!ready || !!busy || !testTo.trim()}
+              onClick={() => run('test')}
+            >
+              {busy === 'test' ? <Spinner /> : <MailIcon />} Send test
+            </Button>
+          </div>
+        </Labelled>
         {result && same(result.for, draft) && <Steps check={result.check} />}
         {!result && view.lastTest && (
           <p className="text-muted-foreground text-xs">
