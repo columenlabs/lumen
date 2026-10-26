@@ -455,7 +455,8 @@ export function meteredClickHouse<T extends { fetch: Fetch }>(
 // ── Durable Object SQLite ───────────────────────────────────────────────────
 
 interface NativeCursor {
-  toArray(): unknown[];
+  raw(): Iterable<unknown[]>;
+  columnNames: string[];
   rowsRead?: number;
   rowsWritten?: number;
 }
@@ -464,11 +465,58 @@ interface NativeSql {
 }
 
 /**
- * A Durable Object's `storage.sql`, metered for `caller`. Each statement is read to the end at
- * `exec`, so its rows read and written are known; callers read rows only through `toArray`.
+ * The rows of one statement, read to the end, behind the same cursor a Durable Object's
+ * `storage.sql` hands back: `toArray`, `one`, `raw`, `next`, iteration and `columnNames` all work,
+ * each reading on from where the last stopped.
  */
-export function meteredSql<T>(sql: T, caller: QueryCaller): T {
+function readCursor(
+  raws: unknown[][],
+  columnNames: string[],
+  rowsRead?: number,
+  rowsWritten?: number,
+) {
+  let at = 0;
+  const row = (r: unknown[]) => Object.fromEntries(columnNames.map((c, i) => [c, r[i]]));
+  const rest = () => {
+    const out = raws.slice(at);
+    at = raws.length;
+    return out;
+  };
+  const cursor = {
+    columnNames,
+    rowsRead,
+    rowsWritten,
+    toArray: () => rest().map(row),
+    one: () => {
+      const left = rest();
+      if (left.length !== 1)
+        throw new Error(
+          `Expected exactly one result from SQL query, but got ${left.length ? 'more than one' : 'no'} results.`,
+        );
+      return row(left[0] as unknown[]);
+    },
+    raw: function* () {
+      while (at < raws.length) yield raws[at++] as unknown[];
+    },
+    next: () =>
+      at < raws.length
+        ? { done: false as const, value: row(raws[at++] as unknown[]) }
+        : { done: true as const, value: undefined },
+    [Symbol.iterator]() {
+      return cursor;
+    },
+  };
+  return cursor;
+}
+
+/**
+ * A Durable Object's `storage.sql`, metered. Each statement is read to the end at `exec`, so its
+ * rows read and written are known; the cursor it returns reads like the native one. Its queries
+ * are charged to the job in scope (`withQueryCaller`, an alarm say), else to `caller`.
+ */
+export function meteredSql<T>(sql: T, caller?: QueryCaller): T {
   const native = sql as unknown as NativeSql;
+  const callerNow = () => scope.getStore() ?? caller ?? currentCaller();
   return new Proxy(native, {
     get(target, prop, receiver) {
       if (prop === 'exec')
@@ -476,7 +524,7 @@ export function meteredSql<T>(sql: T, caller: QueryCaller): T {
           const t0 = performance.now();
           try {
             const cursor = target.exec(query, ...bindings);
-            const rows = cursor.toArray();
+            const raws = Array.from(cursor.raw());
             meterQuery({
               engine: 'do_sqlite',
               sql: query,
@@ -485,14 +533,10 @@ export function meteredSql<T>(sql: T, caller: QueryCaller): T {
               ms: performance.now() - t0,
               rowsRead: cursor.rowsRead,
               rowsWritten: cursor.rowsWritten,
-              rowsOut: rows.length,
-              caller,
+              rowsOut: raws.length,
+              caller: callerNow(),
             });
-            return {
-              toArray: () => rows,
-              rowsRead: cursor.rowsRead,
-              rowsWritten: cursor.rowsWritten,
-            };
+            return readCursor(raws, cursor.columnNames, cursor.rowsRead, cursor.rowsWritten);
           } catch (err) {
             meterQuery({
               engine: 'do_sqlite',
@@ -500,7 +544,7 @@ export function meteredSql<T>(sql: T, caller: QueryCaller): T {
               method: 'exec',
               ok: false,
               ms: performance.now() - t0,
-              caller,
+              caller: callerNow(),
             });
             throw err;
           }

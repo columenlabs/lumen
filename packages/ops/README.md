@@ -88,7 +88,7 @@ GROUP BY fingerprint ORDER BY p95_ms DESC LIMIT 20
 | `withQueryCaller(caller, fn)` | Charges every query inside `fn` to `caller` |
 | `meteredD1(db)` | D1, metered: `prepare` and `batch`, with D1's own rows read and written and duration |
 | `meteredClickHouse(binding)` | A ClickHouse HTTP service binding, metered when the answer has been read: wall time to the last byte, ClickHouse's own statistics |
-| `meteredSql(sql, caller)` | A Durable Object's `storage.sql`, metered |
+| `meteredSql(sql, caller?)` | A Durable Object's `storage.sql`, metered; its cursor keeps `toArray`, `one`, `raw`, `next`, iteration and `columnNames` |
 | `meterQuery(point)` | One point by hand, for any other engine |
 | `queryShape(sql)` | The shape, fingerprint and op of a query |
 | `foldRoute(path)` | A path with id-like segments as `:id` |
