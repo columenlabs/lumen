@@ -147,6 +147,8 @@ export function LumenEChart({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<ECharts | null>(null);
+  /** The option last drawn, serialized: an equal one isn't drawn again. */
+  const drawn = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const handlers = useRef(on);
   handlers.current = on;
@@ -167,15 +169,24 @@ export function LumenEChart({
       ro?.disconnect();
       chart.current?.dispose();
       chart.current = null;
+      drawn.current = null;
     };
   }, []);
 
   // Canvas can't read CSS variables: `var(--chart-1)` in an option would draw black. Each one is
   // swapped for its value, again whenever the theme flips.
   const tokens = useChartTokens();
+  // An app re-rendering hands a new but equal option (a hover, a refetch): drawing it again
+  // replays the line's entry animation, so the chart blanks under the tooltip. Only a change redraws.
   // biome-ignore lint/correctness/useExhaustiveDependencies: tokens change when the theme flips.
   useEffect(() => {
-    if (ready) chart.current?.setOption(resolveVars(option), { notMerge: true });
+    const c = chart.current;
+    if (!ready || !c) return;
+    const next = resolveVars(option);
+    const key = JSON.stringify(next);
+    if (key === drawn.current) return;
+    drawn.current = key;
+    c.setOption(next, { notMerge: true });
   }, [ready, option, tokens]);
 
   const names = Object.keys(on ?? {}).join();
