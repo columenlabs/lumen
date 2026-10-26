@@ -303,6 +303,6 @@ export function waitText(wait: AssistantWait, provider: AssistantProvider) {
   if (wait === 'not_connected')
     return `No ${label} key is set: add one in Settings ▸ Model providers, or pick another model in Settings ▸ Models.`;
   if (wait === 'app_cap')
-    return "You reached this month's cap on the app's keys. Add your own key, or wait for next month.";
+    return "You reached this month's cap on the shared keys. Add your own key, or wait for next month.";
   return 'Your own keys reached their monthly cap: raise it in Settings ▸ Model providers.';
 }

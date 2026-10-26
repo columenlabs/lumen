@@ -197,6 +197,7 @@ function General({ client }: { client: AssistantAdapter }) {
 /** Paste a key, Save tests it first; then its hint, Test and Remove. */
 function KeyBlock({
   label,
+  info,
   prefix,
   provider,
   state,
@@ -207,6 +208,7 @@ function KeyBlock({
   keysUrl,
 }: {
   label: string;
+  info?: string;
   prefix: string;
   provider: string;
   /** Where a key is made: a link that opens in a new tab beside the empty field. */
@@ -236,7 +238,9 @@ function KeyBlock({
   return (
     <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
       <div className="flex items-center gap-2">
-        <span className="flex-1 font-medium text-sm">{label}</span>
+        <InfoLabel className="flex-1 font-medium text-sm" info={info}>
+          {label}
+        </InfoLabel>
         {state.set ? (
           state.hint ? (
             <span className="font-code text-muted-foreground text-xs">{state.hint}</span>
@@ -497,7 +501,7 @@ function ProviderKeys({
   const appOn = p.app.set || !!p.app.from_env;
   const plan = p.own.via === 'chatgpt';
   const meta = [
-    appOn ? 'App key set' : 'No app key',
+    appOn ? 'Shared key set' : 'No shared key',
     plan ? 'your ChatGPT plan' : p.own.set ? 'your own key' : null,
   ]
     .filter(Boolean)
@@ -530,7 +534,8 @@ function ProviderKeys({
     <LumenExpandRow id={p.id} name={p.label} meta={meta} badge={badge}>
       <div className="flex flex-col">
         <KeyBlock
-          label="App key"
+          label="Shared key"
+          info="An admin sets it once; everyone uses it, within each person's monthly cap."
           prefix={p.prefix}
           provider={p.label}
           state={p.app}
@@ -561,7 +566,10 @@ function Providers({ client }: { client: AssistantAdapter }) {
               ))}
             </LumenExpandList>
             {s.admin && (
-              <Row label="Each person may spend" info="On the app's keys, every provider together.">
+              <Row
+                label="Each person may spend"
+                info="On the shared keys, every provider together."
+              >
                 <CapInput
                   label="Cap per person"
                   value={s.caps.app}
@@ -593,7 +601,7 @@ function Providers({ client }: { client: AssistantAdapter }) {
                   v && void apply('pay', () => client.settings({ pay: v as AssistantPayer }))
                 }
               >
-                <ToggleGroupItem value="app">App keys</ToggleGroupItem>
+                <ToggleGroupItem value="app">Shared keys</ToggleGroupItem>
                 <ToggleGroupItem value="own" disabled={!ownSet}>
                   Your keys
                 </ToggleGroupItem>
@@ -879,7 +887,7 @@ function Spend({ client }: { client: AssistantAdapter }) {
                   >
                     <span className="min-w-0 flex-1 truncate">{r.label}</span>
                     <span className="text-muted-foreground text-xs">
-                      {r.payer === 'app' ? 'App key' : 'Your key'}
+                      {r.payer === 'app' ? 'Shared key' : 'Your key'}
                     </span>
                     <span className="w-16 text-right text-muted-foreground text-xs tabular-nums">
                       {r.calls} calls

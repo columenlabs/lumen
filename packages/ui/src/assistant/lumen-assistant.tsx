@@ -239,7 +239,7 @@ const WAIT: Record<
       ? `Add an ${provider} key in Settings ▸ Model providers, or pick another model in Models.`
       : `No ${provider} key is set yet. Add your own in Settings, or pick another model in Models.`,
   app_cap: () =>
-    "You reached this month's cap on the app's keys. Add your own key, or wait for next month.",
+    "You reached this month's cap on the shared keys. Add your own key, or wait for next month.",
   own_cap: () => 'Your own keys reached their monthly cap. Raise it in Settings ▸ Model providers.',
 };
 
