@@ -30,6 +30,7 @@ const STATUS: AssistantStatus = {
       about: 'Quick lookups and short answers',
       model: 'claude-haiku-5-5',
       model_label: 'Claude Haiku 5.5',
+      provider: 'anthropic',
       effort: 'default',
     },
     {
@@ -38,21 +39,27 @@ const STATUS: AssistantStatus = {
       about: 'Most work: reading, comparing, drafting',
       model: 'claude-sonnet-5-5',
       model_label: 'Claude Sonnet 5.5',
+      provider: 'anthropic',
       effort: 'default',
     },
     {
       id: 'deep',
       label: 'Deep',
       about: 'Hard judgement across many results',
-      model: 'claude-opus-5-5',
-      model_label: 'Claude Opus 5.5',
+      model: 'gpt-6-astra',
+      model_label: 'GPT-6 Astra',
+      provider: 'openai',
       effort: 'high',
     },
   ],
   models: [
-    { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', group: 'Claude' },
-    { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', group: 'Claude' },
-    { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', group: 'Claude' },
+    { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', group: 'Claude', provider: 'anthropic' },
+    { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', group: 'Claude', provider: 'anthropic' },
+    { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', group: 'Claude', provider: 'anthropic' },
+    { id: 'gpt-6-luna', label: 'GPT-6 Luna', group: 'OpenAI', provider: 'openai' },
+    { id: 'gpt-6.1-terra', label: 'GPT-6.1 Terra', group: 'OpenAI', provider: 'openai' },
+    { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', group: 'OpenAI', provider: 'openai' },
+    { id: 'gpt-6-astra', label: 'GPT-6 Astra', group: 'OpenAI', provider: 'openai' },
   ],
   tasks: [{ id: 'chat', label: 'Chat', about: 'The side panel', tier: 'fast' }],
   groups: [
@@ -82,16 +89,30 @@ const STATUS: AssistantStatus = {
       test: { at: NOW - 3_600_000, ok: true, detail: 'ScrapeQL answered with 4 tools.' },
     },
   },
-  keys: {
-    app: {
-      set: true,
-      hint: 'sk-ant-…7Qx2',
-      saved_at: NOW - 5 * 86_400_000,
-      cap: 10,
-      test: { at: NOW - 3_600_000, ok: true, detail: 'Claude took the key.' },
+  providers: [
+    {
+      id: 'anthropic',
+      label: 'Anthropic',
+      prefix: 'sk-ant-',
+      keys_url: 'https://console.anthropic.com/settings/keys',
+      app: {
+        set: true,
+        hint: 'sk-ant-…7Qx2',
+        saved_at: NOW - 5 * 86_400_000,
+        test: { at: NOW - 3_600_000, ok: true, detail: 'Anthropic took the key.' },
+      },
+      own: { set: false },
     },
-    own: { set: false, cap: 10 },
-  },
+    {
+      id: 'openai',
+      label: 'OpenAI',
+      prefix: 'sk-',
+      keys_url: 'https://platform.openai.com/api-keys',
+      app: { set: false },
+      own: { set: false },
+    },
+  ],
+  caps: { app: 10, own: 10 },
   pay: 'app',
   spend: {
     month: '2026-10',
@@ -235,7 +256,7 @@ function mockAdapter(o: { status?: Partial<AssistantStatus> } = {}): AssistantAd
     status = { ...status, ...patch };
     return Promise.resolve(status);
   };
-  const ok = { at: Date.now(), ok: true, detail: 'Claude took the key.' };
+  const ok = { at: Date.now(), ok: true, detail: 'The key works.' };
   return {
     key: 'story',
     status: async () => status,
@@ -250,39 +271,42 @@ function mockAdapter(o: { status?: Partial<AssistantStatus> } = {}): AssistantAd
           ? { groups: status.groups.map((g) => ({ ...g, access: p.access?.[g.id] ?? g.access })) }
           : {}),
       }),
-    appCap: (cap) => done({ keys: { ...status.keys, app: { ...status.keys.app, cap } } }),
-    appKey: async (k) => {
+    appCap: (cap) => done({ caps: { ...status.caps, app: cap } }),
+    appKey: async (id, k) => {
       await wait(600);
       return done({
-        keys: {
-          ...status.keys,
-          app: k
+        providers: status.providers.map((p) =>
+          p.id === id
             ? {
-                set: true,
-                hint: `${k.slice(0, 7)}…${k.slice(-4)}`,
-                cap: status.keys.app.cap,
-                test: ok,
+                ...p,
+                app: k
+                  ? { set: true, hint: `${k.slice(0, 7)}…${k.slice(-4)}`, test: ok }
+                  : { set: false },
               }
-            : { set: false, cap: status.keys.app.cap },
-        },
+            : p,
+        ),
       });
     },
     testAppKey: async () => {
       await wait(500);
       return ok;
     },
-    ownKey: async (k) => {
+    ownKey: async (id, k) => {
       await wait(600);
       return done({
-        keys: {
-          ...status.keys,
-          own: k
-            ? { set: true, hint: `${k.slice(0, 7)}…${k.slice(-4)}`, cap: 10, test: ok }
-            : { set: false, cap: 10 },
-        },
+        providers: status.providers.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                own: k
+                  ? { set: true, hint: `${k.slice(0, 7)}…${k.slice(-4)}`, test: ok }
+                  : { set: false },
+              }
+            : p,
+        ),
       });
     },
-    ownCap: (cap) => done({ keys: { ...status.keys, own: { ...status.keys.own, cap } } }),
+    ownCap: (cap) => done({ caps: { ...status.caps, own: cap } }),
     testOwnKey: async () => {
       await wait(500);
       return ok;
@@ -416,7 +440,8 @@ export const NotConnected: StoryObj = {
       mockAdapter({
         status: {
           wait: 'not_connected',
-          keys: { app: { set: false, cap: 10 }, own: { set: false, cap: 10 } },
+          wait_provider: 'anthropic',
+          providers: STATUS.providers.map((p) => ({ ...p, app: { set: false } })),
         },
       }),
     );

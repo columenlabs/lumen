@@ -1,12 +1,13 @@
 // The assistant's Settings sections, for any app on `@columenlabs/lumen-ai/assistant`: the assistant
-// itself (tier, hand off, advice), then Model providers (the app's Claude key, a person's own key,
-// who pays), Models (each tier's model and effort, each task's starting tier), Tools (each group
+// itself (tier, hand off, advice), then Model providers (each provider's app key and a person's own
+// key, the monthly caps, who pays), Models (each tier's model and effort, each task's starting tier), Tools (each group
 // Off, Read or Read + draft), Web (fetch, ScrapeQL's token) and Spend (this month). Keys and tokens
 // are tested before they are kept and never shown again, only their last characters.
 import type {
   AssistantAccess,
   AssistantEffort,
   AssistantPayer,
+  AssistantProviderRow,
   AssistantSettingsPatch,
   AssistantStatus,
   HandOffPolicy,
@@ -14,6 +15,7 @@ import type {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  ExternalLinkIcon,
   GlobeIcon,
   KeyRoundIcon,
   LayersIcon,
@@ -193,20 +195,22 @@ function General({ client }: { client: AssistantAdapter }) {
 /** Paste a key, Save tests it first; then its hint, Test and Remove. */
 function KeyBlock({
   label,
+  prefix,
+  provider,
   state,
   canEdit,
   onSave,
   onRemove,
   onTest,
-  extra,
 }: {
   label: string;
+  prefix: string;
+  provider: string;
   state: KeyState & { from_env?: boolean };
   canEdit: boolean;
   onSave: (key: string) => Promise<boolean>;
   onRemove: () => Promise<boolean>;
   onTest: () => Promise<unknown>;
-  extra?: ReactNode;
 }) {
   const id = useId();
   const [key, setKey] = useState('');
@@ -214,8 +218,8 @@ function KeyBlock({
   const [busy, setBusy] = useState(false);
   const editing = canEdit && (!state.set || replacing);
   const issues: FormIssue[] = [];
-  if (editing && key.trim() && !key.trim().startsWith('sk-ant-'))
-    issues.push({ where: label, message: 'A Claude key starts with sk-ant-', target: id });
+  if (editing && key.trim() && !key.trim().startsWith(prefix))
+    issues.push({ where: label, message: `An ${provider} key starts with ${prefix}`, target: id });
   const save = async () => {
     setBusy(true);
     if (await onSave(key.trim())) {
@@ -247,7 +251,7 @@ function KeyBlock({
             id={id}
             type="password"
             autoComplete="off"
-            placeholder="sk-ant-…"
+            placeholder={`${prefix}…`}
             className="font-code text-xs"
             value={key}
             onChange={(e) => setKey(e.target.value)}
@@ -289,7 +293,6 @@ function KeyBlock({
           </>
         )
       )}
-      {extra}
     </div>
   );
 }
@@ -323,73 +326,101 @@ function CapInput({
   );
 }
 
-function Providers({ client }: { client: AssistantAdapter }) {
+/** One provider: its name, where to make a key (a new tab), the app's key and the person's. */
+function ProviderKeys({
+  client,
+  p,
+  admin,
+}: { client: AssistantAdapter; p: AssistantProviderRow; admin: boolean }) {
   const { apply, refresh } = useApply(client);
   return (
+    <div className="flex flex-col border-b pb-2 last:border-b-0">
+      <div className="flex items-center gap-2 pt-3">
+        <span className="flex-1 font-semibold text-sm">{p.label}</span>
+        <IconButton
+          icon={ExternalLinkIcon}
+          label={`Get an ${p.label} key`}
+          href={p.keys_url}
+          variant="ghost"
+        />
+      </div>
+      <KeyBlock
+        label="App key"
+        prefix={p.prefix}
+        provider={p.label}
+        state={p.app}
+        canEdit={admin}
+        onSave={(k) => apply(`app:${p.id}`, () => client.appKey(p.id, k), 'Key saved')}
+        onRemove={() => apply(`app:${p.id}`, () => client.appKey(p.id, null), 'Key removed')}
+        onTest={() => client.testAppKey(p.id).finally(refresh)}
+      />
+      <KeyBlock
+        label="Your own key"
+        prefix={p.prefix}
+        provider={p.label}
+        state={p.own}
+        canEdit
+        onSave={(k) => apply(`own:${p.id}`, () => client.ownKey(p.id, k), 'Key saved')}
+        onRemove={() => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed')}
+        onTest={() => client.testOwnKey(p.id).finally(refresh)}
+      />
+    </div>
+  );
+}
+
+function Providers({ client }: { client: AssistantAdapter }) {
+  const { apply } = useApply(client);
+  return (
     <WithStatus client={client}>
-      {(s) => (
-        <div className="flex flex-col">
-          <KeyBlock
-            label="App key"
-            state={s.keys.app}
-            canEdit={s.admin}
-            onSave={(k) => apply('app', () => client.appKey(k), 'Key saved')}
-            onRemove={() => apply('app', () => client.appKey(null), 'Key removed')}
-            onTest={() => client.testAppKey().finally(refresh)}
-            extra={
-              s.admin && (
-                <Row label="Each person may spend">
-                  <CapInput
-                    label="Cap per person"
-                    value={s.keys.app.cap}
-                    onSave={(n) => void apply('cap', () => client.appCap(n))}
-                  />
-                </Row>
-              )
-            }
-          />
-          <KeyBlock
-            label="Your own key"
-            state={s.keys.own}
-            canEdit
-            onSave={(k) => apply('own', () => client.ownKey(k), 'Key saved')}
-            onRemove={() => apply('own', () => client.ownKey(null), 'Key removed')}
-            onTest={() => client.testOwnKey().finally(refresh)}
-            extra={
-              s.keys.own.set && (
-                <Row label="Your key may spend">
-                  <CapInput
-                    label="Your monthly cap"
-                    value={s.keys.own.cap}
-                    onSave={(n) => void apply('own', () => client.ownCap(n))}
-                  />
-                </Row>
-              )
-            }
-          />
-          <Row
-            label="Pay with first"
-            info="When it reaches its cap this month, the other key pays."
-          >
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              spacing={0}
-              value={s.pay}
-              aria-label="Pay with"
-              onValueChange={(v) =>
-                v && void apply('pay', () => client.settings({ pay: v as AssistantPayer }))
-              }
+      {(s) => {
+        const ownSet = s.providers.some((p) => p.own.set);
+        return (
+          <div className="flex flex-col">
+            {s.providers.map((p) => (
+              <ProviderKeys key={p.id} client={client} p={p} admin={s.admin} />
+            ))}
+            {s.admin && (
+              <Row label="Each person may spend" info="On the app's keys, every provider together.">
+                <CapInput
+                  label="Cap per person"
+                  value={s.caps.app}
+                  onSave={(n) => void apply('cap', () => client.appCap(n))}
+                />
+              </Row>
+            )}
+            {ownSet && (
+              <Row label="Your keys may spend" info="On your own keys, every provider together.">
+                <CapInput
+                  label="Your monthly cap"
+                  value={s.caps.own}
+                  onSave={(n) => void apply('own', () => client.ownCap(n))}
+                />
+              </Row>
+            )}
+            <Row
+              label="Pay with first"
+              info="When it reaches its cap this month, or has no key for the tier's provider, the other pays."
             >
-              <ToggleGroupItem value="app">App key</ToggleGroupItem>
-              <ToggleGroupItem value="own" disabled={!s.keys.own.set}>
-                Your key
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </Row>
-        </div>
-      )}
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                spacing={0}
+                value={s.pay}
+                aria-label="Pay with"
+                onValueChange={(v) =>
+                  v && void apply('pay', () => client.settings({ pay: v as AssistantPayer }))
+                }
+              >
+                <ToggleGroupItem value="app">App keys</ToggleGroupItem>
+                <ToggleGroupItem value="own" disabled={!ownSet}>
+                  Your keys
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </Row>
+          </div>
+        );
+      }}
     </WithStatus>
   );
 }
@@ -407,28 +438,33 @@ function Models({ client }: { client: AssistantAdapter }) {
         const tiers = s.tiers.map((t) => ({ value: t.id, label: t.label }));
         return (
           <div className="flex flex-col">
-            {s.tiers.map((t) => (
-              <Row key={t.id} label={t.label} info={t.about}>
-                <div className="flex gap-2">
-                  <LumenSelector
-                    label={`${t.label} model`}
-                    size="sm"
-                    className="w-44"
-                    value={t.model}
-                    options={models}
-                    onChange={(model) => set({ tiers: { [t.id]: { model } } })}
-                  />
-                  <LumenSelector
-                    label={`${t.label} effort`}
-                    size="sm"
-                    className="w-32"
-                    value={t.effort}
-                    options={EFFORTS}
-                    onChange={(effort) => set({ tiers: { [t.id]: { effort } } })}
-                  />
-                </div>
-              </Row>
-            ))}
+            {s.tiers.map((t) => {
+              const p = s.providers.find((x) => x.id === t.provider);
+              const keyless = p && !p.app.set && !p.app.from_env && !p.own.set;
+              return (
+                <Row key={t.id} label={t.label} info={t.about}>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {keyless && <Badge variant="outline">No {p.label} key</Badge>}
+                    <LumenSelector
+                      label={`${t.label} model`}
+                      size="sm"
+                      className="w-36 sm:w-44"
+                      value={t.model}
+                      options={models}
+                      onChange={(model) => set({ tiers: { [t.id]: { model } } })}
+                    />
+                    <LumenSelector
+                      label={`${t.label} effort`}
+                      size="sm"
+                      className="w-24 sm:w-32"
+                      value={t.effort}
+                      options={EFFORTS}
+                      onChange={(effort) => set({ tiers: { [t.id]: { effort } } })}
+                    />
+                  </div>
+                </Row>
+              );
+            })}
             {s.tasks.length > 1 &&
               s.tasks.map((task) => (
                 <Row key={task.id} label={`${task.label} starts on`}>
@@ -709,7 +745,7 @@ export function assistantSettingsSections({
       title: 'Model providers',
       icon: KeyRoundIcon,
       sub: true,
-      description: 'Claude keys and who pays',
+      description: 'Keys for each provider, and who pays',
       content: <Providers client={client} />,
     },
     {

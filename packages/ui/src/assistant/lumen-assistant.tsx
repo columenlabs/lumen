@@ -194,7 +194,10 @@ function Messages({
         <Alert className="mb-3">
           <CircleAlertIcon />
           <AlertDescription className="flex flex-col items-start gap-2">
-            {WAIT[status.wait](status.admin)}
+            {WAIT[status.wait](
+              status.admin,
+              status.providers.find((p) => p.id === status.wait_provider)?.label ?? 'API',
+            )}
             {onSettings && (
               <Button size="sm" variant="outline" onClick={onSettings}>
                 Open Settings
@@ -227,14 +230,17 @@ function Messages({
 const isLive = (i: LiveItem): boolean =>
   !!i.live || (i.kind === 'handoff' && (i.items as LiveItem[]).some(isLive));
 
-const WAIT: Record<NonNullable<AssistantStatus['wait']>, (admin: boolean) => string> = {
-  not_connected: (admin) =>
+const WAIT: Record<
+  NonNullable<AssistantStatus['wait']>,
+  (admin: boolean, provider: string) => string
+> = {
+  not_connected: (admin, provider) =>
     admin
-      ? 'Add a Claude key in Settings ▸ Model providers.'
-      : 'No Claude key is set yet. An admin adds one in Settings.',
+      ? `Add an ${provider} key in Settings ▸ Model providers, or pick another model in Models.`
+      : `No ${provider} key is set yet. Add your own in Settings, or pick another model in Models.`,
   app_cap: () =>
-    "You reached this month's cap on the app's key. Add your own key, or wait for next month.",
-  own_cap: () => 'Your own key reached its monthly cap. Raise it in Settings ▸ Spend.',
+    "You reached this month's cap on the app's keys. Add your own key, or wait for next month.",
+  own_cap: () => 'Your own keys reached their monthly cap. Raise it in Settings ▸ Model providers.',
 };
 
 function Items({

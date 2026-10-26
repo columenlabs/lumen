@@ -5,6 +5,7 @@ import type {
   AssistantChatRow,
   AssistantEvent,
   AssistantMessage,
+  AssistantProvider,
   AssistantSettingsPatch,
   AssistantStatus,
   DraftItem,
@@ -19,15 +20,16 @@ export interface AssistantAdapter {
   key: string;
   status(): Promise<AssistantStatus>;
   settings(patch: AssistantSettingsPatch): Promise<AssistantStatus>;
-  /** Admin: what each person may spend a month on the app's key. */
+  /** Admin: what each person may spend a month on the app's keys. */
   appCap(usd: number): Promise<AssistantStatus>;
-  /** Admin: the app's Claude key (tested before it is kept); null removes it. */
-  appKey(key: string | null): Promise<AssistantStatus>;
-  testAppKey(): Promise<Test>;
-  /** The person's own key and its monthly cap; null removes it. */
-  ownKey(key: string | null, cap?: number): Promise<AssistantStatus>;
+  /** Admin: the app's key of a provider (tested before it is kept); null removes it. */
+  appKey(provider: AssistantProvider, key: string | null): Promise<AssistantStatus>;
+  testAppKey(provider: AssistantProvider): Promise<Test>;
+  /** The person's own key of a provider; null removes it. */
+  ownKey(provider: AssistantProvider, key: string | null): Promise<AssistantStatus>;
+  /** What the person may spend a month on their own keys. */
   ownCap(usd: number): Promise<AssistantStatus>;
-  testOwnKey(): Promise<Test>;
+  testOwnKey(provider: AssistantProvider): Promise<Test>;
   /** Admin: ScrapeQL's Access service token; null removes it. */
   scrapeql(token: { client_id: string; client_secret: string } | null): Promise<AssistantStatus>;
   testScrapeql(): Promise<Test>;
@@ -83,14 +85,17 @@ export function assistantClient(base: string): AssistantAdapter {
     status: () => get('/status'),
     settings: (patch) => send('PUT', '/settings', patch),
     appCap: (usd) => send('PUT', '/app', { cap_usd: usd }),
-    appKey: (key) => (key ? send('PUT', '/key', { api_key: key }) : send('DELETE', '/key')),
-    testAppKey: () => send('POST', '/key/test'),
-    ownKey: (key, cap) =>
+    appKey: (p, key) =>
       key
-        ? send('PUT', '/my-key', { api_key: key, ...(cap === undefined ? {} : { cap_usd: cap }) })
-        : send('DELETE', '/my-key'),
+        ? send('PUT', `/key?provider=${p}`, { api_key: key })
+        : send('DELETE', `/key?provider=${p}`),
+    testAppKey: (p) => send('POST', `/key/test?provider=${p}`),
+    ownKey: (p, key) =>
+      key
+        ? send('PUT', `/my-key?provider=${p}`, { api_key: key })
+        : send('DELETE', `/my-key?provider=${p}`),
     ownCap: (usd) => send('PUT', '/my-key/cap', { cap_usd: usd }),
-    testOwnKey: () => send('POST', '/my-key/test'),
+    testOwnKey: (p) => send('POST', `/my-key/test?provider=${p}`),
     scrapeql: (token) =>
       token ? send('PUT', '/web/scrapeql', token) : send('DELETE', '/web/scrapeql'),
     testScrapeql: () => send('POST', '/web/test'),

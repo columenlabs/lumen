@@ -8,7 +8,10 @@
  *
  * Hand off: an `escalate` tool hands one task to a higher tier with the same tools, in its own
  * section of the chat, and its memo goes back. Advice: Anthropic's advisor tool lets a higher tier
- * read the chat and send a plan (it runs nothing), at most `ADVICE_MAX` an answer.
+ * read the chat and send a plan (it runs nothing), at most `ADVICE_MAX` an answer (Claude only).
+ *
+ * Providers: a tier runs a Claude model (Anthropic's Messages API) or an OpenAI model (the
+ * Responses API), each on its payer's key of that provider. A hand-off may cross providers.
  *
  * Spend: every call is priced at list price as it runs; past what its payer has left this month the
  * model must answer from what it has.
@@ -21,6 +24,7 @@ import type {
   AssistantChatRow,
   AssistantEffort,
   AssistantMessage,
+  AssistantProvider,
   AssistantStatus,
   ChatItem,
   ChatUsage,
@@ -32,16 +36,18 @@ import type {
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
+import OpenAI from 'openai';
 import {
-  CLAUDE_MODELS,
+  ALL_MODELS,
   DEFAULT_OUT,
   Meter,
   type ModelDef,
+  PROVIDERS,
   type TaskDef,
   type TierDef,
   effortParams,
 } from './models';
-import { DEFAULT_CAP, type Paying, State, WAIT_TEXT, keyState } from './state';
+import { DEFAULT_CAP, type Paying, State, keyState, waitText } from './state';
 import { type AssistantStore, Docs, type Sealer } from './store';
 import {
   type OpenTools,
@@ -107,7 +113,7 @@ export interface AssistantOptions {
   tiers: TierDef[];
   /** Tasks a person picks a starting tier for; the chat on the smallest tier by default. */
   tasks?: TaskDef[];
-  /** Models a tier may run; Claude's by default. */
+  /** Models a tier may run; every model the kit knows (Claude's and OpenAI's) by default. */
   models?: ModelDef[];
   groups?: ToolGroup[];
   web?: {
@@ -118,15 +124,15 @@ export interface AssistantOptions {
   };
   store: AssistantStore;
   sealer?: Sealer;
-  /** The app's key when none is stored in Settings (a Worker secret). */
-  appKey?: () => Promise<string | null | undefined>;
+  /** The app's key of a provider when none is stored in Settings (a Worker secret). */
+  appKey?: (provider: AssistantProvider) => Promise<string | null | undefined>;
   /** USD a person may spend a month when nobody set a cap; 10. */
   defaultCap?: number;
   /** Months and dates in this zone; UTC by default. */
   timeZone?: string;
   /** Chats are deleted this many days after their last message (`purge`); 30. */
   keepDays?: number;
-  /** The fetch Anthropic and ScrapeQL calls go through. */
+  /** The fetch the model providers and ScrapeQL calls go through. */
   fetch?: typeof fetch;
   onStep?: (s: StepRecord) => void | Promise<void>;
 }
@@ -179,11 +185,35 @@ interface ChatDoc {
 
 type Emit = (event: string, data: unknown) => void;
 
+/** The payer's client of each provider it has a key for. */
+interface Clients {
+  anthropic?: Anthropic;
+  openai?: OpenAI;
+}
+
 interface Session {
   tier: TierDef;
   model: ModelDef;
   effort: AssistantEffort;
   meter: Meter;
+}
+
+/** What one loop runs with, whichever provider runs it. Tools and the opening messages are in
+ * Anthropic's shapes; the OpenAI loop maps them to the Responses API's. */
+interface LoopArgs {
+  session: Session;
+  system: Anthropic.TextBlockParam[];
+  tools: Anthropic.Tool[];
+  messages: Anthropic.MessageParam[];
+  sink: ChatItem[];
+  emit: Emit;
+  called: () => void;
+  tool: (use: Anthropic.ToolUseBlock) => Promise<Anthropic.ToolResultBlockParam>;
+  context?: (tokens: number) => void;
+  signal?: AbortSignal | undefined;
+  over: () => string | null;
+  first?: Anthropic.ToolChoice;
+  advisor?: { session: Session; asked: number };
 }
 
 /** One tool the model may call: where it came from and whether it only drafts. */
@@ -256,22 +286,29 @@ function draftsOf(items: ChatItem[]): DraftItem[] {
 /** A short line of what an error was, never an upstream body. */
 function shownError(err: unknown): { message: string; code: string } {
   if (err instanceof AssistantError) return { message: err.message, code: err.code };
-  if (err instanceof Anthropic.APIError) {
-    if (err.status === 401) return { message: 'The Claude key was refused.', code: 'key_refused' };
-    if (err.status === 429)
+  const api =
+    err instanceof Anthropic.APIError
+      ? { who: 'Claude', status: err.status }
+      : err instanceof OpenAI.APIError
+        ? { who: 'OpenAI', status: err.status }
+        : null;
+  if (api) {
+    const { who, status } = api;
+    if (status === 401) return { message: `The ${who} key was refused.`, code: 'key_refused' };
+    if (status === 429)
       return {
-        message: 'Claude is busy or the key hit its rate limit. Try again shortly.',
+        message: `${who} is busy or the key hit its rate limit. Try again shortly.`,
         code: 'rate_limited',
       };
-    if (err.status === 529 || (err.status ?? 0) >= 500)
-      return { message: 'Claude is overloaded. Try again shortly.', code: 'overloaded' };
-    return {
-      message: `Claude refused the request (${err.status ?? 'error'}).`,
-      code: 'model_error',
-    };
+    if (status === 529 || (status ?? 0) >= 500)
+      return { message: `${who} is overloaded. Try again shortly.`, code: 'overloaded' };
+    return { message: `${who} refused the request (${status ?? 'error'}).`, code: 'model_error' };
   }
   return { message: 'Something went wrong while answering.', code: 'internal' };
 }
+
+const isApiError = (err: unknown) =>
+  err instanceof Anthropic.APIError || err instanceof OpenAI.APIError;
 
 export class Assistant {
   readonly name: string;
@@ -285,7 +322,7 @@ export class Assistant {
     if (!o.tiers.length) throw new Error('An assistant needs at least one tier');
     this.name = o.name;
     this.tiers = o.tiers;
-    this.models = o.models ?? CLAUDE_MODELS;
+    this.models = o.models ?? ALL_MODELS;
     this.tasks = o.tasks ?? [
       { id: 'chat', label: 'Chat', about: 'The side panel', tier: (o.tiers[0] as TierDef).id },
     ];
@@ -297,9 +334,23 @@ export class Assistant {
     });
   }
 
-  private client(apiKey: string) {
+  private anthropic(apiKey: string) {
     const f = this.o.fetch;
     return new Anthropic({ apiKey, maxRetries: 1, ...(f ? { fetch: f } : {}) });
+  }
+  private openai(apiKey: string) {
+    const f = this.o.fetch;
+    return new OpenAI({ apiKey, maxRetries: 1, ...(f ? { fetch: f } : {}) });
+  }
+  private clients(keys: Partial<Record<AssistantProvider, string>>): Clients {
+    return {
+      ...(keys.anthropic ? { anthropic: this.anthropic(keys.anthropic) } : {}),
+      ...(keys.openai ? { openai: this.openai(keys.openai) } : {}),
+    };
+  }
+  /** The providers the app's models run on, in the order the models list them. */
+  get providers(): AssistantProvider[] {
+    return [...new Set(this.models.map((m) => m.provider))];
   }
 
   private tierById(id: string | undefined) {
@@ -346,18 +397,36 @@ export class Assistant {
   // ---------------------------------------------------------------- status and settings
 
   async status(caller: Caller): Promise<AssistantStatus> {
-    const [p, appDoc, appKey, own, scrapeql, spend, appCap, { paying, wait }, main] =
-      await Promise.all([
-        this.state.person(caller.id),
-        this.state.appKey(),
-        this.state.appApiKey(),
-        this.state.ownKey(caller.id),
-        this.o.web?.scrapeql ? this.state.scrapeql() : Promise.resolve(null),
-        this.state.spend(caller.id),
-        this.state.appCap(),
-        this.state.paying(caller.id),
-        this.mainTier(caller),
-      ]);
+    const main = await this.mainTier(caller);
+    const mainModel = (await this.pick(caller, main)).model;
+    const [p, providers, scrapeql, spend, appCap, ownCap, { paying, wait }] = await Promise.all([
+      this.state.person(caller.id),
+      Promise.all(
+        this.providers.map(async (id) => {
+          const [doc, key, own] = await Promise.all([
+            this.state.appKey(id),
+            this.state.appApiKey(id),
+            this.state.ownKey(caller.id, id),
+          ]);
+          const app = caller.admin
+            ? keyState(doc, (d) => (d as { api_key: string }).api_key)
+            : { set: !!key };
+          return {
+            id,
+            label: PROVIDERS[id].label,
+            prefix: PROVIDERS[id].prefix,
+            keys_url: PROVIDERS[id].keysUrl,
+            app: { ...app, ...(key?.fromEnv ? { from_env: true } : {}) },
+            own: keyState(own, (d) => (d as { api_key: string }).api_key),
+          };
+        }),
+      ),
+      this.o.web?.scrapeql ? this.state.scrapeql() : Promise.resolve(null),
+      this.state.spend(caller.id),
+      this.state.appCap(),
+      this.state.ownCap(caller.id),
+      this.state.paying(caller.id, mainModel.provider),
+    ]);
     const tiers = await Promise.all(
       this.tiers.map(async (t) => {
         const { model, effort } = await this.pick(caller, t);
@@ -367,20 +436,24 @@ export class Assistant {
           about: t.about,
           model: model.id,
           model_label: model.label,
+          provider: model.provider,
           effort,
         };
       }),
     );
-    const appState = caller.admin
-      ? keyState(appDoc, (d) => (d as { api_key: string }).api_key)
-      : { set: !!appKey };
     return {
       name: this.name,
       wait,
+      ...(wait ? { wait_provider: mainModel.provider } : {}),
       admin: caller.admin,
       tier: main.id,
       tiers,
-      models: this.models.map((m) => ({ id: m.id, label: m.label, group: m.group })),
+      models: this.models.map((m) => ({
+        id: m.id,
+        label: m.label,
+        group: m.group,
+        provider: m.provider,
+      })),
       tasks: this.tasks.map((t) => ({
         id: t.id,
         label: t.label,
@@ -404,13 +477,8 @@ export class Assistant {
             : { set: !!scrapeql }
           : null,
       },
-      keys: {
-        app: { ...appState, cap: appCap, ...(appKey?.fromEnv ? { from_env: true } : {}) },
-        own: {
-          ...keyState(own, (d) => (d as { api_key: string }).api_key),
-          cap: own?.cap_usd ?? this.o.defaultCap ?? DEFAULT_CAP,
-        },
-      },
+      providers,
+      caps: { app: appCap, own: ownCap },
       pay: p.pay ?? 'app',
       spend: {
         month: this.state.month(),
@@ -587,20 +655,21 @@ export class Assistant {
     const start = doc.items.length;
     emit('chat', { id: chatId, title: doc.title });
 
-    const { paying, wait } = await this.state.paying(caller.id);
+    const main = await this.session(caller, await this.mainTier(caller));
+    const { paying, wait } = await this.state.paying(caller.id, main.model.provider);
     if (!paying) {
-      const text = WAIT_TEXT[wait ?? 'not_connected'];
-      doc.items.push({ kind: 'error', text, code: wait ?? 'not_connected' });
+      const code = wait ?? 'not_connected';
+      const text = waitText(code, main.model.provider);
+      doc.items.push({ kind: 'error', text, code });
       await this.writeChat(caller, chatId, doc);
-      emit('error', { message: text, code: wait });
+      emit('error', { message: text, code });
       emit('done', { id: chatId, usage: doc.usage ?? NO_USAGE });
       return;
     }
     const p = await this.state.person(caller.id);
-    const main = await this.session(caller, await this.mainTier(caller));
     const policy: HandOffPolicy = p.hand_off ?? 'next';
     const advisor = await this.advisorFor(caller, p.advice, main);
-    const client = this.client(paying.apiKey);
+    const clients = this.clients(paying.keys);
     const live: Meter[] = [main.meter, ...(advisor ? [advisor.session.meter] : [])];
     const before = doc.usage ?? NO_USAGE;
     let context = before.context;
@@ -640,7 +709,7 @@ export class Assistant {
       ];
 
       if (compactOnly || (before.context ?? 0) > COMPACT_AT) {
-        const did = await this.compact(client, main, doc, emit);
+        const did = await this.compact(clients, main, doc, emit);
         if (did) context = undefined;
         if (compactOnly) {
           if (!did) {
@@ -678,7 +747,7 @@ export class Assistant {
       ];
       const escalateTool = this.escalateTool(main.tier);
       let answer = await this.loop({
-        client,
+        clients,
         session: main,
         system,
         tools: [...this.toolsFor(tools.fns), ...(escalateTool ? [escalateTool] : [])],
@@ -697,7 +766,7 @@ export class Assistant {
           use.name === 'escalate'
             ? this.handOff(use, {
                 caller,
-                client,
+                clients,
                 message,
                 handTo,
                 page,
@@ -744,7 +813,7 @@ export class Assistant {
       } else {
         outcome = 'error';
         const shown = shownError(err);
-        if (!(err instanceof AssistantError) && !(err instanceof Anthropic.APIError))
+        if (!(err instanceof AssistantError) && !isApiError(err))
           console.error(
             JSON.stringify({
               event: 'assistant_error',
@@ -833,9 +902,11 @@ export class Assistant {
   /** The advisor for this answer, or null when off. Never weaker than the model it advises. */
   private async advisorFor(caller: Caller, setting: string | undefined, main: Session) {
     const tier = setting && setting !== 'off' ? this.tierById(setting) : undefined;
-    if (!tier) return null;
+    if (!tier || main.model.provider !== 'anthropic') return null;
     const rank = (m: ModelDef) => this.models.indexOf(m);
     let session = await this.session(caller, tier);
+    // Anthropic's advisor tool runs a Claude model: another provider's tier advises nothing.
+    if (session.model.provider !== 'anthropic') session = { ...main };
     if (rank(session.model) < rank(main.model))
       session = { ...main, meter: new Meter(main.model, '') };
     session.meter = new Meter(session.model, `${session.tier.label} · advice`);
@@ -883,7 +954,7 @@ export class Assistant {
     use: Anthropic.ToolUseBlock,
     c: {
       caller: Caller;
-      client: Anthropic;
+      clients: Clients;
       message: string;
       handTo?: TierDef;
       page: string;
@@ -931,6 +1002,11 @@ export class Assistant {
     if (c.over())
       return reply('No money left for a higher tier this answer: answer yourself.', true);
     const sub = await this.session(c.caller, tier);
+    if (!c.clients[sub.model.provider])
+      return reply(
+        `${tier.label} runs on ${PROVIDERS[sub.model.provider].label} and no ${PROVIDERS[sub.model.provider].label} key is set for whoever pays this answer: answer yourself.`,
+        true,
+      );
     c.live.push(sub.meter);
     c.counts.handoffs += 1;
     if (this.tiers.indexOf(tier) > this.tiers.indexOf(c.counts.end)) c.counts.end = tier;
@@ -955,7 +1031,7 @@ export class Assistant {
     let failed: string | undefined;
     try {
       memo = await this.loop({
-        client: c.client,
+        clients: c.clients,
         session: sub,
         system: c.system,
         tools: this.toolsFor(c.tools),
@@ -1081,22 +1157,138 @@ export class Assistant {
   }
 
   /** Model calls and tool rounds until the model answers; returns its words. */
-  private async loop(o: {
-    client: Anthropic;
-    session: Session;
-    system: Anthropic.TextBlockParam[];
-    tools: Anthropic.Tool[];
-    messages: Anthropic.MessageParam[];
-    sink: ChatItem[];
-    emit: Emit;
-    called: () => void;
-    tool: (use: Anthropic.ToolUseBlock) => Promise<Anthropic.ToolResultBlockParam>;
-    context?: (tokens: number) => void;
-    signal?: AbortSignal | undefined;
-    over: () => string | null;
-    first?: Anthropic.ToolChoice;
-    advisor?: { session: Session; asked: number };
-  }): Promise<string> {
+  private loop(o: LoopArgs & { clients: Clients }): Promise<string> {
+    const { provider } = o.session.model;
+    const label = PROVIDERS[provider].label;
+    if (provider === 'openai') {
+      if (!o.clients.openai)
+        throw new AssistantError(`No ${label} key is set for this answer.`, 'not_connected');
+      return this.loopOpenAI({ ...o, client: o.clients.openai });
+    }
+    if (!o.clients.anthropic)
+      throw new AssistantError(`No ${label} key is set for this answer.`, 'not_connected');
+    return this.loopClaude({ ...o, client: o.clients.anthropic });
+  }
+
+  /** The loop on OpenAI's Responses API: the same tools, Stop, caps and rounds as Claude's. */
+  private async loopOpenAI(o: LoopArgs & { client: OpenAI }): Promise<string> {
+    const { client, session, tools, sink, emit, signal } = o;
+    const instructions = o.system.map((b) => b.text).join('\n\n');
+    const fnTools: OpenAI.Responses.FunctionTool[] = tools.map((t) => ({
+      type: 'function',
+      name: t.name,
+      description: t.description ?? null,
+      parameters: t.input_schema as Record<string, unknown>,
+      strict: false,
+    }));
+    // The chat so far is plain text turns; this answer's calls are appended as OpenAI items.
+    const input: OpenAI.Responses.ResponseInputItem[] = o.messages.map((m) => ({
+      role: m.role,
+      content:
+        typeof m.content === 'string'
+          ? m.content
+          : m.content
+              .map((b) => (b.type === 'text' ? b.text : ''))
+              .filter(Boolean)
+              .join('\n'),
+    }));
+    let answer = '';
+    let force:
+      | OpenAI.Responses.ToolChoiceOptions
+      | OpenAI.Responses.ToolChoiceFunction
+      | undefined = o.first?.type === 'tool' ? { type: 'function', name: o.first.name } : undefined;
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      signal?.throwIfAborted();
+      const effort = session.effort === 'default' ? undefined : session.effort;
+      const stream = client.responses.stream(
+        {
+          model: session.model.id,
+          instructions,
+          input,
+          tools: fnTools,
+          store: false,
+          include: ['reasoning.encrypted_content'],
+          max_output_tokens: session.tier.out ?? DEFAULT_OUT,
+          ...(effort ? { reasoning: { effort } } : {}),
+          ...(force ? { tool_choice: force } : {}),
+        } as OpenAI.Responses.ResponseCreateParamsStreaming,
+        signal ? { signal } : {},
+      );
+      let partial = '';
+      stream.on('response.output_text.delta', (e) => {
+        partial += e.delta;
+        emit('text', { delta: e.delta });
+      });
+      const res = await stream.finalResponse().catch((err: unknown) => {
+        if (signal?.aborted && partial) sink.push({ kind: 'text', text: partial });
+        throw err;
+      });
+      const u = res.usage;
+      if (u) {
+        const read = u.input_tokens_details?.cached_tokens ?? 0;
+        const written = u.input_tokens_details?.cache_write_tokens ?? 0;
+        session.meter.add({
+          input_tokens: Math.max(0, u.input_tokens - read - written),
+          output_tokens: u.output_tokens,
+          cache_read_input_tokens: read,
+          cache_creation_input_tokens: written,
+        });
+        o.context?.(u.input_tokens + u.output_tokens);
+      }
+      o.called();
+      const cut = res.incomplete_details?.reason === 'max_output_tokens' ? ' …(cut)' : '';
+      if (cut) emit('text', { delta: cut });
+      const text = (res.output_text ?? '') + cut;
+      if (text) {
+        answer += (answer ? '\n\n' : '') + text;
+        sink.push({ kind: 'text', text });
+        emit('text_end', {});
+      }
+      // Reasoning, words and calls go back as they came, so the model keeps its own thread.
+      input.push(...(res.output as OpenAI.Responses.ResponseInputItem[]));
+      const calls = (res.output as OpenAI.Responses.ResponseOutputItem[]).filter(
+        (b): b is OpenAI.Responses.ResponseFunctionToolCall => b.type === 'function_call',
+      );
+      if (calls.length === 0) break;
+      const results = await Promise.all(
+        calls.map((c) => {
+          let args: unknown = {};
+          try {
+            args = c.arguments ? JSON.parse(c.arguments) : {};
+          } catch {}
+          const use: Anthropic.ToolUseBlock = {
+            type: 'tool_use',
+            id: c.call_id,
+            name: c.name,
+            input: args,
+          } as Anthropic.ToolUseBlock;
+          return untilStopped(o.tool(use), signal);
+        }),
+      );
+      for (const r of results) {
+        const body = typeof r.content === 'string' ? r.content : JSON.stringify(r.content ?? '');
+        input.push({
+          type: 'function_call_output',
+          call_id: r.tool_use_id,
+          output: r.is_error ? `Error: ${body}` : body,
+        });
+      }
+      force = undefined;
+      const limit = o.over();
+      const last = round === MAX_ROUNDS - 2;
+      if (limit || last) {
+        input.push({
+          role: 'user',
+          content: limit ?? 'No more tool calls: answer now from what you have.',
+        });
+        force = 'none';
+      }
+    }
+    return answer;
+  }
+
+  /** The loop on Anthropic's Messages API, with the advisor and prompt caching. */
+  private async loopClaude(o: LoopArgs & { client: Anthropic }): Promise<string> {
     const { client, session, system, tools, messages, sink, emit, signal } = o;
     let answer = '';
     let force: Anthropic.ToolChoice | undefined = o.first;
@@ -1220,26 +1412,42 @@ export class Assistant {
   }
 
   /** Swaps the history for a short summary. False with nothing to compact. */
-  private async compact(client: Anthropic, s: Session, doc: ChatDoc, emit: Emit) {
+  private async compact(clients: Clients, s: Session, doc: ChatDoc, emit: Emit) {
     if (doc.history.length < 2) return false;
-    const msg = await client.messages.create({
-      model: s.model.id,
-      max_tokens: 1500,
-      system: `Summarise this chat between a person and ${this.name}, their assistant, so ${this.name} can carry on from the summary alone. Keep what the person wants, the facts and numbers found, decisions made and cards drafted or saved, and anything still open. Plain bullets, at most 400 words. No preamble.`,
-      messages: [
-        {
-          role: 'user',
-          content: doc.history
-            .map((t) => `${t.role === 'user' ? 'Person' : this.name}: ${t.content}`)
-            .join('\n\n'),
-        },
-      ],
-    });
-    s.meter.add(msg.usage);
-    const summary = msg.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
+    const system = `Summarise this chat between a person and ${this.name}, their assistant, so ${this.name} can carry on from the summary alone. Keep what the person wants, the facts and numbers found, decisions made and cards drafted or saved, and anything still open. Plain bullets, at most 400 words. No preamble.`;
+    const chat = doc.history
+      .map((t) => `${t.role === 'user' ? 'Person' : this.name}: ${t.content}`)
+      .join('\n\n');
+    let summary = '';
+    if (s.model.provider === 'openai' && clients.openai) {
+      const res = await clients.openai.responses.create({
+        model: s.model.id,
+        instructions: system,
+        input: chat,
+        store: false,
+        max_output_tokens: 1500,
+      });
+      const u = res.usage;
+      if (u)
+        s.meter.add({
+          input_tokens: u.input_tokens - (u.input_tokens_details?.cached_tokens ?? 0),
+          output_tokens: u.output_tokens,
+          cache_read_input_tokens: u.input_tokens_details?.cached_tokens ?? 0,
+        });
+      summary = res.output_text ?? '';
+    } else if (clients.anthropic) {
+      const msg = await clients.anthropic.messages.create({
+        model: s.model.id,
+        max_tokens: 1500,
+        system,
+        messages: [{ role: 'user', content: chat }],
+      });
+      s.meter.add(msg.usage);
+      summary = msg.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
+    } else return false;
     doc.history = [
       { role: 'user', content: `Summary of our chat so far (compacted):\n${summary}` },
       { role: 'assistant', content: 'Noted. I carry on from this summary.' },
@@ -1279,13 +1487,19 @@ export class Assistant {
 
   // ---------------------------------------------------------------- keys
 
-  /** One free call (reading a model) that says whether Claude takes the key. */
-  async testKey(apiKey: string): Promise<{ ok: boolean; detail: string; at: number }> {
+  /** One free call (reading a model) that says whether the provider takes the key. */
+  async testKey(
+    provider: AssistantProvider,
+    apiKey: string,
+  ): Promise<{ ok: boolean; detail: string; at: number }> {
     const at = Date.now();
-    const model = this.modelById((this.tiers[0] as TierDef).model) ?? (this.models[0] as ModelDef);
+    const model = this.models.find((m) => m.provider === provider);
+    const label = PROVIDERS[provider].label;
+    if (!model) return { ok: false, detail: `This app runs no ${label} models.`, at };
     try {
-      await this.client(apiKey).models.retrieve(model.id);
-      return { ok: true, detail: 'Claude took the key.', at };
+      if (provider === 'openai') await this.openai(apiKey).models.retrieve(model.id);
+      else await this.anthropic(apiKey).models.retrieve(model.id);
+      return { ok: true, detail: `${label} took the key.`, at };
     } catch (err) {
       return { ok: false, detail: shownError(err).message, at };
     }
