@@ -57,7 +57,7 @@ Another engine (R2 SQL, an HTTP database) calls `meterQuery({ engine, sql, metho
 
 ## What a point holds
 
-One point per statement (a D1 batch writes one per statement in it). The column order is the contract for reading the dataset back:
+One point per kind of statement per turn: the same statement run many times in one go (a loop of inserts) is one point whose numbers are totals, with `statements` saying how many ran. Divide by it for a mean. The column order is the contract for reading the dataset back:
 
 | Column | Holds |
 |---|---|
@@ -65,18 +65,20 @@ One point per statement (a D1 batch writes one per statement in it). The column 
 | `blob1` … `blob5` | Engine, app, kind (`fetch`, `cron`, `queue`, `alarm`, `do`), route (ids folded to `:id`), tool |
 | `blob6` … `blob8` | Op (`select`, `insert`, `update`, `delete`, `ddl`, `pragma`, `other`), fingerprint, the query's shape (up to 1 KB) |
 | `blob9`, `blob10` | `ok` or `error`, method (`all`, `first`, `run`, `raw`, `batch`, `query`, `insert`, `exec`) |
-| `double1` … `double8` | Wall ms, the engine's own ms, rows read, bytes read, rows returned, rows written, response bytes, HTTP status |
+| `double1` … `double10` | Wall ms, the engine's own ms, rows read, bytes read, rows returned, rows written, response bytes (each a total), HTTP status, statements, slowest ms |
 
 The shape has every string and number literal as `?`, `IN` lists folded to `(?...)`, comments and ClickHouse's `FORMAT` dropped, and an insert's rows cut off. The fingerprint is a hash of the shape, one per kind of query.
 
 Read it back with the Analytics Engine SQL API, for example the slowest shapes of the last day:
 
 ```sql
-SELECT blob7 AS fingerprint, any(blob8) AS shape, sum(_sample_interval) AS calls,
-       quantileWeighted(0.95)(double1, _sample_interval) AS p95_ms
+SELECT blob7 AS fingerprint, any(blob8) AS shape,
+       sum(IF(double9 > 0, double9, 1) * _sample_interval) AS calls,
+       sum(double1 * _sample_interval) / sum(IF(double9 > 0, double9, 1) * _sample_interval) AS mean_ms,
+       max(double10) AS slowest_ms
 FROM myapp_queries
 WHERE timestamp > NOW() - INTERVAL '1' DAY
-GROUP BY fingerprint ORDER BY p95_ms DESC LIMIT 20
+GROUP BY fingerprint ORDER BY mean_ms DESC LIMIT 20
 ```
 
 ## Exports

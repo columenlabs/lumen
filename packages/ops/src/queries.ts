@@ -169,42 +169,88 @@ export function queryShape(sql: string): QueryShape {
 const cap = (s: string, n = 96) => (s.length > n ? s.slice(0, n) : s);
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
 
+type Batch = {
+  blobs: string[];
+  index: string;
+  sums: number[];
+  status: number;
+  n: number;
+  max: number;
+};
+const pending = new Map<string, Batch>();
+
+function flush() {
+  const batches = [...pending.values()];
+  pending.clear();
+  for (const b of batches) {
+    try {
+      sink?.writeDataPoint({
+        indexes: [b.index],
+        blobs: b.blobs,
+        doubles: [...b.sums, b.status, b.n, b.max],
+      });
+    } catch (err) {
+      console.error('meterQuery', err);
+    }
+  }
+}
+
 /**
  * Column order is the contract with whoever reads the dataset back: index1 engine; blobs
  * engine, app, kind, route, tool, op, fingerprint, sql shape, outcome, method, cap (`capped` when
- * it returned more rows than `setQueryRowCap` allows); doubles wall ms,
- * engine ms, rows read, bytes read, rows out, rows written, bytes out, status.
+ * it returned more rows than `setQueryRowCap` allows); doubles wall ms, engine ms, rows read,
+ * bytes read, rows out, rows written, bytes out, status, statements, slowest ms.
+ *
+ * The same statement run many times in one turn (a loop of inserts) is one point: doubles 1 to 7
+ * are its totals, `statements` how many ran and `slowest ms` the longest, so a sync that writes
+ * thousands of rows stays a handful of points. Divide a total by `statements` for the mean.
  */
 export function meterQuery(p: QueryPoint) {
   if (!sink) return;
   try {
     const shape = queryShape(p.sql);
     const c = p.caller ?? currentCaller();
-    sink.writeDataPoint({
-      indexes: [p.engine],
-      blobs: [
-        p.engine,
-        cap(c.app),
-        cap(c.kind),
-        cap(c.route),
-        cap(c.tool ?? ''),
-        shape.op,
-        shape.fingerprint,
-        shape.text,
-        p.ok ? 'ok' : 'error',
-        p.method,
-        rowCap && num(p.rowsOut) > rowCap ? 'capped' : '',
-      ],
-      doubles: [
-        p.ms,
-        num(p.engineMs),
-        num(p.rowsRead),
-        num(p.bytesRead),
-        num(p.rowsOut),
-        num(p.rowsWritten),
-        num(p.bytesOut),
-        num(p.status),
-      ],
+    const blobs = [
+      p.engine,
+      cap(c.app),
+      cap(c.kind),
+      cap(c.route),
+      cap(c.tool ?? ''),
+      shape.op,
+      shape.fingerprint,
+      shape.text,
+      p.ok ? 'ok' : 'error',
+      p.method,
+      rowCap && num(p.rowsOut) > rowCap ? 'capped' : '',
+    ];
+    const values = [
+      num(p.ms),
+      num(p.engineMs),
+      num(p.rowsRead),
+      num(p.bytesRead),
+      num(p.rowsOut),
+      num(p.rowsWritten),
+      num(p.bytesOut),
+    ];
+    const key = blobs.filter((_, i) => i !== 7).join('\u0000');
+    const b = pending.get(key);
+    if (b) {
+      values.forEach((v, i) => {
+        b.sums[i] = (b.sums[i] ?? 0) + v;
+      });
+      b.n += 1;
+      b.max = Math.max(b.max, num(p.ms));
+      b.status = num(p.status) || b.status;
+      return;
+    }
+    if (pending.size === 0) queueMicrotask(flush);
+    pending.set(key, {
+      blobs,
+      index: p.engine,
+      sums: values,
+      status: num(p.status),
+      n: 1,
+      max: num(p.ms),
     });
   } catch (err) {
     console.error('meterQuery', err);
