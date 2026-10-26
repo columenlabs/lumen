@@ -6,6 +6,7 @@ import {
   type PeopleView,
   type Role,
   emailsIn,
+  inviteGrants,
   levelsOf,
 } from '@columenlabs/lumen-ui-types/people';
 import { CheckIcon, CopyIcon, MailIcon, TriangleAlertIcon, UserPlusIcon } from 'lucide-react';
@@ -44,7 +45,7 @@ export function InviteDrawer({
   const ids = useId();
   const [text, setText] = useState('');
   const [role, setRole] = useState<Role>('member');
-  const [grants, setGrants] = useState<Grant[]>([]);
+  const [grants, setGrants] = useState<Grant[]>(() => inviteGrants(view.scopes));
   const [days, setDays] = useState(view.inviteDays);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -71,7 +72,7 @@ export function InviteDrawer({
   const reset = () => {
     setText('');
     setRole('member');
-    setGrants([]);
+    setGrants(inviteGrants(view.scopes));
     setDays(view.inviteDays);
     setNote('');
     setResults(null);

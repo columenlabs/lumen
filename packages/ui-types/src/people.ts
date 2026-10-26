@@ -35,6 +35,8 @@ export interface Scope {
   parent?: string;
   /** What one resource is called ("Collection"). */
   resourceLabel?: string;
+  /** The level the invite drawer starts at on this scope; the lowest when left out. */
+  inviteLevel?: string;
 }
 
 export interface Grant {
@@ -183,6 +185,13 @@ export function levelsOf(scope: Pick<Scope, 'levels'> | undefined): readonly Lev
 
 export function levelLabel(scope: Pick<Scope, 'levels'> | undefined, id: string): string {
   return levelsOf(scope).find((l) => l.id === id)?.label ?? id;
+}
+
+/** The grants an invite starts with: each app-wide scope's `inviteLevel`, when it names one of its levels. */
+export function inviteGrants(scopes: readonly Scope[]): Grant[] {
+  return scopes
+    .filter((s) => !s.parent && levelsOf(s).some((l) => l.id === s.inviteLevel))
+    .map((s) => ({ scope: s.id, level: s.inviteLevel as string }));
 }
 
 /** `a@B.com ` → `a@b.com`, or null for anything that is not one email. */
