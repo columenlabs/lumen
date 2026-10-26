@@ -213,10 +213,10 @@ function EmailForm({
             }));
             const kept = perRoute[id];
             const next = view.routes.find((r) => r.id === id);
-            // A saved key belongs to the saved route's server: another route needs its own key.
             const onSaved = !!view.current && view.current.route === id;
             const url = kept?.url ?? (onSaved ? view.current?.url : undefined) ?? next?.url ?? '';
-            setReplacing(kept?.replacing ?? !onSaved);
+            // The saved key carries to every route (the same server is often reached either way).
+            setReplacing(kept?.replacing ?? !view.current);
             set({ route: id, url, apiKey: kept?.apiKey ?? '' });
           }}
         />
@@ -245,7 +245,7 @@ function EmailForm({
                 value={draft.apiKey ?? ''}
                 onChange={(e) => set({ apiKey: e.target.value })}
               />
-              {view.current && view.current.route === draft.route && (
+              {view.current && (
                 <Button
                   size="sm"
                   variant="ghost"
