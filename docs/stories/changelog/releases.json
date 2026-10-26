@@ -4,16 +4,12 @@
     "date": "2026-10-26T16:11:23Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Email Check connection fails on a redirect",
         "body": "`reachAndKey` now treats any 3xx answer as a failure, so an email API sitting behind a sign-in page no longer shows \"Reached\" and \"API key accepted\" when the key was never checked."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Send test explains a redirect",
         "body": "the send-test helper now fails with \"The address redirects to `<host>` (a sign-in page?), not to the email API\" instead of the bare \"The server answered 302\", so you can see that the configured address needs correcting."
       }
@@ -24,23 +20,17 @@
     "date": "2026-10-26T15:41:19Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Saved email key survives route changes",
         "body": "In `LumenEmailSettings` from @columenlabs/lumen-ui, switching the route (for example from the public internet to a tunnel) no longer empties the API key, so Save no longer shows a false \"1 to fix\" and you can change routes without re-entering the key."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Choose where the test email goes",
         "body": "`LumenEmailSettings` now has a \"Send a test email to\" field, pre-filled with the signed-in admin's address, and the address you type is carried on the new `EmailDraft.testTo` field from @columenlabs/lumen-ui-types/people."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Test address is checked on the server",
         "body": "`peopleRoutes` (lumen-people) now sends the test email to `testTo`, normalised with `normEmail` and refused unless it is exactly one address, and it names that address in the audit line."
       }
@@ -51,23 +41,17 @@
     "date": "2026-10-26T14:36:59Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Switching email routes keeps what you typed",
         "body": "In `LumenEmailSettings` from @columenlabs/lumen-ui, each route (for example tunnel and public) now remembers its own server address, API key and key mode, so switching away and back restores your input instead of overwriting it with the route's default."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Refetching no longer wipes the form",
         "body": "`LumenEmailSettings` now resets its draft only when the saved settings change (`updatedAt`, route or URL), so a refetch that returns the same data no longer clears what a user is typing."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "\"Keep\" key button only appears on the saved route",
         "body": "In `LumenEmailSettings`, the \"Keep\" option for the saved API key now shows only on the route the key was saved for, so a user on another route has to enter a key for that route's server."
       }
@@ -78,37 +62,27 @@
     "date": "2026-10-26T07:03:41Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "A ready-made people and access screen",
         "body": "Import `LumenPeople` from `@columenlabs/lumen-ui/people` to give an app a user directory with a People table, bulk actions (set level, make admin, resend, disable, remove with Undo), an Invites tab and an audit log."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "A new package for the people backend",
         "body": "`@columenlabs/lumen-people` provides `store` (SQL over any `exec`-style driver), `service` (grants, invites, audit), `routes` (a plain Web `fetch` handler) and `mailer`, so you can run the backend for `LumenPeople` without writing it yourself."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Invite email settings with a connection check",
         "body": "Render `LumenEmailSettings` from `@columenlabs/lumen-ui/people` and use the `email` module of `@columenlabs/lumen-people` to send invites through a Resend-style REST API (`POST {url}/emails`), with Check connection, Send test and a write-only key."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Shared access types and rules",
         "body": "From `@columenlabs/lumen-ui-types/people` you can import the types for scopes, levels, grants, people, invites, audit and email settings, plus the rules `can`, `levelOf`, `atLeast`, `checkAdminFloor`, `inviteExpired` and `emailsIn`."
       },
       {
-        "kinds": [
-          "security"
-        ],
+        "kinds": ["security"],
         "title": "Safer invites and admin access",
         "body": "In `@columenlabs/lumen-people`, `service` hashes invites at rest, always keeps one active admin, and audits every change and refusal, while `routes` accepts writes only as same-origin JSON."
       }
@@ -119,23 +93,17 @@
     "date": "2026-10-26T06:31:38Z",
     "takeaways": [
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "One place for design patterns",
         "body": "The repository's new `DESIGN.md` is where Lumen design patterns are written, so a developer building with `@columenlabs/lumen-ui` can check it before inventing a pattern of their own."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Helper text goes behind an InfoTip",
         "body": "The first pattern in `DESIGN.md`, \"Details on demand: InfoTip\", says helper text belongs behind an (i) next to a label rather than on the screen, and a label gets no (i) unless a reader would otherwise guess wrong."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Clear merge rules for contributors",
         "body": "The new `REVIEW.md` lists what blocks a merge and points to the Rules in `AGENTS.md` and to `DESIGN.md` instead of repeating them. The Rules in `AGENTS.md` now carry one line pointing to both files, so contributors and coding agents find them."
       }
@@ -146,30 +114,22 @@
     "date": "2026-10-26T05:44:55Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "One labelled Settings group per app",
         "body": "In `LumenShell` from @columenlabs/lumen-ui, the new optional `settingsGroups` prop takes `{ label, sections }` entries, so a product with several apps can show General first and then one labelled group per app in a single Settings dialog."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "LumenSettings takes the same groups",
         "body": "`LumenSettings` has a new `groups` prop that accepts the same `SettingsGroupDef[]`, so you can render grouped settings when you use it on its own."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Find searches every group",
         "body": "`allSettings` now includes the entries from `settingsGroups`, so Find in Settings returns matches from each app's group as well as the shared and app sections."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Typed group definitions",
         "body": "`SettingsGroupDef` is now exported, so you can type the array you pass to `settingsGroups` or `groups`."
       }
@@ -180,23 +140,17 @@
     "date": "2026-10-26T01:20:23Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Brand subtitle stays inside the collapsed icon rail",
         "body": "In `LumenShell` from `@columenlabs/lumen-ui`, with the sidebar set to `collapsible=\"icon\"`, a brand with a subtitle no longer wraps word by word or spills a stray last word over the top bar."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Sidebar header and footer clip to the rail",
         "body": "`SidebarHeader` and `SidebarFooter` now stay on one line and clip to the rail width when collapsed, so custom header and footer content can't overflow into the page header."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Section extra content is hidden on the rail",
         "body": "`SidebarSection` now hides its `children` (for example a \"New tag\" button) when the sidebar is collapsed to icons, so only the icons show. Nothing changes in your app code."
       }
@@ -207,23 +161,17 @@
     "date": "2026-10-26T00:47:11Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Header menu for grouped tables with sub-groups",
         "body": "In grouped tables from `@columenlabs/lumen-ui` whose view sets `ViewSubgroup.under`, the header expand/collapse button is now a menu with Expand all, Close every sub-group, and Collapse all."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Close every sub-group in one click",
         "body": "The new menu entry is named from `ViewSubgroup.label` (for example \"Close every meter\"), so you can open all groups and fold all their lines without any extra props."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Clearer header icon, same behavior elsewhere",
         "body": "The header icon shows ⇕ while anything is closed, and tables without a `ViewSubgroup` and server-grouped tables keep the single expand/collapse button, so no app changes are needed."
       }
@@ -234,23 +182,17 @@
     "date": "2026-10-26T00:38:22Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Sub-group part rows highlight on hover",
         "body": "In `@columenlabs/lumen-ui`, part rows inside a view sub-group now show the `hover:bg-muted` highlight, which the `bg-muted/30` base used to hide, so you no longer need a style override to make them feel interactive."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Folded lines highlight on hover, even when open",
         "body": "A folded line, which is a `ViewSubgroup` with `under` set, now highlights on hover in both its closed and open states, so users can see which line they are pointing at."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Click anywhere on a folded line to open or close it",
         "body": "In `@columenlabs/lumen-ui`, a click anywhere on a `ViewSubgroup` `under` line now toggles its rows, and the chevron still works as before, so you get a larger click target with no prop changes."
       }
@@ -261,30 +203,22 @@
     "date": "2026-10-25T23:44:48Z",
     "takeaways": [
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Group headings show colour marks",
         "body": "In grouped tables and views, a group heading now draws the grouped field's `iconOf(value)` in its `color(value)` (for example a product's icon or a label's icon), and falls back to a colour dot, then to the field's icon."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Marks on folded sub-group lines",
         "body": "The new `ViewSubgroup.mark(key, rows)` option, from `@columenlabs/lumen-ui-types`, draws a mark before a folded line's key, such as a meter's product icon."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Flat sub-groups",
         "body": "The new `ViewSubgroup.flat: string[]` option lists the group fields under which rows don't fold, so each row becomes one line named by its `under` key, with the first column kept and headed by the sub-group's label."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Level-aware `rollRender`",
         "body": "`rollRender(rows, level)` now receives a `RollLevel` (`'group' | 'fold' | 'total'`), so an app can draw a split bar on a sub-group's folded line only; existing `rollRender(rows)` callers keep working unchanged."
       }
@@ -295,30 +229,22 @@
     "date": "2026-10-25T23:27:39Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Split a shared cap by part in one bar",
         "body": "In `ShareMeter` from @columenlabs/lumen-ui, the new `segments` prop (`[{ value, color, label }]`) stacks each part's share of the cap in its own colour, so you can show an allowance split by who used it."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Pooled roll-ups for caps shared by several rows",
         "body": "From @columenlabs/lumen-ui, `poolShare(rows, { pool, used, cap })` works inside a field's `rollRender` and computes each pool's share as its rows' use over the shared cap, instead of summing or taking the max of the rows' own percentages."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Split bars line up and read clearly past the cap",
         "body": "With `segments` set, `ShareMeter` keeps the same fixed track width as a plain bar (or `wide`), so a column mixing split and plain meters stays aligned. Past the cap, the track reads as the total and a tick marks the cap."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Each part is announced and shown on hover",
         "body": "When `ShareMeter` has `segments`, its `aria-label` and hover text list every part with its percentage, so the split is available to screen readers and mouse users."
       }
@@ -329,23 +255,17 @@
     "date": "2026-10-25T22:10:13Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "A paged table keeps its page when you select or edit a row",
         "body": "In `LumenView` from @columenlabs/lumen-ui, ticking a row, editing a label or refreshing no longer sends a table on page 2 or later back to page 1, even when your `rows` prop is a new array on every render."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Multi-pick selector keeps its Done footer on screen",
         "body": "In `LumenSelector` from @columenlabs/lumen-ui, the desktop popup is now bounded by the available height, so the search, header note and Done footer stay visible near the bottom of the screen while the list scrolls."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Selector opens upward when there is no room below",
         "body": "`LumenSelector` now opens above its trigger when less than 320px is free below and there is more room above, with no new prop needed."
       }
@@ -356,23 +276,17 @@
     "date": "2026-10-25T22:04:30Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Lone spikes in mostly empty windows are ignored",
         "body": "In `@columenlabs/lumen-ops`, `burnRate` now counts a single nonzero sample as 0 when most samples are empty (median 0), so one stray operation no longer looks like a trend, and `BurnRate.total` now holds the window's own total."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Pace is never projected from a near-empty window",
         "body": "`timeToCap(rate, used, cap, resetIn, { minTotal })` now returns a `thin` pace with no time to the cap when the window's total is under `minTotal` (default 0.1% of the cap), while a meter already at its cap still reads as at its cap."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Trend changes that can't blow up",
         "body": "The new `trendChange(now, prev, { minBase, max })` in `@columenlabs/lumen-ops` returns a `TrendValue` that reads `▲ 12%` over a big enough earlier period, the plain difference `▲ +3` at or under `minBase`, and `▲ >10×` past ten times, so a resource with 3 operations no longer shows `▲ 18688%`."
       }
@@ -383,30 +297,22 @@
     "date": "2026-10-25T21:17:59Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Pace maths with `burnRate` and `timeToCap`",
         "body": "From `@columenlabs/lumen-ui`, call `burnRate(samples, { per, gauge, damp })` to get a rate per hour over a window, then pass it to `timeToCap(rate, used, cap, resetIn)` to get `{ eta, atReset, hits, resetIn, safe }` and answer \"at this pace, when do we hit the cap?\"."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "A one-line `TimeToCap` chip",
         "body": "Render `TimeToCap` from `@columenlabs/lumen-ui` in a table cell or card to show \"in 5h 20m\", \"Resets first\" or \"At cap\", coloured by the canonical `meterLevel` of the projected share at reset."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "`PaceWindowPicker` and a shared pace window",
         "body": "Drop `PaceWindowPicker` from `@columenlabs/lumen-ui` next to any pace display so users can choose a 6h, 12h, 24h or 7d window, and read the choice anywhere with `usePaceWindow()`."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "`paceText()` for sorting and filtering",
         "body": "Use `paceText()` from `@columenlabs/lumen-ui` to get the same pace wording as the chip for sort or filter labels, so text and chip never disagree."
       }
@@ -417,30 +323,22 @@
     "date": "2026-10-25T20:40:34Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "A number column now has one right edge",
         "body": "In `LumenView` from @columenlabs/lumen-ui, a column that mixes `UnitValue` cells with dashes, `Free`, plain numbers, headers or the Total row now lines them all up on the same right edge, with no alignment code in your column `render`."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Units hang in the gutter and the status dot sits by its number",
         "body": "In a `LumenView` table, `UnitValue` now places its unit outside the normal flow, in extra right padding on the cell, and puts the status dot just left of the number instead of in a trailing slot."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Columns are marked for styling",
         "body": "`LumenView` now sets `data-col` on every header, body, group and Total cell, and `data-units` on every cell of a column that contains a `UnitValue`, so your own CSS can target those columns. `UnitValue` flags its column through the new `UnitColumns` context, with no prop or app flag."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "The name column stops at 18rem",
         "body": "In `LumenView`, the name column no longer grows past `18rem`, so it stops squeezing the number columns beside it."
       }
@@ -451,23 +349,17 @@
     "date": "2026-10-25T20:25:47Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Page through a server's groups",
         "body": "In `@columenlabs/lumen-ui-types`, `ServerGroups` has a new optional `pages` field, and when you set it the groups view in `@columenlabs/lumen-ui` shows a `LumenPager` in its header so users can step through groups with previous and next."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Paged groups replace the \"More groups\" row",
         "body": "When `pages` is set on `ServerGroups`, the view drops the More groups row, and `list` is treated as the page currently shown; without `pages` the More groups row and the `N+ groups` count stay as before."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Readable totals in the pager",
         "body": "`LumenPager` in `@columenlabs/lumen-ui` now formats its numbers with thousands separators, so large ranges read like `1–50 of 17,146`."
       }
@@ -478,30 +370,22 @@
     "date": "2026-10-25T19:10:01Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Pick the right roll-up for any field",
         "body": "The new `cardAgg(field, agg?)` in the summary-cards helpers of @columenlabs/lumen-ui returns **sum** for numbers, **max** for percent and weight fields, and **distinct** for text, so a Row of numbers card can show any field."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Rendered number fields now work in number cards",
         "body": "`isNumberField` and the Summary editor's number check no longer reject fields with a custom `render` (such as a meter or a unit), and the roll-up reads the field's plain `value`."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Cards and Number slots accept every field",
         "body": "In the Edit widget for a Row of numbers or a single Number card, you can now tick text fields and rendered fields instead of seeing \"Takes a number\"."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Row of numbers tiles fill the row",
         "body": "In `SummaryTiles`, each tile now fills its grid column instead of keeping the fixed header tile width, so cards no longer leave gaps, matching `TileRow fill`."
       }
@@ -512,9 +396,7 @@
     "date": "2026-10-25T17:55:23Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Hide table columns on a phone",
         "body": "In `@columenlabs/lumen-ui`, each entry in the `head` array of `DetailsTable` now accepts `hideOnPhone`, so a card table with five or six columns fits a phone screen without sideways scrolling."
       }
@@ -530,30 +412,22 @@
         "body": "In `@columenlabs/lumen-ui`, a `ShareMeter` with no `color` prop used to draw `var(--primary)` and now draws grey, amber or red from its share. To keep the old look, pass `color=\"var(--primary)\"`; meters that already set `color` are unchanged."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "One set of meter levels for every app",
         "body": "From `@columenlabs/lumen-ui-types/views`, `METER_LEVELS`, `MeterLevels` and `MeterLevel` define grey under 75%, amber (`watch`) from 75% and red (`alert`) from 90% of a cap, so apps no longer hand-roll thresholds."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Override meter levels per app or per meter",
         "body": "`configureLumen({ meterLevels: { watch, alert } })` changes the thresholds for the whole app (each level can move alone), and `ShareMeter` has a new `levels` prop for a single meter."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "`UnitValue` can set its tone from a share",
         "body": "The new `share` prop (with optional `levels`) on `UnitValue` picks `tone` from the meter level, so a number can turn amber or red without extra code."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Usage progress cards follow the app's levels",
         "body": "Progress cards with `meter: 'usage'` now use the thresholds from `configureLumen`'s `meterLevels`, so they match every other meter."
       }
@@ -564,23 +438,17 @@
     "date": "2026-10-25T16:11:01Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Phone drawers no longer show a duplicate Close bar",
         "body": "In `LumenDrawer` from @columenlabs/lumen-ui, a drawer opened on a phone without `footer` or `footerStart` now renders no footer, so the sheet's own X is the only close control."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Phone drawer actions sit at the bottom again",
         "body": "When you pass `footer` or `footerStart` to `LumenDrawer` on a phone, the footer now renders at the bottom of the sheet, the same as on desktop, instead of moving under the header."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Sidebar rows with nested items open from the chevron again",
         "body": "In `LumenSidebar`, a section item that has nested items opens them from its chevron, and clicking the row only follows its link."
       }
@@ -591,23 +459,17 @@
     "date": "2026-10-25T16:03:54Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Pickable DetailsTable rows",
         "body": "In `@columenlabs/lumen-ui`, `DetailsTable` has a new optional `onSelect(key)` prop, so you can let users pick a row by click, Enter or Space and react to the choice, for example by charting that metric below the table."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Highlight the picked row",
         "body": "In `DetailsTable`, the new optional `selected` prop takes the key of the current row and gives it the table's selected style (`data-state=\"selected\"` and `aria-current`), so you can show which row is active."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Sidebar items open on click",
         "body": "In `LumenSidebar`, a section item that has nested `items` now opens them when you click the item itself, as well as following its link. Clicking the already selected item folds them again, so users no longer have to find the chevron."
       }
@@ -618,9 +480,7 @@
     "date": "2026-10-25T15:37:59Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Group row totals line up with their headers on a phone",
         "body": "In `LumenView` and `LumenTable`, the group row's label cell `colSpan` now leaves out leading columns marked `hideOnPhone` on a phone screen, so roll-up cells in a group row sit under the right headers instead of shifting right."
       }
@@ -631,37 +491,27 @@
     "date": "2026-10-25T06:58:14Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Metric cards with sparklines",
         "body": "In `@columenlabs/lumen-ui`, set the new `spark` prop (with optional `sparkColor`) on a `Tile` or `TileOption` and the tile shows its daily history as a small line under the number."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Tiles that share the row",
         "body": "Add the new `fill` prop to `TileRow` or `TileToggleGroup` and the tiles split the row's width evenly, so a row of metric cards no longer uses the fixed tile width."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Aligned metered columns",
         "body": "The new `UnitValue` component in `@columenlabs/lumen-ui` renders one number per table cell, with right-aligned tabular figures, a muted unit slot and a status dot slot that tints near or past the limit, replacing `value [pct]` cells."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Show as, per column",
         "body": "Set `showAs` on a `ViewField` to offer several readings of one column, such as Amount or % of allowance, which people pick in Edit view under \"Show as\" and which saves with the view as the new optional `shows` key."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Correct group and Total cells",
         "body": "Set `rollRender` on a `ViewField` and group and Total cells are drawn from their rows, with amounts summed alongside their unit, shares recalculated from the totals, and percents never summed."
       }
@@ -672,37 +522,27 @@
     "date": "2026-10-25T06:26:16Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "\"No <field>\" filter for text fields",
         "body": "In `LumenTokenizedFilter` (`@columenlabs/lumen-ui`), a text field where some rows have no value now pins a \"No <field>\" row with its count above the field's values, so users can include or exclude rows that have none."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Saved views can store the empty filter",
         "body": "From `@columenlabs/lumen-ui-types/views`, `viewTokenOps` now includes `empty` and `EMPTY_VALUE` (`∅`) is exported, so a token like `{ key, value: EMPTY_VALUE, op: 'empty', not? }` validates in saved views."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Only one sidebar row looks selected",
         "body": "`SidebarSection` now selects just the row whose link best matches the URL, counting the query string, so `/resources?label=a` wins over `/resources` and an open parent no longer looks selected just for being open."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Icons on sidebar sub-items",
         "body": "The new optional `icon` on `SectionSubItem` is drawn in the sub-item's `color`, and the dot remains the fallback when you don't set one."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "What's new works before your first release",
         "body": "`WhatsNew` now shows a \"What's new\" button that opens an empty state before an app has published a release."
       }
@@ -713,23 +553,17 @@
     "date": "2026-10-25T02:59:39Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Expand all / Collapse all for server groups",
         "body": "In `LumenView` from @columenlabs/lumen-ui, set the new optional `ServerGroups.onToggleAll(open: boolean)` callback and the header's Expand all / Collapse all button shows under server groups, so users can open or close every group at once."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "No stray \"No rows match.\" above the group list",
         "body": "In `LumenView` with server groups, the \"No rows match.\" message no longer shows above the groups when none of them is open."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Empty open groups now say so",
         "body": "In `LumenView` with server groups, an open group with no rows now shows \"No rows match.\" inside that group."
       }
@@ -740,23 +574,17 @@
     "date": "2026-10-25T02:22:53Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Server-paged views can group",
         "body": "In `LumenView` from @columenlabs/lumen-ui, the new `groups` field on the `paging` prop's `ServerPaging` (typed `ServerGroups`) lets your server supply the groups, and each open group pages its own rows."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Server-supplied group headers and per-group paging",
         "body": "With `paging.groups` set, `LumenView` takes group headers from `groups.list`, shows \"N groups\" in the pager (with a + while more exist), adds Show more inside each open group, and adds a More groups row at the end of the table."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Group button follows your server",
         "body": "In `LumenLayout`, the Group button under `paging` now appears only when `paging.groups` is set, so a server-paged view no longer offers grouping it can't do correctly."
       }
@@ -767,23 +595,17 @@
     "date": "2026-10-25T02:19:39Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Explain why a domain can't group",
         "body": "In `@columenlabs/lumen-ui-types`, set the new optional `ViewDomain.groupNote` to a reason string, and Edit view in `@columenlabs/lumen-ui` greys the Group and Pivot shape buttons and every Group box and shows that note on hover or tap."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Turn off only Pivot",
         "body": "In `@columenlabs/lumen-ui-types`, set the new optional `ViewDomain.pivotNote` to grey just the Pivot shape in Edit view, so a server that groups through `ServerPaging.groups` keeps Group available."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "No more Group and Pivot choices that do nothing",
         "body": "A view on a server-paged domain no longer offers Group, Pivot or the Group boxes in Edit view once you set `groupNote` or `pivotNote` on its `ViewDomain`."
       }
@@ -794,30 +616,22 @@
     "date": "2026-10-25T02:16:01Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Two-tap range picking on the coverage map",
         "body": "In `LumenCoverageMap` from @columenlabs/lumen-ui, with `select=\"backfill\"`, a tap now picks a block and starts a range, and a second tap in the same row picks every pickable block in between, so backfill picking works on a phone without shift-click."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Year labels pick a whole year",
         "body": "In `LumenCoverageMap`'s months layout, tapping a year label picks that year's queueable months, and tapping it again drops them."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Selection bar always sits above the map",
         "body": "`LumenCoverageMap` has a new `pickTools?: ReactNode` prop that fills the bar while nothing is picked, so you can add quick-pick buttons that set `preselect` without the map jumping."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Clearer picked blocks and a months layout that fits the card",
         "body": "`CoverageCell` now takes `mark` (`add` or `remove`), `start` and `preview`, so picked blocks look different from queued ones, and the months layout of `LumenCoverageMap` fits its card instead of scrolling sideways on a phone."
       }
@@ -828,23 +642,17 @@
     "date": "2026-10-25T01:34:13Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Clicked tabs show only their underline",
         "body": "In `@columenlabs/lumen-ui`, a `LumenTabs` tab you click with the mouse no longer draws the 3px focus ring over its underline."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Keyboard focus keeps its ring",
         "body": "In `LumenTabs`, moving between tabs with the arrow keys still shows the 3px focus ring on the newly focused tab, so keyboard users keep a clear focus indicator."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Your own handlers still run",
         "body": "`TabsTrigger` now tracks pointer focus internally, and the `onMouseDown`, `onKeyDown` and `onBlur` props you pass to it are still called, so no app changes are needed."
       }
@@ -855,23 +663,17 @@
     "date": "2026-10-25T00:17:56Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Server-paged views no longer fake a full sort",
         "body": "In `LumenView` from @columenlabs/lumen-ui, a view with `paging` now sorts only by the column keys you list in `paging.sorts`, so a header click no longer reorders just the visible page and looks like a sort of every row."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Let the server do the sorting",
         "body": "`LumenTable` in @columenlabs/lumen-ui has a new `serverSorts` prop that switches it to manual sorting and sends header clicks to `onSort`, and `paging.onSort` tells your page which sort the layout holds, including a revert, so you can fetch rows in that order."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "No grouping on a single page",
         "body": "In `LumenView` with `paging`, `groupBy` and `pivot` are now ignored, and `LumenLayout` with `paging` no longer shows the Group button, because grouping one page of rows would misrepresent the whole set."
       }
@@ -882,9 +684,7 @@
     "date": "2026-10-24T23:18:14Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Separate colours for Copying and Indexing coverage cells",
         "body": "In `@columenlabs/lumen-ui`, set the `--cov-run` and `--cov-run-soft` CSS variables for Copying cells and `--cov-index` and `--cov-index-soft` for Indexing cells, and `LumenCoverageMap`, `LumenCoverageCalendarMap` and their legends will show them in their own hues instead of the Complete colour."
       }
@@ -895,23 +695,17 @@
     "date": "2026-10-24T22:58:21Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Server-paged views",
         "body": "In `LumenLayout` and `LumenView` from `@columenlabs/lumen-ui`, the new optional `paging` prop (a `ServerPaging` object with `page`, `size`, `total | null`, `more`, `onPage`, and optional `onSize` and `sizes`) lets you show one server page of rows exactly as given, turn pages through `onPage`, and apply the layout's chips on the server through `onTokens`."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Uncounted totals in the pager",
         "body": "`LumenPager` now takes a `more` prop, so when the total is unknown (`total: null`) it shows a label like `1–50 of 50+` and keeps Next enabled while more pages exist."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "`ServerPaging` type export",
         "body": "`@columenlabs/lumen-ui` now exports the `ServerPaging` type, so you can type your paging state and handlers in your own code."
       }
@@ -922,30 +716,22 @@
     "date": "2026-10-24T21:47:41Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "New `@columenlabs/lumen-ai` package",
         "body": "Call `serveMcp(server, request, { onRequest })` from `@columenlabs/lumen-ai` to answer one stateless MCP Streamable HTTP request from a worker, with JSON responses and the server closed afterwards."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Meter every MCP tool call",
         "body": "Call `meterTools(server, { app, source })` from `@columenlabs/lumen-ai` and each tool call is recorded as one `@columenlabs/lumen-ops` tool-call point."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Read-only MCP servers",
         "body": "Call `keepReadTools(server, isRead?)` from `@columenlabs/lumen-ai` to keep only read tools on a server, using `readOnlyHint` unless you pass your own `isRead` check."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Signed webhooks",
         "body": "From `@columenlabs/lumen-ops/webhooks`, `sendWebhook` posts a webhook signed with your secret, and `newWebhookSecret` generates that secret."
       }
@@ -956,30 +742,22 @@
     "date": "2026-10-24T21:30:22Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Meter every tool call",
         "body": "From `@columenlabs/lumen-ops/tools`, call `setToolSink(binding)` once, then `meterToolCall(point)` to record one analytics point for each tool call an assistant or agent makes."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Wrap a call to meter it",
         "body": "`meteredCall(point, fn, errorKind?)` from `@columenlabs/lumen-ops/tools` runs your function and records the call as a point, with an optional `errorKind` to label failures."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Group runs of the same script",
         "body": "`codeHash(code)` from `@columenlabs/lumen-ops/tools` hashes code with whitespace folded, so the same script gets the same hash across runs and can be grouped in your queries."
       },
       {
-        "kinds": [
-          "security"
-        ],
+        "kinds": ["security"],
         "title": "No arguments, results or people in the data",
         "body": "Tool-call points from `@columenlabs/lumen-ops/tools` never carry arguments, results or the person, and code is stored only as a hash."
       }
@@ -990,30 +768,22 @@
     "date": "2026-10-24T21:17:01Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Date, text and number functions in view formulas",
         "body": "In view formulas, you can now call `year`, `month`, `day`, `quarter`, `weekday`, `days_between`, `start_of` and `today` for dates, `left`, `right`, `mid`, `slice`, `upper`, `lower`, `trim`, `len`, `concat`, `contains`, `replace` and `split_part` for text, and `round`, `abs`, `min` and `max` for numbers, so a Year column no longer means gluing a date's characters together."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Unknown functions are rejected instead of saving blank columns",
         "body": "`checkViewFormula` from `@columenlabs/lumen-ui-types` now returns an error for an unknown function or `|transform`, where it used to accept them and the column saved blank on every row."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Formula autocomplete lists every function",
         "body": "In `@columenlabs/lumen-ui`, the `FormulaInput` autocomplete now offers every function grouped as Sums, Date, Text and Number, each with its call and a plain line on how to use it, and picking one puts the caret inside the brackets."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Function list for assistant instructions",
         "body": "`@columenlabs/lumen-ui-types` now exports `FORMULA_FUNCTIONS` and `formulaFunctionsText()`, so you can give an assistant the exact set of formula functions it may use."
       }
@@ -1024,30 +794,22 @@
     "date": "2026-10-24T21:12:29Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Meter every data query with the new lumen-ops package",
         "body": "From the new @columenlabs/lumen-ops package, wrap a database binding once with `meteredD1`, `meteredClickHouse` or `meteredSql`, and every query through it writes one point to your analytics dataset."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Name who ran each query",
         "body": "In @columenlabs/lumen-ops, `withQueryCaller` names a background job and `setQueryCallerOf` names the request in scope, so each point records which caller issued the query."
       },
       {
-        "kinds": [
-          "security"
-        ],
+        "kinds": ["security"],
         "title": "Query points store only the shape, never values",
         "body": "The metered wrappers in @columenlabs/lumen-ops turn literals into `?` and fold lists before writing a point, so no query value is ever stored."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Bring your own engine name",
         "body": "The `QueryEngine` type in @columenlabs/lumen-ops now accepts any other string, so an app can label queries from its own engine."
       }
@@ -1058,23 +820,17 @@
     "date": "2026-10-24T21:07:39Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Coverage maps can show an Indexing state",
         "body": "`CoverageJobState` in `@columenlabs/lumen-ui` now includes `indexing`, so `LumenCoverageMap` can mark a block whose copy is done but whose follow-up step (an index or rollup) is still running."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Use your own state words in the map tooltip",
         "body": "`LumenCoverageMap` has a new `stateLabels` prop, for example `{ running: 'Copying' }`, which replaces the default state names in the tooltip."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Use your own state words in the legend",
         "body": "`CoverageLegend` has a new `labels` prop that takes the same kind of mapping, so the legend can match the wording in the map tooltip."
       }
@@ -1085,37 +841,27 @@
     "date": "2026-10-24T20:54:35Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Pick months in the months layout",
         "body": "In `LumenCoverageMap` from `@columenlabs/lumen-ui`, with `select=\"backfill\"` and `layout=\"months\"`, you can now click a month to toggle it, or shift-click to add a range in time order across years, where before those cells were disabled outside `drill`."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Remove months from the queue",
         "body": "In `LumenCoverageMap`, the new `removable` prop and `onRemove` callback let users pick months that are already queued, and the selection bar then shows **Remove from queue · N months**."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Preselect months from code",
         "body": "In `LumenCoverageMap`, the new `preselect` prop picks months as if the user had clicked them (pass a new object each time), so an app's presets can select months without queueing anything until the bar's button is pressed."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Custom queue wording",
         "body": "In `LumenCoverageMap`, the new `queueLabel` prop sets the queue button's text (default `Queue backfill`) and `pickNote` sets the note shown after the count to say what the pick comes to."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Clearer selection bar",
         "body": "The `LumenCoverageMap` selection bar now uses text buttons (Clear, Remove from queue, and your queue label) instead of icon-only ones and names rows by label rather than id, so check any app tests or styles that looked for the old icon buttons."
       }
@@ -1126,30 +872,22 @@
     "date": "2026-10-24T20:50:29Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "New `@columenlabs/lumen-auth` package",
         "body": "From `@columenlabs/lumen-auth`, you can now import `AccessVerifier` and check Access sign-in tokens in your own backend, configured with your public `teamDomain` and `aud` values."
       },
       {
-        "kinds": [
-          "security"
-        ],
+        "kinds": ["security"],
         "title": "Strict token checks with no dependencies",
         "body": "`AccessVerifier` uses only Web Crypto, accepts RS256 tokens only, and checks the signature, `aud` (one or several applications), issuer, `exp` and `nbf`, so you can protect routes without adding a JWT library."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Safe, simple results",
         "body": "`AccessVerifier` returns `{ sub, email?, serviceToken? }` for a valid token and `null` for anything else, including any parse or crypto error, so a single null check decides whether to let a request through."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Read the token from a request",
         "body": "`accessToken(request)` pulls the Access token out of an incoming request, and the `ACCESS_HEADER` constant gives you the header name to use elsewhere."
       }
@@ -1160,16 +898,12 @@
     "date": "2026-10-24T20:32:17Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "`lumen-ship release` no longer picks the wrong tag in repos with an older tag scheme",
         "body": "In `@columenlabs/lumen-ship`, `lumen-ship release` used to find the newest tag with `v[0-9]*`, so older tags like `v2026.41.70` sorted above `v0.3.63` and a dry run would have cut `v2026.41.71`; it now finds the right newest tag when you limit it to your own scheme."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "New `tags` key in `lumen-ship.json`",
         "body": "Set `tags` to a git glob such as `\"v0.*\"` to tell `lumen-ship release` which tags are release tags, and it will use that glob both for the newest tag and for the tag before it in `release tag`; the default stays `v[0-9]*`."
       }
@@ -1180,30 +914,22 @@
     "date": "2026-10-24T20:20:10Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "New `@columenlabs/lumen-ship` package",
         "body": "Lumen's first non-UI package is published at the same version as `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types`, and it holds the release notes, What's new changelog and lint guard tooling that any repo can install."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "One release command",
         "body": "`lumen-ship release` now runs your whole release from a `lumen-ship.json` config at the repo root, with modes `patch`, `minor`, `notes` and `tag <tag>`, so you can cut a release on a cadence, from a hand-written notes file, or for a tag your publish job already created."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Release pages without a framework",
         "body": "From `@columenlabs/lumen-ship/releases`, `listReleases(releases, { limit, before, canSee })` and `RELEASES_HEADERS` return the page shape that `WhatsNew` reads, so you can serve a paged, access-filtered release list from any backend."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Lint guards ship as a command",
         "body": "`lumen-ship check` now runs the four guards (kit-neutral, suppressions, settings-copy, magic-numbers) from the package, so an app can drop its own copies of those scripts and keep only its magic-numbers baseline."
       }
@@ -1214,9 +940,7 @@
     "date": "2026-10-24T19:53:13Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Show in hand / expected counts in coverage summaries",
         "body": "In `LumenCoverageMap`, add `'counts'` to the `CoverageSummary` option to get a column headed by your `unit` that prints each row's in hand / expected figures (for example `9,212 / 9,712`) in both the grid and months layouts."
       }
@@ -1227,37 +951,27 @@
     "date": "2026-10-24T19:32:45Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "App-wide default preferences",
         "body": "In `configureLumen`, the new `defaultPrefs` option lets an app set its own defaults, such as theme and time zone, for people who have not chosen yet."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Device time zone helper",
         "body": "The new `deviceTimeZone()` function returns the device's time zone when the time zone picker lists it, so you can use it as a time zone default in `configureLumen({ defaultPrefs })`."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Schedules \"When\" column wraps",
         "body": "In `SchedulesSection`, long schedule text such as \"Every 6 h · Every day 12:00\" now wraps in the When column instead of being cut off."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Logs hint only when there is a Logs page",
         "body": "In `SchedulesSection`, the line \"Each run is a line in Logs.\" now shows only when you pass `onRuns`, so an app without a Logs page no longer points people to one; apps that have a Logs page should pass `onRuns` to keep the line."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Clearer chart month axis",
         "body": "Chart month axis labels now read like `Oct 26` instead of a label such as \"Nov 06\" that looks like a day, and apps get the fix by updating to this version."
       }
@@ -1268,23 +982,17 @@
     "date": "2026-10-24T19:30:36Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "llms.txt and llms-full.txt for coding agents",
         "body": "On the docs site at lumen.columenlabs.com, `/llms.txt` indexes each package and the docs links, and `/llms-full.txt` bundles the READMEs, every component's props and example, and the reference pages, so an agent can read the whole kit in one fetch."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "One markdown file per package",
         "body": "The docs site now serves `/ui.md` for @columenlabs/lumen-ui and `/ui-types.md` for @columenlabs/lumen-ui-types, each with absolute links, and new packages get their own file automatically."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Detailed READMEs for both packages",
         "body": "The @columenlabs/lumen-ui README now walks through setup with `configureLumen`, `registerDomains` and `LumenShell` and its slots, and the @columenlabs/lumen-ui-types README lists every module path and how to register data."
       },
@@ -1300,23 +1008,17 @@
     "date": "2026-10-24T18:37:02Z",
     "takeaways": [
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Package links point to the renamed repository",
         "body": "The package metadata of `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types` now sets `homepage`, `repository` and `bugs` to the new `columenlabs/lumen` repository, so the links on the npm pages go straight to it and no longer rely on a redirect."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Source folders renamed, public API untouched",
         "body": "The kit and its view model types now live in folders named `ui` and `ui-types`, but the npm names, exports, props and slots of `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types` are exactly as before, so an app needs no code change and can upgrade as usual."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "The repository is now home to the whole Lumen family",
         "body": "Future shared packages will sit next to the kit and be published as `@columenlabs/lumen-<name>`, so you can expect more packages under the same scope."
       }
@@ -1327,23 +1029,17 @@
     "date": "2026-10-24T18:09:26Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "App chips on What's new notes",
         "body": "`WhatsNew` now takes an `apps` prop (each app's chip label by id) and an `everyone` prop (default `Global`), so a takeaway's optional `apps: string[]` field picks which chips it shows, and takeaways without it show `Global`."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Busy releases split by app",
         "body": "in `WhatsNew`, a release where one app has 3 or more takeaways is now split into one sub-section per app, largest first with `Global` last, so long releases are easier to scan."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Shell passes app labels through",
         "body": "`LumenShell` has a new `releaseApps` prop that feeds its What's new panel, and leaving it out keeps the panel looking exactly as before, so no app changes are needed."
       }
@@ -1354,23 +1050,17 @@
     "date": "2026-10-24T17:47:12Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "A widget added in Edit layout now saves with the layout",
         "body": "In `LumenLayout`, widgets you add and changes you make in Edit widget stay in the layout draft and are written once when you choose Save layout, so the new widget is no longer lost."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "No more remount that drops your layout draft",
         "body": "In `LumenLayout`, Edit widget no longer saves the view mid-edit, so an app that keys its page on the view's save time (such as `updated_at`) no longer remounts out of Edit layout and discards the draft."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Row of numbers must have a card to save",
         "body": "In `ViewEditDialog`, a Row of numbers with no cards now disables `SaveButton` with the issue \"Cards: Add at least one card\" and jumps you to Add card, instead of saving a widget that draws nothing."
       }
@@ -1381,30 +1071,22 @@
     "date": "2026-10-24T06:08:40Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Changelog page built from release notes",
         "body": "In the docs, the new `Changelog/Release notes` page lists each release's Key takeaways as Feature, Improvement and Fix chips, so you can see what changed without leaving the docs."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Docs reorganized into three levels",
         "body": "The docs sidebar now runs Get started, App shell, Blocks, Components, so you can go from a whole sample app (`LumenShell` and its Frame parts) down to single components."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Edit layout and Edit widget have their own pages",
         "body": "Under Blocks, each page has a short clip of the real UI and a live example, so you can try the rearranging flow right there."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Dark by default in the docs",
         "body": "The docs navigation, pages and component examples now open in dark, so examples match how most apps use the kit."
       }
@@ -1415,23 +1097,17 @@
     "date": "2026-10-24T01:50:01Z",
     "takeaways": [
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "README opens like a product page",
         "body": "The README header now gives a one-line pitch, badges for npm version, MIT licence and docs, and links to Docs, Changelog, llms.txt and Install, so you can judge the kit and jump to what you need from the first screen."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "See the kit in use before installing",
         "body": "The README now shows a dark screenshot of a made-up sample app built only from Lumen, so you can see how the components look together without running anything."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "A map of the kit in the README",
         "body": "The new \"What's inside\" table runs from the app shell through blocks, views and charts, then pickers and primitives, and ends with the two packages, `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types`, so you can find the part you need. This release changes documentation only, and no component or type behaviour differs from the previous version."
       }
@@ -1442,9 +1118,7 @@
     "date": "2026-10-24T00:40:28Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "LumenShell Docs page no longer freezes the browser",
         "body": "The description of LumenShell's `app` prop now shows the `<html>` tag as inline code, so you can open the Frame / LumenShell Docs page and read the full props table without the \"Page Unresponsive\" hang."
       }
@@ -1455,37 +1129,27 @@
     "date": "2026-10-23T21:54:11Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Second sign-in step",
         "body": "Place the new `LumenSecondStep` inside `LumenAuthStage` after the password screen to offer a passkey button, a 6-digit code from an authenticator app or email, or a backup code, with links to switch between them. The `initial` prop is optional, and an app with no code method configured shows only the passkey."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Sign-in methods management",
         "body": "The new `LumenSignInMethods` part gives you ready-made content for a Security page, with rows for password, passkeys, authenticator app, emailed code and backup codes. If your sign-in service can't set up the authenticator app over an existing one, set `app.replaceable: false` to hide Replace."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Security page in Settings",
         "body": "Pass the new `security` prop to `LumenShell` or `LumenSettings` and Settings ▸ General lists **Security** right after Profile."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Backup codes display",
         "body": "The new `LumenBackupCodes` shows a set of codes once, with Copy, Download and an \"I saved them\" tick that must be checked before Done."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Centred pitch in the auth side pane",
         "body": "When you don't pass `illustration` to `LumenAuthStage`, the pitch and points now sit centred in the side pane."
       }
@@ -1496,23 +1160,17 @@
     "date": "2026-10-23T21:06:14Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Step a date field one open day at a time",
         "body": "The new `LumenDateInput` component has ‹ › buttons (and Alt+← / Alt+→ while the field has focus) that move the date by one day, and its `isOpen` prop lets you pass a function that says which days count, such as a trading calendar, so steps skip weekends and holidays."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Keep stepping inside a date range",
         "body": "In `LumenDateInput`, the `min` and `max` props switch a step off when it would pass the limit, so › greys out at today when `max` is today."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Add a Today button and pick a size",
         "body": "In `LumenDateInput`, the `onToday` prop adds a Today icon button (with `atToday` turning it off), and `size` accepts `sm` for toolbars and card headers or `default` for forms."
       }
@@ -1523,23 +1181,17 @@
     "date": "2026-10-23T18:08:52Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Headerless cards keep their controls behind a corner ⋯",
         "body": "In `LumenWidget`, turning the header off (the `Header` control under Edit widget) no longer drops Ask, Refresh and Filter, because the card now shows a ⋯ menu in its top right corner with whichever of those the card has on."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Filtered headerless cards never look unfiltered",
         "body": "In `LumenWidget` with the header off, a count chip now sits beside the ⋯ while the card's filter holds tokens, so you can see the filter is active and tap the chip to open it."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Refresh progress stays visible without a header",
         "body": "In `LumenWidget` with the header off, the corner ⋯ spins as ↻ while a refresh runs."
       }
@@ -1550,30 +1202,22 @@
     "date": "2026-10-23T17:50:25Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "`end-fade` utility",
         "body": "The theme stylesheet now has an `end-fade` class that masks the last part of an element so it fades out, and you can change the length with `--end-fade` (default `--spacing(4)`, 16px)."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Dialog bodies fade when no footer follows",
         "body": "`DialogBody` now bleeds to the dialog's edge and fades over its last 16px when it is the last child of `DialogContent`, meaning you left out `DialogFooter`."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Phone dialogs and drawers fade at the bottom",
         "body": "On phones, `DialogContent`, `AlertDialogContent` and `LumenDrawer` fade their content at the bottom edge, because their footer is a bar at the top there."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Empty settings footers disappear",
         "body": "A settings footer with nothing in `SettingsFooter` is now hidden and the body fades instead, while a section that fills `SettingsFooter` keeps its bar."
       }
@@ -1584,9 +1228,7 @@
     "date": "2026-10-23T17:46:07Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Number widgets now show their main number's label",
         "body": "In `LumenSavedWidget`, a Number widget (kind `metric` with a `tile`) now titles its card with the label set on the main number under Edit widget ▸ Fields, and falls back to the widget's name (or the style name) only when no label is set."
       }
@@ -1597,9 +1239,7 @@
     "date": "2026-10-23T17:10:39Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Release notes no longer collapse for releases with no pull requests",
         "body": "In the release-notes step of the repo's release process (not in `@columenlabs/lumen-ui` or `@columenlabs/lumen-ui-types`, so there is nothing to change in an app), a release whose range has no pull requests now gets notes written from its commit messages, and the list at the end shows commit hashes instead of pull requests."
       }
@@ -1615,23 +1255,17 @@
         "body": "If an app pins `@columenlabs/lumen-ui` or `@columenlabs/lumen-ui-types` to a 0.2, 0.3 or 0.4 version, change the pin to the matching 0.1.x build (0.2.0–0.2.2 is now 0.1.2–0.1.4, 0.3.0–0.3.2 is now 0.1.5–0.1.7, and 0.4.0–0.4.4 is now 0.1.8–0.1.12). The code is identical, only the number changed."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "`latest` now points at 0.1.13",
         "body": "Running `npm install @columenlabs/lumen-ui` or `@columenlabs/lumen-ui-types` without a version installs the newest 0.1.x build instead of a deprecated 0.4 release."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Every release is a patch",
         "body": "Both packages now publish the next 0.1.x patch on each merge, so a plain `^0.1.x` range picks up each new build, and a new minor only ships when a maintainer asks for it."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Deprecation notices name the new version",
         "body": "Installing any deprecated 0.2.0–0.4.4 build of either package prints a warning that names the 0.1.x number it became."
       }
@@ -1642,23 +1276,17 @@
     "date": "2026-10-23T04:05:46Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Confirm dialogs no longer slide under the phone keyboard",
         "body": "`LumenConfirm` and `AlertDialogContent` now open as a full screen pinned to the top on screens below 768px, so a type-to-confirm field stays visible while you type."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Dialogs become full screens on phones",
         "body": "`DialogContent` now fills the screen below 768px, `DialogFooter` becomes an action bar at the top, and `DialogBody` no longer scrolls on its own, so the whole screen scrolls as one."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Bottom sheets are full screens on phones",
         "body": "a bottom `SheetContent`, including `LumenDrawer` and `LumenSelector`, now fills the screen on phones, and the `LumenDrawer` footer sits directly under its header."
       }
@@ -1669,23 +1297,17 @@
     "date": "2026-10-22T23:50:25Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Docs pages no longer show the build machine's folder",
         "body": "In the component docs, the file location shown for each component is now relative to the repository root, so you no longer see an absolute home-directory path."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Repo-relative `filePath` in the components manifest",
         "body": "In the generated components manifest, each component's `filePath` now starts at the repository root, so you can read or match it the same way on any machine."
       },
       {
-        "kinds": [
-          "security"
-        ],
+        "kinds": ["security"],
         "title": "Built docs output no longer exposes local directory names",
         "body": "The `.js`, `.json` and `.html` files in the built docs site no longer contain the absolute path of the machine that built them, so you can publish the output without revealing where it was built."
       }
@@ -1696,9 +1318,7 @@
     "date": "2026-10-22T23:15:47Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Release step no longer skips tags that have no release",
         "body": "In the release tooling, which is not part of `@columenlabs/lumen-ui` or `@columenlabs/lumen-ui-types` and leaves both packages unchanged, a maintainer can now tag a version and have its release created, instead of being told it already exists."
       }
@@ -1709,23 +1329,17 @@
     "date": "2026-10-23T06:26:52Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Every published version now gets a release",
         "body": "The Publish workflow now ends by creating a release for the tag it just published, so each version of `@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types` has notes built from the merged pull requests since the previous tag."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Backfill releases for older tags",
         "body": "When you run the Publish workflow manually, the `tag` input (plus `redo`) creates or rewrites the release for one existing tag without publishing a package, which covers versions tagged before this change."
       },
       {
-        "kinds": [
-          "security"
-        ],
+        "kinds": ["security"],
         "title": "Notes are checked before they go public",
         "body": "The release step checks the notes against the `LUMEN_FORBIDDEN_NAMES` list (case-insensitive), asks for new notes if a name matches, and fails the release rather than publish it."
       }
@@ -1736,23 +1350,17 @@
     "date": "2026-10-23T06:26:50Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Stacked time-series columns",
         "body": "The new `StackedColumns` chart takes `rows`, `x` and `parts` and draws one stacked column per period, oldest on the left, so you can show how a total splits over time."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Confirm dialogs that wait on async work",
         "body": "In `LumenConfirm`, an `onConfirm` that returns a promise now keeps the dialog open and shows `busyAction` until it settles, and you can word a failure with `problem` or show a success message with `done`."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Typed-confirm input on phones",
         "body": "The typed-confirm input in `LumenConfirm` no longer spell-checks or auto-capitalises an all-caps word on phones, so people can type the confirmation word without it being altered."
       }
@@ -1763,30 +1371,22 @@
     "date": "2026-10-23T06:26:48Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Live docs site for every component",
         "body": "At lumen-ui.columenlabs.com/docs you can try about 25 components on sample data, including LumenView as a table, grouped or pivot, LumenLayout with widgets, LumenShell, LumenSelector, LumenDrawer and the charts, change their props with Controls, and copy the code with Show code."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Props tables generated from the code",
         "body": "Each component page lists its props, read from the kit's own source on every build, so the tables for parts like LumenView and LumenChart stay in step with what you install from `@columenlabs/lumen-ui`."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Reference pages for app-bound parts",
         "body": "Settings, the frame parts, the assistant and workspaces, widgets and market now have props pages, so you can look up what they accept even though they need an app behind them to run."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Docs that coding agents can read",
         "body": "The docs build writes an `llms.txt` and serves the component manifest at `/docs/manifests/components.json`, and running the docs workspace locally exposes an MCP endpoint at `/mcp` that agents can query for component details."
       }
@@ -1797,23 +1397,17 @@
     "date": "2026-10-23T06:26:46Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Nested, foldable rows with LumenTree",
         "body": "Import `LumenTree` and `LumenTreeItem` from `@columenlabs/lumen-ui` and nest items to show hierarchies such as a decision path. Each item is one wrapping row beside a chevron, and its children hang off a guide line."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Mark a path taken or dim a row",
         "body": "On `LumenTreeItem`, set the `tone` prop to `positive` to colour the guide line for a path that was taken, or to `muted` to dim the row."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Jump straight to any row",
         "body": "With `useLumenTree`, call `reveal(id)` to open every item above a row, scroll to it and flash it. The flash honours reduced motion, and folded children stay mounted so any row can be revealed."
       }
@@ -1824,37 +1418,27 @@
     "date": "2026-10-23T06:26:44Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Split sign-in page",
         "body": "`LumenAuthStage` takes `brand`, `pitch`, `points`, `illustration` and `footer` props to build a signed-out page, with `LumenAuthHeading`, `LumenAuthProblem` and `LumenAuthNote` for the form side, and the story side hides on phones."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Sign-in form fields",
         "body": "`LumenEmailField`, `LumenPasswordField` (with a Show switch) and `LumenCodeField` (digits only, with `length`, error, hint and a resend link) replace hand-built inputs, and `LumenStepBar` shows progress with its `at` and `of` props."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Choice cards and show-once secrets",
         "body": "`LumenChoice` renders pick-one cards with an icon, title, description and disabled state, and `LumenSecret` shows a secret once with a warning, Show/Hide and Copy."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Typed confirmation",
         "body": "In `LumenConfirm`, the new `typeToConfirm` prop keeps the action disabled until the user types the required word, and leaving the prop out changes nothing."
       },
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "Bar charts now importable",
         "body": "`RankedBars` and `StackedBars` are exported from the `@columenlabs/lumen-ui` package root, so you can import them directly instead of working around their absence."
       }
@@ -1865,23 +1449,17 @@
     "date": "2026-10-23T06:26:42Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "One red flag for an unlinked source",
         "body": "In the Edit widget panel's Data section, a source with no field pairs now shows a single red broken-link icon instead of three red flags, so an unlinked source reads as one clear warning."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "\"Not linked\" badge removed",
         "body": "The Data section no longer renders the \"Not linked\" badge, so if an app's tests or styles look for that badge, they should look for the broken-link icon instead."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Fields stay locked until linked",
         "body": "In the Data section, the fields of an unlinked source stay greyed out and can't be ticked until the source is linked, and the muted hint \"Pick a field on each side to link it\" stays in place."
       }
@@ -1892,30 +1470,22 @@
     "date": "2026-10-23T06:26:39Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Widgets can read their own data",
         "body": "In the view model, a card now accepts `source` (a catalog domain id or a recipe `frame:<id>`) and its own `connections`, and `SourcedCard` reads those rows itself, so the widget can sit on any page."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Pick the data when adding a widget",
         "body": "The Add widget flow now opens with a Data step, where a `LumenSelector` offers This page, the app's live domains that have a reader, or Recipes."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Reshape a widget's data tree",
         "body": "In Edit widget ▸ Data, you can remove any source (the main one included), promote a linked source with ★ Make main, swap the main data with ⇄, or Clear all, and every change has an Undo toast and waits for Save."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Unlinked sources are obvious",
         "body": "In Edit widget ▸ Data, a source that isn't linked shows a red unlink icon, a red badge and a red note, and its fields are greyed out and disabled until you link it."
       }
@@ -1936,16 +1506,12 @@
         "body": "Replace imports from `@columenlabs/lumen-types` with `@columenlabs/lumen-ui-types`, including subpaths such as `@columenlabs/lumen-ui-types/views`, and keep it on the same version as `@columenlabs/lumen-ui`."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Old package names now point to the new ones",
         "body": "Installing `@columenlabs/lumen` or `@columenlabs/lumen-types` now shows a deprecation message starting \"Renamed to …\", so you can find the new names without reading the release notes."
       },
       {
-        "kinds": [
-          "improvement"
-        ],
+        "kinds": ["improvement"],
         "title": "Built with TypeScript 7",
         "body": "The declarations in `@columenlabs/lumen-ui-types/views` still export schemas such as `viewCardSchema`, so existing type and schema imports keep working."
       }
@@ -1956,9 +1522,7 @@
     "date": "2026-10-23T06:26:35Z",
     "takeaways": [
       {
-        "kinds": [
-          "fix"
-        ],
+        "kinds": ["fix"],
         "title": "LumenGeoMap shades with any CSS colour",
         "body": "LumenGeoMap now reads the `--border` and `--primary` theme tokens in any CSS colour format, including `oklch(...)`, so regions shade from the border colour to the primary colour instead of turning black, with no change needed in your app."
       }
@@ -1969,23 +1533,17 @@
     "date": "2026-10-23T06:26:33Z",
     "takeaways": [
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "React component kit on npm",
         "body": "Install `@columenlabs/lumen-ui` to import the app frame, pages, views, widgets, charts, drawers and pickers as React components."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Typed view model",
         "body": "Install `@columenlabs/lumen-ui-types` to import the view model types and type-check the view data you pass to components from `@columenlabs/lumen-ui`."
       },
       {
-        "kinds": [
-          "feature"
-        ],
+        "kinds": ["feature"],
         "title": "Open source under MIT",
         "body": "Use, fork and ship the kit in your own apps, since both packages are published under the MIT license."
       }

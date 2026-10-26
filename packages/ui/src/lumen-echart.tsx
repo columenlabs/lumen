@@ -41,7 +41,7 @@ function readTokens(): ChartTokens {
     primary: v('--primary', '#5b8cff'),
     series: Array.from({ length: 10 }, (_, i) => v(`--chart-${i + 1}`, '#5b8cff')),
     font: getComputedStyle(document.body).fontFamily || 'sans-serif',
-    mono: v('--font-mono', 'monospace'),
+    mono: v('--num-font', 'monospace'),
   };
 }
 

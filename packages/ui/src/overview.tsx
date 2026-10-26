@@ -161,7 +161,7 @@ function Ring({ ring, size }: { ring: OverviewWidget & { kind: 'ring' }; size: n
                         <tspan
                           x={viewBox.cx}
                           dy={many ? '-0.1em' : '0.35em'}
-                          className="fill-foreground font-mono text-[11px]"
+                          className="fill-foreground font-num text-[11px]"
                         >
                           {r.text}
                         </tspan>
