@@ -38,6 +38,8 @@ export const statusTone = (p: Pick<Person, 'status'>): ViewChipTone | undefined 
         : 'muted';
 
 const DAY = 86_400_000;
+/** Non-breaking spaces, so `today 07:18 PM` and `in 7 d` never split across lines in any text. */
+const glue = (s: string) => s.replace(/ /g, '\u00a0');
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /** `today 09:12`, `yesterday 18:42`, `24 Oct`, `24 Oct 2025`; a dash for never. */
@@ -46,13 +48,15 @@ export function when(ts: number | null | undefined, now = Date.now()): string {
   const d = new Date(ts);
   const n = new Date(now);
   const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  if (sameDay(d, n)) return `today ${time}`;
-  if (sameDay(d, new Date(now - DAY))) return `yesterday ${time}`;
-  return d.toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    ...(d.getFullYear() === n.getFullYear() ? {} : { year: 'numeric' }),
-  });
+  if (sameDay(d, n)) return glue(`today ${time}`);
+  if (sameDay(d, new Date(now - DAY))) return glue(`yesterday ${time}`);
+  return glue(
+    d.toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      ...(d.getFullYear() === n.getFullYear() ? {} : { year: 'numeric' }),
+    }),
+  );
 }
 
 /** `in 5 d`, `in 3 h`, `2 d ago`: how far a time is from now. */
@@ -66,7 +70,7 @@ export function fromNow(ts: number | null | undefined, now = Date.now()): string
       : abs >= 3_600_000
         ? `${Math.round(abs / 3_600_000)} h`
         : `${Math.max(1, Math.round(abs / 60_000))} min`;
-  return ms >= 0 ? `in ${n}` : `${n} ago`;
+  return glue(ms >= 0 ? `in ${n}` : `${n} ago`);
 }
 
 /** The top scopes (apps), in order; constructs inside one have a `parent`. */

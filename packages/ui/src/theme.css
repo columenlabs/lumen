@@ -465,6 +465,16 @@
     font-family: var(--num-font);
     font-variant-numeric: tabular-nums;
   }
+
+  /* Short values never wrap: a number, a time, a key. `07:18 PM` stays on one line; where room
+     runs out the holder truncates it (`truncate` and a `title`), never breaks it. A `.num` that
+     clamps on purpose (`line-clamp-*`) keeps its lines. */
+  span.num:not([class*="line-clamp"]),
+  dd.num,
+  time,
+  kbd {
+    white-space: nowrap;
+  }
 }
 
 /* Font and size: the size is the root every rem scales from. Unlayered, so
