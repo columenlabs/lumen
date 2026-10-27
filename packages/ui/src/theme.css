@@ -457,6 +457,11 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+  /* A fieldset keeps its content's min-content width by default, so a form in a drawer or
+     dialog pushed its fields past the edge; it fits its box like any block. */
+  fieldset {
+    min-inline-size: 0;
+  }
   html {
     @apply font-sans;
   }
