@@ -511,11 +511,13 @@ export function LumenWidget({
         data-card={id}
         data-card-title={title}
         data-card-kind={styleId}
+        data-folded={folded || undefined}
         className={cn(
           // A border, not the card's ring: a ring draws outside the box, so the page's scroller
           // clipped it wherever a card touched its edge (the top row's top line).
-          'h-full gap-0 border border-foreground/10 py-0 ring-0',
-          folded && 'h-auto',
+          // Its height is its content's: only a grid cell (LumenGrid) stretches it to the cell, so
+          // a card in a scrolling column (Settings, a drawer) never clips rows the column could scroll to.
+          'gap-0 border border-foreground/10 py-0 ring-0',
           // The allocation bar's tooltip reaches past its short card, over the cards below.
           styleId === 'allocation:bar' ? 'relative overflow-visible hover:z-20' : 'overflow-clip',
           // The edit outline sits inside the card, over its pinned rows: an outer one is clipped by
