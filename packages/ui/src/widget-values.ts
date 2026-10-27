@@ -3,7 +3,7 @@
  * field. Shared by the widget frame and its chart bodies, so a lazily loaded body never pulls the
  * frame back in.
  */
-import { type ViewFormat, isDollarFormat } from '@columenlabs/lumen-ui-types/views';
+import { type ViewFormat, formatBytes, isDollarFormat } from '@columenlabs/lumen-ui-types/views';
 import { maskAmount } from './shell';
 import { type ViewCellValue, type ViewField, label } from './view-model';
 
@@ -18,6 +18,7 @@ export function short(v: number, format: ViewFormat, hidden: boolean) {
   const sign = v < 0 ? MINUS : '';
   const abs = Math.abs(v);
   if (format === 'percent' || format === 'weight') return `${sign}${abs.toFixed(1)}%`;
+  if (format === 'bytes') return `${sign}${formatBytes(abs)}`;
   if (isDollarFormat(format)) return `${sign}$${COMPACT.format(abs)}`;
   return `${sign}${COMPACT.format(abs)}`;
 }
@@ -27,6 +28,7 @@ export function exact(v: number, format: ViewFormat, hidden: boolean) {
   const sign = v < 0 ? MINUS : '';
   const abs = Math.abs(v);
   if (format === 'percent' || format === 'weight') return `${sign}${abs.toFixed(2)}%`;
+  if (format === 'bytes') return `${sign}${formatBytes(abs)}`;
   const n = abs.toLocaleString('en-US', {
     maximumFractionDigits: format === 'rounded' || format === 'price_rounded' ? 0 : 2,
     useGrouping: format !== 'integer',

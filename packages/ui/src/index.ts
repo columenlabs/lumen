@@ -230,6 +230,7 @@ export {
   setPref,
   timeZoneLabel,
   usePrefs,
+  zoneAbbr,
   ASSISTANT_WIDTH,
 } from './prefs';
 export { KIT, type KitConfig, configureLumen } from './kit-config';

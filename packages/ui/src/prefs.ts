@@ -163,5 +163,15 @@ export function usePrefs(): Prefs {
   );
 }
 
+/** A zone's short generic name, as people say it next to a time: `PT`, `ET`, `UTC` (never PDT or PST). */
+export function zoneAbbr(tz: string, at: Date = new Date()): string {
+  // Intl names UTC "GMT+0"; people say UTC.
+  if (/^(Etc\/)?(UTC|GMT|Universal|Zulu)$/.test(tz)) return 'UTC';
+  const part = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortGeneric' })
+    .formatToParts(at)
+    .find((p) => p.type === 'timeZoneName');
+  return part?.value ?? tz;
+}
+
 /** `Pacific`, `UTC`: the short name shown next to times. */
 export const timeZoneLabel = (id: TimeZoneId) => TIME_ZONES.find((z) => z.id === id)?.label ?? id;

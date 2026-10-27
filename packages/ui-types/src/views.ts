@@ -145,10 +145,11 @@ export type ViewValue = number | string | null | [number | null, number | null];
  * is dollars with a sign and gain/loss colour, for gains; `price` is plain dollars.
  * `number` and `price` show cents, `rounded` and `price_rounded` the same with no decimals, and
  * `integer` no decimals and no thousands commas, for years and ids; `compact` reads large numbers
- * short (1.2K, 10B).
+ * short (1.2K, 10B); `bytes` is a size in bytes, read in decimal units (812 KB, 45.2 MB, 13.1 GB).
  */
 export type ViewFormat =
   | 'number'
+  | 'bytes'
   | 'rounded'
   | 'compact'
   | 'price'
@@ -254,7 +255,28 @@ export const viewNumberFormats = [
   'price_signed',
   'weight',
   'percent',
+  'bytes',
 ] as const;
+/**
+ * A size in bytes as a number and its unit, in decimal units as storage is billed and macOS shows
+ * it: `['812', 'KB']`, `['45.2', 'MB']`, `['13.1', 'GB']`. One decimal under 100 (MB and up), whole
+ * above; KB is whole, and anything above 0 reads at least 1 KB.
+ */
+export function bytesParts(b: number): [string, string] {
+  const abs = Math.abs(b);
+  for (const [size, unit] of [
+    [1e12, 'TB'],
+    [1e9, 'GB'],
+    [1e6, 'MB'],
+  ] as const) {
+    if (abs < size) continue;
+    const v = abs / size;
+    return [v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString('en-US'), unit];
+  }
+  return [abs ? Math.max(1, Math.round(abs / 1e3)).toLocaleString('en-US') : '0', 'KB'];
+}
+/** A size in bytes as text: `45.2 MB`. */
+export const formatBytes = (b: number) => bytesParts(b).join(' ');
 /** Formats a formula column can take: a number format, or text for one that gives words. */
 export const viewFormulaFormats = [...viewNumberFormats, 'text'] as const;
 /**

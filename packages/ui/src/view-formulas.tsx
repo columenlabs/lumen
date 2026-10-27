@@ -55,6 +55,7 @@ export const FORMAT_LABELS: Record<ViewFormat, string> = {
   price_signed: 'Currency ±',
   weight: 'Percent',
   percent: 'Percent ±',
+  bytes: 'Size',
   text: 'Text',
 };
 /**
@@ -72,6 +73,7 @@ const FORMAT_GLYPHS: Record<ViewFormat, string> = {
   price_signed: '±$',
   weight: '%',
   percent: '±%',
+  bytes: 'B',
   text: 'Aa',
 };
 /** Text fields whose icon is a calendar are dates (no date format exists; the icon says it). */
@@ -108,6 +110,7 @@ const FORMAT_EXAMPLES: Record<ViewFormat, string> = {
   price_signed: '+$1,234.56',
   weight: '12.3%',
   percent: '+12.3%',
+  bytes: '812 KB · 13.1 GB',
   text: 'Abc',
 };
 /** The number formats as picker options, each with how it reads. */
