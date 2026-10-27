@@ -458,7 +458,7 @@ export function LumenShell({
   );
 }
 
-/** A status bar entry: an optional health dot, a label and a mono value. */
+/** A status bar entry: an optional health dot, a label and its value ("Mail · Up to date"). */
 export function StatusItem({
   label,
   value,
@@ -486,8 +486,10 @@ export function StatusItem({
       <span className={value === undefined ? 'min-w-0 truncate' : 'max-md:hidden'}>{label}</span>
       {value !== undefined && (
         <>
-          {' '}
-          <span className="num shrink-0 text-foreground/80">{value}</span>
+          <span aria-hidden className="max-md:hidden">
+            ·
+          </span>
+          <span className="shrink-0 tabular-nums text-foreground/80">{value}</span>
         </>
       )}
     </span>

@@ -82,6 +82,8 @@ interface Common<V extends string> {
   /** The create row's text; `Add "…"` by default. */
   createLabel?: (query: string) => string;
   placeholder?: string;
+  /** What the closed field shows instead of the picked option's label (a zone's short name, PT). */
+  display?: ReactNode;
   /** Shown when nothing matches. */
   empty?: string;
   /** Accessible name; also the phone sheet's title. */
@@ -373,6 +375,7 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
     create,
     createLabel = (q: string) => `Add “${q}”`,
     placeholder = 'Pick one',
+    display,
     empty = 'Nothing matches',
     label,
     size = 'default',
@@ -475,7 +478,11 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
           !selected && !values.length && 'text-muted-foreground',
         )}
       >
-        {selected ? (selected.content ?? selected.label) : values[0] ? values[0] : placeholder}
+        {selected
+          ? (display ?? selected.content ?? selected.label)
+          : values[0]
+            ? values[0]
+            : placeholder}
       </span>
       <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />
     </>
