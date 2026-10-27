@@ -23,11 +23,11 @@ import {
   UserPlusIcon,
   UserRoundIcon,
   UsersIcon,
-  XIcon,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { LumenConfirm } from '../confirm';
 import { LumenBoundary } from '../lumen-boundary';
+import { LumenBulkBar } from '../lumen-bulk-bar';
 import { LumenLayout } from '../lumen-layout';
 import { LumenPageState } from '../lumen-page-state';
 import { LumenSelector } from '../lumen-selector';
@@ -451,12 +451,7 @@ function BulkBar({
   };
 
   return (
-    <div
-      role="toolbar"
-      aria-label="Change the ticked people"
-      className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted px-3 py-2 text-sm"
-    >
-      <span className="num font-medium">{n} selected</span>
+    <LumenBulkBar count={n} label="Change the ticked people" onClear={onClear}>
       <LumenSelector
         trigger="chip"
         size="sm"
@@ -495,15 +490,6 @@ function BulkBar({
       >
         <Trash2Icon /> Remove
       </Button>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        aria-label="Clear the selection"
-        className="ml-auto"
-        onClick={onClear}
-      >
-        <XIcon />
-      </Button>
       <LumenConfirm
         open={removing}
         onOpenChange={setRemoving}
@@ -519,7 +505,7 @@ function BulkBar({
           onClear();
         }}
       />
-    </div>
+    </LumenBulkBar>
   );
 }
 
