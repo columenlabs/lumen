@@ -67,6 +67,9 @@ interface TasksState {
   /** Deletes one ended task, or every ended one; open tasks stay. */
   clear: (id?: string) => Promise<void>;
   open: (t: Task) => void;
+  /** Shows a task the app just started (its POST's answer) at once, before the next read, so its
+   *  end toasts even when it finishes within one poll. */
+  track: (t: Task) => void;
   /** `TasksConfig.apps`. */
   apps?: Record<string, string>;
 }
@@ -76,6 +79,15 @@ const TasksCtx = createContext<TasksState | null>(null);
 /** The Tasks list, or null where the app has none; `refresh()` after starting one shows it at once. */
 export function useTasks(): TasksState | null {
   return useContext(TasksCtx);
+}
+
+/** The newest task for one piece of work (`kind` + the engine's `ref`, such as a saved search's
+ *  id), so the button that starts it can show it running (`Running 1/3`) and come back when it
+ *  ends. Null when there is none or the app has no Tasks. */
+export function useTaskFor(kind: string, ref: string | null | undefined): Task | null {
+  const tasks = useTasks();
+  if (!tasks?.list || !ref) return null;
+  return tasks.list.tasks.find((t) => t.kind === kind && t.ref === ref) ?? null;
 }
 
 const POLL_MS = 3000;
@@ -143,6 +155,22 @@ function TasksLive({
     setList(next);
   }, [api, open, qc]);
 
+  const track = useCallback(
+    (t: Task) => {
+      activeIds.current = new Set([...(activeIds.current ?? []), t.id]);
+      setList((l) => {
+        const tasks = [t, ...(l?.tasks ?? []).filter((x) => x.id !== t.id)];
+        return {
+          tasks,
+          active: tasks.filter(isActive).length,
+          unseen: tasks.filter((x) => x.finished_at && !x.seen_at).length,
+        };
+      });
+      void refresh();
+    },
+    [refresh],
+  );
+
   const post = useCallback(
     async (path: string) => {
       await fetch(`${api}${path}`, {
@@ -204,8 +232,8 @@ function TasksLive({
   }, [active, refresh]);
 
   const value = useMemo(
-    () => (gone ? null : { list, refresh, cancel, seen, clear, open, apps }),
-    [gone, list, refresh, cancel, seen, clear, open, apps],
+    () => (gone ? null : { list, refresh, cancel, seen, clear, open, track, apps }),
+    [gone, list, refresh, cancel, seen, clear, open, track, apps],
   );
   return <TasksCtx.Provider value={value}>{children}</TasksCtx.Provider>;
 }
