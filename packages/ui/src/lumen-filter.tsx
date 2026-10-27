@@ -196,11 +196,15 @@ export function useLumenFilter<T>(
   {
     text: textOf,
     initial = [],
+    partial = false,
   }: {
     /** Free-text haystack per row (a name, an id), besides the field values. */
     text?: (row: T) => string[];
     /** Tokens applied when the view opens (a view's default filters). */
     initial?: FilterToken[];
+    /** `rows` are one page of a server's rows: a count over them is not the real count, so the
+     *  menu shows none. */
+    partial?: boolean;
   } = {},
 ) {
   const [tokens, setRaw] = useState<FilterToken[]>(() => onePerField(initial));
@@ -239,7 +243,24 @@ export function useLumenFilter<T>(
   }, [indexed, fields, tokens, text]);
   /** Whether rows have text of their own, so the box offers "Text contains". */
   const hasText = !!textOf;
-  return { fields, rows, indexed, tokens, setTokens, text, setText, results, hasText };
+  /** Takes every token and the typed text off. */
+  const clear = useCallback(() => {
+    setRaw([]);
+    setText('');
+  }, []);
+  return {
+    fields,
+    rows,
+    indexed,
+    tokens,
+    setTokens,
+    text,
+    setText,
+    results,
+    hasText,
+    partial,
+    clear,
+  };
 }
 
 export type LumenFilterState<T> = ReturnType<typeof useLumenFilter<T>>;
@@ -396,8 +417,8 @@ function NumberCondition({
   current?: FilterToken;
   /** Phone: taller controls, and 16px text so the page doesn't zoom. */
   tall: boolean;
-  /** How many rows a condition keeps. */
-  count: (op: ViewTokenOp, value: string) => number;
+  /** How many rows a condition keeps; left out when that is not known. */
+  count?: (op: ViewTokenOp, value: string) => number;
   onSet: (op: ViewTokenOp, value: string) => void;
 }) {
   const [from = '0', to = '0'] = current?.value.split('..') ?? [];
@@ -478,7 +499,7 @@ function NumberCondition({
           </>
         )}
         <span className="w-16 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
-          {current && ok ? `${count(op, value(op, a, b))} rows` : ''}
+          {current && ok && count ? `${count(op, value(op, a, b))} rows` : ''}
         </span>
       </div>
     </div>
@@ -510,7 +531,9 @@ export function LumenTokenizedFilter<T>({
    *  never shares (a widget's own fixed filter). */
   link?: FilterLink | null;
 }) {
-  const { fields, indexed, tokens, setTokens, text, setText, hasText } = filter;
+  const { fields, indexed, tokens, setTokens, text, setText, hasText, partial } = filter;
+  // Over one page of a server's rows a count is not the real one: show none.
+  const tally = (n: number) => (partial ? '' : n);
   // A box its card passes no link takes the card's own (every card carries a square).
   const link = useAutoFilterLink(tokens, given);
   // Phone: the box is one tappable row and the menu is a bottom sheet.
@@ -777,7 +800,9 @@ export function LumenTokenizedFilter<T>({
         >
           Only
         </Button>
-        <CommandShortcut className={cn('ml-0 w-8 text-right', shortcut)}>{count}</CommandShortcut>
+        <CommandShortcut className={cn('ml-0 w-8 text-right', shortcut)}>
+          {tally(count)}
+        </CommandShortcut>
       </CommandItem>
     );
   };
@@ -799,7 +824,9 @@ export function LumenTokenizedFilter<T>({
           className="pointer-events-none"
         />
         <span className="min-w-0 truncate text-muted-foreground italic">{noneOf(f.label)}</span>
-        <CommandShortcut className={cn('ml-auto w-8 text-right', shortcut)}>{n}</CommandShortcut>
+        <CommandShortcut className={cn('ml-auto w-8 text-right', shortcut)}>
+          {tally(n)}
+        </CommandShortcut>
       </CommandItem>
     );
   };
@@ -861,7 +888,7 @@ export function LumenTokenizedFilter<T>({
             label={activeField.label}
             current={tokens.find((t) => t.key === activeField.key)}
             tall={mobile}
-            count={(op, value) => numberCount(activeField.key, op, value)}
+            count={partial ? undefined : (op, value) => numberCount(activeField.key, op, value)}
             onSet={(op, value) => setCondition(activeField.key, op, value)}
           />
         )}
@@ -877,7 +904,7 @@ export function LumenTokenizedFilter<T>({
               <TextSearchIcon className="text-muted-foreground" />
               <span className="min-w-0 truncate">“{containsWord}”</span>
               <CommandShortcut className={shortcut}>
-                {wordOf(containsWord, notFor(CONTAINS_KEY))}
+                {tally(wordOf(containsWord, notFor(CONTAINS_KEY)))}
               </CommandShortcut>
             </CommandItem>
           )}
@@ -922,7 +949,7 @@ export function LumenTokenizedFilter<T>({
               </span>
               “{word}”
             </span>
-            <CommandShortcut className={shortcut}>{wordOf(word, negate)}</CommandShortcut>
+            <CommandShortcut className={shortcut}>{tally(wordOf(word, negate))}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
       )}
@@ -1027,7 +1054,7 @@ export function LumenTokenizedFilter<T>({
               <f.icon className="text-muted-foreground" />
               {f.label}
               <CommandShortcut className={shortcut}>
-                {f.number ? '' : (counts.get(f.key)?.size ?? 0)}
+                {f.number ? '' : tally(counts.get(f.key)?.size ?? 0)}
               </CommandShortcut>
             </CommandItem>
           ))}
