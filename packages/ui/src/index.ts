@@ -242,6 +242,7 @@ export {
   errorText,
   useClock,
 } from './integrations';
+export { LumenChatgptSignin, type LumenChatgptSigninProps } from './chatgpt-signin';
 export { LumenExpandList, LumenExpandRow } from './expand-list';
 export { LumenPager } from './pager';
 export { createDeskQueryClient } from './query-client';

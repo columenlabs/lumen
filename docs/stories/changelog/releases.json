@@ -1,5 +1,445 @@
 [
   {
+    "tag": "v0.1.82",
+    "date": "2026-10-27T00:45:19Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Answers no longer cut off",
+        "body": "In `@columenlabs/lumen-ai`, the answer round now reads the raw stream events and takes the answer from the completed, incomplete or failed event, so plans that send extra event types no longer end with \"Something went wrong while answering\"."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Copy from the assistant",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` now has a Copy icon on each turn, a **Copy chat** action in the header and a `/copy` command for the last turn, all copying Markdown."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Point at anything with `#`",
+        "body": "In the `LumenAssistant` composer, the `#` list now always opens and offers this page, every `LumenLayout` card on screen, every marked section and a **Point at something…** picker."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Mark your own sections",
+        "body": "Add `data-assistant-section` (with optional `data-assistant-kind` and `data-assistant-id`) to any element in an app and it appears in the `#` list for the assistant to point at."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "More room for pointed-at text",
+        "body": "The prompt's cap on pointed-at text rises from 8k to 16k characters, so larger cards and sections reach the assistant in full."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.81",
+    "date": "2026-10-27T00:15:35Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Meter every request from one mount point",
+        "body": "From `@columenlabs/lumen-ops/hono`, add the `requestMeter()` middleware to your Hono app and it writes one data point for each answered request, with the route template, status, outcome code, caller, region, bytes, upstream time and subrequest count."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Meter upstream calls, webhooks, syncs and sign-ins",
+        "body": "From `@columenlabs/lumen-ops/events`, call `meterEvent()` for each event, pass `upstream: true` to add its time to the current request, and use `setEventSink(sink, { app, env, version })` to set defaults that every event carries."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Collect browser telemetry safely",
+        "body": "From `@columenlabs/lumen-ops/client`, `meterClientBatch()` checks a batch sent by the browser against a zod schema that allows only enums, templates, codes and numbers, then writes it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Flag oversized query results",
+        "body": "In the query meters of `@columenlabs/lumen-ops`, `setQueryRowCap(n)` marks any statement that returns more than `n` rows as `capped` in a new `blob11` column, which is appended so existing columns are unchanged."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.80",
+    "date": "2026-10-27T00:06:07Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "Shared-key controls moved out of the person's settings",
+        "body": "`assistantSettingsSections` from `@columenlabs/lumen-ui/assistant` no longer includes shared-key controls, so an app that used them there must add `assistantAdminSections({ client })` to its admin settings."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Admin section for shared model keys",
+        "body": "`assistantAdminSections({ client })`, exported from `@columenlabs/lumen-ui/assistant`, returns a \"Shared model keys\" section where an admin sets each provider's shared key and the per-person monthly allowance."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan sign-in no longer refused",
+        "body": "The provider plan sign-in in `@columenlabs/lumen-ai` now sends its agent host id as `urn:uuid:<uuid>` instead of random base64url, so the authorize page accepts the request."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Model providers shows only the person's own key",
+        "body": "The Model providers section from `assistantSettingsSections` now shows one row per provider with the person's own key (or the plan sign-in), and the \"Pay with first\" choice is gone."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.79",
+    "date": "2026-10-26T23:19:47Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Slash commands in the assistant composer",
+        "body": "In `LumenComposer` from @columenlabs/lumen-ui, typing `/` lists commands (the kit ships /compact, /clear, /model and /escalate), and you can add your own on the server with `createAssistant({ commands: [{ name, about, args?, prompt }] })` or in the browser with the panel's `commands` prop, where `run` executes client-side."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Pick a tier per message with @",
+        "body": "In `LumenComposer`, typing `@` chooses a tier for a single message, sent as `AssistantMessage.tier`; a higher tier hands the message off, while the same or a lower tier answers it as the main tier."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Point the assistant at things with #",
+        "body": "In `LumenComposer`, `#` attaches the panel's `sources`, a page's own sources registered with `useAssistantSource`, or the highlighted page text (mark regions with `data-assistant-where`) as chips that are sent as `refs`, and `composeAssistant({ refs, text, tier })` opens the panel with chips and text already filled in."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Write access with Undo",
+        "body": "`ASSISTANT_ACCESS` now includes `write`, offered only for a `ToolGroup` with `writes: true`, and if you set `undo(caller, { tool, args, result })` each write step in the chat gets an Undo button backed by `AssistantAdapter.undoWrite`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.78",
+    "date": "2026-10-26T23:13:51Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant client and chat hook",
+        "body": "From `@columenlabs/lumen-ui/assistant`, `assistantClient(base)` talks to the routes of `@columenlabs/lumen-ai/assistant`, and `useAssistantChat` turns the streamed answer into chat items, so an app can show answers as they arrive with a Stop button, queue a message while an answer runs, open an older chat, and Save or Dismiss a draft."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant panel and composer",
+        "body": "`LumenAssistant` renders the whole conversation (tool steps, markdown text, draft cards, hand-off, advice, and stopped and error lines) and `LumenComposer` is the input box, so you can drop a full assistant chat into an app without building the UI yourself."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant dock for the shell",
+        "body": "`useLumenAssistantDock(client, { name })` returns the header button and the docked panel, which you pass to LumenShell's `headerActions` and `panel` props to get a ⌘J toggle and an unread dot."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant Settings sections",
+        "body": "`assistantSettingsSections({ client, name })` returns ready-made Settings sections for the assistant, model providers, models, tools, web access and spend, so an app can let people and admins configure the assistant without writing those screens."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.77",
+    "date": "2026-10-26T22:46:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Phone bottom sheets can always be dismissed",
+        "body": "In `Sheet` from @columenlabs/lumen-ui, a phone's bottom sheet now stops 44px short of the top so a tap on the dimmed page closes it. It also has a built-in grab handle (swipe down past 80px or flick to close, a shorter drag springs back) and always shows its X, even with `showCloseButton={false}`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Close popups with the phone back button",
+        "body": "The new `useBackClose` hook, exported from @columenlabs/lumen-ui, is wired into the `Sheet`, `Dialog` and `AlertDialog` roots, so phone back closes them with no extra props. Closing another way removes the history entry again, and a link followed from inside the popup keeps its navigation."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Headers no longer run under the X",
+        "body": "`SheetHeader` and `DialogHeader` (and the alert dialog's header) now reserve room for the close button, so a long title in `LumenDrawer` or any dialog wraps instead of sitting under the X."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`LumenSelector` uses the shared sheet controls",
+        "body": "On phones, `LumenSelector` drops its hand-made handle and uses the sheet's grab handle and X, with Done sitting to the left of the X."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.76",
+    "date": "2026-10-26T21:38:38Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Nested, foldable lists with aligned columns",
+        "body": "From `@columenlabs/lumen-ui`, the new `LumenStackedList` and `LumenStackedRow` let you show a source, its groups and their items as nested rows, with `columns` (an array of `StackedColumn`) lining up at every level and each row filling them by key through `cells`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Rows that fold, with an optional notice",
+        "body": "In `LumenStackedRow`, a row with children or a `notice` now gets a chevron and starts folded, the `notice` shows only while the row is open, and you can control it with `open` and `onOpenChange`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Phone-friendly stacked columns",
+        "body": "In `LumenStackedList`, a `StackedColumn` marked `phone` stacks at the end of the row on small screens, and columns without it are left out."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Quieter RenameField",
+        "body": "`RenameField` in `@columenlabs/lumen-ui` now hides its ✎ until hover or focus, keeps a ✎ mark on a renamed name, and shows ↺ Reset only on hover or focus, with no prop changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.75",
+    "date": "2026-10-26T20:36:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Pick the lightest action form that still reads at a glance",
+        "body": "In the Lumen design guidelines, the new \"Actions: icon first\" pattern tells you to build an action in `@columenlabs/lumen-ui` as an icon alone, then an icon with a tooltip, then an icon with text, and only then an icon with text and a detail tooltip."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Edit changeable values in place",
+        "body": "The new guidance says to use `EditInputCell` from `@columenlabs/lumen-ui` for any value a person can change, so a hand-edited value shows the ✎ mark and clearing the box restores the original."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Row actions appear on hover or focus",
+        "body": "Under the same pattern, row actions in your tables show inline on hover or keyboard focus, nothing stands on the row at rest, and one or two actions never go behind a ⋯ menu."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.74",
+    "date": "2026-10-26T20:31:40Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Lines over time with `TimeLines`",
+        "body": "From `@columenlabs/lumen-ui`, `TimeLines` takes the same props as `StackedColumns` (`rows`, `x`, `lines`, `label`, `tick`, `fmt`, `legend`), and a line with `right` is drawn against a second axis."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Drop-in file picking with `LumenFileField`",
+        "body": "From `@columenlabs/lumen-ui`, `LumenFileField` is a controlled field (`file`, `onFile`) where users drop or choose a file, and `accept` is enforced on drop as well as in the picker."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Bot check and plain-words sign-in errors",
+        "body": "From `@columenlabs/lumen-ui`, `LumenBotCheck` adds a bot check to a sign-in form, and `authErrorText` with `LumenAuthError` turns the sign-in server's error codes into readable messages."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`RankedBars` handles funnels and empty states",
+        "body": "In `RankedBars`, `share` now accepts `'total'` (default), `'first'` (funnel) or `false`, and the new `empty` and `label` props cover the no-bars case and the heading."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Header-less cards with `LumenLayoutCard`",
+        "body": "Setting `header: false` on a `LumenLayoutCard` drops its title row so the card shows only its body, like a saved widget with Header off."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.73",
+    "date": "2026-10-26T19:31:08Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant server",
+        "body": "From `@columenlabs/lumen-ai/assistant`, `createAssistant` now runs a chat assistant on your app's own tiers, with tier names and models taken from your config, so a person can set each tier's model and effort and the tier each task starts on."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tool groups from any MCP source",
+        "body": "In `createAssistant`, you can now supply tools through `mcpServerTools`, `mcpFetchTools` (any SDK, served as a fetch handler), `remoteMcpTools` or `plainTools`, and set each group to Off, Read or Read + draft."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Writes are drafts first",
+        "body": "In `createAssistant`, a write tool now only produces a draft card, and the change runs as the signed-in person when they press Save, after access is checked again."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Web access with safe limits",
+        "body": "The assistant's `fetch` tool is a plain GET capped at 10 seconds and 2 MB that can never reach your app's own hosts or private addresses, and scraping goes through an external service's existing MCP API using a service token an admin pastes in."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Shared assistant types",
+        "body": "From `@columenlabs/lumen-ui-types/assistant`, you can now import the types for tiers, access, hand-off policy, chat items, SSE events, status and settings changes, so your server and UI agree on one contract."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.72",
+    "date": "2026-10-26T16:55:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Group apps under their own headings",
+        "body": "In `LumenAppSwitcher` from @columenlabs/lumen-ui, the new `group` field on a `LumenApp` puts that app under its own heading, and apps with no `group` still lead the menu under `menuLabel`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "List apps that live on other sites",
+        "body": "Set `external` on a `LumenApp` and its `LumenAppSwitcher` row shows the app's host (truncated, with the name kept whole) and an ↗ arrow."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Show the same menu in a suite your app doesn't run",
+        "body": "`LumenSuiteSwitcher({ source, current })` reads `{ apps: [{ id, name, url, icon?, iconUrl?, group? }] }` from `source`, so an app that joins a suite can show the suite's menu with the current page's entry marked."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "App icons are now optional",
+        "body": "`LumenApp.icon` is optional and typed as `NavIcon`, and with no `icon` the mark falls back to `iconUrl` (for example another site's favicon) and then to the first letter of the name."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.71",
+    "date": "2026-10-26T16:52:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Line charts no longer go blank under the tooltip",
+        "body": "In `@columenlabs/lumen-ui`, `LumenEChart` no longer replays the series entry animation when your app re-renders on a hover or refetch, so lines and fills stay visible while the tooltip moves."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Equal chart options are not drawn again",
+        "body": "`LumenEChart` now serializes the resolved `option` and skips the redraw when it matches the last one, so you can pass a fresh option object on every render without extra chart work."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Softer focus ring on drawer headers",
+        "body": "In `@columenlabs/lumen-ui`, the header trigger of `DrawerSection` now shows a lighter focus ring (`ring-2 ring-ring/25`, no border), so keyboard focus is still visible without the heavy outline."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.70",
+    "date": "2026-10-26T16:47:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Invite drawer starts each scope at its own level",
+        "body": "In `@columenlabs/lumen-ui`, `InviteDrawer` now starts each scope at that scope's `inviteLevel` instead of always at the lowest level, so an app whose invites only make sense with access no longer needs the admin to switch it on for every invite."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose the invite starting level per scope",
+        "body": "In `@columenlabs/lumen-ui-types/people`, the new optional `Scope.inviteLevel` names the level the invite drawer starts at for that scope. If you leave it out, the lowest level is used, so existing apps see no change."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Compute the starting grants yourself",
+        "body": "The new `inviteGrants(scopes)` returns the starting grants, meaning the app-wide scopes whose `inviteLevel` names one of their levels, and `InviteDrawer` both starts with them and resets to them."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.69",
     "date": "2026-10-26T16:11:23Z",
     "takeaways": [

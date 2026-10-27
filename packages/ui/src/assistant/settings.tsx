@@ -26,6 +26,7 @@ import {
   WrenchIcon,
 } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
+import { LumenChatgptSignin } from '../chatgpt-signin';
 import { LumenExpandList, LumenExpandRow } from '../expand-list';
 import { type FormIssue, SaveButton } from '../form-issues';
 import { IconButton } from '../icon-button';
@@ -344,151 +345,17 @@ function CapInput({
   );
 }
 
-/** A person's ChatGPT plan sign-in: opens in a new tab, finished by pasting back where it ended. */
+/** A person's ChatGPT plan sign-in, on the assistant's own routes. */
 function ChatgptSignin({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
   const { apply, refresh } = useApply(client);
-  const id = useId();
-  const [started, setStarted] = useState<string | null>(null);
-  const [pasted, setPasted] = useState('');
-  const [busy, setBusy] = useState(false);
-  const signedIn = p.own.via === 'chatgpt';
-  const start = async () => {
-    // Open the tab inside the click, or the browser blocks it; point it once the address is known.
-    const tab = window.open('about:blank', '_blank');
-    if (tab) tab.opener = null;
-    try {
-      const { url, redirect } = await client.startSignin(p.id);
-      if (tab) tab.location.href = url;
-      else window.open(url, '_blank', 'noopener');
-      setStarted(redirect);
-    } catch (e) {
-      tab?.close();
-      lumenToast.error(errorText(e));
-    }
-  };
-  const finish = async () => {
-    setBusy(true);
-    if (
-      await apply(`signin:${p.id}`, () => client.finishSignin(p.id, pasted.trim()), 'Signed in')
-    ) {
-      setPasted('');
-      setStarted(null);
-    }
-    setBusy(false);
-  };
-  const issues: FormIssue[] = [];
-  if (pasted.trim() && started && !pasted.trim().startsWith(started.split('/auth')[0] ?? ''))
-    issues.push({ where: 'Address', message: `It starts with ${started}`, target: id });
-  if (signedIn)
-    return (
-      <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
-        <div className="flex items-center gap-2">
-          <span className="flex-1 font-medium text-sm">Your ChatGPT plan</span>
-          <span className="text-muted-foreground text-xs">{p.own.hint}</span>
-          {p.own.test && <TestBadge test={p.own.test} />}
-        </div>
-        <KeyTestLine test={testOf(p.own)} run={() => client.testOwnKey(p.id).finally(refresh)} />
-        <div className="flex justify-end gap-2">
-          <IconButton
-            icon={Trash2Icon}
-            label="Sign out of ChatGPT"
-            variant="outline"
-            onClick={() => void apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Signed out')}
-          />
-          <SaveButton issues={[]} icon={KeyRoundIcon} label="Sign in again" onSave={start} />
-        </div>
-        {started && (
-          <SigninPaste
-            id={id}
-            redirect={started}
-            pasted={pasted}
-            setPasted={setPasted}
-            issues={issues}
-            busy={busy}
-            finish={finish}
-          />
-        )}
-      </div>
-    );
   return (
-    <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
-      <div className="flex items-center gap-2">
-        <InfoLabel
-          className="flex-1 font-medium text-sm"
-          info="Run OpenAI models on your own ChatGPT plan instead of an API key."
-        >
-          Your ChatGPT plan
-        </InfoLabel>
-        <Badge variant="outline">Not signed in</Badge>
-      </div>
-      <div className="flex justify-end">
-        <SaveButton
-          issues={[]}
-          icon={ExternalLinkIcon}
-          label={started ? 'Open the sign-in again' : 'Sign in with ChatGPT'}
-          onSave={start}
-        />
-      </div>
-      {started && (
-        <SigninPaste
-          id={id}
-          redirect={started}
-          pasted={pasted}
-          setPasted={setPasted}
-          issues={issues}
-          busy={busy}
-          finish={finish}
-        />
-      )}
-    </div>
-  );
-}
-
-/** Where the sign-in tab ends, and the box its address is pasted into. */
-function SigninPaste({
-  id,
-  redirect,
-  pasted,
-  setPasted,
-  issues,
-  busy,
-  finish,
-}: {
-  id: string;
-  redirect: string;
-  pasted: string;
-  setPasted: (s: string) => void;
-  issues: FormIssue[];
-  busy: boolean;
-  finish: () => Promise<void>;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>
-        <InfoLabel
-          info={`The sign-in ends on ${redirect}, a page that does not load. That is expected: copy the whole address from that tab's address bar.`}
-        >
-          Paste the address the sign-in ended on
-        </InfoLabel>
-      </Label>
-      <div className="flex gap-2">
-        <Input
-          id={id}
-          autoComplete="off"
-          placeholder={`${redirect}?code=…`}
-          className="font-code text-xs"
-          value={pasted}
-          onChange={(e) => setPasted(e.target.value)}
-        />
-        <SaveButton
-          issues={issues}
-          busy={busy}
-          disabled={!pasted.trim()}
-          label="Finish"
-          onSave={finish}
-        />
-      </div>
-    </div>
+    <LumenChatgptSignin
+      state={p.own}
+      start={() => client.startSignin(p.id)}
+      finish={(url) => apply(`signin:${p.id}`, () => client.finishSignin(p.id, url), 'Signed in')}
+      signOut={() => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Signed out')}
+      test={() => client.testOwnKey(p.id).finally(refresh)}
+    />
   );
 }
 
