@@ -26,13 +26,31 @@ export class ApiError extends Error {
   }
 }
 
-/** A JSON request; `where` names the caller in the error log (`assistant.undo`, `workspace.read`). */
-export async function apiJson<T>(url: string, init: RequestInit = {}, where = 'api'): Promise<T> {
+/**
+ * How long a request waits for the server before it fails as unreachable, so a page never waits
+ * forever: reads give up sooner than writes, which may be doing slow work the person asked for.
+ */
+export const API_TIMEOUT_MS = { read: 15_000, write: 60_000 };
+
+/**
+ * A JSON request; `where` names the caller in the error log (`assistant.undo`, `workspace.read`).
+ * It gives up after `API_TIMEOUT_MS` (or `timeoutMs`); a caller's own `signal` still aborts it.
+ */
+export async function apiJson<T>(
+  url: string,
+  init: RequestInit & { timeoutMs?: number } = {},
+  where = 'api',
+): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
+  const { timeoutMs, ...rest } = init;
+  const timeout = AbortSignal.timeout(
+    timeoutMs ?? (method === 'GET' ? API_TIMEOUT_MS.read : API_TIMEOUT_MS.write),
+  );
   let res: Response;
   try {
     res = await fetch(url, {
-      ...init,
+      ...rest,
+      signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
       headers: {
         accept: 'application/json',
         ...(init.body ? { 'content-type': 'application/json' } : {}),
@@ -40,8 +58,16 @@ export async function apiJson<T>(url: string, init: RequestInit = {}, where = 'a
       },
     });
   } catch (err) {
-    if ((err as Error).name === 'AbortError') throw err;
-    const e = new ApiError(`Couldn't reach the server (${method} ${url})`, method, url, 0);
+    // The caller's own abort is theirs to handle; running out of time is a failure like no network.
+    if ((err as Error).name === 'AbortError' && !timeout.aborted) throw err;
+    const e = new ApiError(
+      timeout.aborted
+        ? `The server didn't answer in time (${method} ${url})`
+        : `Couldn't reach the server (${method} ${url})`,
+      method,
+      url,
+      0,
+    );
     reportError(e, 'shown', where);
     reportFailedFetch(apiRoute(url), 0);
     throw e;

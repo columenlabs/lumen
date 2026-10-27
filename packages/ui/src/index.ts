@@ -350,7 +350,7 @@ export {
   useApp,
   useShell,
 } from './shell';
-export { apiJson } from './api-fetch';
+export { API_TIMEOUT_MS, apiJson } from './api-fetch';
 export {
   savedAnswers,
   type SavedAnswersOptions,
