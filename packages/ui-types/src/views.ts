@@ -406,7 +406,14 @@ export const VIEW_CARD_KIND_NAMES: Record<ViewCardKind, string> = {
   chart: 'Chart',
 };
 /** A trend's drawings as a chart (every Tremor visualization, on our charts). */
-export const chartTrendStyles = ['line', 'area', 'stacked', 'bars', 'combo'] as const;
+export const chartTrendStyles = [
+  'line',
+  'area',
+  'stacked',
+  'bars',
+  'stacked_bars',
+  'combo',
+] as const;
 /** A trend's drawings as a metric: a small line with its last value, or one block per bucket. */
 export const metricTrendStyles = ['spark', 'tracker'] as const;
 export const trendStyles = [...chartTrendStyles, ...metricTrendStyles] as const;
@@ -778,7 +785,7 @@ const chartCard = z.discriminatedUnion('style', [
   /**
    * A trend (every Tremor chart): up to 4 number fields (`values`) over a date
    * field (`date`) of the rows, rolled up per `bucket` by `agg`, drawn as a line, area, stacked
-   * area, bars over time or combo (the first as bars, the rest as lines).
+   * area, bars over time, stacked bars or combo (the first as bars, the rest as lines).
    */
   z.object({
     ...cardBase,
@@ -978,6 +985,15 @@ export const WIDGET_STYLES: {
     name: 'Bars over time',
     note: 'One bar per day, week or month',
     about: 'As line, one bar per bucket.',
+  },
+  {
+    id: 'chart:stacked_bars',
+    kind: 'chart',
+    style: 'stacked_bars',
+    name: 'Stacked bars',
+    note: 'Parts of a total, one bar per day, week or month',
+    about:
+      'As line, one bar per bucket with the values stacked; the headline and tooltip show their total.',
   },
   {
     id: 'chart:combo',
