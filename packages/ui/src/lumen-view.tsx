@@ -1150,15 +1150,14 @@ function LumenTableRows<T extends RowData>({
     (f, i) => i > 0 && chips.some((c) => c.key === f.key && c.placement === 'inline'),
   );
   const shown = visible.filter((f) => !inline.includes(f));
-  // On a narrow phone each row reads as a card (theme.css, `data-card`): its name and one figure
-  // (the sorted one, else the first number or date) on the first line, the rest on the second.
-  // Numbers and dates keep their width there; only text shortens.
+  // On a narrow phone each row reads as a card on ONE line (theme.css, `data-card`): its name and
+  // one value (the sorted one, else the first number or date, else the next column). The rest
+  // waits in the row's detail, never on a second line.
   const short = (f: ViewField<T>) =>
     f.format !== 'text' || (rows[0] !== undefined && isDateText(f.value(rows[0])));
-  const meta = (
-    shown.find((f, i) => i > 0 && f.key === sorting[0]?.id && short(f)) ??
-    shown.find((f, i) => i > 0 && short(f))
-  )?.key;
+  const onCard = shown.filter((f, i) => i > 0 && !f.hideOnPhone);
+  const meta = (onCard.find((f) => f.key === sorting[0]?.id) ?? onCard.find(short) ?? onCard[0])
+    ?.key;
   const cardOf = (f: ViewField<T>) =>
     f === shown[0] ? 'lead' : f.key === meta ? 'meta' : short(f) ? 'num' : 'text';
   const col = (f: ViewField<T> | undefined, ...more: (string | false | undefined | null)[]) => ({
