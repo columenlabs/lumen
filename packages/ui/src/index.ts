@@ -351,6 +351,11 @@ export {
   useShell,
 } from './shell';
 export { apiJson } from './api-fetch';
+export {
+  savedAnswers,
+  type SavedAnswersOptions,
+  type SavedAnswersPersister,
+} from './saved-answers';
 export { cn } from './lib/utils';
 export { type HealthProbe, StatusHealth } from './status-health';
 export {
