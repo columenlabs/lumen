@@ -19,6 +19,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream';
 import type {
+  AllowanceRequest,
+  AllowanceState,
+  AllowanceUnit,
   AssistantAccess,
   AssistantChat,
   AssistantChatRow,
@@ -92,7 +95,43 @@ export interface AssistantCommandDef {
 export interface Caller {
   id: string;
   admin: boolean;
+  /** What approvers see a request from them as: their email or name. */
+  label?: string;
 }
+
+/**
+ * How an app counts allowance on its shared keys, and how a person asks for more. The kit holds
+ * the ledger and the forms; the app picks the unit, the size, who approves and how they hear.
+ */
+export interface AllowanceOptions {
+  /** What it is counted in; dollars by default. */
+  unit?: AllowanceUnit;
+  /** `month` (default): the admin's monthly cap plus grants made that month; `once`: one balance. */
+  period?: 'month' | 'once';
+  /**
+   * Units: each person's balance to start (once), or the monthly cap before an admin sets one
+   * (month).
+   */
+  starter?: number;
+  /** Amounts the Request more form offers. */
+  amounts?: number[];
+  /** Who may grant or decline requests; admins by default. */
+  approver?: (caller: Caller) => boolean;
+  /** Hears each request and each decision: tell the approvers, then the person. */
+  notify?: (n: AllowanceNotice) => void | Promise<void>;
+}
+
+/** A request made, or decided. */
+export interface AllowanceNotice {
+  kind: 'requested' | 'granted' | 'declined';
+  request: AllowanceRequest;
+  unit: AllowanceUnit;
+}
+
+const DOLLARS: AllowanceUnit = { one: 'dollar', many: 'dollars', usd: 1 };
+const round2 = (n: number) => Math.round(n * 100) / 100;
+/** A request may ask for at most this many times the starter or monthly cap. */
+const REQUEST_MAX_TIMES = 100;
 
 /** A change a write tool made at once, as `undo` gets it. */
 export interface AssistantWrite {
@@ -176,8 +215,10 @@ export interface AssistantOptions {
   sealer?: Sealer;
   /** The app's key of a provider when none is stored in Settings (a Worker secret). */
   appKey?: (provider: AssistantProvider) => Promise<string | null | undefined>;
-  /** USD a person may spend a month when nobody set a cap; 10. */
+  /** USD a person may spend a month when nobody set a cap; 10 (or `allowance.starter`). */
   defaultCap?: number;
+  /** An allowance on the shared keys a person can ask to raise (Request more). */
+  allowance?: AllowanceOptions;
   /** Months and dates in this zone; UTC by default. */
   timeZone?: string;
   /** Chats are deleted this many days after their last message (`purge`); 30. */
@@ -389,11 +430,24 @@ export class Assistant {
       { id: 'chat', label: 'Chat', about: 'The side panel', tier: (o.tiers[0] as TierDef).id },
     ];
     this.groups = o.groups ?? [];
+    const al = o.allowance;
+    const unit = al?.unit ?? DOLLARS;
     this.state = new State(new Docs(o.store, o.sealer), {
       timeZone: o.timeZone ?? 'UTC',
-      defaultCap: o.defaultCap ?? DEFAULT_CAP,
+      defaultCap:
+        o.defaultCap ??
+        (al?.starter !== undefined && al.period !== 'once' ? al.starter * unit.usd : DEFAULT_CAP),
       ...(o.appKey ? { appKey: o.appKey } : {}),
       ...(o.fetch ? { fetch: o.fetch } : {}),
+      ...(al
+        ? {
+            allowance: {
+              usd: unit.usd,
+              period: al.period ?? 'month',
+              starter: al.starter ?? DEFAULT_CAP / unit.usd,
+            },
+          }
+        : {}),
     });
   }
 
@@ -566,7 +620,128 @@ export class Assistant {
         payer: paying?.payer ?? null,
         rows: spend.rows,
       },
+      ...(this.o.allowance ? { allowance: await this.allowanceState(caller) } : {}),
     };
+  }
+
+  // ---------------------------------------------------------------- allowance
+
+  private get unit() {
+    return this.o.allowance?.unit ?? DOLLARS;
+  }
+
+  private approver(caller: Caller) {
+    return this.o.allowance?.approver ? this.o.allowance.approver(caller) : caller.admin;
+  }
+
+  /** The person's allowance in the app's unit, and their newest request. */
+  async allowanceState(caller: Caller): Promise<AllowanceState> {
+    const al = this.o.allowance ?? {};
+    const u = this.unit;
+    const [budget, doc, approver] = await Promise.all([
+      this.state.appBudget(caller.id),
+      this.state.allowance(caller.id),
+      this.approver(caller),
+    ]);
+    const total = round2(budget.total / u.usd);
+    const used = round2(budget.used / u.usd);
+    const base =
+      this.state.allowanceConfig?.period === 'once'
+        ? (this.state.allowanceConfig?.starter ?? total)
+        : (await this.state.appCap()) / u.usd;
+    const waiting = approver
+      ? (await this.state.requests()).rows.filter((r) => r.status === 'open').length
+      : undefined;
+    return {
+      unit: u,
+      period: al.period ?? 'month',
+      total,
+      used,
+      left: round2(Math.max(0, total - used)),
+      request: doc.request ?? null,
+      amounts: al.amounts ?? [...new Set([base, base * 3].map((n) => Math.max(1, Math.round(n))))],
+      approver,
+      ...(waiting !== undefined ? { waiting } : {}),
+    };
+  }
+
+  private notify(kind: AllowanceNotice['kind'], request: AllowanceRequest) {
+    const n = this.o.allowance?.notify;
+    if (!n) return;
+    // A notice that fails is logged; the request or decision stands.
+    return Promise.resolve(n({ kind, request, unit: this.unit })).catch((err: unknown) =>
+      console.error(
+        JSON.stringify({ event: 'assistant_allowance_notify_failed', kind, error: String(err) }),
+      ),
+    );
+  }
+
+  /** Asks the approvers for more; one open request at a time. */
+  async requestMore(caller: Caller, amount: number, why: string): Promise<AllowanceRequest> {
+    if (!this.o.allowance)
+      throw new AssistantError('This app has no allowance to raise.', 'not_found', 404);
+    const s = await this.allowanceState(caller);
+    if (s.request?.status === 'open')
+      throw new AssistantError('Your last request is still waiting.', 'open_request', 409);
+    const max = Math.max(...s.amounts, 1) * REQUEST_MAX_TIMES;
+    if (!(amount > 0) || amount > max)
+      throw new AssistantError(`Ask for 1 to ${max} ${this.unit.many}.`, 'bad_amount');
+    const request: AllowanceRequest = {
+      id: `ar_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`,
+      person: caller.id,
+      who: caller.label ?? caller.id,
+      amount: round2(amount),
+      why: why.slice(0, 500),
+      at: Date.now(),
+      status: 'open',
+    };
+    await this.state.setAllowance(caller.id, (d) => ({ ...d, request }));
+    await this.state.putRequest(request);
+    await this.notify('requested', request);
+    return request;
+  }
+
+  /** Approvers: every request, newest first. */
+  async allowanceRequests(caller: Caller): Promise<AllowanceRequest[]> {
+    if (!(await this.approver(caller)))
+      throw new AssistantError('Only an approver can see requests.', 'forbidden', 403);
+    return (await this.state.requests()).rows;
+  }
+
+  /** Approvers: grants (any amount, the asked one by default) or declines an open request. */
+  async decideRequest(
+    caller: Caller,
+    id: string,
+    action: 'grant' | 'decline',
+    amount?: number,
+  ): Promise<AllowanceRequest> {
+    if (!(await this.approver(caller)))
+      throw new AssistantError('Only an approver can decide requests.', 'forbidden', 403);
+    const r = (await this.state.requests()).rows.find((x) => x.id === id);
+    if (!r) throw new AssistantError('That request is gone.', 'not_found', 404);
+    if (r.status !== 'open')
+      throw new AssistantError('That request was already decided.', 'decided', 409);
+    const granted = action === 'grant' ? round2(amount ?? r.amount) : undefined;
+    if (granted !== undefined && !(granted > 0))
+      throw new AssistantError(`Grant more than 0 ${this.unit.many}.`, 'bad_amount');
+    const done: AllowanceRequest = {
+      ...r,
+      status: action === 'grant' ? 'granted' : 'declined',
+      ...(granted !== undefined ? { granted } : {}),
+      decided_at: Date.now(),
+      decided_by: caller.label ?? caller.id,
+    };
+    await this.state.setAllowance(r.person, (d) => ({
+      ...d,
+      grants:
+        granted !== undefined
+          ? [...d.grants, { at: Date.now(), amount: granted, by: caller.id, request: r.id }]
+          : d.grants,
+      ...(d.request?.id === r.id ? { request: done } : {}),
+    }));
+    await this.state.putRequest(done);
+    await this.notify(action === 'grant' ? 'granted' : 'declined', done);
+    return done;
   }
 
   // ---------------------------------------------------------------- chats
@@ -749,7 +924,7 @@ export class Assistant {
     const { paying, wait } = await this.state.paying(caller.id, main.model.provider);
     if (!paying) {
       const code = wait ?? 'not_connected';
-      const text = waitText(code, main.model.provider);
+      const text = waitText(code, main.model.provider, !!this.o.allowance);
       doc.items.push({ kind: 'error', text, code });
       await this.writeChat(caller, chatId, doc);
       emit('error', { message: text, code });

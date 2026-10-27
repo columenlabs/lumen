@@ -88,6 +88,11 @@ export function useShell(): ShellContext {
   return c;
 }
 
+/** Opens Settings at a section, or null outside a shell (a preview). */
+export function useOpenSettings(): ShellContext['openSettings'] | null {
+  return useContext(Ctx)?.openSettings ?? null;
+}
+
 /** The app this page renders in, or null outside a shell (a preview). */
 export function useApp(): { id: string; label: string } | null {
   const c = useContext(Ctx);

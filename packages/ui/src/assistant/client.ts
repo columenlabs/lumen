@@ -1,6 +1,7 @@
 // What the assistant's panel and Settings call: an adapter an app fills, or `assistantClient(url)`
 // over the routes of `@columenlabs/lumen-ai/assistant` (`assistantRoutes`).
 import type {
+  AllowanceRequest,
   AssistantChat,
   AssistantChatRow,
   AssistantEvent,
@@ -50,6 +51,16 @@ export interface AssistantAdapter {
   settleDraft(chatId: string, draftId: string, action: 'save' | 'dismiss'): Promise<DraftItem>;
   /** Takes back a change the assistant made at once. */
   undoWrite(chatId: string, stepId: string): Promise<StepItem>;
+  /** Asks for more allowance on the shared keys (an app with `allowance`). */
+  requestMore?(amount: number, why: string): Promise<AssistantStatus>;
+  /** Approvers: every request, newest first. */
+  allowanceRequests?(): Promise<AllowanceRequest[]>;
+  /** Approvers: grants (the asked amount unless `amount` says) or declines a request. */
+  decideRequest?(
+    id: string,
+    action: 'grant' | 'decline',
+    amount?: number,
+  ): Promise<AllowanceRequest>;
 }
 
 /** Reads `event:` / `data:` blocks off a server-sent event stream. */
@@ -122,6 +133,13 @@ export function assistantClient(base: string): AssistantAdapter {
         'POST',
         `/chats/${encodeURIComponent(chatId)}/writes/${encodeURIComponent(stepId)}/undo`,
       ),
+    requestMore: (amount, why) => send('POST', '/allowance/request', { amount, why }),
+    allowanceRequests: () => get('/allowance/requests'),
+    decideRequest: (id, action, amount) =>
+      send('POST', `/allowance/requests/${encodeURIComponent(id)}`, {
+        action,
+        ...(amount !== undefined ? { amount } : {}),
+      }),
     async send(msg, onEvent, signal) {
       const url = `${root}/chat`;
       const res = await fetch(url, {

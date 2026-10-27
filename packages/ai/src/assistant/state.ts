@@ -11,12 +11,16 @@
  *                                plan sign-in, refreshed before it runs out
  *   signin:<p>   (a person's)    the app's sign-in registration for them, kept across sign-outs
  *   spend:YYYY-MM                what each tier cost them this month, by payer
+ *   allowance    (a person's)    grants of more allowance, their newest request, and (when it is
+ *                                once for good) what they spent on the app's keys in all
+ *   allowance_requests (the app's)  every request, newest first, for approvers
  *
  * Who pays: the person's pick (the app's keys by default) while it has a key for the provider the
  * tier runs on and money left this month, else the other; with neither the assistant waits and says
  * why. A cap covers every provider of its payer.
  */
 import type {
+  AllowanceRequest,
   AssistantAccess,
   AssistantEffort,
   AssistantPayer,
@@ -75,6 +79,30 @@ export interface PersonDoc {
   own_cap?: number;
 }
 
+/** How the app counts allowance on its shared keys (`createAssistant` `allowance`). */
+export interface AllowanceConfig {
+  /** USD one unit buys. */
+  usd: number;
+  /** `month`: the cap resets each month, grants count in their month; `once`: one balance for good. */
+  period: 'month' | 'once';
+  /** Units each person starts with (once); a month's cap is the admin's cap in Settings. */
+  starter: number;
+}
+
+export interface AllowanceDoc {
+  grants: { at: number; amount: number; by: string; request?: string }[];
+  /** USD spent on the app's keys in all (counted only when the allowance is once for good). */
+  spent_usd?: number;
+  request?: AllowanceRequest;
+}
+
+export interface RequestsDoc {
+  rows: AllowanceRequest[];
+}
+
+/** Requests kept for approvers: the newest this many. */
+const REQUESTS_KEPT = 300;
+
 export type SpendRow = UsagePart & { payer: AssistantPayer };
 export interface SpendDoc {
   rows: SpendRow[];
@@ -123,8 +151,53 @@ export class State {
       defaultCap: number;
       appKey?: (provider: AssistantProvider) => Promise<string | null | undefined>;
       fetch?: typeof fetch;
+      allowance?: AllowanceConfig;
     },
   ) {}
+
+  get allowanceConfig() {
+    return this.o.allowance;
+  }
+
+  allowance(id: string) {
+    return this.docs.read<AllowanceDoc>(id, 'allowance').then((d) => d ?? { grants: [] });
+  }
+  setAllowance(id: string, change: (d: AllowanceDoc) => AllowanceDoc) {
+    return this.docs.update<AllowanceDoc>(id, 'allowance', (d) => change(d ?? { grants: [] }));
+  }
+  requests() {
+    return this.docs
+      .read<RequestsDoc>(APP_SCOPE, 'allowance_requests')
+      .then((d) => d ?? { rows: [] });
+  }
+  /** Adds or replaces one request in the approvers' list. */
+  putRequest(r: AllowanceRequest) {
+    return this.docs.update<RequestsDoc>(APP_SCOPE, 'allowance_requests', (d) => ({
+      rows: [r, ...(d?.rows ?? []).filter((x) => x.id !== r.id)].slice(0, REQUESTS_KEPT),
+    }));
+  }
+
+  /**
+   * USD the person has on the app's keys for the period and USD used: the admin's monthly cap plus
+   * this month's grants, or (once for good) the starter and every grant against all spend.
+   */
+  async appBudget(id: string, spentThisMonth?: number): Promise<{ total: number; used: number }> {
+    const al = this.o.allowance;
+    const used =
+      spentThisMonth ??
+      (await this.spend(id)).rows.filter((r) => r.payer === 'app').reduce((a, r) => a + r.usd, 0);
+    if (!al) return { total: await this.appCap(), used };
+    const d = await this.allowance(id);
+    if (al.period === 'once') {
+      const units = al.starter + d.grants.reduce((a, g) => a + g.amount, 0);
+      return { total: units * al.usd, used: d.spent_usd ?? 0 };
+    }
+    const month = this.month();
+    const granted = d.grants
+      .filter((g) => monthIn(this.o.timeZone, new Date(g.at)) === month)
+      .reduce((a, g) => a + g.amount, 0);
+    return { total: (await this.appCap()) + granted * al.usd, used };
+  }
 
   /** USD a month when nobody set a cap. */
   get defaultCap() {
@@ -226,6 +299,11 @@ export class State {
       }
       return { rows };
     });
+    if (payer === 'app' && this.o.allowance?.period === 'once') {
+      const usd = parts.reduce((a, p) => a + p.usd, 0);
+      if (usd > 0)
+        await this.setAllowance(id, (d) => ({ ...d, spent_usd: (d.spent_usd ?? 0) + usd }));
+    }
   }
 
   /** The payer's key of each provider, those set, and which are plan sign-ins. */
@@ -253,16 +331,16 @@ export class State {
     id: string,
     provider: AssistantProvider,
   ): Promise<{ paying: Paying | null; wait: AssistantWait | null }> {
-    const [person, appKeys, ownKeys, spend, appCap, ownCap] = await Promise.all([
+    const [person, appKeys, ownKeys, spend, ownCap] = await Promise.all([
       this.person(id),
       this.keysOf(id, 'app'),
       this.keysOf(id, 'own'),
       this.spend(id),
-      this.appCap(),
       this.ownCap(id),
     ]);
     const spent = (p: AssistantPayer) =>
       spend.rows.filter((r) => r.payer === p).reduce((a, r) => a + r.usd, 0);
+    const budget = await this.appBudget(id, spent('app'));
     const app = appKeys.keys[provider];
     const own = ownKeys.keys[provider];
     const sources: Record<AssistantPayer, Paying | null> = {
@@ -271,8 +349,8 @@ export class State {
             payer: 'app',
             apiKey: app,
             ...appKeys,
-            cap: appCap,
-            left: appCap - spent('app'),
+            cap: budget.total,
+            left: budget.total - budget.used,
           }
         : null,
       own: own
@@ -298,11 +376,13 @@ export class State {
   }
 }
 
-export function waitText(wait: AssistantWait, provider: AssistantProvider) {
+export function waitText(wait: AssistantWait, provider: AssistantProvider, canRequest = false) {
   const label = PROVIDERS[provider].label;
   if (wait === 'not_connected')
     return `No ${label} key is set: add one in Settings ▸ Model providers, or pick another model in Settings ▸ Models.`;
   if (wait === 'app_cap')
-    return "You reached this month's cap on the shared keys. Add your own key, or wait for next month.";
+    return canRequest
+      ? 'You used your allowance on the shared keys. Request more in Settings, or add your own key.'
+      : "You reached this month's cap on the shared keys. Add your own key, or wait for next month.";
   return 'Your own keys reached their monthly cap: raise it in Settings ▸ Model providers.';
 }
