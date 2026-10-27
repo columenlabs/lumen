@@ -548,10 +548,13 @@ export function LumenWidget({
               <LinkPicker color={link.color} onPick={link.onPick} label={title} className="-mr-1" />
             )}
             {!compact && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+            {/* A phone's card with its own tools (a view's pager) gives them the room: the page
+                header names it already, and a title cut to one letter says nothing. */}
             <span
               className={cn(
                 'truncate',
                 compact ? 'text-xs text-muted-foreground' : 'text-sm font-semibold',
+                tools && !layout && 'max-md:hidden',
               )}
             >
               {title}

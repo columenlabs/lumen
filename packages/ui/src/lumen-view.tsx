@@ -1128,10 +1128,19 @@ function LumenTableRows<T extends RowData>({
   // The grouped field is the group row's label, so its column hides (a flat lead stays).
   // Each key once: two columns under one React key can lose a cell on a re-render, and every
   // row after it slides left by one.
+  // A `hideEmpty` column with nothing in any row here leaves the table.
+  const empty = (f: ViewField<T>) =>
+    !!f.hideEmpty &&
+    rows.length > 0 &&
+    rows.every((r) => {
+      const v = f.value(r);
+      return v == null || v === '' || v === 0;
+    });
   const visible = columns.filter(
     (f, i) =>
       (f.key !== groupBy?.key || (flat && i === 0)) &&
-      columns.findIndex((x) => x.key === f.key) === i,
+      columns.findIndex((x) => x.key === f.key) === i &&
+      !empty(f),
   );
   // Inline chips sit on the first column, next to the row's name, not in their own.
   const inline = visible.filter(
