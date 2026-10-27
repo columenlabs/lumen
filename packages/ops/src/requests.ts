@@ -55,7 +55,19 @@ export interface RequestPoint {
 
 let sink: PointSink | undefined;
 let logLines = false;
-const scope = new AsyncLocalStorage<RequestScope & { upstreamMs: number; subrequests: number }>();
+/** What the request spent, per kind (`do`, `ai`, `fetch`) and per call (`DIRECTORY.seen`). */
+export interface CallTally {
+  n: number;
+  ms: number;
+  errors: number;
+}
+type LiveScope = RequestScope & {
+  upstreamMs: number;
+  subrequests: number;
+  kinds: Map<string, CallTally>;
+  calls: Map<string, CallTally & { kind: string }>;
+};
+const scope = new AsyncLocalStorage<LiveScope>();
 
 /** The entry point sets the dataset once per isolate; `log` also prints one JSON line a point. */
 export function setRequestSink(s: PointSink | undefined, opts: { log?: boolean } = {}) {
@@ -65,8 +77,9 @@ export function setRequestSink(s: PointSink | undefined, opts: { log?: boolean }
 
 /** Runs `fn` as request `r`: points written inside carry its id, and queries its route. */
 export function withRequest<T>(r: RequestScope, route: string, fn: () => T): T {
-  return scope.run({ ...r, upstreamMs: 0, subrequests: 0 }, () =>
-    withQueryCaller({ app: r.app, kind: 'fetch', route }, fn),
+  return scope.run(
+    { ...r, upstreamMs: 0, subrequests: 0, kinds: new Map(), calls: new Map() },
+    () => withQueryCaller({ app: r.app, kind: 'fetch', route }, fn),
   );
 }
 
@@ -81,6 +94,54 @@ export function addUpstream(ms: number) {
   if (!s) return;
   s.upstreamMs += ms;
   s.subrequests += 1;
+}
+
+/**
+ * Adds one binding or outbound call to the request in scope: its kind (`do`, `ai`, `vectorize`,
+ * `kv`, `fetch`) and its code (`DIRECTORY.seen`, `fetch.api.example.com`). The binding meter does
+ * this itself. Returns false when no request is in scope (an alarm, a job).
+ */
+export function addCall(kind: string, code: string, ms: number, ok: boolean): boolean {
+  const s = scope.getStore();
+  if (!s) return false;
+  s.upstreamMs += ms;
+  s.subrequests += 1;
+  const k = s.kinds.get(kind) ?? { n: 0, ms: 0, errors: 0 };
+  k.n += 1;
+  k.ms += ms;
+  if (!ok) k.errors += 1;
+  s.kinds.set(kind, k);
+  const c = s.calls.get(code) ?? { kind, n: 0, ms: 0, errors: 0 };
+  c.n += 1;
+  c.ms += ms;
+  if (!ok) c.errors += 1;
+  s.calls.set(code, c);
+  return true;
+}
+
+/** The calls of the request in scope, by code; empty outside a request. */
+export function requestCalls(): [string, CallTally & { kind: string }][] {
+  return [...(scope.getStore()?.calls ?? new Map())];
+}
+
+/**
+ * A `Server-Timing` header value for the request in scope: one entry per kind with its count, then
+ * `app` for the time outside them (`total` minus calls run one after another, so it can go to 0
+ * when calls ran side by side). Names and counts only, never a path or an id.
+ */
+export function serverTiming(totalMs: number): string {
+  const s = scope.getStore();
+  const parts: string[] = [];
+  let spent = 0;
+  for (const [kind, t] of s?.kinds ?? []) {
+    spent += t.ms;
+    parts.push(
+      `${kind};dur=${t.ms.toFixed(1)};desc="${t.n}${t.errors ? ` ${t.errors} failed` : ''}"`,
+    );
+  }
+  parts.push(`app;dur=${Math.max(0, totalMs - spent).toFixed(1)}`);
+  parts.push(`total;dur=${totalMs.toFixed(1)}`);
+  return parts.join(', ');
 }
 
 /** Prints the point as one JSON line for the platform's logs, when the sink was set with `log`. */

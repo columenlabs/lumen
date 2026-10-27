@@ -126,6 +126,21 @@ app.use('*', requestMeter({
 
 A path no route matched is written as `*`, so a scanner's junk never lands. Without Hono, wrap the handler in `withRequest(scope, route, fn)` and call `meterRequest(point)` yourself.
 
+## Bindings and outbound calls
+
+Wrap the env once at the entry and patch `fetch` once, and every Durable Object RPC method, Workers AI, Vectorize, KV, R2, service or VPC call and every outbound `fetch` is timed and charged to the request in scope:
+
+```ts
+import { meterFetch, meteredBindings } from '@columenlabs/lumen-ops';
+import { requestMeter } from '@columenlabs/lumen-ops/hono';
+
+meterFetch();
+app.use('*', requestMeter({ app: 'myapp', serverTiming: true }));
+export default { fetch: (req, env, ctx) => app.fetch(req, meteredBindings(env, { kinds: { AI: 'ai', INDEX: 'vectorize' }, skip: ['METRICS'] }), ctx) };
+```
+
+A call is named by its binding and method (`DIRECTORY.seen`, `AI.run`, `fetch.api.example.com`), never its arguments. The request point's `upstream ms` and `subrequests` add them up; `serverTiming: true` sends the split back as `Server-Timing` (`do`, `ai`, `fetch`, ..., `app`, `total`), and when the request ends each call code is one `call` event (`code` the call, `ref` its kind, `ms` the total, counts: calls, failed). Outside a request (an alarm) each call is its own event. `app` may be a function and `route` names the route when one Worker hands requests on to other apps by path.
+
 ## Events
 
 `@columenlabs/lumen-ops/events` writes what an app does that isn't a request it answers: a call to another service, a webhook in or out, a sync's start and end, a sign-in. With the request points they show whether what came in was acted on.
