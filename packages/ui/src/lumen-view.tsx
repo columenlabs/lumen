@@ -57,7 +57,6 @@ import {
   TableIcon,
   UserPenIcon,
 } from 'lucide-react';
-import Papa from 'papaparse';
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { useAssistantNote } from './assistant-context';
@@ -571,9 +570,9 @@ function ColumnPicker<T>({
 /**
  * The view's rows as a CSV file: the filtered rows in the view's sort, its
  * shown columns (the grouping first when it is not one), plain numbers; amounts stay masked while
- * Hide amounts is on.
+ * Hide amounts is on. The CSV writer loads on the first download, not with the page.
  */
-function downloadCsv<T>({
+async function downloadCsv<T>({
   name,
   columns,
   rows,
@@ -607,6 +606,7 @@ function downloadCsv<T>({
     if (v === null || (typeof v === 'number' && !Number.isFinite(v))) return '';
     return hidden && f.amount ? maskAmount(String(v)) : v;
   };
+  const { default: Papa } = await import('papaparse');
   const csv = Papa.unparse({
     fields: fields.map((f) => f.label),
     data: sorted.map((r) => fields.map((f) => cell(f, r))),

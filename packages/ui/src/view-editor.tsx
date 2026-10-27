@@ -171,7 +171,7 @@ import {
   formulaIssues,
   formulaOptions,
 } from './view-formulas';
-import { VIEW_ICONS, lucideIconNames, shapeIcon, viewIcon } from './view-icons';
+import { VIEW_ICONS, shapeIcon, viewIcon } from './view-icons';
 import {
   FORMULAS_GROUP,
   type ViewDomain,
