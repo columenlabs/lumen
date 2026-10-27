@@ -1,6 +1,5 @@
 import {
   CATALOG,
-  type CatalogDomain,
   FRAME_LINK,
   catalogKeys,
   catalogTables,

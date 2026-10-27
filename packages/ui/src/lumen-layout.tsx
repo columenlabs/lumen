@@ -111,7 +111,6 @@ import { OriginLegend } from './origin-legend';
 import { type Crumb, IconButton, Page } from './page';
 import { SourcedCard } from './sourced-card';
 import { LumenCard, SummaryTiles } from './summary-cards';
-import { Button } from './ui/button';
 import type { ViewEditDialog as ViewEditDialogPart, ViewEditorSection } from './view-editor';
 import {
   type ViewDomain,
