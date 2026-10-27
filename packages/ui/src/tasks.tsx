@@ -407,7 +407,7 @@ function Ring({ share }: { share: number | null }) {
 }
 
 function TaskPanel({ list, onClose }: { list: TaskList; onClose: () => void }) {
-  const { openSettings } = useShell();
+  const { openSettings, hasSettings } = useShell();
   return (
     <>
       <div className="max-h-[60svh] overflow-y-auto">
@@ -415,19 +415,21 @@ function TaskPanel({ list, onClose }: { list: TaskList; onClose: () => void }) {
           <TaskRow key={t.id} task={t} onClose={onClose} />
         ))}
       </div>
-      <div className="border-t px-3.5 py-2.5 text-xs text-muted-foreground">
-        Phone or email when a task ends:{' '}
-        <button
-          type="button"
-          className="text-primary hover:underline"
-          onClick={() => {
-            onClose();
-            openSettings('notifications');
-          }}
-        >
-          Settings ▸ Notifications
-        </button>
-      </div>
+      {hasSettings('notifications') && (
+        <div className="border-t px-3.5 py-2.5 text-xs text-muted-foreground">
+          Phone or email when a task ends:{' '}
+          <button
+            type="button"
+            className="text-primary hover:underline"
+            onClick={() => {
+              onClose();
+              openSettings('notifications');
+            }}
+          >
+            Settings ▸ Notifications
+          </button>
+        </div>
+      )}
     </>
   );
 }

@@ -80,6 +80,8 @@ interface ShellContext {
   openSettings: (section?: string) => void;
   /** Closes Settings (a section that sends the person to a page). */
   closeSettings: () => void;
+  /** Whether Settings has a section with this id, so a link to it is never dead. */
+  hasSettings: (section: string) => boolean;
   /** The header's Refresh: reloads the page's data, skipping the server cache. Null without `onRefresh`. */
   refresh: (() => Promise<void>) | null;
   refreshing: boolean;
@@ -382,6 +384,7 @@ export function LumenShell({
         statusSlot,
         openSettings,
         closeSettings: () => setSettingsAt(null),
+        hasSettings: (section) => findSettings.some((s) => s.id === section),
         refresh: onRefresh ? refresh : null,
         refreshing,
         hideAmounts,
