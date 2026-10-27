@@ -196,7 +196,7 @@ export function TileToggleGroup({
         value={selected}
         onValueChange={(v) => v && onSelect(v)}
         aria-label={label}
-        className="grid w-full grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-px lg:flex lg:w-fit"
+        className="grid w-full grid-cols-2 gap-px max-sm:[&>*:last-child:nth-child(odd)]:col-span-2 sm:grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] lg:flex lg:w-fit"
       >
         {options.map((o) => (
           <ToggleGroupItem

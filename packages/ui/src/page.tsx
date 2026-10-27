@@ -118,8 +118,8 @@ export function PageHeader({ crumbs, actions, layout, meta, status }: PageHeader
               {current?.label}
             </h1>
             {meta && (
-              <div className="flex items-center gap-1.5 truncate text-[11px] leading-tight text-muted-foreground">
-                {meta}
+              <div className="flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
+                <span className="truncate">{meta}</span>
               </div>
             )}
           </div>

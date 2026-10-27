@@ -472,21 +472,22 @@ export function StatusItem({
   className?: string;
 }) {
   return (
-    <span className={cn('flex items-center gap-1.5', className)}>
+    <span className={cn('flex items-center gap-1.5', value === undefined && 'min-w-0', className)}>
       {ok !== undefined && (
         <span
           aria-hidden
           className={cn(
-            'size-2 rounded-full',
+            'size-2 shrink-0 rounded-full',
             ok === null ? 'bg-muted-foreground/40' : ok ? 'bg-gain' : 'bg-destructive',
           )}
         />
       )}
-      {label}
+      {/* A phone has room for the values only: a label with one drops, a lone label truncates. */}
+      <span className={value === undefined ? 'min-w-0 truncate' : 'max-md:hidden'}>{label}</span>
       {value !== undefined && (
         <>
           {' '}
-          <span className="num text-foreground/80">{value}</span>
+          <span className="num shrink-0 text-foreground/80">{value}</span>
         </>
       )}
     </span>

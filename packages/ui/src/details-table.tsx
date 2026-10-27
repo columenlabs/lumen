@@ -33,8 +33,7 @@ export function DetailsTable({ head, rows, foot, selected, onSelect }: DetailsTa
   const grow = marked >= 0 ? marked : head.length - 1;
   const cell = (i: number) =>
     cn(
-      'num',
-      head[i]?.right && 'text-right',
+      head[i]?.right && 'num text-right',
       i !== grow && 'w-px',
       head[i]?.hideOnPhone && 'max-md:hidden',
     );

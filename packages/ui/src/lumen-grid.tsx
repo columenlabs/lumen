@@ -71,6 +71,11 @@ const GridCellContext = createContext<{ fixed: boolean } | null>(null);
 export const useGridCell = () => useContext(GridCellContext);
 
 const CARD = '[data-slot=lumen-card]';
+/** What a card's part adds to its height: nothing when it floats (a card's corner actions). */
+const flowHeight = (el: HTMLElement) => {
+  const at = getComputedStyle(el).position;
+  return at === 'absolute' || at === 'fixed' ? 0 : el.offsetHeight;
+};
 const rowsOf = (px: number) => Math.max(2, Math.ceil((px + GRID_GAP) / GRID_ROW_PX));
 const byPlace = (a: LayoutItem, b: LayoutItem) => a.y - b.y || a.x - b.x;
 
@@ -179,7 +184,7 @@ function Cell({
       // filter, body and footer, plus whatever else the wrapper holds.
       const card = el.matches(CARD) ? el : el.querySelector<HTMLElement>(`:scope > ${CARD}`);
       const px = card
-        ? [...card.children].reduce((s, c) => s + (c as HTMLElement).offsetHeight, 0) +
+        ? [...card.children].reduce((s, c) => s + flowHeight(c as HTMLElement), 0) +
           (card.offsetHeight - card.clientHeight) +
           (el.offsetHeight - card.offsetHeight)
         : el.offsetHeight;

@@ -326,7 +326,8 @@ export function SummaryTiles<T>({
       data-slot="view-tiles"
       className={cn(
         grid,
-        '[&>*:last-child:nth-child(odd)]:col-span-2 md:[&>*:last-child:nth-child(odd)]:col-span-1',
+        // Each tile sits in a `contents` holder, so the odd last one's span goes on what it holds.
+        '[&>*:last-child:nth-child(odd)>*]:col-span-2 md:[&>*:last-child:nth-child(odd)>*]:col-span-1',
       )}
     >
       {shown.map((t) => (
