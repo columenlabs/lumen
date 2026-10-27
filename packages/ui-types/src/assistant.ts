@@ -227,6 +227,54 @@ export interface SpendState {
   rows: (UsagePart & { payer: AssistantPayer })[];
 }
 
+/** What an app's allowance on its shared keys is counted in: credits, or dollars. */
+export interface AllowanceUnit {
+  /** `credit`. */
+  one: string;
+  /** `credits`. */
+  many: string;
+  /** USD one unit buys at list price (0.01 for a credit worth a cent). */
+  usd: number;
+}
+
+/** A person's ask for more allowance, and what an approver did with it. */
+export interface AllowanceRequest {
+  id: string;
+  /** The person's id. */
+  person: string;
+  /** What approvers see them as (their email or name). */
+  who: string;
+  /** Units asked for. */
+  amount: number;
+  why: string;
+  at: number;
+  status: 'open' | 'granted' | 'declined';
+  /** Units granted (an approver may give less or more than asked). */
+  granted?: number;
+  decided_at?: number;
+  decided_by?: string;
+}
+
+/**
+ * A person's allowance on the app's shared keys, in the app's unit: what they have for the period
+ * (a month, or once for good), what they used and what is left, and their newest request.
+ */
+export interface AllowanceState {
+  unit: AllowanceUnit;
+  period: 'month' | 'once';
+  total: number;
+  used: number;
+  left: number;
+  /** Their newest request; an open one blocks another. */
+  request: AllowanceRequest | null;
+  /** Amounts the Request more form offers. */
+  amounts: number[];
+  /** The caller may grant or decline requests. */
+  approver: boolean;
+  /** Open requests waiting on an approver (approvers only). */
+  waiting?: number;
+}
+
 /** Everything the assistant's settings sections show, for one person. */
 export interface AssistantStatus {
   name: string;
@@ -264,6 +312,8 @@ export interface AssistantStatus {
   caps: { app: number; own: number };
   pay: AssistantPayer;
   spend: SpendState;
+  /** Set when the app counts an allowance on its shared keys (`createAssistant` `allowance`). */
+  allowance?: AllowanceState;
 }
 
 /** What a person may change (PUT /settings): any subset. */

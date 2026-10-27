@@ -5,6 +5,7 @@
 // are tested before they are kept and never shown again, only their last characters. The app's
 // shared keys and the allowance on them are the admin's section (`assistantAdminSections`).
 import type {
+  AllowanceRequest,
   AssistantAccess,
   AssistantEffort,
   AssistantProviderRow,
@@ -13,11 +14,13 @@ import type {
   HandOffPolicy,
   KeyState,
 } from '@columenlabs/lumen-ui-types/assistant';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CheckIcon,
+  CoinsIcon,
   ExternalLinkIcon,
   GlobeIcon,
+  InboxIcon,
   KeyRoundIcon,
   LayersIcon,
   ReceiptIcon,
@@ -35,13 +38,15 @@ import { KeyTestLine, TestBadge, errorText } from '../integrations';
 import { LumenSelector } from '../lumen-selector';
 import { lumenToast } from '../lumen-toast';
 import type { SettingsSectionDef } from '../settings';
+import { ShareMeter } from '../share-meter';
 import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import type { AssistantAdapter } from './client';
-import { assistantStatusKey, usd, useAssistantStatus } from './lumen-assistant';
+import { allowanceAmount, assistantStatusKey, usd, useAssistantStatus } from './lumen-assistant';
 
 const EFFORTS: { value: AssistantEffort; label: string }[] = [
   { value: 'default', label: 'Model default' },
@@ -481,16 +486,19 @@ function SharedKeys({ client }: { client: AssistantAdapter }) {
                 <SharedProviderKey key={p.id} client={client} p={p} />
               ))}
             </LumenExpandList>
-            <Row
-              label="Each person may spend"
-              info="A month on the shared keys, every provider together. Past it, a person's own key pays."
-            >
-              <CapInput
-                label="Allowance per person"
-                value={s.caps.app}
-                onSave={(n) => void apply('cap', () => client.appCap(n))}
-              />
-            </Row>
+            {/* A one-off allowance has no monthly cap: starter and grants set it. */}
+            {s.allowance?.period !== 'once' && (
+              <Row
+                label="Each person may spend"
+                info="A month on the shared keys, every provider together. Past it, a person's own key pays."
+              >
+                <CapInput
+                  label="Allowance per person"
+                  value={s.caps.app}
+                  onSave={(n) => void apply('cap', () => client.appCap(n))}
+                />
+              </Row>
+            )}
           </div>
         ) : (
           <p className="text-muted-foreground text-sm">Only an admin can change these.</p>
@@ -794,14 +802,245 @@ function Spend({ client }: { client: AssistantAdapter }) {
   );
 }
 
+// ---------------------------------------------------------------- allowance
+
+const day = (at: number) =>
+  new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+function RequestBadge({ r }: { r: AllowanceRequest }) {
+  if (r.status === 'open') return <Badge variant="outline">Waiting</Badge>;
+  if (r.status === 'granted') return <Badge variant="secondary">Granted</Badge>;
+  return <Badge variant="outline">Declined</Badge>;
+}
+
+/** A person's allowance on the shared keys, their newest request and Request more. */
+function Allowance({ client }: { client: AssistantAdapter }) {
+  const { apply, busy } = useApply(client);
+  const [amount, setAmount] = useState<string>('');
+  const [why, setWhy] = useState('');
+  const whyId = useId();
+  return (
+    <WithStatus client={client}>
+      {(s) => {
+        const a = s.allowance;
+        const requestMore = client.requestMore;
+        if (!a || !requestMore)
+          return <p className="text-muted-foreground text-sm">This app sets no allowance.</p>;
+        const n = (x: number) => allowanceAmount(a.unit, x);
+        const r = a.request;
+        const pick = amount || String(a.amounts[0] ?? '');
+        const issues: FormIssue[] = [
+          ...(pick ? [] : [{ where: 'Amount', message: 'Pick how much to ask for' }]),
+          ...(why.trim()
+            ? []
+            : [{ where: 'What for', message: 'Say what it is for', target: whyId }]),
+        ];
+        const ask = () =>
+          void apply('request', () => requestMore(Number(pick), why.trim()), 'Request sent').then(
+            (ok) => ok && setWhy(''),
+          );
+        return (
+          <div className="flex flex-col">
+            <div className="flex flex-col gap-2 border-b pb-3">
+              <div className="flex items-baseline gap-2">
+                <span className="font-semibold text-2xl tabular-nums">{n(a.left)}</span>
+                <span className="text-muted-foreground text-sm">
+                  left of {n(a.total)}
+                  {a.period === 'month' ? ' this month' : ''}
+                </span>
+              </div>
+              <ShareMeter value={a.total > 0 ? a.used / a.total : 1} wide />
+            </div>
+            {r && (
+              <Row label={`Asked for ${n(r.amount)} · ${day(r.at)}`} info={r.why || undefined}>
+                <div className="flex items-center gap-2 text-sm">
+                  {r.status === 'granted' && r.granted !== undefined && (
+                    <span className="tabular-nums">+{n(r.granted)}</span>
+                  )}
+                  <RequestBadge r={r} />
+                </div>
+              </Row>
+            )}
+            {r?.status === 'open' ? (
+              <p className="pt-3 text-muted-foreground text-sm">
+                You can ask again once this one is decided.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 pt-3">
+                <Input
+                  id={whyId}
+                  aria-label="What for"
+                  placeholder="What it is for"
+                  className="h-8 w-full"
+                  maxLength={500}
+                  value={why}
+                  onChange={(e) => setWhy(e.target.value)}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <LumenSelector
+                    label="Amount"
+                    size="sm"
+                    className="w-40"
+                    value={pick}
+                    options={a.amounts.map((x) => ({ value: String(x), label: n(x) }))}
+                    onChange={(v) => setAmount(v)}
+                  />
+                  <SaveButton
+                    issues={issues}
+                    label="Request more"
+                    icon={null}
+                    busy={busy === 'request'}
+                    onSave={ask}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }}
+    </WithStatus>
+  );
+}
+
+/** One request, opened in place to grant (any amount) or decline. */
+function RequestRow({
+  client,
+  r,
+  n,
+  onDone,
+}: {
+  client: AssistantAdapter;
+  r: AllowanceRequest;
+  n: (x: number) => string;
+  onDone: () => void;
+}) {
+  const [text, setText] = useState(String(r.amount));
+  const [busy, setBusy] = useState<string | null>(null);
+  const amountId = useId();
+  const value = Number(text);
+  const decide = async (action: 'grant' | 'decline') => {
+    if (!client.decideRequest) return;
+    setBusy(action);
+    try {
+      await client.decideRequest(r.id, action, action === 'grant' ? value : undefined);
+      lumenToast.success(action === 'grant' ? `Granted ${n(value)}` : 'Declined');
+      onDone();
+    } catch (e) {
+      lumenToast.error(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const issues: FormIssue[] =
+    Number.isFinite(value) && value > 0
+      ? []
+      : [{ where: 'Grant', message: 'Grant more than 0', target: amountId }];
+  return (
+    <LumenExpandRow
+      id={r.id}
+      name={r.who}
+      meta={`${n(r.amount)} · ${day(r.at)}`}
+      badge={<RequestBadge r={r} />}
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="whitespace-pre-wrap">{r.why || 'No reason given.'}</p>
+        {r.status === 'open' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              id={amountId}
+              aria-label="Grant"
+              inputMode="decimal"
+              className="h-8 w-24 text-right tabular-nums"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <SaveButton
+              issues={issues}
+              label="Grant"
+              busy={busy === 'grant'}
+              onSave={() => void decide('grant')}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!!busy}
+              onClick={() => void decide('decline')}
+            >
+              Decline
+            </Button>
+          </div>
+        ) : (
+          <p className="text-muted-foreground">
+            {r.status === 'granted' ? `Granted ${n(r.granted ?? r.amount)}` : 'Declined'}
+            {r.decided_by ? ` by ${r.decided_by}` : ''}
+            {r.decided_at ? ` · ${day(r.decided_at)}` : ''}
+          </p>
+        )}
+      </div>
+    </LumenExpandRow>
+  );
+}
+
+/** Approvers: every request for more allowance, open ones first. */
+function AllowanceRequests({ client }: { client: AssistantAdapter }) {
+  const qc = useQueryClient();
+  const key = [...assistantStatusKey(client), 'allowance-requests'];
+  const q = useQuery({
+    queryKey: key,
+    queryFn: () => client.allowanceRequests?.() ?? Promise.resolve([]),
+    enabled: !!client.allowanceRequests,
+  });
+  return (
+    <WithStatus client={client}>
+      {(s) => {
+        const a = s.allowance;
+        if (!a || !client.allowanceRequests)
+          return <p className="text-muted-foreground text-sm">This app sets no allowance.</p>;
+        if (!a.approver)
+          return <p className="text-muted-foreground text-sm">Only an approver can see these.</p>;
+        if (!q.data)
+          return (
+            <p className="text-muted-foreground text-sm">
+              {q.isError ? errorText(q.error) : 'Loading…'}
+            </p>
+          );
+        if (!q.data.length)
+          return <p className="text-muted-foreground text-sm">No requests yet.</p>;
+        const rows = [...q.data].sort(
+          (x, y) => Number(y.status === 'open') - Number(x.status === 'open') || y.at - x.at,
+        );
+        const done = () => {
+          void qc.invalidateQueries({ queryKey: assistantStatusKey(client) });
+        };
+        return (
+          <LumenExpandList>
+            {rows.map((r) => (
+              <RequestRow
+                key={r.id}
+                client={client}
+                r={r}
+                n={(x) => allowanceAmount(a.unit, x)}
+                onDone={done}
+              />
+            ))}
+          </LumenExpandList>
+        );
+      }}
+    </WithStatus>
+  );
+}
+
 /**
  * The admin's section: the app's shared keys and each person's monthly allowance on them. Put it
  * where the app keeps its admin settings, shown only to admins.
  */
 export function assistantAdminSections({
   client,
+  allowance = false,
 }: {
   client: AssistantAdapter;
+  /** Add Allowance requests (the app set `allowance` on the server). */
+  allowance?: boolean;
 }): SettingsSectionDef[] {
   return [
     {
@@ -811,6 +1050,17 @@ export function assistantAdminSections({
       description: "Keys everyone's answers run on, and the allowance",
       content: <SharedKeys client={client} />,
     },
+    ...(allowance
+      ? [
+          {
+            id: 'assistant-allowance-requests',
+            title: 'Allowance requests',
+            icon: InboxIcon,
+            description: 'Grant or decline asks for more allowance',
+            content: <AllowanceRequests client={client} />,
+          },
+        ]
+      : []),
   ];
 }
 
@@ -822,12 +1072,15 @@ export function assistantSettingsSections({
   client,
   name,
   web = true,
+  allowance = false,
 }: {
   client: AssistantAdapter;
   /** The assistant's name, the parent section's title. */
   name: string;
   /** Show the Web section (the app set up `web` on the server). */
   web?: boolean;
+  /** Show Allowance: what is left on the shared keys, and Request more (`allowance` on the server). */
+  allowance?: boolean;
 }): SettingsSectionDef[] {
   return [
     {
@@ -881,5 +1134,17 @@ export function assistantSettingsSections({
       description: 'What answers cost this month',
       content: <Spend client={client} />,
     },
+    ...(allowance
+      ? [
+          {
+            id: 'assistant-allowance',
+            title: 'Allowance',
+            icon: CoinsIcon,
+            sub: true,
+            description: 'What is left on the shared keys, and Request more',
+            content: <Allowance client={client} />,
+          },
+        ]
+      : []),
   ];
 }

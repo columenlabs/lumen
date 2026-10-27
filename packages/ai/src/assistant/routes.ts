@@ -19,6 +19,9 @@
  *   GET    /chats, GET|DELETE /chats/:id
  *   POST   /chats/:id/drafts/:draft {action: save | dismiss}
  *   POST   /chats/:id/writes/:step/undo
+ *   POST   /allowance/request {amount, why}   asks for more allowance (one open at a time)
+ *   GET    /allowance/requests                approvers: every request
+ *   POST   /allowance/requests/:id {action: grant | decline, amount?}   approvers
  *
  * Writes must be same-origin JSON: a signed-in browser session is a cookie, so a foreign page's
  * form or fetch is refused before it reaches a rule. Keys and tokens are write-only: no route
@@ -313,6 +316,26 @@ export function assistantRoutes(
 
         case 'GET /chats':
           return json(await a.listChats(caller));
+
+        case 'POST /allowance/request': {
+          const b = await body(req);
+          const amount = typeof b.amount === 'number' && Number.isFinite(b.amount) ? b.amount : 0;
+          const why = typeof b.why === 'string' ? b.why.trim() : '';
+          await a.requestMore(caller, amount, why);
+          return status();
+        }
+
+        case 'GET /allowance/requests':
+          return json(await a.allowanceRequests(caller));
+      }
+
+      if (parts[0] === 'allowance' && parts[1] === 'requests' && parts[2] && m === 'POST') {
+        const b = await body(req);
+        const action = b.action;
+        if (action !== 'grant' && action !== 'decline') return fail('action is grant or decline.');
+        const amount =
+          typeof b.amount === 'number' && Number.isFinite(b.amount) ? b.amount : undefined;
+        return json(await a.decideRequest(caller, parts[2], action, amount));
       }
 
       if (parts[0] === 'chats' && parts[1]) {

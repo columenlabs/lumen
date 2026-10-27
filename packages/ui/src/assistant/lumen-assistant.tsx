@@ -4,6 +4,8 @@
 // cards to Save or Dismiss, work handed to a higher tier in its own section); and the composer,
 // with Stop, a queued message and the chat's cost and context under it.
 import type {
+  AllowanceState,
+  AllowanceUnit,
   AssistantMessage,
   AssistantRefNote,
   AssistantStatus,
@@ -51,6 +53,7 @@ import {
   type LumenSelectorListHandle,
 } from '../lumen-selector';
 import { lumenToast } from '../lumen-toast';
+import { useOpenSettings } from '../shell';
 import {
   type PointedAt,
   cardsOnScreen,
@@ -325,19 +328,38 @@ function Messages({
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [count]);
+  // The app's own link to Settings, else the shell's, at the section that answers the wait.
+  const shellSettings = useOpenSettings();
+  const settings = onSettings ? (_section: string) => onSettings() : shellSettings;
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
       {status?.wait && (
         <Alert className="mb-3">
           <CircleAlertIcon />
           <AlertDescription className="flex flex-col items-start gap-2">
-            {WAIT[status.wait](
-              status.admin,
-              status.providers.find((p) => p.id === status.wait_provider)?.label ?? 'API',
-            )}
-            {onSettings && (
-              <Button size="sm" variant="outline" onClick={onSettings}>
-                Open Settings
+            {status.wait === 'app_cap' && status.allowance
+              ? allowanceWait(status.allowance)
+              : WAIT[status.wait](
+                  status.admin,
+                  status.providers.find((p) => p.id === status.wait_provider)?.label ?? 'API',
+                )}
+            {settings && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  settings(
+                    status.wait === 'app_cap' && status.allowance
+                      ? 'assistant-allowance'
+                      : 'assistant-providers',
+                  )
+                }
+              >
+                {status.wait === 'app_cap' &&
+                status.allowance &&
+                status.allowance.request?.status !== 'open'
+                  ? 'Request more'
+                  : 'Open Settings'}
               </Button>
             )}
           </AlertDescription>
@@ -383,6 +405,20 @@ const WAIT: Record<
     "You reached this month's cap on the shared keys. Add your own key, or wait for next month.",
   own_cap: () => 'Your own keys reached their monthly cap. Raise it in Settings ▸ Model providers.',
 };
+
+/** An allowance in its unit: `$4.20`, or `350 credits`. */
+export const allowanceAmount = (u: AllowanceUnit, n: number) =>
+  u.usd === 1 && u.many === 'dollars'
+    ? usd(n)
+    : `${n.toLocaleString()} ${n === 1 ? u.one : u.many}`;
+
+function allowanceWait(a: AllowanceState) {
+  if (a.request?.status === 'open')
+    return `You used your allowance on the shared keys. Your request for ${allowanceAmount(a.unit, a.request.amount)} is waiting, or add your own key.`;
+  return a.period === 'once'
+    ? 'You used your allowance on the shared keys. Request more, or add your own key.'
+    : "You used this month's allowance on the shared keys. Request more, or add your own key.";
+}
 
 /** The assistant's name, for a copied turn's headings. */
 const AssistantName = createContext('Assistant');

@@ -1,5 +1,6 @@
 import { LumenShell, NavGroup, type SettingsSectionDef } from '@columenlabs/lumen-ui';
 import type {
+  AllowanceRequest,
   AssistantChat,
   AssistantEvent,
   AssistantStatus,
@@ -319,9 +320,14 @@ const SCRIPT: AssistantEvent[] = [
 ];
 
 function mockAdapter(
-  o: { status?: Partial<AssistantStatus>; chat?: AssistantChat } = {},
+  o: {
+    status?: Partial<AssistantStatus>;
+    chat?: AssistantChat;
+    requests?: AllowanceRequest[];
+  } = {},
 ): AssistantAdapter {
   let status: AssistantStatus = { ...STATUS, ...o.status };
+  const requests = structuredClone(o.requests ?? []);
   const chat = structuredClone(o.chat ?? CHAT);
   const done = (patch: Partial<AssistantStatus>) => {
     status = { ...status, ...patch };
@@ -431,6 +437,40 @@ function mockAdapter(
       d.status = action === 'save' ? 'saved' : 'dismissed';
       return { ...d };
     },
+    requestMore: async (amount, why) => {
+      await wait(400);
+      const request: AllowanceRequest = {
+        id: `ar_${requests.length + 1}`,
+        person: 'u_ada',
+        who: 'ada@example.com',
+        amount,
+        why,
+        at: Date.now(),
+        status: 'open',
+      };
+      requests.unshift(request);
+      return done(status.allowance ? { allowance: { ...status.allowance, request } } : {});
+    },
+    allowanceRequests: async () => requests.map((r) => ({ ...r })),
+    decideRequest: async (id, action, amount) => {
+      await wait(400);
+      const r = requests.find((x) => x.id === id) as AllowanceRequest;
+      Object.assign(r, {
+        status: action === 'grant' ? 'granted' : 'declined',
+        ...(action === 'grant' ? { granted: amount ?? r.amount } : {}),
+        decided_at: Date.now(),
+        decided_by: 'ada@example.com',
+      });
+      const a = status.allowance;
+      if (a && r.person === 'u_ada') {
+        const total = a.total + (action === 'grant' ? (amount ?? r.amount) : 0);
+        await done({
+          allowance: { ...a, total, left: total - a.used, request: { ...r } },
+          ...(action === 'grant' ? { wait: null } : {}),
+        });
+      }
+      return { ...r };
+    },
     undoWrite: async (_c, id) => {
       await wait(400);
       const st = chat.items.find(
@@ -485,11 +525,13 @@ function Docked({
   openChat,
   openPanel = true,
   chatId = 'c_1',
+  allowance = false,
 }: {
   adapter: AssistantAdapter;
   openChat: boolean;
   openPanel?: boolean;
   chatId?: string;
+  allowance?: boolean;
 }) {
   const dock = useLumenAssistantDock(adapter, {
     name: 'Helper',
@@ -499,8 +541,8 @@ function Docked({
   const [sections] = useState<SettingsSectionDef[]>(() =>
     // The admin's shared keys sit in the app's admin settings; the story lists them last.
     [
-      ...assistantSettingsSections({ client: adapter, name: 'Helper' }),
-      ...assistantAdminSections({ client: adapter }),
+      ...assistantSettingsSections({ client: adapter, name: 'Helper', allowance }),
+      ...assistantAdminSections({ client: adapter, allowance }),
     ],
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: open the story's chat once on mount
@@ -615,5 +657,47 @@ export const Settings: StoryObj = {
   render: () => {
     const [adapter] = useState(() => mockAdapter());
     return <Docked adapter={adapter} openChat={false} openPanel={false} />;
+  },
+};
+
+const CREDITS = { one: 'credit', many: 'credits', usd: 0.01 };
+
+/**
+ * An allowance in credits, used up: the panel offers Request more, Settings ▸ Allowance asks, and
+ * Allowance requests (an approver's) grants or declines.
+ */
+export const Allowance: StoryObj = {
+  render: () => {
+    const [adapter] = useState(() =>
+      mockAdapter({
+        status: {
+          wait: 'app_cap',
+          wait_provider: 'anthropic',
+          allowance: {
+            unit: CREDITS,
+            period: 'once',
+            total: 500,
+            used: 500,
+            left: 0,
+            request: null,
+            amounts: [250, 500, 1000],
+            approver: true,
+            waiting: 1,
+          },
+        },
+        requests: [
+          {
+            id: 'ar_0',
+            person: 'u_grace',
+            who: 'grace@example.com',
+            amount: 500,
+            why: 'Drafting the launch notes for every team this week.',
+            at: NOW - 3 * 3_600_000,
+            status: 'open',
+          },
+        ],
+      }),
+    );
+    return <Docked adapter={adapter} openChat={false} allowance />;
   },
 };
