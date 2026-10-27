@@ -28,6 +28,10 @@ export interface AssistantStore {
   /** Creates the table. Safe to call often. */
   init(): Promise<void>;
   get(scope: string, key: string): Promise<StoredDoc | null>;
+  /** Several documents in one call, in the order asked (null where missing). Optional: a store
+   * across a network hop (a Durable Object stub) gives it so a request's reads in one tick are one
+   * call; `Docs.cached` uses it when present and `get` otherwise. */
+  getMany?(refs: { scope: string; key: string }[]): Promise<(StoredDoc | null)[]>;
   put(scope: string, key: string, value: string, meta?: string | null): Promise<void>;
   remove(scope: string, key: string): Promise<void>;
   /** Keys starting with `prefix`, newest first, without their values. */
@@ -110,6 +114,26 @@ export function sqlAssistantStore(sql: SqlRunner): AssistantStore {
           }
         : null;
     },
+    async getMany(refs) {
+      await init();
+      if (!refs.length) return [];
+      const rows = await sql.all(
+        `SELECT scope, key, meta, value, at FROM ${TABLE} WHERE ${refs.map(() => '(scope = ? AND key = ?)').join(' OR ')}`,
+        ...refs.flatMap((r) => [r.scope, r.key]),
+      );
+      const by = new Map(rows.map((r) => [`${r.scope}\u0000${r.key}`, r]));
+      return refs.map(({ scope, key }) => {
+        const r = by.get(`${scope}\u0000${key}`);
+        return r
+          ? {
+              key: String(r.key),
+              meta: r.meta == null ? null : String(r.meta),
+              value: String(r.value),
+              at: Number(r.at),
+            }
+          : null;
+      });
+    },
     async put(scope, key, value, meta = null) {
       await init();
       await sql.run(
@@ -159,6 +183,12 @@ export function sqlAssistantStore(sql: SqlRunner): AssistantStore {
   };
 }
 
+interface PendingRead {
+  scope: string;
+  key: string;
+  done: (d: Promise<StoredDoc | null>) => void;
+}
+
 /** JSON documents over a store, sealed when the app gives a sealer. */
 export class Docs {
   constructor(
@@ -187,12 +217,36 @@ export class Docs {
     return d ? this.open(d.value) : null;
   }
 
+  /** Reads asked in the same tick, waiting to go as one `getMany` call. */
+  private batch: PendingRead[] | null = null;
+
+  /** One stored doc, joined with the other reads of this tick when the store can batch them. */
+  private batched(scope: string, key: string): Promise<string | null> {
+    const many = this.store.getMany?.bind(this.store);
+    if (!many) return this.fresh(scope, key);
+    const doc = new Promise<StoredDoc | null>((resolve, reject) => {
+      if (!this.batch) {
+        const queue: PendingRead[] = [];
+        this.batch = queue;
+        queueMicrotask(() => {
+          this.batch = null;
+          const all = Promise.resolve().then(() =>
+            many(queue.map(({ scope, key }) => ({ scope, key }))),
+          );
+          queue.forEach((q, i) => q.done(all.then((docs) => docs[i] ?? null)));
+        });
+      }
+      this.batch.push({ scope, key, done: (d) => d.then(resolve, reject) });
+    });
+    return doc.then((d) => (d ? this.open(d.value) : null));
+  }
+
   async read<T>(scope: string, key: string): Promise<T | null> {
     let text: Promise<string | null>;
     if (this.memo) {
       const id = this.id(scope, key);
       const hit = this.memo.get(id);
-      text = hit ?? this.fresh(scope, key);
+      text = hit ?? this.batched(scope, key);
       if (!hit) {
         this.memo.set(id, text);
         text.catch(() => this.memo?.delete(id));
