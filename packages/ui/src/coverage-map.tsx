@@ -32,6 +32,7 @@ import { cn } from './lib/utils';
 import { LumenStates, useLumenSource } from './lumen-source';
 import { LumenWidget } from './lumen-widget';
 import { LumenPager } from './pager';
+import { useScrollFade } from './scroll-fade';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
@@ -347,6 +348,8 @@ function sameNode(a: ReactNode, b: ReactNode): boolean {
 
 interface RowLook {
   mobile: boolean;
+  /** The strip is scrolled on from its start (it fades there): a phone's names start past the fade. */
+  inset?: boolean;
   groupBy: boolean;
   select?: 'backfill' | 'drill';
   sums: CoverageSummary[];
@@ -393,11 +396,19 @@ const MapRow = memo(
         <span
           // Rows sit indented under their group's name.
           className={cn(
-            'sticky left-0 z-1 flex min-w-0 flex-col bg-card pr-2',
+            look.mobile
+              ? 'col-span-full -mb-0.5 flex min-w-0'
+              : 'sticky left-0 z-1 flex min-w-0 flex-col bg-card pr-2',
             look.groupBy && (look.mobile ? 'pl-1.5' : 'pl-3'),
           )}
         >
-          <span className="flex min-w-0 items-center gap-1.5">
+          <span
+            className={cn(
+              'flex min-w-0 items-center gap-1.5',
+              look.mobile && 'sticky left-0 max-w-[calc(var(--view-w,100vw)-4rem)] text-xs',
+              look.mobile && look.inset && 'left-8',
+            )}
+          >
             {link ? (
               <Link
                 {...link}
@@ -513,6 +524,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
     setStart(null);
   }, [preselect]);
   const scroller = useRef<HTMLDivElement>(null);
+  const edge = useScrollFade(scroller);
   const [pageSize, setPageSize] = useState(initialPageSize ?? 0);
   const [pageIndex, setPageIndex] = useState(0);
 
@@ -533,6 +545,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el && layout === 'grid') el.scrollLeft = el.scrollWidth;
+    edge.update();
   }, [strip]);
 
   const sums = mobile ? summary.filter((s) => s === 'complete') : summary;
@@ -805,7 +818,8 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       // sideways with the names column pinned, opening at today.
       const cell = `minmax(${CELL_MIN}px, 1fr)`;
       const grid = {
-        gridTemplateColumns: `${label} repeat(${cols.length}, ${cell}) ${sums.map((s) => SUMMARY_WIDTH[s]).join(' ')}`,
+        // A phone puts each name on its own line above its blocks, so blocks never run under it.
+        gridTemplateColumns: `${mobile ? '' : `${label} `}repeat(${cols.length}, ${cell}) ${sums.map((s) => SUMMARY_WIDTH[s]).join(' ')}`,
       };
       const allRows: CoverageRow[] = data.rows.length
         ? data.rows
@@ -820,13 +834,23 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
         const row = id.slice(0, cut);
         pickedBy.set(row, [...(pickedBy.get(row) ?? []), id.slice(cut + 1)]);
       }
-      const look = { mobile, groupBy, select, sums, drilled, link: rowSpec.link };
+      const look = {
+        mobile,
+        inset: edge.side === 'start' || edge.side === 'both',
+        groupBy,
+        select,
+        sums,
+        drilled,
+        link: rowSpec.link,
+      };
       let group: string | undefined;
       body = (
         <div className={cn('grid min-w-min items-center gap-[3px]', fade)} style={grid} {...routes}>
-          <span className="sticky left-0 z-1 bg-card text-xs text-muted-foreground">
-            {mobile ? '' : rowSpec.title}
-          </span>
+          {!mobile && (
+            <span className="sticky left-0 z-1 bg-card text-xs text-muted-foreground">
+              {rowSpec.title}
+            </span>
+          )}
           {cols.map((k) => (
             <span
               key={k}
@@ -898,6 +922,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                   r.last,
                   JSON.stringify(rowSpec.link?.(r.row) ?? null),
                   mobile,
+                  look.inset,
                   groupBy,
                   select,
                   sums.join(),
@@ -1081,7 +1106,12 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                 )}
               </div>
             )}
-            <div ref={scroller} className="overflow-x-auto overflow-y-hidden pb-1">
+            <div
+              ref={scroller}
+              onScroll={edge.update}
+              data-fade={edge.side}
+              className="overflow-x-auto overflow-y-hidden pb-1"
+            >
               {/* The months layout fits its twelve months to the card; the grid scrolls sideways. */}
               <CoverageTip
                 content={tipFor}

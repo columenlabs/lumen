@@ -482,13 +482,11 @@ export function StatusItem({
           )}
         />
       )}
-      {/* A phone has room for the values only: a label with one drops, a lone label truncates. */}
-      <span className={value === undefined ? 'min-w-0 truncate' : 'max-md:hidden'}>{label}</span>
+      {/* A lone label truncates; a label with a value keeps both ("Mail · Up to date"). */}
+      <span className={value === undefined ? 'min-w-0 truncate' : 'shrink-0'}>{label}</span>
       {value !== undefined && (
         <>
-          <span aria-hidden className="max-md:hidden">
-            ·
-          </span>
+          <span aria-hidden>·</span>
           <span className="shrink-0 tabular-nums text-foreground/80">{value}</span>
         </>
       )}

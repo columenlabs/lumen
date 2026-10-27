@@ -6,6 +6,7 @@
 // actions so wide that the tabs would get under 12rem wrap to a line under them.
 import type { ReactNode } from 'react';
 import type { NavIcon } from './nav';
+import { useScrollFade } from './scroll-fade';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 
 /**
@@ -34,6 +35,7 @@ export function LumenTabs<V extends string>({
   actions?: ReactNode;
 }) {
   const shown = tabs.filter((t) => !t.hidden);
+  const fade = useScrollFade();
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* min-w-48, not min-w-fit: a min width of all the tabs beat max-w-full, so the list never
@@ -41,7 +43,12 @@ export function LumenTabs<V extends string>({
       <div className="min-w-48 max-w-full flex-1">
         {shown.length ? (
           <Tabs value={value} onValueChange={(v) => onChange(v as V)}>
-            <TabsList className="max-w-full overflow-x-auto">
+            <TabsList
+              ref={fade.ref}
+              onScroll={fade.update}
+              data-fade={fade.side}
+              className="max-w-full overflow-x-auto"
+            >
               {shown.map(({ value: v, label, icon: Icon, after }) => (
                 <TabsTrigger key={v} value={v}>
                   <Icon />

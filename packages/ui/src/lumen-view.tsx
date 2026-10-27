@@ -812,6 +812,8 @@ export function LumenView<T extends RowData>({
               <IconButton
                 icon={DownloadIcon}
                 label="Download CSV"
+                // A phone's card header has room for the pager, filter, refresh and menu only.
+                className="max-md:hidden"
                 onClick={() =>
                   downloadCsv({
                     name: title,
@@ -1150,6 +1152,7 @@ function LumenTableRows<T extends RowData>({
   const col = (f: ViewField<T> | undefined, ...more: (string | false | undefined | null)[]) => ({
     ...colProps(f, ...more),
     'data-card': f ? cardOf(f) : undefined,
+    'data-card-unit': f?.cardUnit,
   });
   const computed = useMemo(() => computedOf(domain, rows, groupBy), [domain, rows, groupBy]);
   // Values per editable field, offered when a cell is edited: the field's own list when it has
