@@ -1,0 +1,18 @@
+{
+  "name": "@columenlabs/lumen-vault",
+  "version": "0.0.0",
+  "description": "Lumen's vault: envelope encryption for per-person data with Web Crypto only, a master key wrapping one data key per person.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "biome check src && ../ship/scripts/check-kit-neutral.sh",
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./base64": "./src/base64.ts",
+    "./envelope": "./src/envelope.ts",
+    "./regional": "./src/regional.ts",
+    "./unlock": "./src/unlock.ts"
+  }
+}
