@@ -12,8 +12,9 @@ export function useScrollFade(given?: RefObject<HTMLDivElement | null>) {
   const update = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    const start = el.scrollLeft > 1;
-    const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    // A couple of pixels past the edge (rounding, a border) is not "more beyond it".
+    const start = el.scrollLeft > 2;
+    const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
     setSide(start && end ? 'both' : start ? 'start' : end ? 'end' : undefined);
   }, [ref]);
   useEffect(() => {
