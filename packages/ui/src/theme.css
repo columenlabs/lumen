@@ -479,9 +479,10 @@
   table[data-cards] td[colspan] {
     flex: 1 1 100%;
   }
-  /* A row's panel (`row-panel`) is a box of its own under the row, not a row: it keeps its lines. */
-  table[data-cards] tr[data-slot="row-panel"],
-  table[data-cards] tr[data-slot="row-panel"] > td {
+  /* A row's panel (`row-panel`) and the empty table's message (`table-empty`) are boxes of their
+     own, not rows: they keep their lines. */
+  table[data-cards] tr:is([data-slot="row-panel"], [data-slot="table-empty"]),
+  table[data-cards] tr:is([data-slot="row-panel"], [data-slot="table-empty"]) > td {
     white-space: normal;
   }
   table[data-cards] td:not([data-card]):not([colspan]),

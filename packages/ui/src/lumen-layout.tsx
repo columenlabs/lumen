@@ -628,6 +628,8 @@ function ViewLayout<T extends RowData>({
   const filter = useLumenFilter(rows, filterFields, {
     text: domain.text,
     initial: config.filters.default,
+    // A server's page is not every row: the menu's counts would be over that page only.
+    partial: !!paging && (paging.more || paging.page > 0 || (paging.total ?? 0) > rows.length),
   });
   // A view patched while open (the assistant's card move, a save from another tab) applies its new saved
   // filters at once; the person's own unsaved tokens stay while the saved ones
@@ -1056,6 +1058,7 @@ function ViewLayout<T extends RowData>({
           tools={viewTools}
           filter={viewFilter}
           filterCount={filter.tokens.length}
+          onClearFilter={filter.clear}
           strip={
             <ConnectOffer
               domain={domain}

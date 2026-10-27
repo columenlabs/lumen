@@ -45,6 +45,7 @@ import {
   Columns3CogIcon,
   CornerDownRightIcon,
   DownloadIcon,
+  FilterXIcon,
   ListCollapseIcon,
   PlusIcon,
   SigmaIcon,
@@ -453,7 +454,9 @@ export interface LumenViewProps<T> {
   /** The rows' loading state (`useLumenLoad`): the view shows its skeleton, progress bar, ↻, a
    *  failure with Retry and, with Observability details on, its load time. */
   load?: LumenLoad;
-  /** Shown in place of the table instead of the rows, e.g. an empty state ("No accounts yet"). */
+  /** Shown in place of the table instead of the rows, e.g. an empty state ("No accounts yet").
+   *  While a filter is on it shows in the table's body instead, under the headers, so the
+   *  filter stays in reach. */
   state?: ReactNode;
   /** The card's title; left out: the view's name. */
   title?: string;
@@ -478,6 +481,8 @@ export interface LumenViewProps<T> {
    *  not the page's), and how many tokens it holds. */
   filter?: ReactNode;
   filterCount?: number;
+  /** Takes every filter off: an empty table under a filter offers Clear filters. */
+  onClearFilter?: () => void;
   /** A line under the filter: the card's Link offer. */
   strip?: ReactNode;
   /** Its link colour on the layout. */
@@ -627,6 +632,7 @@ export function LumenView<T extends RowData>({
   tools,
   filter,
   filterCount,
+  onClearFilter,
   strip,
   link,
   note,
@@ -679,6 +685,10 @@ export function LumenView<T extends RowData>({
   const [pageIndex, setPageIndex] = useState(0);
   useEffect(() => setPageSize(pagination.size), [pagination.size]);
   const sub = subgroupOf(domain, subgroup === undefined ? config.subgroup : subgroup);
+  // An empty state replaces the table, its filter and tools, unless a filter is on: then it sits
+  // in the table's body, under the headers, with the filter still there to change or clear.
+  const filtered = !!filterCount;
+  const blank = filtered ? null : state;
   // Folded lines and their rows stay on one page, so a fold shows every row like a grouping.
   const paging =
     !server && pagination.on && on('pager') && !state && !groupBy && !pivot && !sub?.under;
@@ -788,13 +798,13 @@ export function LumenView<T extends RowData>({
     ) : null;
 
   const table =
-    pivot && config.pivot ? (
+    pivot && config.pivot && !state ? (
       <PivotTable domain={domain} rows={rows} pivot={config.pivot} />
     ) : (
       <LumenTable
         domain={domain}
         columns={columns}
-        rows={tableRows}
+        rows={state ? [] : tableRows}
         groupBy={groupBy}
         subgroup={sub}
         chips={chips}
@@ -808,7 +818,9 @@ export function LumenView<T extends RowData>({
         sort={sort}
         onSort={sorted}
         serverSorts={server ? (server.sorts ?? []) : undefined}
-        serverGroups={served}
+        serverGroups={state ? null : served}
+        emptyState={state}
+        onClearFilter={filtered ? onClearFilter : undefined}
         total={config.total !== false}
         add={
           onAddColumn || onColumns
@@ -826,7 +838,7 @@ export function LumenView<T extends RowData>({
       phoneTitle={false}
       controls={controls}
       tools={
-        state ? (
+        blank ? (
           tools
         ) : (
           <>
@@ -857,9 +869,9 @@ export function LumenView<T extends RowData>({
           </>
         )
       }
-      filter={state ? undefined : filter}
+      filter={blank ? undefined : filter}
       filterCount={filterCount}
-      strip={state ? undefined : strip}
+      strip={blank ? undefined : strip}
       foot={foot}
       link={link}
       note={note}
@@ -869,7 +881,7 @@ export function LumenView<T extends RowData>({
       pinned={inLayout && !fit}
       className={cn('relative', !inLayout && 'overflow-x-auto overflow-y-hidden [--pin-top:0px]')}
     >
-      {state ??
+      {blank ??
         (load ? (
           <LumenStates load={load} skeleton={<LumenSkeleton rows={10} />}>
             {table}
@@ -1100,6 +1112,10 @@ export interface LumenTableProps<T> {
   /** The groups come from a server (`ServerPaging.groups`): their order, counts and open state,
    *  and each open group's rows. */
   serverGroups?: ServerGroups | null;
+  /** What the body says when no row shows (an app's empty state); left out: "No rows match." */
+  emptyState?: ReactNode;
+  /** Takes every filter off: the empty body offers Clear filters. */
+  onClearFilter?: () => void;
 }
 
 /** The table's sort from a view's: none when its column is not shown, or the server cannot sort
@@ -1133,6 +1149,8 @@ function LumenTableRows<T extends RowData>({
   subgroup = null,
   add,
   serverGroups = null,
+  emptyState,
+  onClearFilter,
 }: LumenTableProps<T>) {
   const isMobile = useIsMobile();
   const [sorting, setSorting] = useState<SortingState>(() => sortingOf(sort, columns, serverSorts));
@@ -1982,9 +2000,20 @@ function LumenTableRows<T extends RowData>({
           </TableHeader>
           <TableBody>
             {!rows.length && !serverGroups?.list?.length && (
-              <TableRow>
-                <TableCell colSpan={span} className="py-6 text-center text-muted-foreground">
-                  No rows match.
+              <TableRow data-slot="table-empty" className="hover:bg-transparent">
+                <TableCell
+                  colSpan={span}
+                  className="py-6 text-center whitespace-normal text-muted-foreground"
+                >
+                  <div className="flex flex-col items-center gap-3">
+                    {emptyState ?? 'No rows match.'}
+                    {onClearFilter && (
+                      <Button variant="outline" size="sm" onClick={onClearFilter}>
+                        <FilterXIcon />
+                        Clear filters
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             )}

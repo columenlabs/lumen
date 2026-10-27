@@ -152,6 +152,7 @@ export function LumenViewCard<T extends RowData>({
         </>
       }
       filterCount={filter.tokens.length}
+      onClearFilter={filter.clear}
       link={link || undefined}
       shown={savedControls}
       onColumns={(columns) => {
