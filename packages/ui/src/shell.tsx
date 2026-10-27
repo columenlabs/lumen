@@ -20,6 +20,8 @@ import {
   useMemo,
   useState,
 } from 'react';
+import type { ComponentType } from 'react';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenFinder, type LumenFinderConfig } from './lumen-finder';
 import { usePrefs } from './prefs';
@@ -59,7 +61,13 @@ import {
 } from './ui/sidebar';
 import { Toaster } from './ui/sonner';
 import { TooltipProvider } from './ui/tooltip';
-import { WhatsNew } from './whats-new';
+import type { WhatsNew as WhatsNewPart } from './whats-new';
+
+// Loaded when it first shows (lazy-part.tsx).
+const WhatsNew = lazyPart(
+  () => import('./whats-new').then((m) => m.WhatsNew as ComponentType<object>),
+  null,
+) as unknown as typeof WhatsNewPart;
 
 interface ShellContext {
   /** The app this page renders in (`data-app` on the root `<html>`). */

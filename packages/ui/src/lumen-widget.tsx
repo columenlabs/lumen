@@ -68,13 +68,15 @@ import {
   XIcon,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import type { ComponentType } from 'react';
 import { useAssistant, useAssistantName } from './assistant-context';
 import { LumenConfirm } from './confirm';
 import { FoldChevron, useFolded, usePageKey } from './fold';
-import { GrowthChart } from './growth-chart';
+import type { GrowthChart as GrowthChartPart } from './growth-chart';
 import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
 import { useDomainReads } from './joins';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenBoundary } from './lumen-boundary';
 import {
@@ -101,7 +103,7 @@ import {
   LumenRefresh,
   LumenStates,
 } from './lumen-source';
-import { TrendBody } from './lumen-trend';
+import type { TrendBody as TrendBodyPart } from './lumen-trend';
 import {
   AllocationBar,
   Donut,
@@ -112,7 +114,7 @@ import {
 } from './lumen-widget-charts';
 import { useHasMarket } from './market/live';
 import { useBarsUrl, useLumenChart } from './market/lumen-chart';
-import { MarketWidget } from './market/market-widget';
+import type { MarketWidget as MarketWidgetPart } from './market/market-widget';
 import { maskAmount, useAmountsHidden } from './shell';
 import { SummaryCardsEditor, summaryCardIssues } from './summary-cards';
 import { Badge } from './ui/badge';
@@ -158,6 +160,24 @@ import {
 import { WidgetControlsEditor } from './widget-controls';
 import { PAGE_SOURCE, useWidgetDataOptions } from './widget-data';
 import { dateFields } from './widget-settings';
+
+// Loaded when it first shows (lazy-part.tsx).
+const MarketWidget = lazyPart(
+  () => import('./market/market-widget').then((m) => m.MarketWidget as ComponentType<object>),
+  <Skeleton className="h-full min-h-40 w-full" />,
+) as unknown as typeof MarketWidgetPart;
+
+// Loaded when it first shows (lazy-part.tsx).
+const TrendBody = lazyPart(
+  () => import('./lumen-trend').then((m) => m.TrendBody as ComponentType<object>),
+  <Skeleton className="h-full min-h-40 w-full" />,
+) as unknown as typeof TrendBodyPart;
+
+// Loaded when it first shows (lazy-part.tsx).
+const GrowthChart = lazyPart(
+  () => import('./growth-chart').then((m) => m.GrowthChart as ComponentType<object>),
+  <Skeleton className="h-full min-h-40 w-full" />,
+) as unknown as typeof GrowthChartPart;
 
 /** Each style's icon, by its id in `WIDGET_STYLES`; a style left out takes its kind's. */
 const STYLE_ICONS: Record<string, LucideIcon> = {
