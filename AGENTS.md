@@ -58,6 +58,16 @@ Screenshots show looks, not behaviour. Before a UI change is done, run the app's
 6. **Health:** no console error, no failed or 4xx/5xx call, on any page or after any click.
 7. **Visual:** screenshots that differ from main's are listed for review; an unplanned one is a bug.
 
+## Prod safety (2026-10-27)
+No stalls and no broken deploys. Every PR follows these rules.
+1. **Never block the hot path.** No heavy or unbounded work on app load, on a request, or when a Durable Object wakes. Backfills, migrations and recounts run as small, budgeted background steps (alarms or queues) that resume from a bookmark and never hold a request.
+2. **Every wait has a timeout and a fallback.** Client caches (IndexedDB etc.), fetches and locks give up after about 1.5 s and fall back to the server or an empty state. Never wait forever. In Lumen, use `savedAnswers`.
+3. **Schema changes stay backward compatible.** Add columns or tables. Always name the columns in an INSERT, so an older build and a rollback keep working on new data.
+4. **Test like a returning user.** Before merging, run the production build in a real browser three ways: a fresh load, a reload with saved data, and a stuck or slow store.
+5. **Verify live, not just the build.** After a deploy, check two things: the live build's sha equals main's HEAD, and the live app renders its key pages and `/api` for a signed-in identity. If the check fails, roll back first, then fix.
+6. **One change at a time.** Merges are at least a minute apart. Wait until each deploy is verified before the next merge. Ship a correctness fix on its own.
+7. **If prod breaks, restore first.** Roll back, find the cause in the logs, then fix it at its root so it can't happen again.
+
 ## Release
 1. Every merge to `main` publishes the next patch after the newest tag (0.1.0, 0.1.1, ...), tags it and makes its GitHub release. `lumen-ship release` (`packages/ship`, config `lumen-ship.json`, prompt `.github/release-prompt.md`) has Claude (secret `ANTHROPIC_API_KEY`) write the notes from the merged pull requests: Key takeaways that name the exported part and prop each change lives in, then a section per area. Notes naming a product in `LUMEN_FORBIDDEN_NAMES` are not published. Run workflow on Publish with a tag (and redo) writes one tag's release again. A new minor is cut only when the owner asks: Run workflow on Publish with bump = minor (the next minor neither a tag nor npm has used). PRs never change the versions in `packages/*/package.json`, which publishing does not read.
 2. Bump the exact version in each app (`@columenlabs/lumen-ui` and `@columenlabs/lumen-ui-types` together).
