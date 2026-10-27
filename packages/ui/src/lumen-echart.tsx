@@ -130,6 +130,30 @@ export function axisStyle(t: ChartTokens) {
   };
 }
 
+/** `over` laid on `under`, plain objects merged key by key: what the chart sets wins. */
+function layer(under: unknown, over: unknown): unknown {
+  const plain = (v: unknown): v is Record<string, unknown> =>
+    !!v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype;
+  if (!plain(under) || !plain(over)) return over === undefined ? under : over;
+  const out: Record<string, unknown> = { ...under };
+  for (const [k, v] of Object.entries(over)) out[k] = layer(under[k], v);
+  return out;
+}
+
+/** `option` with its axes in the theme's colours under whatever the chart sets itself, so a chart
+ *  that names no axis colours still draws its grid lines faint in dark mode too. */
+function themedAxes(option: EChartOption, t: ChartTokens): EChartOption {
+  const style = axisStyle(t);
+  const theme = (a: unknown) =>
+    Array.isArray(a) ? a.map((x) => layer(style, x)) : layer(style, a);
+  const o = option as Record<string, unknown>;
+  return {
+    ...option,
+    ...(o.xAxis ? { xAxis: theme(o.xAxis) } : {}),
+    ...(o.yAxis ? { yAxis: theme(o.yAxis) } : {}),
+  } as EChartOption;
+}
+
 export function LumenEChart({
   option,
   height = 260,
@@ -178,11 +202,10 @@ export function LumenEChart({
   const tokens = useChartTokens();
   // An app re-rendering hands a new but equal option (a hover, a refetch): drawing it again
   // replays the line's entry animation, so the chart blanks under the tooltip. Only a change redraws.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tokens change when the theme flips.
   useEffect(() => {
     const c = chart.current;
     if (!ready || !c) return;
-    const next = resolveVars(option);
+    const next = resolveVars(themedAxes(option, tokens));
     const key = JSON.stringify(next);
     if (key === drawn.current) return;
     drawn.current = key;
