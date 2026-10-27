@@ -414,6 +414,82 @@
   left: 100%;
 }
 
+/* A LumenView table on a narrow phone (`data-cards`): each row is a card, so nothing runs off
+   the right edge. Line 1: the row's name (shortens) and one figure (`data-card="meta"`); line 2:
+   the other values, small and muted. Numbers, dates and their units keep their width; only text
+   shortens, in an ellipsis. Group, Total and More rows span the card's width. */
+@media (max-width: 639px) {
+  table[data-cards],
+  table[data-cards] > tbody,
+  table[data-cards] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  /* A wide table widens its card (the page scrolls sideways); a card table fits the view. */
+  table[data-cards] {
+    max-width: calc(var(--view-w, 100%) - 2px);
+  }
+  table[data-cards] > thead {
+    display: none;
+  }
+  table[data-cards] tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.75rem;
+    row-gap: 0.125rem;
+    padding: 0.5rem var(--cell-x);
+  }
+  table[data-cards] td {
+    padding: 0 !important;
+    width: auto !important;
+    min-width: 0;
+  }
+  table[data-cards] td[colspan] {
+    flex: 1 1 100%;
+  }
+  table[data-cards] td:not([data-card]):not([colspan]) {
+    display: none;
+  }
+  table[data-cards] td[data-card="select"] {
+    order: 0;
+    flex: none;
+    align-self: center;
+  }
+  table[data-cards] td[data-card="lead"] {
+    order: 1;
+    flex: 1 1 0;
+    overflow: hidden;
+    font-weight: 500;
+  }
+  table[data-cards] td[data-card="meta"] {
+    order: 2;
+    flex: none;
+  }
+  table[data-cards] tr:has(> td[data-card="lead"])::after {
+    content: "";
+    order: 3;
+    flex-basis: 100%;
+  }
+  table[data-cards] td:is([data-card="num"], [data-card="text"]) {
+    order: 4;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+  table[data-cards] td[data-card="num"] {
+    flex: none;
+  }
+  table[data-cards] td[data-card="text"] {
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table[data-cards] [data-slot="unit-value-unit"] {
+    position: static;
+    margin-left: 0.25em;
+  }
+}
+
 @layer utilities {
   .bg-gap-hatch {
     background: repeating-linear-gradient(135deg, var(--gap) 0 3px, var(--gap-soft) 3px 6px);
