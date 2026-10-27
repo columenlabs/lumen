@@ -235,6 +235,9 @@ export interface LumenLayoutViewProps<T> {
   selection?: LumenViewProps<T>['selection'];
   /** A row click opens it (a page of its own) instead of the details drawer. */
   onOpen?: (row: T) => void;
+  /** The key of the row `onOpen` shows in a drawer of the app's own (a docked one), so the table
+   *  marks it selected; the layout's own details drawer marks its row itself. */
+  openKey?: string | null;
   /** The `rowLink` value tapped when the page opens, so linked cards start narrowed to one row
    *  (a playbook's Results open on its Default variant). */
   rowPick?: string;
@@ -544,6 +547,7 @@ function LayoutTable<T extends RowData>({
   load,
   state,
   onDetails,
+  openKey,
   controls,
   onLayout,
 }: {
@@ -554,6 +558,7 @@ function LayoutTable<T extends RowData>({
   load?: LumenLoad;
   state?: ReactNode;
   onDetails?: (row: T) => void;
+  openKey?: string | null;
   controls?: CardControls;
   onLayout?: (table: ViewTableLayout) => void;
 }) {
@@ -572,6 +577,7 @@ function LayoutTable<T extends RowData>({
       state={state}
       title={card.title ?? config.name}
       onDetails={onDetails}
+      openKey={openKey}
       controls={controls}
       shown={card.controls}
       onColumns={onLayout && ((columns) => onLayout(tableLayoutOf({ ...own, columns })))}
@@ -605,6 +611,7 @@ function ViewLayout<T extends RowData>({
   onSummaryRows,
   selection,
   onOpen,
+  openKey: openedKey,
   rowPick: initialPick,
   groupActions,
   onTokens,
@@ -658,6 +665,7 @@ function ViewLayout<T extends RowData>({
   useEffect(() => onServerSort?.(heldSort ?? null), [onServerSort, heldSort]);
   const [details, setDetails] = useState<T | null>(null);
   const onDetails = onOpen ?? (domain.details?.length ? setDetails : undefined);
+  const openKey = onOpen ? (openedKey ?? null) : details === null ? null : domain.rowKey(details);
   // The assistant sees the view, its data domain, its filter, how many rows show, the first of them and the
   // row open in the drawer (it saw only a row count and could not answer).
   useAssistantNote('view', {
@@ -1033,6 +1041,7 @@ function ViewLayout<T extends RowData>({
           load={scope(c.id, load)}
           state={state}
           onDetails={onDetails}
+          openKey={openKey}
           controls={controls}
           onLayout={onConfigChange ? (table) => putCard({ ...c, table }) : undefined}
         />
@@ -1052,6 +1061,7 @@ function ViewLayout<T extends RowData>({
           selection={selection}
           onDetails={rowPick.onTap ?? onDetails}
           tapped={rowPick.tapped}
+          openKey={openKey}
           groupActions={groupActions}
           controls={controls}
           inLayout

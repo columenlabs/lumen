@@ -118,6 +118,9 @@
   --popover: #fbfcfe;
   --popover-foreground: #121826;
   --primary: #2563eb;
+  /* The open row's fill (LumenView `openKey`). */
+  --row-open: color-mix(in oklab, var(--primary) 14%, var(--card));
+  --row-open-hover: color-mix(in oklab, var(--primary) 20%, var(--card));
   --primary-foreground: #f5f8ff;
   --secondary: #e9edf5;
   --secondary-foreground: #121826;
@@ -225,6 +228,8 @@
   --popover: #121826;
   --popover-foreground: #e6eaf2;
   --primary: #5b8cff;
+  --row-open: color-mix(in oklab, var(--primary) 24%, var(--card));
+  --row-open-hover: color-mix(in oklab, var(--primary) 30%, var(--card));
   --primary-foreground: #0b0f17;
   --secondary: #1c2435;
   --secondary-foreground: #e6eaf2;
@@ -532,6 +537,34 @@
     margin-left: 0.25em;
     color: var(--muted-foreground);
     font-weight: 400;
+  }
+}
+
+/* The row whose details are open (LumenView `openKey`, a docked drawer beside the table): an
+   accent fill and an accent bar on its leading edge, readable in light and dark. It scrolls clear
+   of the pinned header and the page footer when it comes into view. */
+tr[aria-selected="true"] {
+  scroll-margin-top: calc(var(--pin-top, 0px) + var(--row-h));
+  scroll-margin-bottom: var(--row-h);
+}
+tr[aria-selected="true"] > td {
+  background-color: var(--row-open);
+}
+tr[aria-selected="true"]:hover > td {
+  background-color: var(--row-open-hover);
+}
+tr[aria-selected="true"] > td:first-child {
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+/* A phone's card row is one flex box: the fill and bar go on the row itself. */
+@media (max-width: 639px) {
+  table[data-cards] tr[aria-selected="true"] {
+    background-color: var(--row-open);
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+  table[data-cards] tr[aria-selected="true"] > td {
+    background-color: transparent;
+    box-shadow: none;
   }
 }
 

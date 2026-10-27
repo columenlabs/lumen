@@ -467,6 +467,10 @@ export interface LumenViewProps<T> {
   onDetails?: (row: T) => void;
   /** Rows picked by a tap (a linked table's row filter): a muted fill, no border. */
   tapped?: (row: T) => boolean;
+  /** The key of the row whose details are open (a docked drawer beside the table): the row reads
+   *  as selected (an accent fill and edge bar, `aria-selected`) and scrolls into view when it
+   *  shows. ↑ and ↓ on a focused row move to the next one, and open it while a row is open. */
+  openKey?: string | null;
   /** Buttons at the end of a group row's label (pin a group), given its key and rows. */
   groupActions?: (key: string, rows: T[]) => ReactNode;
   /** Its place in a LumenLayout: the layout's edit state and the card's ⋯ menu. */
@@ -625,6 +629,7 @@ export function LumenView<T extends RowData>({
   selection,
   onDetails,
   tapped,
+  openKey,
   groupActions,
   controls,
   inLayout: inScroller = false,
@@ -813,6 +818,7 @@ export function LumenView<T extends RowData>({
         fit={fit}
         onDetails={onDetails}
         tapped={tapped}
+        openKey={openKey}
         selection={selection}
         groupActions={groupActions}
         sort={sort}
@@ -1092,6 +1098,7 @@ export interface LumenTableProps<T> {
   fit?: boolean;
   onDetails?: (row: T) => void;
   tapped?: LumenViewProps<T>['tapped'];
+  openKey?: LumenViewProps<T>['openKey'];
   selection?: LumenViewProps<T>['selection'];
   groupActions?: LumenViewProps<T>['groupActions'];
   /** The view's default sort; a header click changes it for the visit. */
@@ -1140,6 +1147,7 @@ function LumenTableRows<T extends RowData>({
   fit = false,
   onDetails,
   tapped,
+  openKey = null,
   selection,
   groupActions,
   sort,
@@ -1654,6 +1662,26 @@ function LumenTableRows<T extends RowData>({
       {add && <TableCell />}
     </TableRow>
   );
+  // ↑ and ↓ step to the next data row (past part and panel rows); while a row's details are
+  // open, the step opens that row too, so the docked drawer follows the focus.
+  const step = (from: HTMLElement, down: boolean) => {
+    let n = down ? from.nextElementSibling : from.previousElementSibling;
+    while (n && !(n instanceof HTMLElement && n.dataset.row !== undefined))
+      n = down ? n.nextElementSibling : n.previousElementSibling;
+    if (!(n instanceof HTMLElement)) return;
+    n.focus();
+    const next =
+      openKey === null ? undefined : sorted.find((x) => keyOf(x.original) === n.dataset.row);
+    if (next && onDetails) onDetails(next.original);
+  };
+  // The open row scrolls into view when it shows: opened by keyboard, or a page that holds it.
+  const pageKeys = sorted.map((r) => keyOf(r.original)).join('\n');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scrolls when the open row or the shown rows change, not on every render.
+  useEffect(() => {
+    if (openKey === null) return;
+    const el = box.current?.querySelector<HTMLElement>(`tr[data-row="${CSS.escape(openKey)}"]`);
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [openKey, pageKeys, page?.index]);
   // The whole row opens the details drawer.
   const dataRow = (r: (typeof sorted)[number]) => (
     <Fragment key={domain.rowKey(r.original)}>
@@ -1661,6 +1689,7 @@ function LumenTableRows<T extends RowData>({
         key={domain.rowKey(r.original)}
         data-row={domain.rowKey(r.original)}
         data-state={tapped?.(r.original) ? 'selected' : undefined}
+        aria-selected={openKey === null ? undefined : openKey === keyOf(r.original)}
         className={cn('group/row', onDetails && 'cursor-pointer')}
         tabIndex={onDetails ? 0 : undefined}
         onClick={onDetails ? () => onDetails(r.original) : undefined}
@@ -1671,6 +1700,9 @@ function LumenTableRows<T extends RowData>({
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   onDetails(r.original);
+                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  step(e.currentTarget, e.key === 'ArrowDown');
                 }
               }
             : undefined
