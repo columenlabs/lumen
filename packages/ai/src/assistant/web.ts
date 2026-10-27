@@ -176,14 +176,25 @@ export interface AccessToken {
   client_secret: string;
 }
 
-/** ScrapeQL's MCP tools over its API, with an Access service token. Every one of them reads. */
-export function scrapeqlTools(url: string, token: AccessToken, f?: typeof fetch): ToolSource {
+/**
+ * ScrapeQL's MCP tools over its API, with an Access service token, or none over a service
+ * binding (`f` is then the binding's fetch). Every one of them reads.
+ */
+export function scrapeqlTools(
+  url: string,
+  token: AccessToken | null,
+  f?: typeof fetch,
+): ToolSource {
   const remote = remoteMcpTools({
     url,
-    headers: {
-      'CF-Access-Client-Id': token.client_id,
-      'CF-Access-Client-Secret': token.client_secret,
-    },
+    ...(token
+      ? {
+          headers: {
+            'CF-Access-Client-Id': token.client_id,
+            'CF-Access-Client-Secret': token.client_secret,
+          },
+        }
+      : {}),
     ...(f ? { fetch: f } : {}),
   });
   return async () => {

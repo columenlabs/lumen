@@ -210,8 +210,11 @@ export interface AssistantOptions {
   web?: {
     /** `fetch` options, or false for no fetch. */
     fetch?: WebFetchOptions | false;
-    /** ScrapeQL's MCP address; its tools join once an admin adds the Access token. */
-    scrapeql?: { url: string };
+    /**
+     * ScrapeQL's MCP address; its tools join once an admin adds the Access token. With `fetch`
+     * (a service binding's), ScrapeQL is reached through it: no token, its tools always on.
+     */
+    scrapeql?: { url: string; fetch?: typeof fetch };
   };
   store: AssistantStore;
   sealer?: Sealer;
@@ -661,9 +664,11 @@ export class Assistant {
       web: {
         fetch: p.web ?? true,
         scrapeql: this.o.web?.scrapeql
-          ? caller.admin
-            ? keyState(scrapeql, (d) => (d as { client_id: string }).client_id)
-            : { set: !!scrapeql }
+          ? this.o.web.scrapeql.fetch
+            ? { set: true, bound: true }
+            : caller.admin
+              ? keyState(scrapeql, (d) => (d as { client_id: string }).client_id)
+              : { set: !!scrapeql }
           : null,
       },
       providers,
@@ -855,12 +860,13 @@ export class Assistant {
           access: 'read',
           source: webFetchTools(this.o.web?.fetch || {}),
         });
-      const sq = this.o.web?.scrapeql ? await this.state.scrapeql() : null;
-      if (sq && this.o.web?.scrapeql)
+      const sq = this.o.web?.scrapeql;
+      const token = sq && !sq.fetch ? await this.state.scrapeql() : null;
+      if (sq && (sq.fetch || token))
         sources.push({
           group: 'web',
           access: 'read',
-          source: scrapeqlTools(this.o.web.scrapeql.url, sq, this.o.fetch),
+          source: scrapeqlTools(sq.url, token, sq.fetch ?? this.o.fetch),
         });
     }
     const results = await Promise.allSettled(sources.map((s) => s.source()));
@@ -2119,18 +2125,31 @@ export class Assistant {
     }
   }
 
-  /** Lists ScrapeQL's tools with the token: works or why not. */
-  async testScrapeql(token: AccessToken): Promise<{ ok: boolean; detail: string; at: number }> {
+  /** ScrapeQL is reached over a service binding, so it needs no token. */
+  get boundScrapeql(): boolean {
+    return !!this.o.web?.scrapeql?.fetch;
+  }
+
+  /** Lists ScrapeQL's tools with the token (none over a binding): works or why not. */
+  async testScrapeql(
+    token: AccessToken | null,
+  ): Promise<{ ok: boolean; detail: string; at: number }> {
     const at = Date.now();
-    const url = this.o.web?.scrapeql?.url;
-    if (!url) return { ok: false, detail: 'ScrapeQL is not set up in this app.', at };
+    const sq = this.o.web?.scrapeql;
+    if (!sq) return { ok: false, detail: 'ScrapeQL is not set up in this app.', at };
     try {
-      const open = await scrapeqlTools(url, token, this.o.fetch)();
+      const open = await scrapeqlTools(sq.url, sq.fetch ? null : token, sq.fetch ?? this.o.fetch)();
       const n = open.tools.length;
       await open.close();
       return { ok: true, detail: `ScrapeQL answered with ${n} tool${n === 1 ? '' : 's'}.`, at };
     } catch {
-      return { ok: false, detail: 'ScrapeQL refused the token or could not be reached.', at };
+      return {
+        ok: false,
+        detail: sq.fetch
+          ? 'ScrapeQL could not be reached over the link.'
+          : 'ScrapeQL refused the token or could not be reached.',
+        at,
+      };
     }
   }
 

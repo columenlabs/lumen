@@ -22,6 +22,7 @@ import {
   InboxIcon,
   KeyRoundIcon,
   LayersIcon,
+  Link2Icon,
   LogInIcon,
   ReceiptIcon,
   SparklesIcon,
@@ -498,6 +499,31 @@ function ScrapeqlBlock({ client, s }: { client: AssistantAdapter; s: AssistantSt
   const { apply, refresh } = useApply(client);
   const state = s.web.scrapeql;
   if (!state) return null;
+  // Reached over the app's service binding: nothing to paste, only a test.
+  if (state.bound)
+    return (
+      <LumenExpandList>
+        <LumenConnection
+          id="scrapeql"
+          name="ScrapeQL"
+          logo={<ConnectionLogo icon={GlobeIcon} />}
+          meta="Linked to this app, no token needed"
+          ways={[
+            {
+              id: 'link',
+              label: 'App link',
+              icon: Link2Icon,
+              info: 'This app reaches ScrapeQL over a Cloudflare service binding, so no token is stored.',
+              set: true,
+              test: wayTest(state),
+              note: 'Set by the app',
+              readOnly: true,
+              ...(s.admin ? { onTest: () => client.testScrapeql().finally(refresh) } : {}),
+            },
+          ]}
+        />
+      </LumenExpandList>
+    );
   return (
     <LumenExpandList>
       <LumenConnection

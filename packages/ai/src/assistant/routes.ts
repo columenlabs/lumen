@@ -285,6 +285,12 @@ export function assistantRoutes(
         case 'PUT /web/scrapeql': {
           const no = admin();
           if (no) return no;
+          if (a.boundScrapeql)
+            return fail(
+              "ScrapeQL is reached over the app's link; it needs no token.",
+              409,
+              'bound',
+            );
           const b = await body(req);
           const client_id = str(b.client_id, 200);
           const client_secret = str(b.client_secret, 400);
@@ -310,6 +316,7 @@ export function assistantRoutes(
         case 'POST /web/test': {
           const no = admin();
           if (no) return no;
+          if (a.boundScrapeql) return json(await a.testScrapeql(null));
           const d = await a.state.scrapeql();
           if (!d) return fail('No ScrapeQL token is set.', 404);
           const test = await a.testScrapeql(d);
