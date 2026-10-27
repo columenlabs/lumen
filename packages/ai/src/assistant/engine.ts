@@ -412,6 +412,28 @@ function shownError(err: unknown): { message: string; code: string } {
   return { message: 'Something went wrong while answering.', code: 'internal' };
 }
 
+/**
+ * A plain sentence for an error OpenAI sends inside the answer's stream (an `error` event, or a
+ * failed response): what happened and what to do, by its code. The code is shown when it is not
+ * one we know; OpenAI's own message is only logged.
+ */
+function openaiStreamError(code: string, plan: boolean): string {
+  if (/usage_limit|usage_unavailable|insufficient_quota|rate_limit/.test(code))
+    return plan
+      ? 'Your ChatGPT plan reached its usage limit for now: try again later, or pick another model.'
+      : 'OpenAI says the key is out of quota or rate limited. Try again shortly.';
+  if (/context_length|too_long|max_tokens/.test(code))
+    return 'This chat is too long for the model. Start a new chat, or type /compact.';
+  if (/model_not_found|model_not_supported|invalid_model|unsupported_model/.test(code))
+    return plan
+      ? 'This model is not on your ChatGPT plan. Pick another model for this tier in Settings.'
+      : 'OpenAI does not offer this model to the key. Pick another model for this tier in Settings.';
+  if (/server_error|overloaded|timeout|unavailable/.test(code))
+    return 'OpenAI is overloaded. Try again shortly.';
+  if (/content_policy|safety|refus/.test(code)) return 'OpenAI declined to answer this message.';
+  return `OpenAI could not answer (${code || 'no reason given'}). It is logged; try again or pick another model.`;
+}
+
 const isApiError = (err: unknown) =>
   err instanceof Anthropic.APIError || err instanceof OpenAI.APIError;
 
@@ -1532,6 +1554,28 @@ export class Assistant {
       // an empty `output`, its items having come only as `response.output_item.done`.
       const seen: Record<string, number> = {};
       const items: OpenAI.Responses.ResponseOutputItem[] = [];
+      // An error OpenAI sends inside the stream: logged in full, shown as a plain sentence.
+      const streamFailure = (er: {
+        code?: string | null;
+        type?: string;
+        message?: string;
+        param?: string | null;
+      }) => {
+        if (partial) sink.push({ kind: 'text', text: partial });
+        console.error(
+          JSON.stringify({
+            event: 'assistant_openai_error',
+            model: session.model.id,
+            plan,
+            code: er.code ?? null,
+            type: er.type ?? null,
+            param: er.param ?? null,
+            message: er.message?.slice(0, 500) ?? null,
+            events: seen,
+          }),
+        );
+        return new AssistantError(openaiStreamError(er.code || er.type || '', plan), 'upstream');
+      };
       const res = await (async () => {
         const stream = await client.responses.create(
           {
@@ -1562,13 +1606,33 @@ export class Assistant {
           ) {
             done = e.response as OpenAI.Responses.Response;
           } else if (e.type === 'error') {
-            throw new AssistantError('OpenAI could not finish the answer.', 'upstream');
+            const er = (e.error ?? e) as {
+              code?: string;
+              type?: string;
+              message?: string;
+              param?: string;
+            };
+            throw streamFailure(er);
           }
         }
         if (!done) throw new AssistantError('OpenAI ended the answer early.', 'upstream');
         return done;
       })().catch((err: unknown) => {
         if (signal?.aborted && partial) sink.push({ kind: 'text', text: partial });
+        // The SDK throws a stream's `error` event as an APIError with no HTTP status.
+        if (err instanceof OpenAI.APIError && err.status === undefined) {
+          const er = (err.error ?? {}) as {
+            code?: string;
+            type?: string;
+            message?: string;
+            param?: string;
+          };
+          throw streamFailure({
+            ...er,
+            code: er.code ?? err.code ?? undefined,
+            message: er.message ?? err.message,
+          });
+        }
         throw err;
       });
       if (res.status === 'failed') {
@@ -1584,12 +1648,7 @@ export class Assistant {
             events: seen,
           }),
         );
-        throw new AssistantError(
-          /usage_limit/.test(code)
-            ? 'Your ChatGPT plan reached its usage limit for now: try again later, or pick another model.'
-            : 'OpenAI could not finish the answer.',
-          'upstream',
-        );
+        throw new AssistantError(openaiStreamError(code, plan), 'upstream');
       }
       const u = res.usage;
       if (u) {
@@ -1630,6 +1689,9 @@ export class Assistant {
             usage: res.usage ?? null,
             events: seen,
             output: output.map((b) => b.type),
+            parts: output.flatMap((b) =>
+              b.type === 'message' ? b.content.map((c) => c.type) : [],
+            ),
           }),
         );
         if (!answer)
