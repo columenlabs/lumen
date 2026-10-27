@@ -1,5 +1,6 @@
 // Trend widgets: up to 4 number fields over a date field of the view's rows, rolled up per day, week,
-// month or year, drawn as a line, area, stacked area, bars over time, combo, a spark or a tracker.
+// month or year, drawn as a line, area, stacked area, bars over time, stacked bars, combo, a spark
+// or a tracker.
 // With the allocation, donut, bars and card styles they cover every Tremor visualization, drawn on
 // our own Recharts in ChartContainer. Worked out in the browser from the rows; nothing is fetched.
 import {
@@ -9,7 +10,7 @@ import {
   formatBytes,
   isDollarFormat,
 } from '@columenlabs/lumen-ui-types/views';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -165,6 +166,8 @@ export function TrendBody<T>({
     () => trendPoints(rows, date, values, bucket, agg, read),
     [rows, date, values, bucket, agg, read],
   );
+  // Series hidden by a tap on the legend; the last one shown can't be hidden.
+  const [off, setOff] = useState<string[]>([]);
   const first = values[0];
   if (!points.length || !first)
     return <p className="py-6 text-center text-sm text-muted-foreground">No dated rows to draw.</p>;
@@ -177,6 +180,16 @@ export function TrendBody<T>({
       { label: agg === 'count' ? `${f.label} (count)` : f.label, color: COLORS[i] },
     ]),
   );
+  const keys = values.map((_, i) => `v${i}`);
+  const on = keys.filter((k) => !off.includes(k));
+  const toggle = (k: string) =>
+    setOff((o) =>
+      o.includes(k) ? o.filter((x) => x !== k) : o.length + 1 < keys.length ? [...o, k] : o,
+    );
+  // Stacked parts add up: the headline and tooltip read their total.
+  const stacks = (style === 'stacked' || style === 'stacked_bars') && on.length > 1;
+  const totalOf = (p: Record<string, number | string> | undefined) =>
+    on.reduce((t, k) => t + Number(p?.[k] ?? 0), 0);
   const last = Number(points[points.length - 1]?.v0 ?? 0);
   const start = Number(points[0]?.v0 ?? 0);
 
@@ -264,57 +277,91 @@ export function TrendBody<T>({
       content={
         <ChartTooltipContent
           labelFormatter={(v) => tick(String(v), bucket)}
-          formatter={(v, name) => {
+          formatter={(v, name, item) => {
             const i = Number(String(name).slice(1));
             const f = values[i] ?? first;
             return (
-              <span className="flex w-full items-center gap-2">
-                <span className="size-2 shrink-0 rounded-full" style={{ background: COLORS[i] }} />
-                <span className="truncate">{config[String(name)]?.label}</span>
-                <span className="num ml-auto pl-3">{fmt(Number(v), f)}</span>
-              </span>
+              <>
+                <span className="flex w-full items-center gap-2">
+                  <span
+                    className="size-2 shrink-0 rounded-full"
+                    style={{ background: COLORS[i] }}
+                  />
+                  <span className="truncate">{config[String(name)]?.label}</span>
+                  <span className="num ml-auto pl-3">{fmt(Number(v), f)}</span>
+                </span>
+                {stacks && String(name) === on[on.length - 1] && (
+                  <span className="flex w-full items-center gap-2 border-t pt-1.5 font-medium">
+                    <span className="size-2 shrink-0" />
+                    <span className="truncate">Total</span>
+                    <span className="num ml-auto pl-3">{fmt(totalOf(item.payload), f)}</span>
+                  </span>
+                )}
+              </>
             );
           }}
         />
       }
     />,
     ...(legend && values.length > 1
-      ? [<ChartLegend key="l" content={<ChartLegendContent />} />]
+      ? [<ChartLegend key="l" content={<ChartLegendContent off={off} onSeries={toggle} />} />]
       : []),
   ];
+  const end = points[points.length - 1];
+  const lead0 = on[0] ?? 'v0';
   const lead = (
     <Headline
-      value={fmt(last)}
-      caption={`${config.v0?.label} · ${tick(String(points[points.length - 1]?.at), bucket)}`}
+      value={fmt(stacks ? totalOf(end) : Number(end?.[lead0] ?? 0))}
+      caption={`${stacks ? 'Total' : config[lead0]?.label} · ${tick(String(end?.at), bucket)}`}
     />
   );
   const box = 'aspect-auto h-56 w-full';
-  const keys = values.map((_, i) => `v${i}`);
+  // Room above the top gridline, so its label sits on the line rather than below it (a bar near
+  // the top read as reaching the label's value).
+  const margin = { top: 8, left: 0, right: 4 };
+  // A stack's top part rounds its data end; a 2px gap of the card's colour parts the segments.
+  const top = on[on.length - 1];
   return (
     <div className="flex flex-col">
       {lead}
       <ChartContainer config={config} className={box}>
-        {style === 'bars' ? (
-          <BarChart data={points} margin={{ left: 0, right: 4 }}>
+        {style === 'bars' || style === 'stacked_bars' ? (
+          <BarChart data={points} margin={margin}>
             {axes}
-            {keys.map((k) => (
-              <Bar
-                key={k}
-                dataKey={k}
-                fill={`var(--color-${k})`}
-                radius={2}
-                isAnimationActive={false}
-              />
-            ))}
+            {keys.map((k) =>
+              style === 'stacked_bars' ? (
+                <Bar
+                  key={k}
+                  dataKey={k}
+                  hide={off.includes(k)}
+                  stackId="a"
+                  fill={`var(--color-${k})`}
+                  stroke="var(--card)"
+                  strokeWidth={on.length > 1 ? 2 : 0}
+                  radius={k === top ? [2, 2, 0, 0] : 0}
+                  isAnimationActive={false}
+                />
+              ) : (
+                <Bar
+                  key={k}
+                  dataKey={k}
+                  hide={off.includes(k)}
+                  fill={`var(--color-${k})`}
+                  radius={2}
+                  isAnimationActive={false}
+                />
+              ),
+            )}
           </BarChart>
         ) : style === 'combo' ? (
-          <ComposedChart data={points} margin={{ left: 0, right: 4 }}>
+          <ComposedChart data={points} margin={margin}>
             {axes}
             {keys.map((k, i) =>
               i === 0 ? (
                 <Bar
                   key={k}
                   dataKey={k}
+                  hide={off.includes(k)}
                   fill={`var(--color-${k})`}
                   radius={2}
                   isAnimationActive={false}
@@ -323,6 +370,7 @@ export function TrendBody<T>({
                 <Line
                   key={k}
                   dataKey={k}
+                  hide={off.includes(k)}
                   type="monotone"
                   stroke={`var(--color-${k})`}
                   strokeWidth={1.5}
@@ -333,12 +381,13 @@ export function TrendBody<T>({
             )}
           </ComposedChart>
         ) : style === 'area' || style === 'stacked' ? (
-          <AreaChart data={points} margin={{ left: 0, right: 4 }}>
+          <AreaChart data={points} margin={margin}>
             {axes}
             {keys.map((k) => (
               <Area
                 key={k}
                 dataKey={k}
+                hide={off.includes(k)}
                 type="monotone"
                 stackId={style === 'stacked' ? 'a' : undefined}
                 stroke={`var(--color-${k})`}
@@ -350,12 +399,13 @@ export function TrendBody<T>({
             ))}
           </AreaChart>
         ) : (
-          <LineChart data={points} margin={{ left: 0, right: 4 }}>
+          <LineChart data={points} margin={margin}>
             {axes}
             {keys.map((k) => (
               <Line
                 key={k}
                 dataKey={k}
+                hide={off.includes(k)}
                 type="monotone"
                 stroke={`var(--color-${k})`}
                 strokeWidth={1.5}

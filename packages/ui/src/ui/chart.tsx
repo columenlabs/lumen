@@ -252,9 +252,15 @@ function ChartLegendContent({
   payload,
   verticalAlign = 'bottom',
   nameKey,
+  off,
+  onSeries,
 }: React.ComponentProps<'div'> & {
   hideIcon?: boolean;
   nameKey?: string;
+  /** Series keys hidden by a tap on the legend; they stay listed, dimmed. */
+  off?: string[];
+  /** Given, each item is a button that shows or hides its series. */
+  onSeries?: (key: string) => void;
 } & RechartsPrimitive.DefaultLegendContentProps) {
   const { config } = useChart();
 
@@ -277,13 +283,24 @@ function ChartLegendContent({
         .map((item, index) => {
           const key = `${nameKey ?? item.dataKey ?? 'value'}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
+          const series = String(item.dataKey ?? key);
+          const hidden = off?.includes(series) ?? false;
+          const Item = onSeries ? 'button' : 'div';
 
           return (
-            <div
+            <Item
               key={index}
               title={typeof itemConfig?.label === 'string' ? itemConfig.label : undefined}
+              {...(onSeries && {
+                type: 'button' as const,
+                'aria-pressed': !hidden,
+                onClick: () => onSeries(series),
+              })}
               className={cn(
                 'flex max-w-full min-w-0 items-center gap-1.5 sm:max-w-64 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground',
+                onSeries &&
+                  'min-h-6 cursor-pointer rounded-sm px-1 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                hidden && 'text-muted-foreground line-through',
               )}
             >
               {itemConfig?.icon && !hideIcon ? (
@@ -292,12 +309,12 @@ function ChartLegendContent({
                 <div
                   className="h-2 w-2 shrink-0 rounded-[2px]"
                   style={{
-                    backgroundColor: item.color,
+                    backgroundColor: hidden ? 'var(--muted-foreground)' : item.color,
                   }}
                 />
               )}
               <span className="truncate">{itemConfig?.label}</span>
-            </div>
+            </Item>
           );
         })}
     </div>
