@@ -436,14 +436,11 @@ function openaiStreamError(code: string, plan: boolean): string {
 
 /** The reasoning effort sent to OpenAI (`low` only on a retry). */
 type Effort = 'low' | 'medium' | 'high' | 'max' | undefined;
-/** Set once a plan backend refuses `max_output_tokens`, for the rest of the isolate. */
-let planCapRefused = false;
-const refusesCap = (err: unknown) =>
-  err instanceof OpenAI.APIError &&
-  err.status === 400 &&
-  /max_output_tokens/.test(
-    `${err.message} ${(err.error as { param?: string } | undefined)?.param ?? ''}`,
-  );
+/** A tool's schema without JSON Schema's `$schema` line, which zod writes and no provider needs. */
+const withoutMeta = (schema: Record<string, unknown> | undefined) => {
+  const { $schema: _, ...rest } = schema ?? {};
+  return rest;
+};
 /** Whether a response's output has words or a call to show. */
 const shows = (output: OpenAI.Responses.ResponseOutputItem[]) =>
   output.some(
@@ -901,7 +898,10 @@ export class Assistant {
           0,
           4000,
         ),
-      input_schema: { type: 'object', ...f.def.inputSchema } as Anthropic.Tool.InputSchema,
+      input_schema: {
+        type: 'object',
+        ...withoutMeta(f.def.inputSchema),
+      } as Anthropic.Tool.InputSchema,
     }));
   }
 
@@ -1546,11 +1546,11 @@ export class Assistant {
       | OpenAI.Responses.ToolChoiceOptions
       | OpenAI.Responses.ToolChoiceFunction
       | undefined = o.first?.type === 'tool' ? { type: 'function', name: o.first.name } : undefined;
-    // A plan sign-in takes function tools only inside a namespace. Its output cap is sent too,
-    // unless the backend refused one before (then it keeps its own).
-    const sent = (only: string | undefined, cap: boolean) => {
+    // A plan sign-in takes function tools only inside a namespace, and no output cap
+    // (`max_output_tokens` is unsupported there: developers.openai.com/siwc, Preview limitations).
+    const sent = (only: string | undefined) => {
       const fns = only ? fnTools.filter((t) => t.name === only) : fnTools;
-      const out = cap ? { max_output_tokens: session.tier.out ?? DEFAULT_OUT } : {};
+      const out = plan ? {} : { max_output_tokens: session.tier.out ?? DEFAULT_OUT };
       if (!plan) return { tools: fns, ...out };
       return {
         ...out,
@@ -1600,22 +1600,22 @@ export class Assistant {
         );
         return new AssistantError(openaiStreamError(er.code || er.type || '', plan), 'upstream');
       };
-      // One call of this round; asked again (fresh stream state) when the plan refuses the cap or
-      // spends its whole output on reasoning.
-      const ask = (cap: boolean, eff: Effort) => {
+      // One call of this round; asked again (fresh stream state) when it spends its whole output
+      // on reasoning.
+      const ask = (eff: Effort) => {
         partial = '';
         seen = {};
         items = [];
-        return askOnce(cap, eff);
+        return askOnce(eff);
       };
-      const askOnce = (cap: boolean, eff: Effort) =>
+      const askOnce = (eff: Effort) =>
         (async () => {
           const stream = await client.responses.create(
             {
               model: session.model.id,
               instructions,
               input,
-              ...sent(only, cap),
+              ...sent(only),
               store: false,
               stream: true,
               include: ['reasoning.encrypted_content'],
@@ -1670,25 +1670,14 @@ export class Assistant {
           }
           throw err;
         });
-      let cap = !plan || !planCapRefused;
-      let res: OpenAI.Responses.Response;
-      try {
-        res = await ask(cap, effort);
-      } catch (err) {
-        // A plan backend that refuses an output cap keeps its own: ask once more without it.
-        if (!(plan && cap && refusesCap(err))) throw err;
-        planCapRefused = true;
-        cap = false;
-        console.error(
-          JSON.stringify({ event: 'assistant_openai_cap_refused', model: session.model.id }),
-        );
-        res = await ask(cap, effort);
-      }
+      let res = await ask(effort);
       // A reasoning model can spend the whole output on thinking and say nothing: ask once more
-      // with less thinking before giving up.
+      // with less thinking before giving up. One that stopped before writing anything is not asked
+      // again: less thinking cannot help it.
       if (
         res.status === 'incomplete' &&
         res.incomplete_details?.reason === 'max_output_tokens' &&
+        (res.usage?.output_tokens ?? 0) > 0 &&
         !partial &&
         !shows(res.output?.length ? res.output : items) &&
         effort !== 'low'
@@ -1698,13 +1687,12 @@ export class Assistant {
             event: 'assistant_openai_retry',
             model: session.model.id,
             plan,
-            cap,
             why: 'no_words',
             usage: res.usage ?? null,
             events: seen,
           }),
         );
-        res = await ask(cap, 'low');
+        res = await ask('low');
       }
       if (res.status === 'failed') {
         if (partial) sink.push({ kind: 'text', text: partial });
@@ -1767,11 +1755,13 @@ export class Assistant {
         );
         if (!answer)
           throw new AssistantError(
-            res.incomplete_details?.reason === 'max_output_tokens'
-              ? 'OpenAI spent the whole answer thinking and wrote nothing. Try again, or pick a smaller tier.'
-              : res.incomplete_details?.reason
-                ? `OpenAI stopped before answering (${res.incomplete_details.reason}).`
-                : 'OpenAI sent no answer.',
+            res.incomplete_details?.reason === 'max_output_tokens' && !res.usage?.output_tokens
+              ? 'OpenAI stopped before reading the message. Try again, or pick another model for this tier.'
+              : res.incomplete_details?.reason === 'max_output_tokens'
+                ? 'OpenAI spent the whole answer thinking and wrote nothing. Try again, or pick a smaller tier.'
+                : res.incomplete_details?.reason
+                  ? `OpenAI stopped before answering (${res.incomplete_details.reason}).`
+                  : 'OpenAI sent no answer.',
             'upstream',
           );
       }
