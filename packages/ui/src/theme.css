@@ -104,8 +104,9 @@
   --cell-y: 4px;
   /* A UnitValue's unit slot (`GB`, `%`, `/day`), hung in the gutter of a units column. */
   --unit-slot: 2rem;
-  /* A table's first (name) column stops growing here; longer names end in an ellipsis. */
-  --lead-col-max: 18rem;
+  /* A table's first (name) column stops growing here; longer names end in an ellipsis. On a phone
+     it leaves room for the next column (55% of the screen), so a long name never hides the rest. */
+  --lead-col-max: min(18rem, 55vw);
 
   --background: #f4f6fa;
   --foreground: #121826;
