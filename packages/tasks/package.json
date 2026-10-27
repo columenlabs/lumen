@@ -1,0 +1,19 @@
+{
+  "name": "@columenlabs/lumen-tasks",
+  "version": "0.0.0",
+  "description": "Lumen's background jobs on the server: a ledger of the work a person started (state, progress, result), cancel, a reaper for stuck jobs and the routes the header Tasks list calls.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "biome check src && ../ship/scripts/check-kit-neutral.sh",
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./store": "./src/store.ts",
+    "./routes": "./src/routes.ts"
+  },
+  "dependencies": {
+    "@columenlabs/lumen-ui-types": "workspace:*"
+  }
+}

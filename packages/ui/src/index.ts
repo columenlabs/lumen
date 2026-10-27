@@ -318,7 +318,7 @@ export {
   SchedulesSection,
 } from './schedules';
 export { NotificationsSettings } from './notifications';
-export { type TasksConfig, TasksButton, TasksProvider, useTasks } from './tasks';
+export { type TasksConfig, TasksButton, TasksProvider, useTaskFor, useTasks } from './tasks';
 export { type McpServer, McpSettings } from './mcp-settings';
 export { lumenToast } from './lumen-toast';
 export {
