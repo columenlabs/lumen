@@ -1396,7 +1396,7 @@ function LumenTableRows<T extends RowData>({
     }
     return [...m];
   }, [groupBy, sorted, serverGroups]);
-  const span = shown.length + (selection ? 1 : 0);
+  const span = shown.length + (selection ? 1 : 0) + (add ? 1 : 0);
   const served = new Map((serverGroups?.list ?? []).map((g) => [g.key, g]));
   const startsOpen = (i: number) => rows.length <= OPEN_ALL || i === 0;
   const isOpen = (key: string, i: number) =>
@@ -1491,11 +1491,13 @@ function LumenTableRows<T extends RowData>({
   const anyFoldClosed = folds && foldKeys().some((k) => !openParts.has(k));
   const setAllParts = (open: boolean) =>
     setOpenParts(new Set(open === !!subgroup?.open ? [] : foldKeys()));
+  const titleOf = (key: string, rows: T[]) =>
+    subgroup?.title?.(key, rows, groupBy?.key ?? null) ?? key;
   const flatName = (row: T) =>
     flat && subgroup?.under ? (
       <span className="flex min-w-0 items-center gap-1.5">
         {subgroup.mark?.(subgroup.under(row), [row])}
-        <span className="truncate">{subgroup.under(row)}</span>
+        <span className="truncate">{titleOf(subgroup.under(row), [row])}</span>
       </span>
     ) : null;
   const nests = folds || sorted.some((r) => opens(r.original));
@@ -1553,6 +1555,7 @@ function LumenTableRows<T extends RowData>({
           )}
         </TableCell>
       ))}
+      {add && <TableCell />}
     </TableRow>
   );
   // The whole row opens the details drawer.
@@ -1600,6 +1603,7 @@ function LumenTableRows<T extends RowData>({
             )}
           </TableCell>
         ))}
+        {add && <TableCell />}
       </TableRow>
       {openParts.has(keyOf(r.original)) &&
         partsOf(r.original).map((p) => partRow(p, subgroup?.name))}
@@ -1609,7 +1613,7 @@ function LumenTableRows<T extends RowData>({
           data-slot="row-panel"
           className="bg-muted/20 hover:bg-muted/20"
         >
-          <TableCell colSpan={shown.length + (selection ? 1 : 0)} className="p-0 whitespace-normal">
+          <TableCell colSpan={span} className="p-0 whitespace-normal">
             {/* Pinned to the table's left edge, so a wide table never scrolls the panel away. */}
             <div className="sticky left-0 w-[min(56rem,calc(100vw-2rem))] max-w-full px-4 py-3 md:pl-10">
               {panelOf(r.original)}
@@ -1646,7 +1650,9 @@ function LumenTableRows<T extends RowData>({
                 <span className="flex items-center gap-1">
                   {chevron(k, `${key} ${openLabel()}`)}
                   {subgroup?.mark?.(key, ms)}
-                  <span className="font-medium">{key}</span>
+                  <span className="font-medium" title={titleOf(key, ms) === key ? undefined : key}>
+                    {titleOf(key, ms)}
+                  </span>
                   <span className="num text-xs text-muted-foreground">{ms.length}</span>
                 </span>
               ) : (
@@ -1654,6 +1660,7 @@ function LumenTableRows<T extends RowData>({
               )}
             </TableCell>
           ))}
+          {add && <TableCell />}
         </TableRow>
         {openParts.has(k) && ms.map((p) => partRow(p, subgroup?.name))}
       </Fragment>
@@ -1945,6 +1952,8 @@ function LumenTableRows<T extends RowData>({
                             </TableCell>
                           ),
                         )}
+                        {/* The + column's cell, so the group's band runs to the table's edge. */}
+                        {add && <TableCell className={PINNED_GROUP} />}
                       </TableRow>
                       {open && (serverGroups ? servedRows(members, key) : drawn(members, key))}
                     </Fragment>
@@ -1971,6 +1980,7 @@ function LumenTableRows<T extends RowData>({
                     cell
                   ),
                 )}
+                {add && <TableCell />}
               </TableRow>
             )}
           </TableBody>
