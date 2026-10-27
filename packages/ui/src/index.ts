@@ -239,6 +239,17 @@ export {
 export { LumenExpandList, LumenExpandRow } from './expand-list';
 export { LumenPager } from './pager';
 export { createDeskQueryClient } from './query-client';
+export {
+  type ClientPoint,
+  type ClientPointKind,
+  type LumenTelemetryOptions,
+  apiRoute,
+  reportClient,
+  reportClientError,
+  reportFailedFetch,
+  stackFingerprint,
+  useLumenTelemetry,
+} from './telemetry';
 export { refreshHeaders, withRefreshToken } from './refresh';
 export {
   type LumenLoad,

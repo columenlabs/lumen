@@ -1,7 +1,7 @@
 {
   "name": "@columenlabs/lumen-ops",
   "version": "0.0.0",
-  "description": "Lumen's ops parts: every data query and tool call an app runs as one Analytics Engine point (shapes and hashes only), and signed webhooks out.",
+  "description": "Lumen's ops parts: every request, event, data query and tool call an app runs as one Analytics Engine point (templates, codes, shapes and hashes only), and signed webhooks out.",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
@@ -10,12 +10,28 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./events": "./src/events.ts",
+    "./hono": "./src/hono.ts",
     "./points": "./src/points.ts",
     "./queries": "./src/queries.ts",
+    "./requests": "./src/requests.ts",
     "./tools": "./src/tools.ts",
     "./webhooks": "./src/webhooks.ts"
   },
   "dependencies": {
-    "standardwebhooks": "1.1.1"
+    "standardwebhooks": "1.1.1",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "hono": ">=4.8.0"
+  },
+  "peerDependenciesMeta": {
+    "hono": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "hono": "4.13.13"
   }
 }
