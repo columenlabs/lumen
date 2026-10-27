@@ -451,6 +451,17 @@ export class Assistant {
     });
   }
 
+  /**
+   * This assistant for one request: its documents are read once each (`Docs.cached`), so a page of
+   * Settings or a chat turn costs a handful of store calls, not dozens. `assistantRoutes` makes one
+   * per request itself.
+   */
+  forRequest(): Assistant {
+    const view = Object.create(this) as Assistant;
+    Object.defineProperty(view, 'state', { value: this.state.withDocs(this.state.docs.cached()) });
+    return view;
+  }
+
   private anthropic(apiKey: string) {
     const f = this.o.fetch;
     return new Anthropic({ apiKey, maxRetries: 1, ...(f ? { fetch: f } : {}) });

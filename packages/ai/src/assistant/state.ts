@@ -155,6 +155,11 @@ export class State {
     },
   ) {}
 
+  /** The same state over other documents (a request's `Docs.cached`). */
+  withDocs(docs: Docs) {
+    return new State(docs, this.o);
+  }
+
   get allowanceConfig() {
     return this.o.allowance;
   }

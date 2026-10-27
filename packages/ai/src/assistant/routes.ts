@@ -137,13 +137,15 @@ function settingsChange(a: Assistant, groups: string[], b: Record<string, unknow
 }
 
 export function assistantRoutes(
-  a: Assistant,
+  app: Assistant,
   o: AssistantRoutesOptions,
 ): (req: Request) => Promise<Response> {
   const base = o.base.replace(/\/+$/, '');
-  const docs = a.state.docs;
 
   return async (req) => {
+    // One request's view: each stored document is read once however many routes ask for it.
+    const a = app.forRequest();
+    const docs = a.state.docs;
     const url = new URL(req.url);
     if (!url.pathname.startsWith(base)) return fail('Not found.', 404);
     const parts = url.pathname

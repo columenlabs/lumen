@@ -164,35 +164,69 @@ export class Docs {
   constructor(
     private readonly store: AssistantStore,
     private readonly sealer?: Sealer,
+    /** Opened values already read in this request (`cached`), by scope and key. */
+    private readonly memo?: Map<string, Promise<string | null>>,
   ) {}
+
+  /**
+   * The same documents with each one read once: one request (a Settings page, a chat turn) reads
+   * a person's settings, keys and spend many times, and each read is a store call and an unseal.
+   * Writes keep it current; `update` always reads the store, so a change never builds on a value
+   * another request has since replaced. Make one per request, never one per app.
+   */
+  cached(): Docs {
+    return new Docs(this.store, this.sealer, new Map());
+  }
 
   private seal = (s: string) => (this.sealer ? this.sealer.seal(s) : Promise.resolve(s));
   private open = (s: string) => (this.sealer ? this.sealer.open(s) : Promise.resolve(s));
+  private id = (scope: string, key: string) => `${scope}\u0000${key}`;
+
+  private async fresh(scope: string, key: string): Promise<string | null> {
+    const d = await this.store.get(scope, key);
+    return d ? this.open(d.value) : null;
+  }
 
   async read<T>(scope: string, key: string): Promise<T | null> {
-    const d = await this.store.get(scope, key);
-    return d ? (JSON.parse(await this.open(d.value)) as T) : null;
+    let text: Promise<string | null>;
+    if (this.memo) {
+      const id = this.id(scope, key);
+      const hit = this.memo.get(id);
+      text = hit ?? this.fresh(scope, key);
+      if (!hit) {
+        this.memo.set(id, text);
+        text.catch(() => this.memo?.delete(id));
+      }
+    } else text = this.fresh(scope, key);
+    const t = await text;
+    // Parsed each time, so a caller that changes what it got never changes the next read.
+    return t === null ? null : (JSON.parse(t) as T);
   }
 
   async write<T>(scope: string, key: string, value: T, meta?: string) {
+    const text = JSON.stringify(value);
     await this.store.put(
       scope,
       key,
-      await this.seal(JSON.stringify(value)),
+      await this.seal(text),
       meta === undefined ? null : await this.seal(meta),
     );
+    this.memo?.set(this.id(scope, key), Promise.resolve(text));
   }
 
-  /** Read, change and write back; `change` returning null removes it. */
+  /** Read (from the store, never the request's copy), change and write back; `change` returning
+   * null removes it. */
   async update<T>(scope: string, key: string, change: (prev: T | null) => T | null) {
-    const next = change(await this.read<T>(scope, key));
-    if (next === null) await this.store.remove(scope, key);
+    const t = await this.fresh(scope, key);
+    const next = change(t === null ? null : (JSON.parse(t) as T));
+    if (next === null) await this.remove(scope, key);
     else await this.write(scope, key, next);
     return next;
   }
 
-  remove(scope: string, key: string) {
-    return this.store.remove(scope, key);
+  async remove(scope: string, key: string) {
+    await this.store.remove(scope, key);
+    this.memo?.set(this.id(scope, key), Promise.resolve(null));
   }
 
   async list(scope: string, prefix: string, limit: number) {
