@@ -6,6 +6,7 @@ import { Button } from './button';
 import { XIcon } from 'lucide-react';
 import { useOverlayOpen } from '../hooks/use-back-close';
 import { usePhoneScreen } from '../hooks/use-keyboard-fit';
+import { escapeToPicker } from './overlay-guard';
 
 function Dialog({
   open: given,
@@ -67,6 +68,7 @@ function DialogContent({
           className,
         )}
         {...props}
+        onEscapeKeyDown={escapeToPicker(props.onEscapeKeyDown)}
         style={style}
       >
         {children}

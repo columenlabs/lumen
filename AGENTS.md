@@ -41,7 +41,20 @@ One repo for the Lumen family: each package is a folder `packages/<name>` publis
 - What's new ships in every app through `LumenShell`'s `releases` prop and lumen-ship's `listReleases`; it shows an empty state before the first release.
 - Numbers use tabular figures and a true minus `−`. A gain or loss always shows a sign or arrow.
 - No unit or e2e tests. Verify with lint, type-check and build. A visual change carries phone (390×844) and desktop (1440×900) screenshots in the PR, taken in an app that uses the change.
+- Esc closes the topmost thing only: a picker open inside a Sheet, Dialog or AlertDialog takes the Esc and the overlay stays (`ui/overlay-guard.ts`, wired into all three). A new overlay or a new kind of picker joins that guard.
+- Coloured chips (`ColorChip`) draw their text in the colour pulled toward the foreground, so any hue reads at 4.5:1 in light and dark. Never put a raw app colour on its own tint as text.
+- Hover-card and tooltip triggers a person can Tab to show the focus ring (`HoverCardTrigger` carries it); never `outline-none` a focusable thing without a `focus-visible` ring.
 - Breaking changes are allowed while the version is 0.x, but say so in the PR, and land the app-side fix in the same release cycle.
+
+## UI gate: how a change is known to have no glitches
+Screenshots show looks, not behaviour. Before a UI change is done, run the app's interaction smoke (in an app that uses the change, e.g. `bun e2e/smoke.ts` in an app that has one) at phone (390×844) and desktop (1440×900), light and dark. It drives every page, Settings section and control, and checks the invariants below on every screen and every popup. CI runs it on every app PR. Any of these is a bug, whatever the screenshot looks like:
+1. **Reach:** every scroll box scrolls by wheel and by finger; no content cut off by `overflow: hidden/clip` with no way to reach it; no sideways page scroll.
+2. **Popups:** every drawer, sheet, dialog, menu and picker opens from its trigger, fits the screen, has a way out (× or Cancel on a phone, Esc, tap outside), its title clears the ×, and Esc closes only the topmost one.
+3. **Lines:** table rows, numbers, times, badges and labels stay on one line; no text overlaps other text.
+4. **Controls:** sort changes the order, a filter that matches nothing shows the empty state, paging holds its page on a selection, a selection shows the bulk bar with a Clear, collapse can open again, every hover help shows.
+5. **Access:** text reads at 4.5:1 (3:1 large), a phone's tap targets are 24px or sit alone in a 24px row, every Tab stop is on screen, uncovered and shows a focus ring.
+6. **Health:** no console error, no failed or 4xx/5xx call, on any page or after any click.
+7. **Visual:** screenshots that differ from main's are listed for review; an unplanned one is a bug.
 
 ## Release
 1. Every merge to `main` publishes the next patch after the newest tag (0.1.0, 0.1.1, ...), tags it and makes its GitHub release. `lumen-ship release` (`packages/ship`, config `lumen-ship.json`, prompt `.github/release-prompt.md`) has Claude (secret `ANTHROPIC_API_KEY`) write the notes from the merged pull requests: Key takeaways that name the exported part and prop each change lives in, then a section per area. Notes naming a product in `LUMEN_FORBIDDEN_NAMES` are not published. Run workflow on Publish with a tag (and redo) writes one tag's release again. A new minor is cut only when the owner asks: Run workflow on Publish with bump = minor (the next minor neither a tag nor npm has used). PRs never change the versions in `packages/*/package.json`, which publishing does not read.

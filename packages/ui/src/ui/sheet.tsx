@@ -7,6 +7,7 @@ import * as React from 'react';
 import { useOverlayOpen } from '../hooks/use-back-close';
 import { useKeyboardFit } from '../hooks/use-keyboard-fit';
 import { useIsMobile } from '../hooks/use-mobile';
+import { escapeToPicker } from './overlay-guard';
 
 /** Closes the sheet from inside it (the grab handle's swipe). */
 const SheetCloseContext = React.createContext<() => void>(() => undefined);
@@ -161,6 +162,7 @@ function SheetContent({
             'max-h-[calc(100dvh-env(safe-area-inset-top)-2.75rem)] rounded-t-2xl border-t-0 pt-5',
         )}
         {...props}
+        onEscapeKeyDown={escapeToPicker(props.onEscapeKeyDown)}
         style={style}
         // A click or focus in the docked the assistant panel leaves the sheet open, so the person can ask
         // about what it shows (LumenShell).

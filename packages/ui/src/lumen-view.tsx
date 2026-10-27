@@ -33,7 +33,9 @@ import {
 } from '@tanstack/react-table';
 import {
   ArrowDownIcon,
+  ArrowDownWideNarrowIcon,
   ArrowUpIcon,
+  ArrowUpNarrowWideIcon,
   ChartCandlestick,
   ChartSpline,
   ChevronRightIcon,
@@ -1365,6 +1367,40 @@ function LumenTableRows<T extends RowData>({
     },
     autoResetPageIndex: false,
   });
+  // A phone's cards hide the header row, so a Sort by picker and a direction toggle stand in for
+  // the header clicks (numbers and dates start high to low, text A to Z, as a header click does).
+  const sortBy = sorting[0];
+  const sortable = shown.filter((f) => !serverSorts || serverSorts.includes(f.key));
+  const cardSort = sortable.length > 1 && (
+    <div
+      data-slot="card-sort"
+      className="hidden items-center justify-end gap-1 px-(--cell-x) py-1 max-sm:flex"
+    >
+      <LumenSelector
+        label="Sort by"
+        size="sm"
+        placeholder="Sort by"
+        options={sortable.map((f) => ({ value: f.key, label: f.label, icon: f.icon }))}
+        value={sortBy?.id ?? null}
+        onChange={(id) =>
+          table.setSorting([
+            {
+              id,
+              desc:
+                sortBy?.id === id ? sortBy.desc : sortable.some((f) => f.key === id && short(f)),
+            },
+          ])
+        }
+      />
+      {sortBy && (
+        <IconButton
+          icon={sortBy.desc ? ArrowDownWideNarrowIcon : ArrowUpNarrowWideIcon}
+          label={sortBy.desc ? 'High to low' : 'Low to high'}
+          onClick={() => table.setSorting([{ id: sortBy.id, desc: !sortBy.desc }])}
+        />
+      )}
+    </div>
+  );
   // Phone: a long press on a header opens the Columns picker as a sheet.
   const [fieldOpen, setFieldOpen] = useState(false);
   const press = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1751,6 +1787,7 @@ function LumenTableRows<T extends RowData>({
         fit && FIT,
       )}
     >
+      {cardSort}
       <UnitColumns.Provider value={markUnits}>
         <Table data-cards="">
           <TableHeader>
