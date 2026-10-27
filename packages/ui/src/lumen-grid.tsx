@@ -203,7 +203,9 @@ function Cell({
     <GridCellContext.Provider value={value}>
       <div
         ref={ref}
-        className="h-full [&>*:has(>[data-slot=lumen-card])]:h-full"
+        // The cell's card fills it (a folded one keeps its header's height); nowhere else does a
+        // card take its parent's height.
+        className="h-full [&>*:has(>[data-slot=lumen-card])]:h-full [&>*>[data-slot=lumen-card]:not([data-folded])]:h-full [&>[data-slot=lumen-card]:not([data-folded])]:h-full"
         style={{ paddingBottom: GRID_GAP }}
       >
         {children}
