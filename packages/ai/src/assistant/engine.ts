@@ -999,7 +999,7 @@ export class Assistant {
       const page =
         this.cardNews(doc) +
         (req.refs?.length
-          ? `The person points at: ${JSON.stringify(req.refs).slice(0, 16000)}\n\n`
+          ? `The person points at these parts: they are what "this" means, and when the person asks for a change they are the only parts to change. Read anything else you need (the rest of the page, other records, your tools) for context, but leave it as it is unless they ask.\n${JSON.stringify(req.refs).slice(0, 16000)}\n\n`
           : '') +
         (req.context
           ? `Page: ${req.context.label}${req.context.note === undefined ? '' : `\n${JSON.stringify(req.context.note).slice(0, 4000)}`}\n\n`
@@ -1140,6 +1140,10 @@ export class Assistant {
       'A tool marked DRAFT ONLY makes a card the person saves or dismisses; it changes nothing by itself. Say what the card will do; never claim it is done. The next message tells you how each card ended.',
       'A tool marked WRITES AT ONCE makes its change when you call it; the person can undo it from the chat. Change only what they asked for, and say what you changed.',
     ];
+    if (main)
+      lines.push(
+        `You run on the ${main.tier.label} tier: ${main.model.label}, from ${PROVIDERS[main.model.provider].label}. Say so when asked which tier or model you are.`,
+      );
     if (!fns.size)
       lines.push('No tools are on now: the person can turn them on in Settings ▸ Tools.');
     if (failed)
