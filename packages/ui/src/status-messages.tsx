@@ -1,10 +1,9 @@
-// Messages in the status bar: one line each, a few at most, the rest behind a "+N" chip. A long
-// message ends in an ellipsis with its full text in a pop-up on hover or tap, and the same message
-// posted again shows once with a count, so a burst of errors never floods the bar or pushes its
-// other items off.
+// Messages in the status bar: the latest one on one line, the earlier ones behind a "+N" chip. A
+// long message ends in an ellipsis with its full text in a pop-up on hover or tap, and the same
+// message posted again shows once with a count, so a burst of errors never floods the bar or pushes
+// its other items off.
 import type { ReactNode } from 'react';
 import { useHoverOpen } from './hooks/use-hover-open';
-import { useIsMobile } from './hooks/use-mobile';
 import { cn } from './lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
@@ -17,9 +16,6 @@ export interface StatusMessage {
   /** How many times it was posted, for an app that counts repeats itself; repeats in the list add up too. */
   count?: number;
 }
-
-/** Errors first, then warnings, so the message that matters most is the one in view. */
-const RANK: Record<StatusMessageTone, number> = { error: 0, warning: 1, success: 2, info: 3 };
 
 const TEXT: Record<StatusMessageTone, string | undefined> = {
   error: 'text-destructive',
@@ -39,7 +35,7 @@ interface Group extends Required<StatusMessage> {
   count: number;
 }
 
-/** One entry per distinct message (same tone, same words), counted, most severe first. */
+/** One entry per distinct message (same tone, same words), counted, in the order given. */
 export function groupStatusMessages(messages: readonly StatusMessage[]): Group[] {
   const groups = new Map<string, Group>();
   for (const m of messages) {
@@ -52,8 +48,8 @@ export function groupStatusMessages(messages: readonly StatusMessage[]): Group[]
     if (g) g.count += count;
     else groups.set(key, { text, tone, count });
   }
-  // Map keeps first-seen order; the sort is stable, so equal tones keep it.
-  return [...groups.values()].sort((a, b) => RANK[a.tone] - RANK[b.tone]);
+  // Map keeps first-seen order, so the latest message stays first.
+  return [...groups.values()];
 }
 
 const label = (g: Group) => (g.count > 1 ? `${g.text} (×${g.count})` : g.text);
@@ -122,37 +118,31 @@ function Line({ group }: { group: Group }) {
 }
 
 /**
- * The app's messages in the status bar. Each message is one line that ends in an ellipsis past
- * `--status-message-max`, with its full text on hover or tap; a repeated message shows once with
- * `×N`; past `max` messages (one on a phone), a `+N` chip lists the rest.
+ * The app's messages in the status bar, newest first. Only the latest shows, on one line that ends
+ * in an ellipsis past `--status-message-max`, with its full text on hover or tap; a new message
+ * takes its place rather than adding a second line. A repeat shows once with `×N`, and the earlier
+ * messages sit behind a `+N` chip that lists them.
  */
 export function StatusMessages({
   messages,
-  max = 2,
   className,
 }: {
+  /** Newest first. */
   messages: readonly StatusMessage[];
-  /** How many messages show at once on a wider screen; the rest go behind the `+N` chip. */
-  max?: number;
   className?: string;
 }) {
-  const phone = useIsMobile();
-  const groups = groupStatusMessages(messages);
-  if (!groups.length) return null;
-  const shown = groups.slice(0, phone ? 1 : Math.max(1, max));
-  const rest = groups.slice(shown.length);
+  const [latest, ...earlier] = groupStatusMessages(messages);
+  if (!latest) return null;
   return (
     <span aria-live="polite" className={cn('flex min-w-0 items-center gap-2', className)}>
-      {shown.map((g) => (
-        <Line key={`${g.tone}:${g.text}`} group={g} />
-      ))}
-      {rest.length > 0 && (
+      <Line group={latest} />
+      {earlier.length > 0 && (
         <Pop
-          label={`${rest.length} more messages`}
+          label={`${earlier.length} earlier messages`}
           className={cn(TRIGGER, 'num shrink-0 text-foreground/80')}
           content={
             <ul className="flex flex-col gap-1">
-              {rest.map((g) => (
+              {earlier.map((g) => (
                 <li key={`${g.tone}:${g.text}`} className="flex items-start gap-1.5">
                   <span className="flex h-4 items-center">
                     <Dot tone={g.tone} />
@@ -163,7 +153,7 @@ export function StatusMessages({
             </ul>
           }
         >
-          +{rest.length}
+          +{earlier.length}
         </Pop>
       )}
     </span>
