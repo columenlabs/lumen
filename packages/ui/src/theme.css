@@ -88,6 +88,9 @@
   --shell-assistant-width: 26rem;
   --shell-header-height: 48px;
   --shell-status-height: 32px;
+  /* A status bar message ends in an ellipsis here (StatusMessages), so it fits beside the bar's
+     other items; the full text opens on hover or tap. A phone shows one message, a wider screen two. */
+  --status-message-max: 45vw;
   --tile-width: 8.5rem;
   --shell-gutter: 12px;
   --shell-section-gap: 12px;
@@ -209,6 +212,7 @@
 @media (min-width: 768px) {
   :root {
     --shell-gutter: 16px;
+    --status-message-max: min(28rem, 30vw);
   }
 }
 
