@@ -796,6 +796,7 @@ export function LumenView<T extends RowData>({
       kind="table"
       style="table"
       title={title}
+      phoneTitle={false}
       controls={controls}
       tools={
         state ? (
