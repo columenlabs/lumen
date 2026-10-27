@@ -4,6 +4,9 @@
 
 const OPEN_PICKER = '[data-slot="lumen-selector"][data-open], [data-slot="combobox-content"][data-open]';
 
+/** Whether a picker is open, so a panel that closes on Esc leaves this one to it. */
+export const pickerOpen = () => !!document.querySelector(OPEN_PICKER);
+
 /** The overlay's `onEscapeKeyDown`: ignores Esc while a picker is open, else runs the caller's. */
 export function escapeToPicker(own?: (e: KeyboardEvent) => void) {
   return (e: KeyboardEvent) => {

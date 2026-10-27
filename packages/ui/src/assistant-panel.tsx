@@ -5,47 +5,19 @@
 // Open or closed and the width are each browser tab's own (sessionStorage). The
 // product fills the body (the product's assistant: its chat, composer, cards and spend).
 import { HistoryIcon, SparklesIcon } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useIsMobile } from './hooks/use-mobile';
 import { cn } from './lib/utils';
 import { LumenBoundary } from './lumen-boundary';
 import { LumenSelector } from './lumen-selector';
 import { ASSISTANT_WIDTH, usePrefs } from './prefs';
+import { ResizeEdge, tabState } from './side-dock';
 import { Button } from './ui/button';
 import { Kbd } from './ui/kbd';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
-/** A value kept for this browser tab (sessionStorage), read with `use` and set with `write`. */
-export function tabState<T>(key: string, fallback: T, parse: (raw: string) => T | null) {
-  const listeners = new Set<() => void>();
-  const read = () => {
-    try {
-      const raw = sessionStorage.getItem(key);
-      return raw == null ? fallback : (parse(raw) ?? fallback);
-    } catch {
-      return fallback;
-    }
-  };
-  let state = typeof sessionStorage === 'undefined' ? fallback : read();
-  const write = (next: T) => {
-    state = next;
-    try {
-      sessionStorage.setItem(key, String(next));
-    } catch {}
-    for (const l of listeners) l();
-  };
-  const use = () =>
-    useSyncExternalStore(
-      (l) => {
-        listeners.add(l);
-        return () => listeners.delete(l);
-      },
-      () => state,
-      () => fallback,
-    );
-  return { write, use, get: () => state };
-}
+export { tabState };
 
 /** Whether the assistant is open in this tab. */
 export const assistantOpen = tabState('assistant_open', false, (raw) => raw === '1');
@@ -191,6 +163,9 @@ function Docked({ name, children }: { name: string; children: ReactNode }) {
       <ResizeEdge
         name={name}
         width={width || 416}
+        min={ASSISTANT_WIDTH.min}
+        max={Math.min(ASSISTANT_WIDTH.max, Math.floor(window.innerWidth / 2))}
+        slot="assistant-resize"
         onWidth={(w) => {
           setDrag(null);
           assistantWidth.write(w);
@@ -201,89 +176,6 @@ function Docked({ name, children }: { name: string; children: ReactNode }) {
         {children}
       </LumenBoundary>
     </aside>
-  );
-}
-
-/**
- * The panel's left edge: drag it, or focus it and use the arrow keys, to set the width; a double
- * click goes back to the default. While dragging only `onDrag` hears it.
- */
-function ResizeEdge({
-  name,
-  width,
-  onDrag,
-  onWidth,
-}: {
-  name: string;
-  width: number;
-  onDrag: (w: number | null) => void;
-  onWidth: (w: number) => void;
-}) {
-  const clamp = (w: number) =>
-    Math.round(
-      Math.max(
-        ASSISTANT_WIDTH.min,
-        Math.min(w, ASSISTANT_WIDTH.max, Math.floor(window.innerWidth / 2)),
-      ),
-    );
-  // The panel's width on screen (the default one is CSS's).
-  const now = (el: HTMLElement) =>
-    Math.round(el.parentElement?.getBoundingClientRect().width ?? width);
-  const [dragging, setDragging] = useState(false);
-  useEffect(() => {
-    if (!dragging) return;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    return () => {
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [dragging]);
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={`Resize ${name}`}
-      aria-valuemin={ASSISTANT_WIDTH.min}
-      aria-valuemax={ASSISTANT_WIDTH.max}
-      aria-valuenow={width}
-      tabIndex={0}
-      data-slot="assistant-resize"
-      data-dragging={dragging ? '' : undefined}
-      className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:transition-colors hover:after:bg-ring focus-visible:after:bg-ring data-dragging:after:bg-ring"
-      onPointerDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        const el = e.currentTarget;
-        el.setPointerCapture(e.pointerId);
-        const x0 = e.clientX;
-        const w0 = now(el);
-        let last = w0;
-        setDragging(true);
-        const move = (m: PointerEvent) => {
-          last = clamp(w0 + x0 - m.clientX);
-          onDrag(last);
-        };
-        const up = () => {
-          el.removeEventListener('pointermove', move);
-          el.removeEventListener('pointerup', up);
-          el.removeEventListener('pointercancel', up);
-          setDragging(false);
-          onWidth(last);
-        };
-        el.addEventListener('pointermove', move);
-        el.addEventListener('pointerup', up);
-        el.addEventListener('pointercancel', up);
-      }}
-      onDoubleClick={() => onWidth(0)}
-      onKeyDown={(e) => {
-        const step = e.shiftKey ? 64 : 16;
-        if (e.key === 'ArrowLeft') onWidth(clamp(now(e.currentTarget) + step));
-        else if (e.key === 'ArrowRight') onWidth(clamp(now(e.currentTarget) - step));
-        else return;
-        e.preventDefault();
-      }}
-    />
   );
 }
 

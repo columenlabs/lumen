@@ -33,6 +33,7 @@ import {
   ThemeToggle,
   allSettings,
 } from './settings';
+import { DockSlot } from './side-dock';
 import { SourceHealthProvider } from './source-health';
 import { StatusTimeZone } from './status';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -337,6 +338,7 @@ export function LumenShell({
   children,
 }: LumenShellProps) {
   const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
+  const [dockSlot, setDockSlot] = useState<HTMLElement | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Refresh reloads the layout too: once the data is fresh the page mounts
   // again, so every card, tab and saved layout starts from what the server holds now.
@@ -391,69 +393,73 @@ export function LumenShell({
         headerActions,
       }}
     >
-      <SourceHealthProvider>
-        {wrap(
-          <TooltipProvider delayDuration={200}>
-            <SidebarProvider defaultOpen={sidebarOpen()}>
-              <LumenFinder
-                app={app}
-                settings={findSettings}
-                openSettings={openSettings}
-                config={finder}
-              >
-                <CloseDrawerOnNavigate />
-                <Sidebar collapsible="icon">
-                  <SidebarHeader>{brand}</SidebarHeader>
-                  <SidebarContent>{nav}</SidebarContent>
-                  <SidebarFooter>
-                    <NavUser
-                      who={user}
-                      signOutUrl={signOutUrl}
-                      onSettings={() => openSettings()}
-                      onLogs={onLogs}
-                    />
-                  </SidebarFooter>
-                  <SidebarRail />
-                </Sidebar>
-                <SidebarInset className="flex min-h-svh min-w-0 flex-col">
-                  <div key={epoch} className="flex min-w-0 flex-1 flex-col">
-                    {children}
-                  </div>
-                  <footer
-                    data-slot="shell-status"
-                    aria-label="Status"
-                    className="sticky bottom-0 z-10 flex h-(--shell-status-height) shrink-0 items-center gap-4 overflow-x-auto overflow-y-hidden border-t bg-background px-(--shell-gutter) text-xs whitespace-nowrap text-muted-foreground"
-                  >
-                    {status}
-                    <div ref={setStatusSlot} className="flex shrink-0 items-center gap-4" />
-                    <span className="ml-auto flex shrink-0 items-center gap-1">
-                      {health}
-                      {releases && <WhatsNew api={releases} apps={releaseApps} />}
-                      {statusEnd}
-                      <StatusTimeZone />
-                    </span>
-                  </footer>
-                </SidebarInset>
-                {panel}
-                <LumenSettings
-                  open={settingsAt !== null}
-                  section={settingsAt ?? lastSection}
-                  onOpen={openSettings}
-                  onClose={() => setSettingsAt(null)}
-                  appLabel={appLabel}
-                  profile={profile}
-                  security={security}
-                  sections={settings}
-                  shared={shared}
-                  sharedLabel={sharedLabel}
-                  groups={settingsGroups}
-                />
-                <Toaster position="bottom-right" />
-              </LumenFinder>
-            </SidebarProvider>
-          </TooltipProvider>,
-        )}
-      </SourceHealthProvider>
+      <DockSlot.Provider value={dockSlot}>
+        <SourceHealthProvider>
+          {wrap(
+            <TooltipProvider delayDuration={200}>
+              <SidebarProvider defaultOpen={sidebarOpen()}>
+                <LumenFinder
+                  app={app}
+                  settings={findSettings}
+                  openSettings={openSettings}
+                  config={finder}
+                >
+                  <CloseDrawerOnNavigate />
+                  <Sidebar collapsible="icon">
+                    <SidebarHeader>{brand}</SidebarHeader>
+                    <SidebarContent>{nav}</SidebarContent>
+                    <SidebarFooter>
+                      <NavUser
+                        who={user}
+                        signOutUrl={signOutUrl}
+                        onSettings={() => openSettings()}
+                        onLogs={onLogs}
+                      />
+                    </SidebarFooter>
+                    <SidebarRail />
+                  </Sidebar>
+                  <SidebarInset className="flex min-h-svh min-w-0 flex-col">
+                    <div key={epoch} className="flex min-w-0 flex-1 flex-col">
+                      {children}
+                    </div>
+                    <footer
+                      data-slot="shell-status"
+                      aria-label="Status"
+                      className="sticky bottom-0 z-10 flex h-(--shell-status-height) shrink-0 items-center gap-4 overflow-x-auto overflow-y-hidden border-t bg-background px-(--shell-gutter) text-xs whitespace-nowrap text-muted-foreground"
+                    >
+                      {status}
+                      <div ref={setStatusSlot} className="flex shrink-0 items-center gap-4" />
+                      <span className="ml-auto flex shrink-0 items-center gap-1">
+                        {health}
+                        {releases && <WhatsNew api={releases} apps={releaseApps} />}
+                        {statusEnd}
+                        <StatusTimeZone />
+                      </span>
+                    </footer>
+                  </SidebarInset>
+                  {/* A docked LumenDrawer: beside the page, left of the assistant. */}
+                  <div ref={setDockSlot} data-slot="shell-dock" className="contents" />
+                  {panel}
+                  <LumenSettings
+                    open={settingsAt !== null}
+                    section={settingsAt ?? lastSection}
+                    onOpen={openSettings}
+                    onClose={() => setSettingsAt(null)}
+                    appLabel={appLabel}
+                    profile={profile}
+                    security={security}
+                    sections={settings}
+                    shared={shared}
+                    sharedLabel={sharedLabel}
+                    groups={settingsGroups}
+                  />
+                  <Toaster position="bottom-right" />
+                </LumenFinder>
+              </SidebarProvider>
+            </TooltipProvider>,
+          )}
+        </SourceHealthProvider>
+      </DockSlot.Provider>
     </Ctx.Provider>
   );
 }

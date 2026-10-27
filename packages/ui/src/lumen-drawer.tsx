@@ -1,9 +1,12 @@
-import { XIcon } from 'lucide-react';
-import { type ReactNode, useEffect } from 'react';
+import { PanelRightCloseIcon, PanelRightOpenIcon, XIcon } from 'lucide-react';
+import { type ReactNode, useEffect, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
 import { lazyPart } from './lazy-part';
+import { ResizeEdge, tabState, useDockSlot } from './side-dock';
 import { Button } from './ui/button';
+import { pickerOpen } from './ui/overlay-guard';
 import {
   Sheet,
   SheetClose,
@@ -36,6 +39,12 @@ export interface LumenDrawerProps {
   defaultSize?: Size;
   minSize?: Size;
   maxSize?: Size;
+  /**
+   * Docks it beside the page on desktop instead of over it, under this name: a click on the page
+   * leaves it open (a list's next row swaps what it shows), it folds to a rail, and its width and
+   * fold are kept in this browser. A phone still gets the bottom sheet.
+   */
+  dock?: string;
 }
 
 /**
@@ -45,7 +54,8 @@ export interface LumenDrawerProps {
  * the handle and the drawer take the pointer, so a click beside it falls through to the overlay
  * and closes it (`!` beats the inline pointer-events Radix sets on a modal's content). Its body
  * holds DrawerSections; its footer sits at the bottom (actions on the right, Close by default; on a
- * phone it shows only when there are actions, as the sheet's X closes it).
+ * phone it shows only when there are actions, as the sheet's X closes it). With `dock` it sits beside
+ * the page on desktop instead (DockedDrawer), for a list whose rows each open it.
  */
 export function LumenDrawer({
   open,
@@ -58,8 +68,10 @@ export function LumenDrawer({
   defaultSize = '32%',
   minSize = '320px',
   maxSize = '60%',
+  dock,
 }: LumenDrawerProps) {
   const isMobile = useIsMobile();
+  const slot = useDockSlot();
   // Fetched once the page is idle, so the first drawer opened on a desktop has its panels ready.
   useEffect(() => {
     if (isMobile) return;
@@ -94,15 +106,30 @@ export function LumenDrawer({
       )}
       <div className="ml-auto flex items-center gap-2">
         {footer ?? (
-          <SheetClose asChild>
-            <Button type="button" size="sm" variant="outline">
-              Close
-            </Button>
-          </SheetClose>
+          <Button type="button" size="sm" variant="outline" onClick={onClose}>
+            Close
+          </Button>
         )}
       </div>
     </footer>
   );
+  if (dock && !isMobile && slot)
+    return open
+      ? createPortal(
+          <DockedDrawer
+            dock={dock}
+            title={title}
+            description={description}
+            onClose={onClose}
+            defaultSize={defaultSize}
+            minSize={minSize}
+            maxSize={maxSize}
+            body={body}
+            foot={foot}
+          />,
+          slot,
+        )
+      : null;
   return (
     // Not modal on desktop: the assistant, docked beside it, stays usable while the drawer is open.
     <Sheet open={open} onOpenChange={(o) => !o && onClose()} modal={isMobile}>
@@ -138,5 +165,156 @@ export function LumenDrawer({
         </SheetContent>
       )}
     </Sheet>
+  );
+}
+
+/** What each docked drawer keeps, by its `dock` name: its dragged width (0: the default) and its fold. */
+const docks = new Map<
+  string,
+  { width: ReturnType<typeof tabState<number>>; folded: ReturnType<typeof tabState<boolean>> }
+>();
+function dockState(dock: string) {
+  let d = docks.get(dock);
+  if (!d) {
+    d = {
+      width: tabState(
+        `lumen_dock_${dock}_width`,
+        0,
+        (raw) => {
+          const n = Math.round(Number(raw));
+          return Number.isFinite(n) && n > 0 ? n : null;
+        },
+        'local',
+      ),
+      folded: tabState(`lumen_dock_${dock}_folded`, false, (raw) => raw === 'true', 'local'),
+    };
+    docks.set(dock, d);
+  }
+  return d;
+}
+
+const onResize = (l: () => void) => {
+  window.addEventListener('resize', l);
+  return () => window.removeEventListener('resize', l);
+};
+/** A Size in px, a percentage being of the window's width. */
+const px = (size: Size, vw: number) =>
+  size.endsWith('%') ? (vw * Number.parseFloat(size)) / 100 : Number.parseFloat(size);
+/** Room a docked drawer always leaves the page, px. */
+const PAGE_MIN = 480;
+
+/**
+ * A drawer docked right of the page (LumenShell's dock slot): the page narrows beside it and stays
+ * usable. Its left edge drags the width within `minSize` and `maxSize` (never leaving the page under
+ * PAGE_MIN); it folds to a rail that shows its title; Esc in it closes it, unless a picker in it is open.
+ */
+function DockedDrawer({
+  dock,
+  title,
+  description,
+  onClose,
+  defaultSize,
+  minSize,
+  maxSize,
+  body,
+  foot,
+}: {
+  dock: string;
+  title: ReactNode;
+  description?: ReactNode;
+  onClose: () => void;
+  defaultSize: Size;
+  minSize: Size;
+  maxSize: Size;
+  body: ReactNode;
+  foot: ReactNode;
+}) {
+  const state = dockState(dock);
+  const saved = state.width.use();
+  const folded = state.folded.use();
+  const [drag, setDrag] = useState<number | null>(null);
+  const vw = useSyncExternalStore(
+    onResize,
+    () => window.innerWidth,
+    () => 1440,
+  );
+  const min = Math.round(px(minSize, vw));
+  const max = Math.max(min, Math.round(Math.min(px(maxSize, vw), vw - PAGE_MIN)));
+  const clamp = (w: number) => Math.max(min, Math.min(w, max));
+  const width = drag ?? clamp(saved || px(defaultSize, vw));
+  const name = typeof title === 'string' ? title : 'Details';
+  return (
+    <aside
+      aria-label={name}
+      data-slot="lumen-drawer"
+      data-docked=""
+      data-folded={folded ? '' : undefined}
+      style={folded ? undefined : { width }}
+      className="sticky top-0 flex h-svh shrink-0 flex-col border-l bg-background data-folded:w-11"
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || e.defaultPrevented || pickerOpen()) return;
+        // Only Esc from inside it: one from a dialog it opened (a portal) is that dialog's.
+        if (!e.currentTarget.contains(e.target as Node)) return;
+        e.preventDefault();
+        onClose();
+      }}
+    >
+      {folded ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden py-3">
+          <IconButton
+            icon={PanelRightOpenIcon}
+            label="Expand panel"
+            onClick={() => state.folded.write(false)}
+          />
+          <span
+            className="min-h-0 truncate text-muted-foreground text-xs [writing-mode:vertical-rl]"
+            title={name}
+          >
+            {title}
+          </span>
+        </div>
+      ) : (
+        <>
+          <ResizeEdge
+            name={name}
+            width={width}
+            min={min}
+            max={max}
+            slot="lumen-drawer-resize"
+            onDrag={setDrag}
+            onWidth={(w) => {
+              setDrag(null);
+              state.width.write(w);
+            }}
+          />
+          <header className="flex shrink-0 items-center gap-1 border-b px-4 py-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <h2
+                className="cn-font-heading truncate font-medium text-base text-foreground"
+                title={name}
+              >
+                {title}
+              </h2>
+              {description && (
+                <p
+                  className="truncate text-muted-foreground text-xs"
+                  title={typeof description === 'string' ? description : undefined}
+                >
+                  {description}
+                </p>
+              )}
+            </div>
+            <IconButton
+              icon={PanelRightCloseIcon}
+              label="Collapse panel"
+              onClick={() => state.folded.write(true)}
+            />
+            <IconButton icon={XIcon} label="Close" onClick={onClose} />
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
+          {foot}
+        </>
+      )}
+    </aside>
   );
 }
