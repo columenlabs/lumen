@@ -2327,6 +2327,16 @@ function DetailsSection<T>({
           />
         </div>
       </Row>
+      <Row label="Page footer">
+        <Switch
+          aria-label="Page footer"
+          checked={pagination.footer}
+          disabled={!pagination.on}
+          onCheckedChange={(footer) =>
+            setDraft({ ...draft, pagination: { ...pagination, footer } })
+          }
+        />
+      </Row>
       <Row label="Table width">
         <ToggleGroup
           type="single"

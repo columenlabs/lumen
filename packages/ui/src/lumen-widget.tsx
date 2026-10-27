@@ -408,6 +408,7 @@ export function LumenWidget({
   help,
   assistant,
   strip,
+  foot,
   shown,
   style,
 }: {
@@ -449,6 +450,8 @@ export function LumenWidget({
    * follows, or an offer such as Link to Holdings by Symbol.
    */
   strip?: ReactNode;
+  /** A line under the body, above the load line: a table's page footer. */
+  foot?: ReactNode;
   /** The card's source: its ↻, and its load time below the body. */
   load?: LumenLoad;
   rows?: number;
@@ -740,6 +743,11 @@ export function LumenWidget({
         >
           <LumenBoundary where={id}>{children}</LumenBoundary>
         </div>
+        {foot && !folded && (
+          <div className={cn('shrink-0', pinned && 'sticky left-0 w-(--view-w) max-w-full')}>
+            {foot}
+          </div>
+        )}
         {headless && (
           <HeaderlessMenu
             title={title}

@@ -65,7 +65,7 @@ import { LumenSelector } from './lumen-selector';
 import { type LumenLoad, LumenSkeleton, LumenStates, useLiveLoad } from './lumen-source';
 import { type CardControls, type CardLink, LumenWidget } from './lumen-widget';
 import { MAX_COMPARE, useSymbolChart } from './market/lumen-chart';
-import { LumenPager } from './pager';
+import { LumenPageFooter, LumenPager } from './pager';
 import { maskAmount, useAmountsHidden } from './shell';
 import { useSymbolSheet } from './symbol-sheet-context';
 import { Badge } from './ui/badge';
@@ -722,45 +722,61 @@ export function LumenView<T extends RowData>({
 
   // A server's page: the pager counts from the server's total, or the rows seen so far. Server
   // groups page themselves: the header counts them.
-  const pager = served?.pages ? (
-    <LumenPager
-      total={
-        served.pages.total ?? served.pages.page * served.pages.size + (served.list?.length ?? 0)
+  const turn: (Parameters<typeof LumenPager>[0] & { more: boolean }) | null = served?.pages
+    ? {
+        total:
+          served.pages.total ?? served.pages.page * served.pages.size + (served.list?.length ?? 0),
+        page: served.pages.page,
+        size: served.pages.size,
+        onPage: served.pages.onPage,
+        onSize: served.pages.onSize ?? (() => {}),
+        sizes: served.pages.sizes ?? [served.pages.size],
+        noun: served.pages.noun ?? 'groups',
+        more: served.pages.total === null && served.pages.more,
       }
-      page={served.pages.page}
-      size={served.pages.size}
-      onPage={served.pages.onPage}
-      onSize={served.pages.onSize ?? (() => {})}
-      sizes={served.pages.sizes ?? [served.pages.size]}
-      noun={served.pages.noun ?? 'groups'}
-      more={served.pages.total === null && served.pages.more}
-    />
+    : served
+      ? null
+      : server
+        ? {
+            total: server.total ?? server.page * server.size + rows.length,
+            page: server.page,
+            size: server.size,
+            onPage: server.onPage,
+            onSize: server.onSize ?? (() => {}),
+            sizes: server.sizes ?? [server.size],
+            more: server.total === null && server.more,
+          }
+        : paging
+          ? {
+              total: tableRows.length,
+              page,
+              size: pageSize,
+              onPage: setPageIndex,
+              onSize: setPageSize,
+              noun: rows.length === total ? 'rows' : `of ${total} rows`,
+              more: false,
+            }
+          : null;
+  const pager = turn ? (
+    <LumenPager {...turn} />
   ) : served ? (
     <span className="num px-2 text-xs text-muted-foreground">
       {served.list ? `${served.list.length.toLocaleString()}${served.more ? '+' : ''} groups` : ''}
     </span>
-  ) : server ? (
-    <LumenPager
-      total={server.total ?? server.page * server.size + rows.length}
-      page={server.page}
-      size={server.size}
-      onPage={server.onPage}
-      onSize={server.onSize ?? (() => {})}
-      sizes={server.sizes ?? [server.size]}
-      more={server.total === null && server.more}
-    />
-  ) : paging ? (
-    <LumenPager
-      total={tableRows.length}
-      page={page}
-      size={pageSize}
-      onPage={setPageIndex}
-      onSize={setPageSize}
-      noun={rows.length === total ? 'rows' : `of ${total} rows`}
-    />
   ) : (
     <span className="num px-2 text-xs text-muted-foreground">{count}</span>
   );
+  // The page footer (`pagination.footer`): under the table while there is more than one page.
+  const foot =
+    turn && pagination.footer && !state && (turn.more || turn.total > turn.size) ? (
+      <LumenPageFooter
+        total={turn.total}
+        page={turn.page}
+        size={turn.size}
+        onPage={turn.onPage}
+        more={turn.more}
+      />
+    ) : null;
 
   const table =
     pivot && config.pivot ? (
@@ -835,6 +851,7 @@ export function LumenView<T extends RowData>({
       filter={state ? undefined : filter}
       filterCount={filterCount}
       strip={state ? undefined : strip}
+      foot={foot}
       link={link}
       note={note}
       load={load}
