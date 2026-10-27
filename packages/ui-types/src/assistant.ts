@@ -312,8 +312,8 @@ export interface AssistantStatus {
   advice: string;
   web: {
     fetch: boolean;
-    /** Null when the app has no ScrapeQL. */
-    scrapeql: (KeyState & { tools?: string[] }) | null;
+    /** Null when the app has no ScrapeQL; `bound` when it is reached over a service binding (no token). */
+    scrapeql: (KeyState & { tools?: string[]; bound?: boolean }) | null;
   };
   /** The providers the app's models run on, each with its keys. */
   providers: AssistantProviderRow[];
