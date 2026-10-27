@@ -45,6 +45,8 @@ export interface LumenViewCardProps<T> {
   state?: ReactNode;
   /** A row click (pick a version, open a drawer). */
   onDetails?: (row: T) => void;
+  /** The row whose details are open, marked selected (LumenView `openKey`). */
+  openKey?: string | null;
   /** Its place in the layout: the layout's `frame` hands these over. */
   controls?: CardControls;
   /** Its saved controls (Edit widget ▸ Controls), on a saved page's table. */
@@ -67,6 +69,7 @@ export function LumenViewCard<T extends RowData>({
   note,
   state,
   onDetails,
+  openKey,
   controls,
   shown: savedControls,
   onColumns,
@@ -132,6 +135,7 @@ export function LumenViewCard<T extends RowData>({
       state={state}
       onDetails={pick.onTap ?? onDetails}
       tapped={pick.tapped}
+      openKey={openKey}
       title={title ?? config.name}
       inLayout
       cardId={cardId}
