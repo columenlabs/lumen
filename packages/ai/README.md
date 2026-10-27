@@ -141,3 +141,18 @@ The panel's composer lists what can follow three keys as they are typed. The kit
   `target` lights the thing on screen while its row is hovered. A page's source replaces a standing one with the same `id`.
 
   Text the person highlights on the page is offered first under `#` (Selected text), with where it sits from the nearest `data-assistant-where` attribute. To hand a highlight over from the page, an Ask button calls `composeAssistant({ refs: [selectionRef({ text, where })], text: '' })` (or any refs and text): the panel opens with the chips in the composer, focused for the person to finish.
+
+### Bearings
+
+Each message the model gets starts with a few lines of bearings: the time now in the person's zone (the panel sends the browser's), UTC, how long since the chat's last message and the app's name. They go in the message, not the system prompt, so the prompt cache holds. An app adds its own lines with `bearings`; each call gets 300 ms, and when it is late or throws its lines are left out.
+
+```ts
+createAssistant({
+  // ...
+  app: 'Notes',
+  timeZone: 'America/Los_Angeles', // when the browser sends none
+  bearings: ({ now, at, span }) => `Next backup: ${at(nextBackup(now))} (in ${span(nextBackup(now) - now)})`,
+});
+```
+
+An app with its own assistant loop builds the same block with `bearings({ timeZone, lastAt, app, extras })` and puts it before the message.

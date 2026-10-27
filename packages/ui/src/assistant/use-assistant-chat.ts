@@ -13,6 +13,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorText } from '../integrations';
 import type { AssistantAdapter } from './client';
 
+/** The browser's IANA zone, sent with each message for the assistant's bearings. */
+function browserZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** An item as the panel draws it: a text still streaming, a step still running. */
 export type LiveItem = ChatItem & { live?: boolean };
 
@@ -169,7 +178,12 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         ]);
       try {
         await client.send(
-          { message, ...(idRef.current ? { chat_id: idRef.current } : {}), ...extra },
+          {
+            message,
+            ...(idRef.current ? { chat_id: idRef.current } : {}),
+            ...(browserZone() ? { time_zone: browserZone() } : {}),
+            ...extra,
+          },
           (e) => {
             if (e.event === 'chat') {
               idRef.current = e.data.id;
