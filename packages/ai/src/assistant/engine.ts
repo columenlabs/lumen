@@ -434,6 +434,24 @@ function openaiStreamError(code: string, plan: boolean): string {
   return `OpenAI could not answer (${code || 'no reason given'}). It is logged; try again or pick another model.`;
 }
 
+/** The reasoning effort sent to OpenAI (`low` only on a retry). */
+type Effort = 'low' | 'medium' | 'high' | 'max' | undefined;
+/** Set once a plan backend refuses `max_output_tokens`, for the rest of the isolate. */
+let planCapRefused = false;
+const refusesCap = (err: unknown) =>
+  err instanceof OpenAI.APIError &&
+  err.status === 400 &&
+  /max_output_tokens/.test(
+    `${err.message} ${(err.error as { param?: string } | undefined)?.param ?? ''}`,
+  );
+/** Whether a response's output has words or a call to show. */
+const shows = (output: OpenAI.Responses.ResponseOutputItem[]) =>
+  output.some(
+    (b) =>
+      b.type === 'function_call' ||
+      (b.type === 'message' && b.content.some((c) => c.type === 'output_text' && c.text)),
+  );
+
 const isApiError = (err: unknown) =>
   err instanceof Anthropic.APIError || err instanceof OpenAI.APIError;
 
@@ -1510,26 +1528,32 @@ export class Assistant {
       strict: false,
     }));
     // The chat so far is plain text turns; this answer's calls are appended as OpenAI items.
-    const input: OpenAI.Responses.ResponseInputItem[] = o.messages.map((m) => ({
-      role: m.role,
-      content:
-        typeof m.content === 'string'
-          ? m.content
-          : m.content
-              .map((b) => (b.type === 'text' ? b.text : ''))
-              .filter(Boolean)
-              .join('\n'),
-    }));
+    // An earlier answer that said nothing (only a cut mark) is left out: an empty turn is refused.
+    const input: OpenAI.Responses.ResponseInputItem[] = o.messages
+      .map((m) => ({
+        role: m.role,
+        content:
+          typeof m.content === 'string'
+            ? m.content
+            : m.content
+                .map((b) => (b.type === 'text' ? b.text : ''))
+                .filter(Boolean)
+                .join('\n'),
+      }))
+      .filter((m) => m.role !== 'assistant' || m.content.replace('…(cut)', '').trim() !== '');
     let answer = '';
     let force:
       | OpenAI.Responses.ToolChoiceOptions
       | OpenAI.Responses.ToolChoiceFunction
       | undefined = o.first?.type === 'tool' ? { type: 'function', name: o.first.name } : undefined;
-    // A plan sign-in takes function tools only inside a namespace and no output cap.
-    const sent = (only?: string) => {
+    // A plan sign-in takes function tools only inside a namespace. Its output cap is sent too,
+    // unless the backend refused one before (then it keeps its own).
+    const sent = (only: string | undefined, cap: boolean) => {
       const fns = only ? fnTools.filter((t) => t.name === only) : fnTools;
-      if (!plan) return { tools: fns, max_output_tokens: session.tier.out ?? DEFAULT_OUT };
+      const out = cap ? { max_output_tokens: session.tier.out ?? DEFAULT_OUT } : {};
+      if (!plan) return { tools: fns, ...out };
       return {
+        ...out,
         tools: [
           {
             type: 'namespace',
@@ -1552,8 +1576,8 @@ export class Assistant {
       let partial = '';
       // Event types seen and the items finished one by one: a plan sign-in's final event may carry
       // an empty `output`, its items having come only as `response.output_item.done`.
-      const seen: Record<string, number> = {};
-      const items: OpenAI.Responses.ResponseOutputItem[] = [];
+      let seen: Record<string, number> = {};
+      let items: OpenAI.Responses.ResponseOutputItem[] = [];
       // An error OpenAI sends inside the stream: logged in full, shown as a plain sentence.
       const streamFailure = (er: {
         code?: string | null;
@@ -1576,65 +1600,112 @@ export class Assistant {
         );
         return new AssistantError(openaiStreamError(er.code || er.type || '', plan), 'upstream');
       };
-      const res = await (async () => {
-        const stream = await client.responses.create(
-          {
-            model: session.model.id,
-            instructions,
-            input,
-            ...sent(only),
-            store: false,
-            stream: true,
-            include: ['reasoning.encrypted_content'],
-            ...(effort ? { reasoning: { effort } } : {}),
-            ...(choice ? { tool_choice: choice } : {}),
-          } as OpenAI.Responses.ResponseCreateParamsStreaming,
-          signal ? { signal } : {},
-        );
-        let done: OpenAI.Responses.Response | undefined;
-        for await (const e of stream as AsyncIterable<{ type: string } & Record<string, unknown>>) {
-          seen[e.type] = (seen[e.type] ?? 0) + 1;
-          if (e.type === 'response.output_item.done' && e.item)
-            items.push(e.item as OpenAI.Responses.ResponseOutputItem);
-          if (e.type === 'response.output_text.delta' && typeof e.delta === 'string') {
-            partial += e.delta;
-            emit('text', { delta: e.delta });
-          } else if (
-            e.type === 'response.completed' ||
-            e.type === 'response.incomplete' ||
-            e.type === 'response.failed'
-          ) {
-            done = e.response as OpenAI.Responses.Response;
-          } else if (e.type === 'error') {
-            const er = (e.error ?? e) as {
+      // One call of this round; asked again (fresh stream state) when the plan refuses the cap or
+      // spends its whole output on reasoning.
+      const ask = (cap: boolean, eff: Effort) => {
+        partial = '';
+        seen = {};
+        items = [];
+        return askOnce(cap, eff);
+      };
+      const askOnce = (cap: boolean, eff: Effort) =>
+        (async () => {
+          const stream = await client.responses.create(
+            {
+              model: session.model.id,
+              instructions,
+              input,
+              ...sent(only, cap),
+              store: false,
+              stream: true,
+              include: ['reasoning.encrypted_content'],
+              ...(eff ? { reasoning: { effort: eff } } : {}),
+              ...(choice ? { tool_choice: choice } : {}),
+            } as OpenAI.Responses.ResponseCreateParamsStreaming,
+            signal ? { signal } : {},
+          );
+          let done: OpenAI.Responses.Response | undefined;
+          for await (const e of stream as AsyncIterable<
+            { type: string } & Record<string, unknown>
+          >) {
+            seen[e.type] = (seen[e.type] ?? 0) + 1;
+            if (e.type === 'response.output_item.done' && e.item)
+              items.push(e.item as OpenAI.Responses.ResponseOutputItem);
+            if (e.type === 'response.output_text.delta' && typeof e.delta === 'string') {
+              partial += e.delta;
+              emit('text', { delta: e.delta });
+            } else if (
+              e.type === 'response.completed' ||
+              e.type === 'response.incomplete' ||
+              e.type === 'response.failed'
+            ) {
+              done = e.response as OpenAI.Responses.Response;
+            } else if (e.type === 'error') {
+              const er = (e.error ?? e) as {
+                code?: string;
+                type?: string;
+                message?: string;
+                param?: string;
+              };
+              throw streamFailure(er);
+            }
+          }
+          if (!done) throw new AssistantError('OpenAI ended the answer early.', 'upstream');
+          return done;
+        })().catch((err: unknown) => {
+          if (signal?.aborted && partial) sink.push({ kind: 'text', text: partial });
+          // The SDK throws a stream's `error` event as an APIError with no HTTP status.
+          if (err instanceof OpenAI.APIError && err.status === undefined) {
+            const er = (err.error ?? {}) as {
               code?: string;
               type?: string;
               message?: string;
               param?: string;
             };
-            throw streamFailure(er);
+            throw streamFailure({
+              ...er,
+              code: er.code ?? err.code ?? undefined,
+              message: er.message ?? err.message,
+            });
           }
-        }
-        if (!done) throw new AssistantError('OpenAI ended the answer early.', 'upstream');
-        return done;
-      })().catch((err: unknown) => {
-        if (signal?.aborted && partial) sink.push({ kind: 'text', text: partial });
-        // The SDK throws a stream's `error` event as an APIError with no HTTP status.
-        if (err instanceof OpenAI.APIError && err.status === undefined) {
-          const er = (err.error ?? {}) as {
-            code?: string;
-            type?: string;
-            message?: string;
-            param?: string;
-          };
-          throw streamFailure({
-            ...er,
-            code: er.code ?? err.code ?? undefined,
-            message: er.message ?? err.message,
-          });
-        }
-        throw err;
-      });
+          throw err;
+        });
+      let cap = !plan || !planCapRefused;
+      let res: OpenAI.Responses.Response;
+      try {
+        res = await ask(cap, effort);
+      } catch (err) {
+        // A plan backend that refuses an output cap keeps its own: ask once more without it.
+        if (!(plan && cap && refusesCap(err))) throw err;
+        planCapRefused = true;
+        cap = false;
+        console.error(
+          JSON.stringify({ event: 'assistant_openai_cap_refused', model: session.model.id }),
+        );
+        res = await ask(cap, effort);
+      }
+      // A reasoning model can spend the whole output on thinking and say nothing: ask once more
+      // with less thinking before giving up.
+      if (
+        res.status === 'incomplete' &&
+        res.incomplete_details?.reason === 'max_output_tokens' &&
+        !partial &&
+        !shows(res.output?.length ? res.output : items) &&
+        effort !== 'low'
+      ) {
+        console.error(
+          JSON.stringify({
+            event: 'assistant_openai_retry',
+            model: session.model.id,
+            plan,
+            cap,
+            why: 'no_words',
+            usage: res.usage ?? null,
+            events: seen,
+          }),
+        );
+        res = await ask(cap, 'low');
+      }
       if (res.status === 'failed') {
         if (partial) sink.push({ kind: 'text', text: partial });
         const code = res.error?.code ?? '';
@@ -1696,9 +1767,11 @@ export class Assistant {
         );
         if (!answer)
           throw new AssistantError(
-            res.incomplete_details?.reason
-              ? `OpenAI stopped before answering (${res.incomplete_details.reason}).`
-              : 'OpenAI sent no answer.',
+            res.incomplete_details?.reason === 'max_output_tokens'
+              ? 'OpenAI spent the whole answer thinking and wrote nothing. Try again, or pick a smaller tier.'
+              : res.incomplete_details?.reason
+                ? `OpenAI stopped before answering (${res.incomplete_details.reason}).`
+                : 'OpenAI sent no answer.',
             'upstream',
           );
       }
