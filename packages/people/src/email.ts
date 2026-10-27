@@ -93,11 +93,32 @@ export async function sendResend(c: ResendConfig, msg: MailMessage): Promise<Mai
     }),
   });
   if (!res) return { ok: false, detail: 'Could not reach the email server' };
-  await res.body?.cancel();
-  if (res.status >= 300 && res.status < 400) return { ok: false, detail: redirected(res) };
-  return res.ok
-    ? { ok: true, detail: `Emailed ${msg.to}` }
-    : { ok: false, detail: refused(res.status) };
+  if (res.ok) {
+    await res.body?.cancel();
+    return { ok: true, detail: `Emailed ${msg.to}` };
+  }
+  if (res.status >= 300 && res.status < 400) {
+    await res.body?.cancel();
+    return { ok: false, detail: redirected(res) };
+  }
+  const why = await serverSays(res);
+  return { ok: false, detail: why ? `${refused(res.status)}: ${why}` : refused(res.status) };
+}
+
+/** The server's own reason in a Resend-style error body (`message` or `error`), short and on one line. */
+async function serverSays(res: Response): Promise<string | null> {
+  const body = (await res.json().catch(() => null)) as {
+    message?: unknown;
+    error?: unknown;
+  } | null;
+  const said =
+    typeof body?.message === 'string'
+      ? body.message
+      : typeof body?.error === 'string'
+        ? body.error
+        : '';
+  const line = said.replace(/\s+/g, ' ').trim();
+  return line ? (line.length > 200 ? `${line.slice(0, 199)}…` : line) : null;
 }
 
 export const resendMailer =
