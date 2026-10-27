@@ -12,7 +12,7 @@ export {
   useAssistantStatus,
   useLumenAssistantDock,
 } from './lumen-assistant';
-export { assistantSettingsSections } from './settings';
+export { assistantAdminSections, assistantSettingsSections } from './settings';
 export {
   type AssistantSource,
   type AssistantSourceItem,

@@ -1,12 +1,12 @@
 // The assistant's Settings sections, for any app on `@columenlabs/lumen-ai/assistant`: the assistant
-// itself (tier, hand off, advice), then Model providers (each provider's app key and a person's own
-// key, the monthly caps, who pays), Models (each tier's model and effort, each task's starting tier), Tools (each group
+// itself (tier, hand off, advice), then Model providers (a person's own key for each provider and
+// its monthly cap), Models (each tier's model and effort, each task's starting tier), Tools (each group
 // Off, Read or Read + draft), Web (fetch, ScrapeQL's token) and Spend (this month). Keys and tokens
-// are tested before they are kept and never shown again, only their last characters.
+// are tested before they are kept and never shown again, only their last characters. The app's
+// shared keys and the allowance on them are the admin's section (`assistantAdminSections`).
 import type {
   AssistantAccess,
   AssistantEffort,
-  AssistantPayer,
   AssistantProviderRow,
   AssistantSettingsPatch,
   AssistantStatus,
@@ -492,125 +492,143 @@ function SigninPaste({
   );
 }
 
-/** One provider, collapsed to a row: where to make a key (a new tab), the app's key and the person's. */
-function ProviderKeys({
-  client,
-  p,
-  admin,
-}: { client: AssistantAdapter; p: AssistantProviderRow; admin: boolean }) {
+const ready = (
+  <Badge variant="outline" className="text-gain">
+    <CheckIcon />
+    Ready
+  </Badge>
+);
+const notSet = <Badge variant="outline">Not set</Badge>;
+
+/** One provider, collapsed to a row: the person's own key (or their ChatGPT plan sign-in). */
+function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
   const { apply, refresh } = useApply(client);
-  const appOn = p.app.set || !!p.app.from_env;
   const plan = p.own.via === 'chatgpt';
-  const meta = [
-    appOn ? 'Shared key set' : 'No shared key',
-    plan ? 'your ChatGPT plan' : p.own.set ? 'your own key' : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  const failed = [p.app, p.own].some((k) => k.set && k.test && !k.test.ok);
-  const badge = failed ? (
-    <TestBadge test={{ ok: false }} />
-  ) : appOn || p.own.set ? (
-    <Badge variant="outline" className="text-gain">
-      <CheckIcon />
-      Ready
-    </Badge>
-  ) : (
-    <Badge variant="outline">Not set</Badge>
-  );
-  const ownKey = (
-    <KeyBlock
-      label={p.signin && !p.own.set ? 'Or your own API key' : 'Your own key'}
-      prefix={p.prefix}
-      provider={p.label}
-      state={p.own}
-      canEdit
-      keysUrl={p.keys_url}
-      onSave={(k) => apply(`own:${p.id}`, () => client.ownKey(p.id, k), 'Key saved')}
-      onRemove={() => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed')}
-      onTest={() => client.testOwnKey(p.id).finally(refresh)}
-    />
-  );
+  const badge =
+    p.own.set && p.own.test && !p.own.test.ok ? (
+      <TestBadge test={{ ok: false }} />
+    ) : p.own.set ? (
+      ready
+    ) : (
+      notSet
+    );
   return (
-    <LumenExpandRow id={p.id} name={p.label} meta={meta} badge={badge}>
+    <LumenExpandRow
+      id={p.id}
+      name={p.label}
+      meta={plan ? 'Your ChatGPT plan' : p.own.set ? 'Your key' : 'No key'}
+      badge={badge}
+    >
       <div className="flex flex-col">
-        <KeyBlock
-          label="Shared key"
-          info="An admin sets it once; everyone uses it, within each person's monthly cap."
-          prefix={p.prefix}
-          provider={p.label}
-          state={p.app}
-          canEdit={admin}
-          keysUrl={p.keys_url}
-          onSave={(k) => apply(`app:${p.id}`, () => client.appKey(p.id, k), 'Key saved')}
-          onRemove={() => apply(`app:${p.id}`, () => client.appKey(p.id, null), 'Key removed')}
-          onTest={() => client.testAppKey(p.id).finally(refresh)}
-        />
         {p.signin === 'chatgpt' && (!p.own.set || plan) && <ChatgptSignin client={client} p={p} />}
-        {!plan && ownKey}
+        {!plan && (
+          <KeyBlock
+            label={p.signin && !p.own.set ? 'Or your API key' : 'Your key'}
+            prefix={p.prefix}
+            provider={p.label}
+            state={p.own}
+            canEdit
+            keysUrl={p.keys_url}
+            onSave={(k) => apply(`own:${p.id}`, () => client.ownKey(p.id, k), 'Key saved')}
+            onRemove={() => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed')}
+            onTest={() => client.testOwnKey(p.id).finally(refresh)}
+          />
+        )}
       </div>
     </LumenExpandRow>
   );
 }
 
+/** A person's own keys, one row a provider, and what they may spend on them. */
 function Providers({ client }: { client: AssistantAdapter }) {
   const { apply } = useApply(client);
   return (
     <WithStatus client={client}>
-      {(s) => {
-        const ownSet = s.providers.some((p) => p.own.set);
-        return (
+      {(s) => (
+        <div className="flex flex-col">
+          <LumenExpandList>
+            {s.providers.map((p) => (
+              <OwnProviderKey key={p.id} client={client} p={p} />
+            ))}
+          </LumenExpandList>
+          {s.providers.some((p) => p.own.set) && (
+            <Row label="Your keys may spend" info="On your keys, every provider together.">
+              <CapInput
+                label="Your monthly cap"
+                value={s.caps.own}
+                onSave={(n) => void apply('own', () => client.ownCap(n))}
+              />
+            </Row>
+          )}
+        </div>
+      )}
+    </WithStatus>
+  );
+}
+
+/** One provider's shared key, which an admin sets for everyone. */
+function SharedProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
+  const { apply, refresh } = useApply(client);
+  const on = p.app.set || !!p.app.from_env;
+  const badge =
+    p.app.set && p.app.test && !p.app.test.ok ? (
+      <TestBadge test={{ ok: false }} />
+    ) : on ? (
+      ready
+    ) : (
+      notSet
+    );
+  return (
+    <LumenExpandRow
+      id={p.id}
+      name={p.label}
+      meta={p.app.from_env ? 'From the server' : on ? 'Shared key' : 'No key'}
+      badge={badge}
+    >
+      <KeyBlock
+        label="Shared key"
+        info="Everyone's answers run on it, within the monthly allowance below."
+        prefix={p.prefix}
+        provider={p.label}
+        state={p.app}
+        canEdit
+        keysUrl={p.keys_url}
+        onSave={(k) => apply(`app:${p.id}`, () => client.appKey(p.id, k), 'Key saved')}
+        onRemove={() => apply(`app:${p.id}`, () => client.appKey(p.id, null), 'Key removed')}
+        onTest={() => client.testAppKey(p.id).finally(refresh)}
+      />
+    </LumenExpandRow>
+  );
+}
+
+/** Admins only: the app's shared keys and what each person may spend on them. */
+function SharedKeys({ client }: { client: AssistantAdapter }) {
+  const { apply } = useApply(client);
+  return (
+    <WithStatus client={client}>
+      {(s) =>
+        s.admin ? (
           <div className="flex flex-col">
             <LumenExpandList>
               {s.providers.map((p) => (
-                <ProviderKeys key={p.id} client={client} p={p} admin={s.admin} />
+                <SharedProviderKey key={p.id} client={client} p={p} />
               ))}
             </LumenExpandList>
-            {s.admin && (
-              <Row
-                label="Each person may spend"
-                info="On the shared keys, every provider together."
-              >
-                <CapInput
-                  label="Cap per person"
-                  value={s.caps.app}
-                  onSave={(n) => void apply('cap', () => client.appCap(n))}
-                />
-              </Row>
-            )}
-            {ownSet && (
-              <Row label="Your keys may spend" info="On your own keys, every provider together.">
-                <CapInput
-                  label="Your monthly cap"
-                  value={s.caps.own}
-                  onSave={(n) => void apply('own', () => client.ownCap(n))}
-                />
-              </Row>
-            )}
             <Row
-              label="Pay with first"
-              info="When it reaches its cap this month, or has no key for the tier's provider, the other pays."
+              label="Each person may spend"
+              info="A month on the shared keys, every provider together. Past it, a person's own key pays."
             >
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                spacing={0}
-                value={s.pay}
-                aria-label="Pay with"
-                onValueChange={(v) =>
-                  v && void apply('pay', () => client.settings({ pay: v as AssistantPayer }))
-                }
-              >
-                <ToggleGroupItem value="app">Shared keys</ToggleGroupItem>
-                <ToggleGroupItem value="own" disabled={!ownSet}>
-                  Your keys
-                </ToggleGroupItem>
-              </ToggleGroup>
+              <CapInput
+                label="Allowance per person"
+                value={s.caps.app}
+                onSave={(n) => void apply('cap', () => client.appCap(n))}
+              />
             </Row>
           </div>
-        );
-      }}
+        ) : (
+          <p className="text-muted-foreground text-sm">Only an admin can change these.</p>
+        )
+      }
     </WithStatus>
   );
 }
@@ -910,6 +928,26 @@ function Spend({ client }: { client: AssistantAdapter }) {
 }
 
 /**
+ * The admin's section: the app's shared keys and each person's monthly allowance on them. Put it
+ * where the app keeps its admin settings, shown only to admins.
+ */
+export function assistantAdminSections({
+  client,
+}: {
+  client: AssistantAdapter;
+}): SettingsSectionDef[] {
+  return [
+    {
+      id: 'assistant-shared-keys',
+      title: 'Shared model keys',
+      icon: KeyRoundIcon,
+      description: "Keys everyone's answers run on, and the allowance",
+      content: <SharedKeys client={client} />,
+    },
+  ];
+}
+
+/**
  * The assistant's Settings sections: the assistant, then Model providers, Models, Tools, Web and
  * Spend under it. Pass them to LumenShell's `shared` (or an app's own `settings`).
  */
@@ -937,7 +975,7 @@ export function assistantSettingsSections({
       title: 'Model providers',
       icon: KeyRoundIcon,
       sub: true,
-      description: 'Keys for each provider, and who pays',
+      description: 'Your own key for each provider',
       content: <Providers client={client} />,
     },
     {
