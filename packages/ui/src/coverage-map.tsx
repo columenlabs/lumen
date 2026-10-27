@@ -544,7 +544,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when the columns change
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (el && layout === 'grid') el.scrollLeft = el.scrollWidth;
+    if (el && layout === 'grid') snapToEnd(el);
     edge.update();
   }, [strip]);
 
@@ -854,6 +854,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
           {cols.map((k) => (
             <span
               key={k}
+              data-col=""
               className="num h-4 overflow-visible text-[11px] whitespace-nowrap text-muted-foreground"
             >
               {headLabel(k, block, cols.length)}
@@ -1139,4 +1140,24 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       </LumenWidget>
     </div>
   );
+}
+
+/** Scrolls a sideways strip to its end (today) so its left edge falls on a whole block, not mid
+ *  block with its label cut: the strip's content takes just enough room at its end to land there. */
+function snapToEnd(el: HTMLElement) {
+  const content = el.firstElementChild as HTMLElement | null;
+  if (!content) return;
+  content.style.paddingRight = '';
+  el.scrollLeft = el.scrollWidth;
+  const box = el.getBoundingClientRect().left;
+  const lefts = [...el.querySelectorAll<HTMLElement>('[data-col]')].map(
+    (c) => c.getBoundingClientRect().left - box,
+  );
+  // The first block cut by the left edge; the strip moves on to the block after it.
+  const cut = lefts.find((x, i) => x < -0.5 && (lefts[i + 1] ?? 1) > 0.5);
+  if (cut === undefined) return;
+  const next = lefts[lefts.indexOf(cut) + 1];
+  if (next === undefined || next <= 0.5) return;
+  content.style.paddingRight = `${Math.ceil(next)}px`;
+  el.scrollLeft = el.scrollWidth;
 }

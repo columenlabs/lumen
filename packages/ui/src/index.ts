@@ -117,6 +117,7 @@ export { RankedBars, StackedBars, StackedColumns, TimeLines } from './lumen-widg
 export { type ShareSegment, ShareMeter } from './share-meter';
 export { type Pool, poolShare } from './pool-share';
 export { METER_LEVEL_COLOR, meterLevel, meterValueTone } from './meter-level';
+export { contrast, readableInk } from './ink';
 export { UnitValue } from './unit-value';
 export {
   type BurnRate,
