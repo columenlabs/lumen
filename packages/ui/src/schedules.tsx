@@ -129,13 +129,52 @@ const daysText = (days: number[]) => {
 const allDay = (s: ScheduleItem) =>
   s.days.length === 7 && s.from === '00:00' && (s.to === '23:59' || s.to === '24:00');
 
-/** When it runs, in words: `Every 6 h`, `Every 1 h · Weekdays 9:00 AM–5:00 PM ET`, `Daily at 3:15 AM UTC`. */
-function when(s: ScheduleItem) {
+/** The zone's offset from UTC at `at`, in ms (positive east of UTC). */
+const offsetOf = (tz: string, at: number) => {
+  const p: Record<string, number> = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+    })
+      .formatToParts(at)
+      .map((x) => [x.type, Number(x.value)]),
+  );
+  const n = (k: string) => p[k] ?? 0;
+  return (
+    Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute')) -
+    Math.floor(at / 60_000) * 60_000
+  );
+};
+/** `03:15` in `from` (today) as the same moment's clock in `to`: `03:15` UTC → `8:15 PM` PT. */
+const clockIn = (hhmm: string, from: string, to: string) => {
+  if (from === to) return clockText(hhmm);
+  const [h = 0, m = 0] = hhmm.split(':').map(Number);
+  const now = new Date();
+  const wall = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m);
+  const at = wall - offsetOf(from, wall);
+  return new Date(at).toLocaleTimeString('en-US', {
+    timeZone: to,
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+/**
+ * When it runs, in words, in the viewer's zone (`zone`, the person's preference): `Every 6 h`,
+ * `Every 1 h · Weekdays 6:00 AM–2:00 PM PT`, `Daily at 8:15 PM PT`. Days stay the schedule's own.
+ */
+function when(s: ScheduleItem, zone: string) {
   if (s.when) return s.when;
-  if (s.kind === 'daily') return `Daily at ${clockText(s.from)} ${zoneAbbr(s.tz)}`;
+  const at = (hhmm: string) => clockIn(hhmm, s.tz, zone);
+  if (s.kind === 'daily') return `Daily at ${at(s.from)} ${zoneAbbr(zone)}`;
   const every = `Every ${everyText(s.every)}`;
   if (allDay(s)) return every;
-  return `${every} · ${daysText(s.days)} ${clockText(s.from)}–${clockText(s.to)} ${zoneAbbr(s.tz)}`;
+  return `${every} · ${daysText(s.days)} ${at(s.from)}–${at(s.to)} ${zoneAbbr(zone)}`;
 }
 
 function useTime() {
@@ -272,6 +311,7 @@ function Editor({
 }) {
   const assistantName = useAssistantName();
   const time = useTime();
+  const { timeZone } = usePrefs();
   const assistant = useAssistant();
   const { closeSettings } = useShell();
   const [brief, setBrief] = useState<BriefChange>({
@@ -322,7 +362,7 @@ function Editor({
     <>
       <SheetHeader>
         <SheetTitle>{s.name}</SheetTitle>
-        <SheetDescription>{when(s)}</SheetDescription>
+        <SheetDescription>{when(s, timeZone)}</SheetDescription>
       </SheetHeader>
       <div className="grid grid-cols-1 gap-5 overflow-y-auto px-4">
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
@@ -544,6 +584,7 @@ export function SchedulesSection({
   briefs?: BriefActions;
 }) {
   const isMobile = useIsMobile();
+  const { timeZone } = usePrefs();
   const { closeSettings } = useShell();
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -571,7 +612,7 @@ export function SchedulesSection({
             >
               <span className="font-medium">{s.name}</span>
               <OnSwitch s={s} onSave={onSave} />
-              <span className="col-span-2 text-xs text-muted-foreground">{when(s)}</span>
+              <span className="col-span-2 text-xs text-muted-foreground">{when(s, timeZone)}</span>
               <span className="col-span-2 text-xs">
                 {s.waiting ? <span className="text-warning">{s.waiting}</span> : <Last s={s} />}
               </span>
@@ -598,7 +639,7 @@ export function SchedulesSection({
                   </TableCell>
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
-                    {when(s)}
+                    {when(s, timeZone)}
                   </TableCell>
                   <TableCell className="max-w-48">
                     {s.waiting ? (
