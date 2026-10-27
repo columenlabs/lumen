@@ -67,7 +67,7 @@ other packages:
 - Any change to `packages/vault`, the publish workflow, `scripts/pack.sh` or `CODEOWNERS` needs the
   owner's review (`.github/CODEOWNERS` and a branch rule).
 - It is published only when it changed since its last version on npm, by the `vault` job of the
-  publish workflow, which waits for the owner's approval in the `vault` environment and uses that
-  environment's own npm token, `NPM_TOKEN_VAULT`, which can publish only this package.
+  publish workflow, which waits for the owner's approval in the `vault` environment (admins cannot
+  skip it).
 - Apps never take a vault update automatically: no Dependabot group or auto-merge covers it, and
   each bump is its own pull request.
