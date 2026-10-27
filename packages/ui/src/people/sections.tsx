@@ -26,6 +26,7 @@ import { useMemo, useState } from 'react';
 import { LumenLayout } from '../lumen-layout';
 import { LumenSelector } from '../lumen-selector';
 import { useLumenLoad } from '../lumen-source';
+import { getPrefs } from '../prefs';
 import { Tile, TileRow } from '../tile';
 import { Button } from '../ui/button';
 import type { ViewDomain } from '../view-model';
@@ -446,7 +447,8 @@ export function AuditSection({ frame }: { frame: PeopleFrame }) {
         label: 'Day',
         icon: ClockIcon,
         value: (e) =>
-          new Date(e.at).toLocaleDateString(undefined, {
+          new Date(e.at).toLocaleDateString('en-US', {
+            timeZone: getPrefs().timeZone,
             weekday: 'short',
             day: 'numeric',
             month: 'short',
@@ -459,7 +461,13 @@ export function AuditSection({ frame }: { frame: PeopleFrame }) {
         label: 'When',
         icon: ClockIcon,
         value: (e) =>
-          new Date(e.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+          new Date(e.at).toLocaleTimeString('en-US', {
+            timeZone: getPrefs().timeZone,
+            // Two-digit hours keep a column of times aligned.
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'shortGeneric',
+          }),
         format: 'text',
       },
       {

@@ -19,7 +19,7 @@ import { LumenConfirm } from './confirm';
 import { useIsMobile } from './hooks/use-mobile';
 import { LumenSelector } from './lumen-selector';
 import { IconButton } from './page';
-import { timeZoneLabel, usePrefs } from './prefs';
+import { usePrefs, zoneAbbr } from './prefs';
 import { useShell } from './shell';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -125,14 +125,17 @@ const daysText = (days: number[]) => {
   if (d.join() === '1,2,3,4,5') return 'Weekdays';
   return d.map((x) => DAYS[x]).join(', ');
 };
-const zoneText = (tz: string) => tz.split('/').pop()?.replace('_', ' ') ?? tz;
+/** A window that spans the whole day on every day says nothing a person needs. */
+const allDay = (s: ScheduleItem) =>
+  s.days.length === 7 && s.from === '00:00' && (s.to === '23:59' || s.to === '24:00');
 
-/** When it runs, in words. */
+/** When it runs, in words: `Every 6 h`, `Every 1 h · Weekdays 9:00 AM–5:00 PM ET`, `Daily at 3:15 AM UTC`. */
 function when(s: ScheduleItem) {
   if (s.when) return s.when;
-  if (s.kind === 'window')
-    return `${daysText(s.days)} ${clockText(s.from)}–${clockText(s.to)} ${zoneText(s.tz)}`;
-  return `Daily at ${clockText(s.from)} ${zoneText(s.tz)}`;
+  if (s.kind === 'daily') return `Daily at ${clockText(s.from)} ${zoneAbbr(s.tz)}`;
+  const every = `Every ${everyText(s.every)}`;
+  if (allDay(s)) return every;
+  return `${every} · ${daysText(s.days)} ${clockText(s.from)}–${clockText(s.to)} ${zoneAbbr(s.tz)}`;
 }
 
 function useTime() {
@@ -143,6 +146,7 @@ function useTime() {
       weekday: 'short',
       hour: 'numeric',
       minute: '2-digit',
+      timeZoneName: 'shortGeneric',
     });
 }
 
@@ -552,7 +556,6 @@ export function SchedulesSection({
       }
     : undefined;
   const editing = schedules?.find((s) => s.id === open);
-  const { timeZone } = usePrefs();
   if (error) return <p className="text-sm text-loss">{error}</p>;
   if (!schedules) return <Skeleton className="h-48 w-full" />;
   return (
@@ -568,10 +571,7 @@ export function SchedulesSection({
             >
               <span className="font-medium">{s.name}</span>
               <OnSwitch s={s} onSave={onSave} />
-              <span className="col-span-2 text-xs text-muted-foreground">
-                {s.kind === 'daily' ? '' : `Every ${everyText(s.every)} · `}
-                {when(s)}
-              </span>
+              <span className="col-span-2 text-xs text-muted-foreground">{when(s)}</span>
               <span className="col-span-2 text-xs">
                 {s.waiting ? <span className="text-warning">{s.waiting}</span> : <Last s={s} />}
               </span>
@@ -598,7 +598,6 @@ export function SchedulesSection({
                   </TableCell>
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
-                    {s.kind === 'daily' ? '' : `Every ${everyText(s.every)} · `}
                     {when(s)}
                   </TableCell>
                   <TableCell className="max-w-48">
@@ -629,10 +628,11 @@ export function SchedulesSection({
         </div>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          Last runs shown in {timeZoneLabel(timeZone)}.
-          {onRuns ? ' Each run is a line in Logs.' : ''}
-        </p>
+        {onRuns ? (
+          <p className="text-xs text-muted-foreground">Each run is a line in Logs.</p>
+        ) : (
+          <span />
+        )}
         {briefs ? (
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
             <PlusIcon />

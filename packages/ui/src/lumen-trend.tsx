@@ -6,6 +6,7 @@ import {
   type TrendBucket,
   type TrendStyle,
   type ViewFormat,
+  formatBytes,
   isDollarFormat,
 } from '@columenlabs/lumen-ui-types/views';
 import { useMemo } from 'react';
@@ -47,6 +48,7 @@ function short(v: number, format: ViewFormat, hidden: boolean) {
   const sign = v < 0 ? MINUS : '';
   const abs = Math.abs(v);
   if (format === 'percent' || format === 'weight') return `${sign}${abs.toFixed(1)}%`;
+  if (format === 'bytes') return `${sign}${formatBytes(abs)}`;
   if (isDollarFormat(format)) return `${sign}$${COMPACT.format(abs)}`;
   return `${sign}${COMPACT.format(abs)}`;
 }

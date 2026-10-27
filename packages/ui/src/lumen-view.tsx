@@ -4,6 +4,7 @@ import {
   type ViewChip,
   type ViewFormat,
   type WidgetControl,
+  bytesParts,
   controlOn,
   isCountAgg,
   isDollarFormat,
@@ -111,7 +112,7 @@ import { Skeleton } from './ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { UnitColumns } from './unit-value';
+import { UnitColumns, UnitValue } from './unit-value';
 import { EditCell, EditInputCell, EditManyCell } from './view-edit-cell';
 import type { ViewEditDialog as ViewEditDialogPart, ViewEditorSection } from './view-editor';
 import { fieldOptions } from './view-formulas';
@@ -258,6 +259,11 @@ export function ViewValueCell({
         <TooltipContent className="max-w-md whitespace-normal">{text}</TooltipContent>
       </Tooltip>
     );
+  }
+  if (format === 'bytes' && !hidden) {
+    // A size: its number and unit in the column's unit slot, so a column of sizes lines up.
+    const [n, unit] = bytesParts(value);
+    return <UnitValue value={`${value < 0 ? MINUS : ''}${n}`} unit={unit} />;
   }
   const abs = hidden ? maskAmount('0') : digitsOf(format, compact).format(Math.abs(value));
   const signed = format === 'signed' || format === 'percent' || format === 'price_signed';

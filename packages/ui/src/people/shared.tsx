@@ -18,6 +18,7 @@ import { errorText } from '../integrations';
 import { LumenSelector } from '../lumen-selector';
 import { lumenToast } from '../lumen-toast';
 import type { Crumb } from '../page';
+import { getPrefs } from '../prefs';
 import type { ViewChipTone } from '../view-model';
 import type { PeopleAdapter, WithSync } from './client';
 
@@ -38,23 +39,33 @@ export const statusTone = (p: Pick<Person, 'status'>): ViewChipTone | undefined 
         : 'muted';
 
 const DAY = 86_400_000;
-/** Non-breaking spaces, so `today 07:18 PM` and `in 7 d` never split across lines in any text. */
+/** Non-breaking spaces, so `today 7:18 PM PT` and `in 7 d` never split across lines in any text. */
 const glue = (s: string) => s.replace(/ /g, '\u00a0');
-const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
-/** `today 09:12`, `yesterday 18:42`, `24 Oct`, `24 Oct 2025`; a dash for never. */
+/**
+ * `today 9:12 AM PT`, `yesterday 6:42 PM PT`, `Oct 24`, `Oct 24, 2025`; a dash for never. Days and
+ * times are the person's time zone (Settings ▸ Preferences), not the device's.
+ */
 export function when(ts: number | null | undefined, now = Date.now()): string {
   if (!ts) return '—';
-  const d = new Date(ts);
-  const n = new Date(now);
-  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  if (sameDay(d, n)) return glue(`today ${time}`);
-  if (sameDay(d, new Date(now - DAY))) return glue(`yesterday ${time}`);
+  const { timeZone } = getPrefs();
+  const day = (t: number) => new Date(t).toLocaleDateString('en-US', { timeZone });
+  const year = (t: number) =>
+    new Date(t).toLocaleDateString('en-US', { timeZone, year: 'numeric' });
+  const time = new Date(ts).toLocaleTimeString('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'shortGeneric',
+  });
+  if (day(ts) === day(now)) return glue(`today ${time}`);
+  if (day(ts) === day(now - DAY)) return glue(`yesterday ${time}`);
   return glue(
-    d.toLocaleDateString(undefined, {
+    new Date(ts).toLocaleDateString('en-US', {
+      timeZone,
       day: 'numeric',
       month: 'short',
-      ...(d.getFullYear() === n.getFullYear() ? {} : { year: 'numeric' }),
+      ...(year(ts) === year(now) ? {} : { year: 'numeric' }),
     }),
   );
 }
