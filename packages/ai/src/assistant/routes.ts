@@ -42,7 +42,14 @@ import {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { type Assistant, AssistantError, type Caller } from './engine';
 import { PROVIDERS } from './models';
-import { type KeyDoc, type PersonDoc, type TokenDoc, keyDocName, planDocName } from './state';
+import {
+  type KeyDoc,
+  type KeyTest,
+  type PersonDoc,
+  type TokenDoc,
+  keyDocName,
+  planDocName,
+} from './state';
 import { APP_SCOPE } from './store';
 
 type Awaitable<T> = T | Promise<T>;
@@ -316,7 +323,11 @@ export function assistantRoutes(
         case 'POST /web/test': {
           const no = admin();
           if (no) return no;
-          if (a.boundScrapeql) return json(await a.testScrapeql(null));
+          if (a.boundScrapeql) {
+            const test = await a.testScrapeql(null);
+            await docs.write<{ test: KeyTest }>(APP_SCOPE, 'scrapeql:link', { test });
+            return json(test);
+          }
           const d = await a.state.scrapeql();
           if (!d) return fail('No ScrapeQL token is set.', 404);
           const test = await a.testScrapeql(d);

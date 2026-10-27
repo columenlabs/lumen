@@ -586,6 +586,8 @@ export class Assistant {
   async status(caller: Caller): Promise<AssistantStatus> {
     const main = await this.mainTier(caller);
     const mainModel = (await this.pick(caller, main)).model;
+    // The binding's last test has no token doc to sit in; it is read beside the rest.
+    const linkTest = this.o.web?.scrapeql?.fetch ? this.state.scrapeqlLink() : null;
     const [p, providers, scrapeql, spend, appCap, ownCap, { paying, wait }] = await Promise.all([
       this.state.person(caller.id),
       Promise.all(
@@ -621,6 +623,7 @@ export class Assistant {
       this.state.ownCap(caller.id),
       this.state.paying(caller.id, mainModel.provider),
     ]);
+    const link = await linkTest;
     const tiers = await Promise.all(
       this.tiers.map(async (t) => {
         const { model, effort } = await this.pick(caller, t);
@@ -673,7 +676,11 @@ export class Assistant {
         fetch: p.web ?? true,
         scrapeql: this.o.web?.scrapeql
           ? this.o.web.scrapeql.fetch
-            ? { set: true, bound: true }
+            ? {
+                set: true,
+                bound: true,
+                ...(link?.test ? { test: link.test } : {}),
+              }
             : caller.admin
               ? keyState(scrapeql, (d) => (d as { client_id: string }).client_id)
               : { set: !!scrapeql }

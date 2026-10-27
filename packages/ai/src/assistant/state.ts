@@ -309,6 +309,10 @@ export class State {
   scrapeql() {
     return this.docs.read<TokenDoc>(APP_SCOPE, 'scrapeql');
   }
+  /** The last test of ScrapeQL over the app's service binding (no token to keep it beside). */
+  scrapeqlLink() {
+    return this.docs.read<{ test: KeyTest }>(APP_SCOPE, 'scrapeql:link');
+  }
 
   async appCap() {
     return (await this.app()).cap_usd ?? this.o.defaultCap;
