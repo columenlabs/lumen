@@ -64,6 +64,7 @@ export {
 export { LinkDot, LinkPicker, type LinkColor, linkVar } from './lumen-links';
 export { CardSegments, CardSwitch } from './card-switch';
 export { PageInput, PageInputs } from './page-inputs';
+export { LumenBulkBar } from './lumen-bulk-bar';
 export { type LumenTab, LumenTabs } from './lumen-tabs';
 export { LumenTabDrawer, TAB_NAME_MAX } from './lumen-tab-drawer';
 export { IconPicker } from './icon-picker';
