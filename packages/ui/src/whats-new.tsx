@@ -11,6 +11,7 @@ import { SparklesIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import Markdown from 'react-markdown';
 import { DrawerSection } from './drawer-section';
+import { fetchWithin } from './fetch-within';
 import { LumenDrawer } from './lumen-drawer';
 import { usePrefs } from './prefs';
 import { Badge } from './ui/badge';
@@ -54,7 +55,7 @@ const EVERYONE = '';
 async function page(api: string, before: string | null): Promise<Release[] | null> {
   const q = new URLSearchParams({ limit: String(PAGE) });
   if (before) q.set('before', before);
-  const r = await fetch(`${api}?${q}`, { credentials: 'include' });
+  const r = await fetchWithin(`${api}?${q}`, { credentials: 'include' });
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`releases ${r.status}`);
   return ((await r.json()) as { releases: Release[] }).releases;

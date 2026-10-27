@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 // otherwise it reads again on focus. The product mounts `TasksProvider` and `TasksButton` in the
 // shell's slots; where the API answers 404 nothing shows.
 import { LumenConfirm } from './confirm';
+import { fetchWithin } from './fetch-within';
 import { useIsMobile } from './hooks/use-mobile';
 import { cn } from './lib/utils';
 import { IconButton } from './page';
@@ -146,7 +147,9 @@ function TasksLive({
   const inflight = useRef<Promise<void> | null>(null);
 
   const read = useCallback(async () => {
-    const res = await fetch(api, { headers: { accept: 'application/json' } }).catch(() => null);
+    const res = await fetchWithin(api, { headers: { accept: 'application/json' } }).catch(
+      () => null,
+    );
     if (!res) return;
     if (res.status === 404) {
       setGone(true);
@@ -190,7 +193,7 @@ function TasksLive({
 
   const post = useCallback(
     async (path: string) => {
-      await fetch(`${api}${path}`, {
+      await fetchWithin(`${api}${path}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{}',

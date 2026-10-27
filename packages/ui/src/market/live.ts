@@ -28,6 +28,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { fetchWithin } from '../fetch-within';
 
 export type MarketStatus = 'loading' | 'live' | 'closed' | 'connecting' | 'off' | 'error';
 
@@ -85,7 +86,7 @@ class MarketHub {
     const k = keys.join(',');
     let p = this.days.get(k);
     if (!p) {
-      p = fetch(`${this.api}/daily?symbols=${encodeURIComponent(k)}`, {
+      p = fetchWithin(`${this.api}/daily?symbols=${encodeURIComponent(k)}`, {
         credentials: 'same-origin',
       }).then(async (r) => {
         if (!r.ok) throw new Error(`server answered ${r.status}`);
@@ -98,7 +99,7 @@ class MarketHub {
   }
   /** Whether the app serves market data at all (a 404 means no feed here), read once. */
   available() {
-    this.probe ??= fetch(`${this.api}/session`, { credentials: 'same-origin' })
+    this.probe ??= fetchWithin(`${this.api}/session`, { credentials: 'same-origin' })
       .then((r) => r.status !== 404)
       .catch(() => true);
     return this.probe;

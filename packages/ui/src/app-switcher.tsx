@@ -7,6 +7,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRightIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { Fragment, type ReactNode, useState } from 'react';
+import { fetchWithin } from './fetch-within';
 import { cn } from './lib/utils';
 import type { NavIcon } from './nav';
 import {
@@ -217,7 +218,7 @@ export function LumenSuiteSwitcher({
     queryKey: ['lumen-suite', source],
     enabled: !!source,
     queryFn: async (): Promise<SuiteList> => {
-      const res = await fetch(source as string, { credentials: 'include' });
+      const res = await fetchWithin(source as string, { credentials: 'include' });
       if (!res.ok) throw new Error(`suite list ${res.status}`);
       return res.json();
     },

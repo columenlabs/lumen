@@ -15,6 +15,7 @@ import { type ErrorComponentProps, useRouter } from '@tanstack/react-router';
 import { ChevronRight, RefreshCw, RotateCcw, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { fetchWithin } from './fetch-within';
 import { reportClientError } from './telemetry';
 import { Button } from './ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
@@ -132,7 +133,7 @@ async function newBuildOut(): Promise<boolean> {
     ?.getAttribute('src');
   if (!mine) return false;
   try {
-    const res = await fetch(import.meta.env.BASE_URL ?? '/', { cache: 'no-store' });
+    const res = await fetchWithin(import.meta.env.BASE_URL ?? '/', { cache: 'no-store' }, 5000);
     if (!res.ok || !res.headers.get('content-type')?.includes('text/html')) return false;
     const live = entryOf(await res.text());
     return !!live && live !== mine;
