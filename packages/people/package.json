@@ -1,0 +1,22 @@
+{
+  "name": "@columenlabs/lumen-people",
+  "version": "0.0.0",
+  "description": "Lumen's people, access and invites on the server: the rules, a SQL store, single-use invite links, a pluggable mailer and the routes the People screens call.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "biome check src && ../ship/scripts/check-kit-neutral.sh",
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./store": "./src/store.ts",
+    "./service": "./src/service.ts",
+    "./routes": "./src/routes.ts",
+    "./mailer": "./src/mailer.ts",
+    "./email": "./src/email.ts"
+  },
+  "dependencies": {
+    "@columenlabs/lumen-ui-types": "workspace:*"
+  }
+}

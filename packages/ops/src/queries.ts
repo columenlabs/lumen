@@ -52,12 +52,21 @@ export interface QueryPoint {
 }
 
 let sink: PointSink | undefined;
+let rowCap = 0;
 let callerOf: (() => QueryCaller | undefined) | undefined;
 const scope = new AsyncLocalStorage<QueryCaller>();
 
 /** The entry point sets the dataset once per isolate. */
 export function setQuerySink(s: PointSink | undefined) {
   sink = s;
+}
+
+/**
+ * The most rows one statement should return (an app's page size cap); a statement that returns
+ * more is marked `capped`, so a query that dodged paging shows up. 0 turns the check off.
+ */
+export function setQueryRowCap(n: number | undefined) {
+  rowCap = n && n > 0 ? n : 0;
 }
 
 /** How to name the request in scope when no job is (the app's request telemetry). */
@@ -160,40 +169,88 @@ export function queryShape(sql: string): QueryShape {
 const cap = (s: string, n = 96) => (s.length > n ? s.slice(0, n) : s);
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
 
+type Batch = {
+  blobs: string[];
+  index: string;
+  sums: number[];
+  status: number;
+  n: number;
+  max: number;
+};
+const pending = new Map<string, Batch>();
+
+function flush() {
+  const batches = [...pending.values()];
+  pending.clear();
+  for (const b of batches) {
+    try {
+      sink?.writeDataPoint({
+        indexes: [b.index],
+        blobs: b.blobs,
+        doubles: [...b.sums, b.status, b.n, b.max],
+      });
+    } catch (err) {
+      console.error('meterQuery', err);
+    }
+  }
+}
+
 /**
  * Column order is the contract with whoever reads the dataset back: index1 engine; blobs
- * engine, app, kind, route, tool, op, fingerprint, sql shape, outcome, method; doubles wall ms,
- * engine ms, rows read, bytes read, rows out, rows written, bytes out, status.
+ * engine, app, kind, route, tool, op, fingerprint, sql shape, outcome, method, cap (`capped` when
+ * it returned more rows than `setQueryRowCap` allows); doubles wall ms, engine ms, rows read,
+ * bytes read, rows out, rows written, bytes out, status, statements, slowest ms.
+ *
+ * The same statement run many times in one turn (a loop of inserts) is one point: doubles 1 to 7
+ * are its totals, `statements` how many ran and `slowest ms` the longest, so a sync that writes
+ * thousands of rows stays a handful of points. Divide a total by `statements` for the mean.
  */
 export function meterQuery(p: QueryPoint) {
   if (!sink) return;
   try {
     const shape = queryShape(p.sql);
     const c = p.caller ?? currentCaller();
-    sink.writeDataPoint({
-      indexes: [p.engine],
-      blobs: [
-        p.engine,
-        cap(c.app),
-        cap(c.kind),
-        cap(c.route),
-        cap(c.tool ?? ''),
-        shape.op,
-        shape.fingerprint,
-        shape.text,
-        p.ok ? 'ok' : 'error',
-        p.method,
-      ],
-      doubles: [
-        p.ms,
-        num(p.engineMs),
-        num(p.rowsRead),
-        num(p.bytesRead),
-        num(p.rowsOut),
-        num(p.rowsWritten),
-        num(p.bytesOut),
-        num(p.status),
-      ],
+    const blobs = [
+      p.engine,
+      cap(c.app),
+      cap(c.kind),
+      cap(c.route),
+      cap(c.tool ?? ''),
+      shape.op,
+      shape.fingerprint,
+      shape.text,
+      p.ok ? 'ok' : 'error',
+      p.method,
+      rowCap && num(p.rowsOut) > rowCap ? 'capped' : '',
+    ];
+    const values = [
+      num(p.ms),
+      num(p.engineMs),
+      num(p.rowsRead),
+      num(p.bytesRead),
+      num(p.rowsOut),
+      num(p.rowsWritten),
+      num(p.bytesOut),
+    ];
+    const key = blobs.filter((_, i) => i !== 7).join('\u0000');
+    const b = pending.get(key);
+    if (b) {
+      values.forEach((v, i) => {
+        b.sums[i] = (b.sums[i] ?? 0) + v;
+      });
+      b.n += 1;
+      b.max = Math.max(b.max, num(p.ms));
+      b.status = num(p.status) || b.status;
+      return;
+    }
+    if (pending.size === 0) queueMicrotask(flush);
+    pending.set(key, {
+      blobs,
+      index: p.engine,
+      sums: values,
+      status: num(p.status),
+      n: 1,
+      max: num(p.ms),
     });
   } catch (err) {
     console.error('meterQuery', err);
@@ -444,7 +501,8 @@ export function meteredClickHouse<T extends { fetch: Fetch }>(
 // ── Durable Object SQLite ───────────────────────────────────────────────────
 
 interface NativeCursor {
-  toArray(): unknown[];
+  raw(): Iterable<unknown[]>;
+  columnNames: string[];
   rowsRead?: number;
   rowsWritten?: number;
 }
@@ -453,11 +511,58 @@ interface NativeSql {
 }
 
 /**
- * A Durable Object's `storage.sql`, metered for `caller`. Each statement is read to the end at
- * `exec`, so its rows read and written are known; callers read rows only through `toArray`.
+ * The rows of one statement, read to the end, behind the same cursor a Durable Object's
+ * `storage.sql` hands back: `toArray`, `one`, `raw`, `next`, iteration and `columnNames` all work,
+ * each reading on from where the last stopped.
  */
-export function meteredSql<T>(sql: T, caller: QueryCaller): T {
+function readCursor(
+  raws: unknown[][],
+  columnNames: string[],
+  rowsRead?: number,
+  rowsWritten?: number,
+) {
+  let at = 0;
+  const row = (r: unknown[]) => Object.fromEntries(columnNames.map((c, i) => [c, r[i]]));
+  const rest = () => {
+    const out = raws.slice(at);
+    at = raws.length;
+    return out;
+  };
+  const cursor = {
+    columnNames,
+    rowsRead,
+    rowsWritten,
+    toArray: () => rest().map(row),
+    one: () => {
+      const left = rest();
+      if (left.length !== 1)
+        throw new Error(
+          `Expected exactly one result from SQL query, but got ${left.length ? 'more than one' : 'no'} results.`,
+        );
+      return row(left[0] as unknown[]);
+    },
+    raw: function* () {
+      while (at < raws.length) yield raws[at++] as unknown[];
+    },
+    next: () =>
+      at < raws.length
+        ? { done: false as const, value: row(raws[at++] as unknown[]) }
+        : { done: true as const, value: undefined },
+    [Symbol.iterator]() {
+      return cursor;
+    },
+  };
+  return cursor;
+}
+
+/**
+ * A Durable Object's `storage.sql`, metered. Each statement is read to the end at `exec`, so its
+ * rows read and written are known; the cursor it returns reads like the native one. Its queries
+ * are charged to the job in scope (`withQueryCaller`, an alarm say), else to `caller`.
+ */
+export function meteredSql<T>(sql: T, caller?: QueryCaller): T {
   const native = sql as unknown as NativeSql;
+  const callerNow = () => scope.getStore() ?? caller ?? currentCaller();
   return new Proxy(native, {
     get(target, prop, receiver) {
       if (prop === 'exec')
@@ -465,7 +570,7 @@ export function meteredSql<T>(sql: T, caller: QueryCaller): T {
           const t0 = performance.now();
           try {
             const cursor = target.exec(query, ...bindings);
-            const rows = cursor.toArray();
+            const raws = Array.from(cursor.raw());
             meterQuery({
               engine: 'do_sqlite',
               sql: query,
@@ -474,14 +579,10 @@ export function meteredSql<T>(sql: T, caller: QueryCaller): T {
               ms: performance.now() - t0,
               rowsRead: cursor.rowsRead,
               rowsWritten: cursor.rowsWritten,
-              rowsOut: rows.length,
-              caller,
+              rowsOut: raws.length,
+              caller: callerNow(),
             });
-            return {
-              toArray: () => rows,
-              rowsRead: cursor.rowsRead,
-              rowsWritten: cursor.rowsWritten,
-            };
+            return readCursor(raws, cursor.columnNames, cursor.rowsRead, cursor.rowsWritten);
           } catch (err) {
             meterQuery({
               engine: 'do_sqlite',
@@ -489,7 +590,7 @@ export function meteredSql<T>(sql: T, caller: QueryCaller): T {
               method: 'exec',
               ok: false,
               ms: performance.now() - t0,
-              caller,
+              caller: callerNow(),
             });
             throw err;
           }

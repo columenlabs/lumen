@@ -20,11 +20,19 @@ import {
   useMemo,
   useState,
 } from 'react';
+import type { ComponentType } from 'react';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenFinder, type LumenFinderConfig } from './lumen-finder';
 import { usePrefs } from './prefs';
 import { withRefreshToken } from './refresh';
-import { LumenSettings, type SettingsSectionDef, ThemeToggle, allSettings } from './settings';
+import {
+  LumenSettings,
+  type SettingsGroupDef,
+  type SettingsSectionDef,
+  ThemeToggle,
+  allSettings,
+} from './settings';
 import { SourceHealthProvider } from './source-health';
 import { StatusTimeZone } from './status';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -53,7 +61,13 @@ import {
 } from './ui/sidebar';
 import { Toaster } from './ui/sonner';
 import { TooltipProvider } from './ui/tooltip';
-import { WhatsNew } from './whats-new';
+import type { WhatsNew as WhatsNewPart } from './whats-new';
+
+// Loaded when it first shows (lazy-part.tsx).
+const WhatsNew = lazyPart(
+  () => import('./whats-new').then((m) => m.WhatsNew as ComponentType<object>),
+  null,
+) as unknown as typeof WhatsNewPart;
 
 interface ShellContext {
   /** The app this page renders in (`data-app` on the root `<html>`). */
@@ -66,6 +80,8 @@ interface ShellContext {
   openSettings: (section?: string) => void;
   /** Closes Settings (a section that sends the person to a page). */
   closeSettings: () => void;
+  /** Whether Settings has a section with this id, so a link to it is never dead. */
+  hasSettings: (section: string) => boolean;
   /** The header's Refresh: reloads the page's data, skipping the server cache. Null without `onRefresh`. */
   refresh: (() => Promise<void>) | null;
   refreshing: boolean;
@@ -80,6 +96,11 @@ export function useShell(): ShellContext {
   const c = useContext(Ctx);
   if (!c) throw new Error('useShell must be used inside <LumenShell>.');
   return c;
+}
+
+/** Opens Settings at a section, or null outside a shell (a preview). */
+export function useOpenSettings(): ShellContext['openSettings'] | null {
+  return useContext(Ctx)?.openSettings ?? null;
 }
 
 /** The app this page renders in, or null outside a shell (a preview). */
@@ -246,6 +267,8 @@ export interface LumenShellProps {
   /** Sections every app of the product shows, listed after General under `sharedLabel`. */
   shared?: SettingsSectionDef[];
   sharedLabel?: string;
+  /** More labelled Settings groups (one per app of a product), listed after `shared`, before the app's own. */
+  settingsGroups?: SettingsGroupDef[];
   /** Who is signed in (the profile button); null while it loads. */
   user?: ShellUser | null;
   /** Where Sign out goes; no Sign out without it. */
@@ -299,6 +322,7 @@ export function LumenShell({
   settings,
   shared,
   sharedLabel,
+  settingsGroups,
   user = null,
   signOutUrl,
   profile,
@@ -342,7 +366,10 @@ export function LumenShell({
   }, [app]);
   // Find lists every Settings section by name.
   const sectionNames = JSON.stringify(
-    allSettings(profile, shared, settings, security).map((s) => ({ id: s.id, title: s.title })),
+    allSettings(profile, shared, settings, security, settingsGroups).map((s) => ({
+      id: s.id,
+      title: s.title,
+    })),
   );
   const findSettings = useMemo(
     () => JSON.parse(sectionNames) as { id: string; title: string }[],
@@ -357,6 +384,7 @@ export function LumenShell({
         statusSlot,
         openSettings,
         closeSettings: () => setSettingsAt(null),
+        hasSettings: (section) => findSettings.some((s) => s.id === section),
         refresh: onRefresh ? refresh : null,
         refreshing,
         hideAmounts,
@@ -418,6 +446,7 @@ export function LumenShell({
                   sections={settings}
                   shared={shared}
                   sharedLabel={sharedLabel}
+                  groups={settingsGroups}
                 />
                 <Toaster position="bottom-right" />
               </LumenFinder>

@@ -32,12 +32,30 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
   );
 }
 
-function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+// Radix focuses a trigger from its own mousedown, which browsers count as :focus-visible, so a
+// clicked tab drew the keyboard ring over its underline. A pointer press marks the trigger until
+// the next key or blur; the ring shows only without that mark.
+const pointerOn = (e: React.SyntheticEvent<HTMLButtonElement>) => e.currentTarget.setAttribute('data-pointer', '');
+const pointerOff = (e: React.SyntheticEvent<HTMLButtonElement>) => e.currentTarget.removeAttribute('data-pointer');
+
+function TabsTrigger({ className, onMouseDown, onKeyDown, onBlur, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
+      onMouseDown={(e) => {
+        pointerOn(e);
+        onMouseDown?.(e);
+      }}
+      onKeyDown={(e) => {
+        pointerOff(e);
+        onKeyDown?.(e);
+      }}
+      onBlur={(e) => {
+        pointerOff(e);
+        onBlur?.(e);
+      }}
       className={cn(
-        "relative inline-flex shrink-0 items-center gap-1.5 px-0 pt-0 pb-2 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent text-sm leading-4 font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground data-[state=active]:after:bg-primary data-[state=active]:[&_svg]:text-primary [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative inline-flex shrink-0 items-center gap-1.5 px-0 pt-0 pb-2 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent text-sm leading-4 font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:rounded-sm focus-visible:not-data-[pointer]:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground data-[state=active]:after:bg-primary data-[state=active]:[&_svg]:text-primary [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}

@@ -2,7 +2,8 @@
 // for charts Recharts does not draw (heat landscapes, parallel lines, small multiples). ECharts
 // loads in its own chunk the first time a page draws one. Colours come from the theme's tokens
 // (`useChartTokens`), so callers build options from tokens and the chart redraws when the theme
-// flips. It sizes to its box and follows it.
+// flips. A `var(--token)` colour in an option works too: it is resolved before drawing, so a
+// sparkline in `var(--chart-1)` reads in light and dark. It sizes to its box and follows it.
 import type { ECharts, EChartsCoreOption } from 'echarts/core';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from './lib/utils';
@@ -40,7 +41,7 @@ function readTokens(): ChartTokens {
     primary: v('--primary', '#5b8cff'),
     series: Array.from({ length: 10 }, (_, i) => v(`--chart-${i + 1}`, '#5b8cff')),
     font: getComputedStyle(document.body).fontFamily || 'sans-serif',
-    mono: v('--font-mono', 'monospace'),
+    mono: v('--num-font', 'monospace'),
   };
 }
 
@@ -100,6 +101,24 @@ export function baseOption(t: ChartTokens): EChartOption {
   };
 }
 
+/** `option` with every `var(--name)` string (also inside `color-mix()`) replaced by its value. */
+function resolveVars<T>(option: T): T {
+  const css = getComputedStyle(document.documentElement);
+  const walk = (v: unknown): unknown => {
+    if (typeof v === 'string')
+      return v.includes('var(--')
+        ? v.replace(/var\((--[\w-]+)(?:,\s*([^)]+))?\)/g, (_, name: string, fb?: string) => {
+            return css.getPropertyValue(name).trim() || fb?.trim() || '';
+          })
+        : v;
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype)
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
+    return v;
+  };
+  return walk(option) as T;
+}
+
 /** An axis in the theme's colours (merge into xAxis or yAxis). */
 export function axisStyle(t: ChartTokens) {
   return {
@@ -128,6 +147,8 @@ export function LumenEChart({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<ECharts | null>(null);
+  /** The option last drawn, serialized: an equal one isn't drawn again. */
+  const drawn = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const handlers = useRef(on);
   handlers.current = on;
@@ -148,12 +169,25 @@ export function LumenEChart({
       ro?.disconnect();
       chart.current?.dispose();
       chart.current = null;
+      drawn.current = null;
     };
   }, []);
 
+  // Canvas can't read CSS variables: `var(--chart-1)` in an option would draw black. Each one is
+  // swapped for its value, again whenever the theme flips.
+  const tokens = useChartTokens();
+  // An app re-rendering hands a new but equal option (a hover, a refetch): drawing it again
+  // replays the line's entry animation, so the chart blanks under the tooltip. Only a change redraws.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tokens change when the theme flips.
   useEffect(() => {
-    if (ready) chart.current?.setOption(option, { notMerge: true });
-  }, [ready, option]);
+    const c = chart.current;
+    if (!ready || !c) return;
+    const next = resolveVars(option);
+    const key = JSON.stringify(next);
+    if (key === drawn.current) return;
+    drawn.current = key;
+    c.setOption(next, { notMerge: true });
+  }, [ready, option, tokens]);
 
   const names = Object.keys(on ?? {}).join();
   useEffect(() => {

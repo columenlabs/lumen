@@ -107,7 +107,8 @@ export interface LumenCoverageMapProps<TRaw = unknown, TKey extends QueryKey = Q
   unit?: string;
   /** Right-hand columns; a phone keeps Complete only. */
   summary?: CoverageSummary[];
-  /** `backfill`: click, shift-click a range, then the selection bar's buttons. `drill`: a click opens the block. */
+  /** `backfill`: tap a block, then another to pick the range between (a year's label picks its
+   *  year), then the selection bar's buttons. `drill`: a click opens the block. */
   select?: 'backfill' | 'drill';
   /** Months a backfill can take (the source's own limits). */
   selectable?: (row: string, month: string) => boolean;
@@ -123,6 +124,8 @@ export interface LumenCoverageMapProps<TRaw = unknown, TKey extends QueryKey = Q
   stateLabels?: Partial<Record<CoverageLevel, string>>;
   /** Picks these months as if clicked (pass a new object each time); nothing is queued until the bar's button. */
   preselect?: CoveragePick;
+  /** In the selection bar while nothing is picked: quick picks (buttons that set `preselect`). */
+  pickTools?: ReactNode;
   /** The drilled block (`2026-09`) and the click that changes it. */
   drilled?: string | null;
   onDrill?: (row: string, period: string) => void;
@@ -362,13 +365,23 @@ const MapRow = memo(
     cols,
     marks,
     picks,
+    start,
+    previews,
     total,
     look,
   }: {
     r: CoverageRow;
     cols: string[];
-    marks: ({ level: CoverageLevel; canPick: boolean; fill?: number } | null)[];
+    marks: ({
+      level: CoverageLevel;
+      canPick: boolean;
+      fill?: number;
+      kind?: 'add' | 'remove';
+    } | null)[];
     picks: string[];
+    /** The first block of a range being picked, and the blocks it would pick. */
+    start?: string;
+    previews: string[];
     total: { have: number; expected: number };
     look: RowLook;
     sig: string;
@@ -412,6 +425,9 @@ const MapRow = memo(
               label={`${text} · ${blockName(k)}`}
               tip={`${r.row}|${k}`}
               picked={picks.includes(k) || look.drilled === k}
+              mark={picks.includes(k) ? m.kind : undefined}
+              start={start === k}
+              preview={m.canPick && previews.includes(k)}
               pickable={look.select === 'backfill' || look.select === 'drill'}
               disabled={look.select === 'backfill' ? !m.canPick : look.select !== 'drill'}
               className="h-[18px]"
@@ -462,6 +478,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   removable = () => false,
   onRemove,
   preselect,
+  pickTools,
   stateLabels,
   drilled = null,
   onDrill,
@@ -483,11 +500,17 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   const [block, setBlock] = useState<CoverageBlock>(layout === 'months' ? 'month' : initialBlock);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [queueing, setQueueing] = useState(false);
-  const anchor = useRef<{ row: string; index: number } | null>(null);
+  // A range: the first tap picks a block and starts it, the next tap in the row picks every block
+  // between. Started on a picked block, the range unpicks instead (`remove`).
+  // `over` is the block under the pointer meanwhile; `last` anchors shift-click.
+  const [start, setStart] = useState<{ row: string; key: string; remove: boolean } | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const last = useRef<{ row: string; index: number } | null>(null);
   // A preselect picks its months as if clicked; it replaces the current pick.
   useEffect(() => {
-    if (preselect)
-      setPicked(new Set(preselect.flatMap((p) => p.months.map((m) => `${p.row}|${m}`))));
+    if (!preselect) return;
+    setPicked(new Set(preselect.flatMap((p) => p.months.map((m) => `${p.row}|${m}`))));
+    setStart(null);
   }, [preselect]);
   const scroller = useRef<HTMLDivElement>(null);
   const [pageSize, setPageSize] = useState(initialPageSize ?? 0);
@@ -509,7 +532,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when the columns change
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (el) el.scrollLeft = el.scrollWidth;
+    if (el && layout === 'grid') el.scrollLeft = el.scrollWidth;
   }, [strip]);
 
   const sums = mobile ? summary.filter((s) => s === 'complete') : summary;
@@ -518,13 +541,13 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   const unitLabel = (have: number, expected: number) =>
     expected > 0 ? `${fmtInt(have)} of ${fmtInt(expected)} ${unit}` : 'Not expected';
 
-  const toggle = (row: string, keys: string[], mode: 'toggle' | 'add') =>
+  const toggle = (row: string, keys: string[], mode: 'toggle' | 'add' | 'remove') =>
     setPicked((prev) => {
       const next = new Set(prev);
       const ids = keys.map((k) => `${row}|${k}`);
       const all = ids.every((id) => next.has(id));
       for (const id of ids) {
-        if (mode === 'toggle' && all) next.delete(id);
+        if (mode === 'remove' || (mode === 'toggle' && all)) next.delete(id);
         else next.add(id);
       }
       return next;
@@ -552,6 +575,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
     try {
       await act(pickedMonths(remove ? removable : selectable));
       setPicked(new Set());
+      setStart(null);
     } finally {
       setQueueing(false);
     }
@@ -590,6 +614,17 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       .get(row)
       ?.get(key)
       ?.months.some((m) => selectable(row, m) || (onRemove !== undefined && removable(row, m)));
+  /** What picking a block does: queue its months, or take them out of the queue. */
+  const kindOf = (row: string, key: string): 'add' | 'remove' =>
+    folded?.cells
+      .get(row)
+      ?.get(key)
+      ?.months.some((m) => selectable(row, m))
+      ? 'add'
+      : 'remove';
+  /** A row's blocks in time order; the months layout runs across years. */
+  const orderOf = (row: string) =>
+    layout === 'months' ? [...(folded?.cells.get(row)?.keys() ?? [])].sort() : cols;
 
   // One click handler for every cell: drill, or pick (shift-click picks a range in the row).
   const onCellClick = (e: React.MouseEvent<HTMLElement>) => {
@@ -604,34 +639,83 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       return;
     }
     if (select !== 'backfill') return;
-    // The months layout ranges over its months in time order, across years.
-    const order = layout === 'months' ? [...(folded?.cells.get(row)?.keys() ?? [])].sort() : cols;
+    const order = orderOf(row);
     const i = order.indexOf(k);
-    if (e.shiftKey && anchor.current?.row === row) {
-      const [lo, hi] = [anchor.current.index, i].sort((x, y) => x - y) as [number, number];
-      const span = order.slice(lo, hi + 1);
+    const range = (from: number, mode: 'add' | 'remove' = 'add') => {
+      const [lo, hi] = [from, i].sort((x, y) => x - y) as [number, number];
       toggle(
         row,
-        span.filter((key) => canPick(row, key)),
-        'add',
+        order.slice(lo, hi + 1).filter((key) => canPick(row, key)),
+        mode,
       );
-    } else toggle(row, [k], 'toggle');
-    anchor.current = { row, index: i };
+    };
+    if (e.shiftKey && last.current?.row === row) {
+      range(last.current.index);
+      setStart(null);
+    } else if (start?.row === row) {
+      // The second tap ends the range. On its own first block it only ends it: a picked range
+      // start is out already, a new one goes back out.
+      if (start.key === k) toggle(row, [k], 'remove');
+      else range(order.indexOf(start.key), start.remove ? 'remove' : 'add');
+      setStart(null);
+    } else {
+      const remove = picked.has(`${row}|${k}`);
+      toggle(row, [k], remove ? 'remove' : 'add');
+      setStart({ row, key: k, remove });
+    }
+    setOver(null);
+    last.current = { row, index: i };
   };
+
+  // While a range is open, the block under the pointer shows what the next tap would pick.
+  const onCellOver = (e: React.PointerEvent<HTMLElement>) => {
+    if (!start) return;
+    const el = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-cell]') : null;
+    const tip = el?.dataset.cell ?? '';
+    const cut = tip.lastIndexOf('|');
+    if (el && tip.slice(0, cut) === start.row) setOver(tip.slice(cut + 1));
+  };
+  const previewOf = (row: string): string[] => {
+    if (!start || start.row !== row || !over) return [];
+    const order = orderOf(row);
+    const [lo, hi] = [order.indexOf(start.key), order.indexOf(over)].sort((x, y) => x - y) as [
+      number,
+      number,
+    ];
+    // An unpicking range previews the picked blocks it would take out; a picking one the rest.
+    return lo < 0
+      ? []
+      : order
+          .slice(lo, hi + 1)
+          .filter((k) =>
+            k === start.key ? start.remove : picked.has(`${row}|${k}`) === start.remove,
+          );
+  };
+  const picking = picked.size > 0 || !!start;
+  // Picking fades the blocks a pick can't take, so what can be picked stands out.
+  const routes = {
+    onClick: onCellClick,
+    onPointerOver: onCellOver,
+    onPointerLeave: () => setOver(null),
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') setStart(null);
+    },
+  };
+  const fade = select === 'backfill' && picking && '[&_[data-cell]:disabled]:opacity-30';
 
   let body: ReactNode = null;
   if (data && folded) {
     if (layout === 'months') {
       const row = data.rows[0]?.row ?? data.facts[0]?.row ?? '';
       const cells = folded.cells.get(row) ?? new Map<string, Folded>();
+      const previews = new Set(previewOf(row));
       const years = [...new Set([...cells.keys()].map((k) => k.slice(0, 4)))].sort().reverse();
       const sumCols = sums.map((s) => SUMMARY_WIDTH[s]).join(' ');
       const grid = {
         gridTemplateColumns: `${mobile ? '2.75rem' : '4rem'} repeat(12, minmax(${mobile ? '14px' : '18px'}, 1fr)) ${sumCols}`,
       };
       body = (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: each cell is a button; this only routes its click.
-        <div className="grid items-center gap-[3px]" style={grid} onClick={onCellClick}>
+        <div className={cn('grid items-center gap-[3px]', fade)} style={grid} {...routes}>
           <span className="text-xs text-muted-foreground">Year</span>
           {MON.map((m, i) => (
             <span key={m} className="text-xs text-muted-foreground">
@@ -646,10 +730,29 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
           {years.map((y) => {
             let have = 0;
             let expected = 0;
+            // A year's label picks the months in it that can be queued (again: takes them out).
+            const yearKeys = MON.map((_, i) => `${y}-${String(i + 1).padStart(2, '0')}`).filter(
+              (k) => canPick(row, k) && kindOf(row, k) === 'add',
+            );
             return [
-              <span key={`${y}-label`} className="num text-xs">
-                {y}
-              </span>,
+              select === 'backfill' && yearKeys.length ? (
+                <button
+                  key={`${y}-label`}
+                  type="button"
+                  aria-label={`Pick ${y}`}
+                  className="num -ml-1 w-fit cursor-pointer rounded px-1 text-left text-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  onClick={() => {
+                    toggle(row, yearKeys, 'toggle');
+                    setStart(null);
+                  }}
+                >
+                  {y}
+                </button>
+              ) : (
+                <span key={`${y}-label`} className="num text-xs">
+                  {y}
+                </span>
+              ),
               ...MON.map((_, i) => {
                 const key = `${y}-${String(i + 1).padStart(2, '0')}`;
                 const c = cells.get(key);
@@ -665,6 +768,9 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                     label={`${row} · ${blockName(key)}`}
                     tip={`${row}|${key}`}
                     picked={picked.has(`${row}|${key}`) || drilled === key}
+                    mark={picked.has(`${row}|${key}`) ? kindOf(row, key) : undefined}
+                    start={start?.key === key}
+                    preview={previews.has(key) && canPick(row, key)}
                     pickable={select === 'backfill' || select === 'drill'}
                     disabled={select === 'backfill' ? !canPick(row, key) : select !== 'drill'}
                     className={mobile ? 'h-4' : 'h-5'}
@@ -717,8 +823,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
       const look = { mobile, groupBy, select, sums, drilled, link: rowSpec.link };
       let group: string | undefined;
       body = (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: each cell is a button; this only routes its click.
-        <div className="grid min-w-min items-center gap-[3px]" style={grid} onClick={onCellClick}>
+        <div className={cn('grid min-w-min items-center gap-[3px]', fade)} style={grid} {...routes}>
           <span className="sticky left-0 z-1 bg-card text-xs text-muted-foreground">
             {mobile ? '' : rowSpec.title}
           </span>
@@ -769,9 +874,12 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                 level: c.level,
                 canPick: select === 'backfill' && canPick(r.row, k),
                 fill: c.expected > 0 ? c.have / c.expected : undefined,
+                kind: select === 'backfill' && canPick(r.row, k) ? kindOf(r.row, k) : undefined,
               };
             });
             const picks = pickedBy.get(r.row) ?? [];
+            const rowStart = start?.row === r.row ? start.key : undefined;
+            const previews = previewOf(r.row);
             out.push(
               <MapRow
                 key={r.row}
@@ -779,6 +887,8 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                 cols={cols}
                 marks={marks}
                 picks={picks}
+                start={rowStart}
+                previews={previews}
                 total={folded.totals.get(r.row) ?? { have: 0, expected: 0 }}
                 look={look}
                 sig={[
@@ -796,8 +906,12 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                   cols[0],
                   cols.at(-1),
                   picks.join(),
+                  rowStart,
+                  previews.join(),
                   marks
-                    .map((m) => (m ? `${m.level}${m.canPick ? '+' : ''}${m.fill ?? ''}` : ''))
+                    .map((m) =>
+                      m ? `${m.level}${m.canPick ? '+' : ''}${m.kind ?? ''}${m.fill ?? ''}` : '',
+                    )
                     .join(),
                   JSON.stringify(folded.totals.get(r.row) ?? null),
                 ].join('\u0001')}
@@ -818,6 +932,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   const pickedRows = [...new Set([...pick, ...unpick].map((p) => p.row))];
   const rowName = (row: string) => data?.rows.find((r) => r.row === row)?.label ?? row;
   const months = (n: number) => `${n} month${n > 1 ? 's' : ''}`;
+  const word = layout === 'months' ? 'month' : 'block in the row';
 
   const head = (
     <>
@@ -833,6 +948,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
             if (!v) return;
             setBlock(v as CoverageBlock);
             setPicked(new Set());
+            setStart(null);
           }}
           aria-label="Block size"
           className="max-sm:hidden"
@@ -894,42 +1010,86 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
             skeleton={<GridSkeleton />}
             empty={data && !data.rows.length && !data.facts.length ? empty : undefined}
           >
-            <div ref={scroller} className="overflow-x-auto overflow-y-hidden pb-1">
-              <CoverageTip content={tipFor} className="w-max min-w-full">
-                {body}
-              </CoverageTip>
-            </div>
-            {pickedCount > 0 && (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
-                <span className="min-w-0">
-                  {/* The months layout has one row, named in the title already. */}
-                  {layout === 'grid' && (
-                    <span className="num font-semibold">{`${pickedRows.map(rowName).join(', ')} · `}</span>
-                  )}
-                  {`${months(pickedCount)} picked`}
-                  {pickNote && queueCount > 0 ? ` · ${pickNote(pick)}` : ''}
-                </span>
-                <span className="flex-1" />
-                <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
-                  Clear
-                </Button>
-                {removeCount > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={queueing}
-                    onClick={() => void queue(true)}
-                  >
-                    <ListXIcon /> Remove from queue · {months(removeCount)}
-                  </Button>
+            {select === 'backfill' && (
+              // The selection bar keeps its place above the map, picked or not, so the map never moves.
+              <div
+                aria-live="polite"
+                className={cn(
+                  'flex min-h-11 flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 text-sm',
+                  pickedCount > 0
+                    ? 'bg-foreground/5 ring-1 ring-foreground ring-inset'
+                    : 'bg-muted',
                 )}
-                {queueCount > 0 && (
-                  <Button size="sm" disabled={queueing || !onQueue} onClick={() => void queue()}>
-                    <ListPlusIcon /> {queueLabel} · {months(queueCount)}
-                  </Button>
+              >
+                <span className="min-w-0 flex-1 basis-56">
+                  {pickedCount > 0 ? (
+                    <>
+                      {/* The months layout has one row, named in the title already. */}
+                      {layout === 'grid' && (
+                        <span className="num font-semibold">{`${pickedRows.map(rowName).join(', ')} · `}</span>
+                      )}
+                      <span className="font-semibold">{`${months(pickedCount)} picked`}</span>
+                      <span className="text-muted-foreground">
+                        {pickNote && queueCount > 0 ? ` · ${pickNote(pick)}` : ''}
+                        {start
+                          ? ` · Tap another ${word} to ${start.remove ? 'unpick' : 'pick'} the range`
+                          : ''}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {pickTools
+                        ? 'Pick on the map, or'
+                        : `Tap a ${word}, then another to pick the range`}
+                    </span>
+                  )}
+                </span>
+                {pickedCount > 0 ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPicked(new Set());
+                        setStart(null);
+                      }}
+                    >
+                      Clear
+                    </Button>
+                    {removeCount > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={queueing}
+                        onClick={() => void queue(true)}
+                      >
+                        <ListXIcon /> Remove from queue · {months(removeCount)}
+                      </Button>
+                    )}
+                    {queueCount > 0 && (
+                      <Button
+                        size="sm"
+                        disabled={queueing || !onQueue}
+                        onClick={() => void queue()}
+                      >
+                        <ListPlusIcon /> {queueLabel} · {months(queueCount)}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  pickTools
                 )}
               </div>
             )}
+            <div ref={scroller} className="overflow-x-auto overflow-y-hidden pb-1">
+              {/* The months layout fits its twelve months to the card; the grid scrolls sideways. */}
+              <CoverageTip
+                content={tipFor}
+                className={layout === 'months' ? 'min-w-0' : 'w-max min-w-full'}
+              >
+                {body}
+              </CoverageTip>
+            </div>
             <div className="border-t pt-3">
               <CoverageLegend
                 levels={levels}
@@ -937,7 +1097,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
                 hint={
                   hint ??
                   (select === 'backfill'
-                    ? 'Click a block, shift-click for a range'
+                    ? 'Tap a block, then another for a range'
                     : select === 'drill'
                       ? 'Click a block to see its days'
                       : undefined)

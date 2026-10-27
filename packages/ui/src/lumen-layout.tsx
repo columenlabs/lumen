@@ -48,6 +48,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { ComponentType } from 'react';
 import { AddFormulaDialog, YourDataDialog } from './add-column';
 import { useAssistant } from './assistant-context';
 import { useAssistantNote } from './assistant-context';
@@ -58,6 +59,7 @@ import { useGroup } from './group-button';
 import { useIsMobile } from './hooks/use-mobile';
 import { SourceStatusItems, useJoins } from './joins';
 import { useYourData } from './joins';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenDrawer } from './lumen-drawer';
 import {
@@ -86,6 +88,7 @@ import {
   DetailsBody,
   LumenView,
   type LumenViewProps,
+  type ServerPaging,
   VIEW_PAGE,
   VIEW_SCROLL,
   mergeRows,
@@ -109,7 +112,7 @@ import { type Crumb, IconButton, Page } from './page';
 import { SourcedCard } from './sourced-card';
 import { LumenCard, SummaryTiles } from './summary-cards';
 import { Button } from './ui/button';
-import { ViewEditDialog, type ViewEditorSection } from './view-editor';
+import type { ViewEditDialog as ViewEditDialogPart, ViewEditorSection } from './view-editor';
 import {
   type ViewDomain,
   computedOf,
@@ -122,6 +125,12 @@ import {
   withSavedFilters,
   withViewFields,
 } from './view-model';
+
+// Loaded when it first shows (lazy-part.tsx).
+const ViewEditDialog = lazyPart(
+  () => import('./view-editor').then((m) => m.ViewEditDialog as ComponentType<object>),
+  null,
+) as unknown as typeof ViewEditDialogPart;
 
 /** Rows of a view the assistant sees with each message. */
 const ASSISTANT_ROWS = 10;
@@ -142,6 +151,8 @@ export interface LumenLayoutCard {
   rows?: number;
   /** Buttons or links in the card's header, before its ↻ ("All jobs"). */
   tools?: ReactNode;
+  /** false: the card is its body alone, no title row (Edit layout still shows it). */
+  header?: boolean;
   /** ⓘ How to read: a few lines on what the card shows and what to look for. */
   help?: ReactNode;
   /** What ✦ Ask the assistant adds to its question (the record to read); false: no ✦ on this card. */
@@ -231,6 +242,9 @@ export interface LumenLayoutViewProps<T> {
   /** Told the filter's tokens whenever they change, so an app can load rows for what they pick
    *  (the Symbols view's `in` filter). */
   onTokens?: (tokens: FilterToken[]) => void;
+  /** The rows are one page of a server's, already filtered by `onTokens`' chips: the table
+   *  shows them as given and its pager pages through the server. */
+  paging?: ServerPaging;
   /** Buttons in the view card's header ("+ Add time"). */
   viewTools?: ReactNode;
   /** False leaves Field out of the header's + Add column (a table whose columns are fixed, a
@@ -296,6 +310,7 @@ function CodeCard({
       icon={card.icon ?? (card.kind === 'table' ? TableIcon : undefined)}
       title={card.title}
       controls={controls}
+      shown={card.header === false ? { header: false } : undefined}
       load={card.load}
       rows={card.rows}
       tools={card.tools}
@@ -586,6 +601,7 @@ function ViewLayout<T extends RowData>({
   rowPick: initialPick,
   groupActions,
   onTokens,
+  paging,
   viewTools,
   columnPicker,
   hideFilter,
@@ -628,6 +644,9 @@ function ViewLayout<T extends RowData>({
     savedSortRef.current = savedSort;
     setHeldSort(config.sort);
   }, [savedSort, config.sort]);
+  // A server's page sorts on the server: it hears each sort held.
+  const onServerSort = paging?.onSort;
+  useEffect(() => onServerSort?.(heldSort ?? null), [onServerSort, heldSort]);
   const [details, setDetails] = useState<T | null>(null);
   const onDetails = onOpen ?? (domain.details?.length ? setDetails : undefined);
   // The assistant sees the view, its data domain, its filter, how many rows show, the first of them and the
@@ -718,8 +737,9 @@ function ViewLayout<T extends RowData>({
   const viewFollowKey = JSON.stringify(viewFollows);
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on what the table follows.
   const viewRows = useMemo(
-    () => narrow(filter.results, viewFollows),
-    [filter.results, viewFollowKey, widgetFields],
+    // A server's page is filtered there: its chips do not narrow it again here.
+    () => narrow(paging ? rows : filter.results, viewFollows),
+    [filter.results, viewFollowKey, widgetFields, paging ? rows : null],
   );
   useEffect(() => onShownRows?.(viewRows), [onShownRows, viewRows]);
   const linksChanged = saved.some((c) => (colors[c.id] ?? null) !== (c.link ?? null));
@@ -920,7 +940,9 @@ function ViewLayout<T extends RowData>({
   const viewCard = mainTableOf(cards);
   const viewOn = (k: WidgetControl) => !viewCard || controlOn(viewCard, k);
   const showBox = !hideFilter && viewOn('filter');
-  const groupButton = viewOn('group') ? group.button : null;
+  // A server's page cannot be grouped (a group would bucket the one page only), unless the
+  // server groups it.
+  const groupButton = viewOn('group') && (!paging || paging.groups) ? group.button : null;
   const viewFilter =
     !showBox && !groupButton ? undefined : (
       <>
@@ -1011,6 +1033,7 @@ function ViewLayout<T extends RowData>({
           config={config}
           rows={viewRows}
           total={rows.length}
+          paging={paging}
           groupBy={group.groupField}
           pivot={pivot}
           subgroup={group.sub}

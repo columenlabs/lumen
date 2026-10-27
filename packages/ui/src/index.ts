@@ -11,10 +11,14 @@ export {
   type LumenTableProps,
   LumenView,
   type LumenViewProps,
+  type ServerGroup,
+  type ServerGroups,
+  type ServerPaging,
   type ViewCellValue,
   type ViewChipTone,
   type ViewDomain,
   type ViewField,
+  type RollLevel,
   type ViewFieldGroup,
   type ViewSource,
   CHIP_TONE,
@@ -48,12 +52,19 @@ export {
   cardsOnScreen,
   kindName,
   onScreen,
+  pointAt,
   pointAtCard,
+  type PointedAt,
+  type SectionOnScreen,
+  sectionsOnScreen,
   spotlight,
+  targetEl,
+  textOf,
 } from './spotlight';
 export { LinkDot, LinkPicker, type LinkColor, linkVar } from './lumen-links';
 export { CardSegments, CardSwitch } from './card-switch';
 export { PageInput, PageInputs } from './page-inputs';
+export { LumenBulkBar } from './lumen-bulk-bar';
 export { type LumenTab, LumenTabs } from './lumen-tabs';
 export { LumenTabDrawer, TAB_NAME_MAX } from './lumen-tab-drawer';
 export { IconPicker } from './icon-picker';
@@ -68,6 +79,7 @@ export {
 export { LumenGeoMap } from './lumen-geo-map';
 export { LumenWidget, type CardControls, type CardLink, LumenSavedWidget } from './lumen-widget';
 export { LumenConfirm, type LumenConfirmProps } from './confirm';
+export { InfoLabel, InfoTip } from './info-tip';
 export {
   type LumenAuthPoint,
   LumenAuthHeading,
@@ -79,7 +91,10 @@ export {
   LumenEmailField,
   LumenPasswordField,
   LumenStepBar,
+  type LumenAuthError,
+  authErrorText,
 } from './lumen-auth';
+export { LumenBotCheck } from './lumen-bot-check';
 export {
   LumenBackupCodes,
   type LumenCodeMethod,
@@ -96,8 +111,27 @@ export {
   stepDate,
 } from './lumen-date-input';
 export { LumenChoice, type LumenChoiceOption } from './lumen-choice';
+export { LumenFileField, type LumenFileFieldProps } from './lumen-file-field';
 export { LumenSecret } from './lumen-secret';
-export { RankedBars, StackedBars, StackedColumns } from './lumen-widget-charts';
+export { RankedBars, StackedBars, StackedColumns, TimeLines } from './lumen-widget-charts';
+export { type ShareSegment, ShareMeter } from './share-meter';
+export { type Pool, poolShare } from './pool-share';
+export { METER_LEVEL_COLOR, meterLevel, meterValueTone } from './meter-level';
+export { UnitValue } from './unit-value';
+export {
+  type BurnRate,
+  burnRate,
+  durationText,
+  PACE_WINDOWS,
+  type Pace,
+  type PaceWindow,
+  paceHours,
+  setDefaultPaceWindow,
+  timeToCap,
+  usePaceWindow,
+} from './pace';
+export { PaceWindowPicker, paceText, TimeToCap } from './time-to-cap';
+export { type TrendChange, TrendValue, trendChange } from './trend-value';
 export {
   COVERAGE_LEVELS,
   CoverageCell,
@@ -135,6 +169,13 @@ export {
   type LumenCodeLang,
 } from './lumen-code-editor';
 export { RenameField, type RenameFieldProps } from './rename-field';
+export {
+  LumenStackedList,
+  type LumenStackedListProps,
+  LumenStackedRow,
+  type LumenStackedRowProps,
+  type StackedColumn,
+} from './lumen-stacked-list';
 export { ResetButton, type ResetButtonProps } from './reset-button';
 export {
   type ChartBand,
@@ -202,8 +243,36 @@ export {
   errorText,
   useClock,
 } from './integrations';
+export {
+  ConnectionBadge,
+  type ConnectionField,
+  type ConnectionLine,
+  ConnectionLogo,
+  type ConnectionSignin,
+  type ConnectionStatus,
+  type ConnectionTest,
+  type ConnectionWay,
+  LumenConnection,
+  type LumenConnectionProps,
+  activeWay,
+  connectionStatus,
+} from './connection';
+export { LumenChatgptSignin, type LumenChatgptSigninProps } from './chatgpt-signin';
+export { LumenExpandList, LumenExpandRow } from './expand-list';
+export { type Fact, FactList, type FactListProps } from './fact-list';
 export { LumenPager } from './pager';
 export { createDeskQueryClient } from './query-client';
+export {
+  type ClientPoint,
+  type ClientPointKind,
+  type LumenTelemetryOptions,
+  apiRoute,
+  reportClient,
+  reportClientError,
+  reportFailedFetch,
+  stackFingerprint,
+  useLumenTelemetry,
+} from './telemetry';
 export { refreshHeaders, withRefreshToken } from './refresh';
 export {
   type LumenLoad,
@@ -242,11 +311,19 @@ export {
   SettingRow,
   SettingsActions,
   SettingsFooter,
+  type SettingsGroupDef,
   type SettingsSectionDef,
 } from './settings';
 export { LumenCard } from './summary-cards';
 export { WhatsNew } from './whats-new';
-export { type LumenApp, LumenAppSwitcher } from './app-switcher';
+export {
+  type LumenApp,
+  LumenAppSwitcher,
+  LumenSuiteSwitcher,
+  type SuiteApp,
+  type SuiteList,
+  suiteApps,
+} from './app-switcher';
 export {
   type BriefActions,
   type BriefChange,
@@ -256,7 +333,7 @@ export {
   SchedulesSection,
 } from './schedules';
 export { NotificationsSettings } from './notifications';
-export { type TasksConfig, TasksButton, TasksProvider, useTasks } from './tasks';
+export { type TasksConfig, TasksButton, TasksProvider, useTaskFor, useTasks } from './tasks';
 export { type McpServer, McpSettings } from './mcp-settings';
 export { lumenToast } from './lumen-toast';
 export {
@@ -305,6 +382,7 @@ export {
   TileChip,
   type TileOption,
   TileRow,
+  TileSpark,
   TileToggleGroup,
 } from './tile';
 export {
@@ -315,6 +393,7 @@ export {
   useLumenFilter,
 } from './lumen-filter';
 export { useIsMobile } from './hooks/use-mobile';
+export { useBackClose } from './hooks/use-back-close';
 export { VIEW_ICONS, iconOf, viewIcon } from './view-icons';
 export { type AppViewState, useAppView } from './app-views';
 export {

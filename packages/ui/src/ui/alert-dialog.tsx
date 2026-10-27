@@ -2,11 +2,19 @@ import { cn } from '../lib/utils';
 import { AlertDialog as AlertDialogPrimitive } from 'radix-ui';
 import type * as React from 'react';
 
+import { useOverlayOpen } from '../hooks/use-back-close';
 import { usePhoneScreen } from '../hooks/use-keyboard-fit';
 import { Button } from './button';
 
-function AlertDialog({ ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
+function AlertDialog({
+  open: given,
+  defaultOpen,
+  onOpenChange: changed,
+  ...props
+}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
+  // Phone back closes it, as its Cancel does (useBackClose).
+  const state = useOverlayOpen({ open: given, defaultOpen, onOpenChange: changed });
+  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...state} {...props} />;
 }
 
 function AlertDialogTrigger({

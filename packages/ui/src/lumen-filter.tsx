@@ -1,5 +1,10 @@
 import type { JoinKey } from '@columenlabs/lumen-ui-types/domains';
-import { CONTAINS_KEY, type ViewTokenOp, meetsNumber } from '@columenlabs/lumen-ui-types/views';
+import {
+  CONTAINS_KEY,
+  EMPTY_VALUE,
+  type ViewTokenOp,
+  meetsNumber,
+} from '@columenlabs/lumen-ui-types/views';
 // The one filter box every view uses, redone after p2e's:
 // one chip per field in the sans face, `Account IRA, Roth ×`, included or excluded as a whole
 // (`Symbol not AAPL`). A chip's tap opens its field: Include / Exclude, then its values ticked,
@@ -8,7 +13,9 @@ import { CONTAINS_KEY, type ViewTokenOp, meetsNumber } from '@columenlabs/lumen-
 // fields: all must match (AND). Free text matches the row's text and any field value; picking
 // "Text contains" keeps it as a chip. It filters the rows already loaded, on the client. The box
 // is one row that never grows and always keeps room to type; crowded chips fold to `Sector: 3`,
-// then behind +N. Phones get a bottom sheet.
+// then behind +N. Phones get a bottom sheet. A text field where some rows have no value pins
+// "No <field>" above its values: Include keeps the rows without one, Exclude the rows with any
+// (an `empty` token); typing "no" or "empty" offers it too.
 import { Command as CommandPrimitive } from 'cmdk';
 import {
   ChevronLeftIcon,
@@ -78,7 +85,13 @@ export interface FilterToken {
   text?: string;
 }
 
-const OP_SIGN: Record<ViewTokenOp, string> = { gt: '>', lt: '<', eq: '=', between: '' };
+const OP_SIGN: Record<ViewTokenOp, string> = { gt: '>', lt: '<', eq: '=', between: '', empty: '' };
+/** The rows with no value on a field (`not`: with any). */
+const isEmptyToken = (t: FilterToken) => t.op === 'empty';
+const emptyToken = (key: string, not: boolean): FilterToken =>
+  not ? { key, value: EMPTY_VALUE, op: 'empty', not } : { key, value: EMPTY_VALUE, op: 'empty' };
+/** "No label": the empty row's words for a field. */
+const noneOf = (label: string) => `No ${label.toLowerCase()}`;
 export const tokenText = (t: FilterToken) =>
   `${t.not ? '-' : ''}${t.key}:${t.op ? OP_SIGN[t.op] : ''}${t.value}`;
 /** A number condition as people read it: `> 100`, `0 – 500`. */
@@ -88,7 +101,9 @@ const conditionText = (t: FilterToken) =>
 const NUMBER_TYPED = /^(\w+):(>|<|=)?(-?\d+(?:\.\d+)?)(?:\.\.(-?\d+(?:\.\d+)?))?$/;
 /** Same field and value, included or not: a value sits in one chip only. */
 const same = (a: FilterToken, b: FilterToken) =>
-  a.key === b.key && a.value.toLowerCase() === b.value.toLowerCase();
+  a.key === b.key &&
+  isEmptyToken(a) === isEmptyToken(b) &&
+  a.value.toLowerCase() === b.value.toLowerCase();
 const token = (key: string, value: string, not: boolean): FilterToken =>
   not ? { key, value, not } : { key, value };
 
@@ -119,9 +134,14 @@ function passes(
       continue;
     }
     const have = values[f.key] ?? [];
-    const inc = of.filter((t) => !t.not).map((t) => t.value.toLowerCase());
-    const exc = of.filter((t) => t.not).map((t) => t.value.toLowerCase());
-    if (inc.length && !have.some((v) => inc.includes(v))) return false;
+    // `empty`: no value (included, alongside any values: none or one of these) or any value (excluded).
+    const none = of.find((t) => isEmptyToken(t) && !t.not);
+    if (of.some((t) => isEmptyToken(t) && t.not) && !have.length) return false;
+    const plain = of.filter((t) => !isEmptyToken(t));
+    const inc = plain.filter((t) => !t.not).map((t) => t.value.toLowerCase());
+    const exc = plain.filter((t) => t.not).map((t) => t.value.toLowerCase());
+    if ((inc.length || none) && !(none && !have.length) && !have.some((v) => inc.includes(v)))
+      return false;
     if (exc.length && have.some((v) => exc.includes(v))) return false;
   }
   if (except === CONTAINS_KEY) return true;
@@ -161,7 +181,7 @@ export function filterByTokens<T>(
 /** A field is included or excluded as a whole: where a field holds both, as
  * filters saved before that do, its included values stay. */
 function onePerField(tokens: FilterToken[]) {
-  const inc = new Set(tokens.filter((t) => !t.not && !t.op).map((t) => t.key));
+  const inc = new Set(tokens.filter((t) => !t.not && (!t.op || isEmptyToken(t))).map((t) => t.key));
   return tokens.some((t) => t.not && inc.has(t.key))
     ? tokens.filter((t) => !(t.not && inc.has(t.key)))
     : tokens;
@@ -273,7 +293,12 @@ function chipWords(chip: Chip, field: FilterField<never> | undefined, form: Chip
   const condition = field?.number && chip.tokens[0];
   if (condition) return { name, verb: '', shown: conditionText(condition), all: '' };
   const quote = chip.key === CONTAINS_KEY;
-  const all = chip.tokens.map((t) => (quote ? `“${t.value}”` : t.value)).join(', ');
+  // An excluded `empty` reads "Label any"; an included one "none" among the values.
+  if (chip.not && chip.tokens.length === 1 && chip.tokens[0] && isEmptyToken(chip.tokens[0]))
+    return { name, verb: '', shown: 'any', all: 'any' };
+  const all = chip.tokens
+    .map((t) => (isEmptyToken(t) ? 'none' : quote ? `“${t.value}”` : t.value))
+    .join(', ');
   const counted = form === 'count' && chip.tokens.length > 1;
   const verb = chip.not ? (counted ? 'not in:' : 'not') : counted ? ':' : '';
   return { name, verb, shown: counted ? String(chip.tokens.length) : all, all };
@@ -546,9 +571,20 @@ export function LumenTokenizedFilter<T>({
   const only = (key: string, value: string) => {
     setTokens([...tokens.filter((x) => x.key !== key), token(key, value, notFor(key))]);
   };
+  const hasEmpty = (key: string) => tokens.some((t) => t.key === key && isEmptyToken(t));
+  const toggleEmpty = (key: string, not = notFor(key)) => {
+    if (hasEmpty(key)) setTokens(tokens.filter((t) => !(t.key === key && isEmptyToken(t))));
+    else setTokens([...tokens, emptyToken(key, not)]);
+    if (!field) setText('');
+    else setSearch('');
+  };
   const setNot = (key: string, not: boolean) => {
     setPendingNot(not);
-    setTokens(tokens.map((t) => (t.key === key ? token(key, t.value, not) : t)));
+    setTokens(
+      tokens.map((t) =>
+        t.key !== key ? t : isEmptyToken(t) ? emptyToken(key, not) : token(key, t.value, not),
+      ),
+    );
   };
   // A number field holds one condition: a new one replaces it.
   const setCondition = (key: string, op: ViewTokenOp, value: string) =>
@@ -590,18 +626,24 @@ export function LumenTokenizedFilter<T>({
 
   // Each field's values with counts. A field counts the rows the other fields' tokens keep, so a
   // chip can take more values of its own field.
-  const counts = useMemo(() => {
-    const out = new Map<string, Map<string, number>>();
+  const { counts, empties } = useMemo(() => {
+    const counts = new Map<string, Map<string, number>>();
+    // Rows with no value on each field, for its "No <field>" row.
+    const empties = new Map<string, number>();
     for (const f of fields) {
       if (f.number) continue;
       const m = new Map<string, number>();
+      let none = 0;
       for (const { row, values, nums } of indexed) {
         if (!passes(values, nums, tokens, fields, f.key)) continue;
-        for (const v of new Set(f.values(row))) m.set(v, (m.get(v) ?? 0) + 1);
+        const vs = new Set(f.values(row));
+        if (!vs.size) none++;
+        for (const v of vs) m.set(v, (m.get(v) ?? 0) + 1);
       }
-      out.set(f.key, m);
+      counts.set(f.key, m);
+      empties.set(f.key, none);
     }
-    return out;
+    return { counts, empties };
   }, [fields, indexed, tokens]);
   const picked = (key: string, value: string) => tokens.some((t) => same(t, { key, value }));
   /** A field's values matching `n`: picked ones first, then the most common. In the open field
@@ -609,7 +651,8 @@ export function LumenTokenizedFilter<T>({
   const valuesOf = (key: string, n: string, limit: number) => {
     const first = (v: string) => (key === field ? pinned.has(v) : picked(key, v));
     const m = new Map(counts.get(key) ?? []);
-    for (const t of tokens) if (t.key === key && !m.has(t.value)) m.set(t.value, 0);
+    for (const t of tokens)
+      if (t.key === key && !isEmptyToken(t) && !m.has(t.value)) m.set(t.value, 0);
     return [...m]
       .filter(([v]) => !n || v.toLowerCase().includes(n))
       .sort(
@@ -738,6 +781,28 @@ export function LumenTokenizedFilter<T>({
       </CommandItem>
     );
   };
+  // A field's "No <field>" row, pinned above its values: the rows with no value (Exclude: any).
+  const emptyRow = (f: FilterField<never>, include?: boolean) => {
+    const n = empties.get(f.key) ?? 0;
+    if (!n && !hasEmpty(f.key)) return null;
+    return (
+      <CommandItem
+        key={`${f.key}:${EMPTY_VALUE}`}
+        value={`${f.key}:${EMPTY_VALUE}`}
+        onSelect={() => toggleEmpty(f.key, include ? false : undefined)}
+        className={tall}
+      >
+        <Checkbox
+          checked={hasEmpty(f.key)}
+          tabIndex={-1}
+          aria-hidden
+          className="pointer-events-none"
+        />
+        <span className="min-w-0 truncate text-muted-foreground italic">{noneOf(f.label)}</span>
+        <CommandShortcut className={cn('ml-auto w-8 text-right', shortcut)}>{n}</CommandShortcut>
+      </CommandItem>
+    );
+  };
   const summary = (c: Chip) => {
     const w = chipWords(c, fieldOf(c.key), 'full');
     return (
@@ -823,6 +888,8 @@ export function LumenTokenizedFilter<T>({
       ) : (
         !activeField.number && (
           <CommandGroup className="px-1 py-0.5">
+            {(!needle || noneOf(activeField.label).toLowerCase().includes(needle)) &&
+              emptyRow(activeField)}
             {valuesOf(activeField.key, needle, 200).map(([v, n]) =>
               valueRow(activeField.key, v, n),
             )}
@@ -877,6 +944,24 @@ export function LumenTokenizedFilter<T>({
             ))}
         </CommandGroup>
       )}
+      {(q.startsWith('no') || (q.length > 1 && 'empty'.startsWith(q))) &&
+        fields.some(
+          (f) =>
+            !f.number &&
+            (empties.get(f.key) ?? 0) > 0 &&
+            (q.startsWith('no') ? noneOf(f.label).toLowerCase().startsWith(q) : true),
+        ) && (
+          <CommandGroup heading="Quick filters" className="px-1 py-0.5">
+            {fields
+              .filter(
+                (f) =>
+                  !f.number &&
+                  (empties.get(f.key) ?? 0) > 0 &&
+                  (q.startsWith('no') ? noneOf(f.label).toLowerCase().startsWith(q) : true),
+              )
+              .map((f) => emptyRow(f as FilterField<never>, true))}
+          </CommandGroup>
+        )}
       {fields
         .filter((f) => !f.number)
         .map((f) => {
@@ -1097,7 +1182,7 @@ export function LumenTokenizedFilter<T>({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="mr-8 ml-auto font-normal text-muted-foreground"
+                  className="ml-auto font-normal text-muted-foreground"
                   onClick={clear}
                 >
                   Clear all

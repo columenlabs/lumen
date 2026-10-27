@@ -1,7 +1,7 @@
 // Chart widgets: each leads with a headline number; bars are a ranked
 // list on full tracks (or split into parts by a text field), the donut carries its total in the
 // middle, allocation names its wide slices. Flat marks, no glow. Recharts only.
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -10,6 +10,8 @@ import {
   Cell,
   Label,
   LabelList,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   Rectangle,
@@ -220,6 +222,7 @@ export function StackedColumns({
   // The highest part with a value carries the column's rounded cap.
   const top = (r: Record<string, number | string>) =>
     parts.findLast((p) => Number(r[p.key]) > 0)?.key;
+  const ticks = niceTicks(Math.max(0, ...rows.map(total)));
   return (
     <div className="flex flex-col gap-2">
       <ChartContainer
@@ -242,8 +245,9 @@ export function StackedColumns({
           <YAxis
             tickLine={false}
             axisLine={false}
-            width={36}
-            allowDecimals={false}
+            domain={[0, ticks.at(-1) ?? 'auto']}
+            ticks={ticks}
+            width={axisWidth(ticks.map(fmt))}
             tickFormatter={(v) => fmt(Number(v))}
           />
           <ChartTooltip
@@ -303,20 +307,168 @@ export function StackedColumns({
   );
 }
 
+/** Lines over time (visits, sign-ups per day), each its own colour; a line with `right` reads off a
+ *  second axis on the right, for a count far smaller than the others. */
+export function TimeLines({
+  rows,
+  x,
+  lines,
+  label,
+  height = 220,
+  tick = String,
+  fmt = (v) => v.toLocaleString(),
+  legend = true,
+}: {
+  /** One row per period, oldest first: the `x` field plus a number (or null for no data) for
+   *  each line's key. */
+  rows: Record<string, number | string | null>[];
+  /** The field that names each period (a date, a month). */
+  x: string;
+  lines: { name: string; key: string; fill: string; right?: boolean }[];
+  /** What the chart shows, for screen readers. */
+  label: string;
+  height?: number;
+  /** How a period's name reads under the chart (a date as `10-22`). */
+  tick?: (v: string) => string;
+  fmt?: Fmt;
+  /** The lines' names under the chart. */
+  legend?: boolean;
+}) {
+  const config: ChartConfig = Object.fromEntries(
+    lines.map((l) => [l.key, { label: l.name, color: l.fill }]),
+  );
+  const axis = (right: boolean) => {
+    const keys = lines.filter((l) => !!l.right === right).map((l) => l.key);
+    return niceTicks(Math.max(0, ...rows.flatMap((r) => keys.map((k) => Number(r[k]) || 0))));
+  };
+  const left = axis(false);
+  const hasRight = lines.some((l) => l.right);
+  const right = hasRight ? axis(true) : [];
+  return (
+    <div className="flex flex-col gap-2">
+      <ChartContainer
+        config={config}
+        role="img"
+        aria-label={label}
+        className="aspect-auto w-full"
+        style={{ height }}
+      >
+        <LineChart data={rows} margin={{ left: 0, right: 0, top: 8, bottom: 0 }}>
+          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+          <XAxis
+            dataKey={x}
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            minTickGap={12}
+            tickFormatter={(v) => tick(String(v))}
+          />
+          <YAxis
+            yAxisId="left"
+            tickLine={false}
+            axisLine={false}
+            domain={[0, left.at(-1) ?? 'auto']}
+            ticks={left}
+            width={axisWidth(left.map(fmt))}
+            tickFormatter={(v) => fmt(Number(v))}
+          />
+          {hasRight && (
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tickLine={false}
+              axisLine={false}
+              domain={[0, right.at(-1) ?? 'auto']}
+              ticks={right}
+              width={axisWidth(right.map(fmt))}
+              tickFormatter={(v) => fmt(Number(v))}
+            />
+          )}
+          <ChartTooltip
+            cursor={{ stroke: 'var(--border)' }}
+            content={
+              <ChartTooltipContent
+                labelFormatter={(_, payload) => {
+                  const r = payload?.[0]?.payload as Record<string, unknown> | undefined;
+                  return r ? tick(String(r[x])) : null;
+                }}
+                formatter={(v, name) => (
+                  <span className="flex w-full items-center gap-2">
+                    <span
+                      className="size-2 shrink-0 rounded-sm"
+                      style={{ background: config[String(name)]?.color }}
+                    />
+                    <span>{config[String(name)]?.label}</span>
+                    <span className="num ml-auto pl-3">{fmt(Number(v))}</span>
+                  </span>
+                )}
+              />
+            }
+          />
+          {lines.map((l) => (
+            <Line
+              key={l.key}
+              dataKey={l.key}
+              yAxisId={l.right ? 'right' : 'left'}
+              type="monotone"
+              stroke={l.fill}
+              strokeWidth={2}
+              dot={false}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          ))}
+        </LineChart>
+      </ChartContainer>
+      {legend && (
+        <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {lines.map((l) => (
+            <li key={l.key} className="flex items-center gap-1.5">
+              <span className="h-0.5 w-3 rounded-full" style={{ background: l.fill }} />
+              {l.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Horizontal bars as a ranked list: a full track per row, each bar its own colour. */
 export function RankedBars({
   id,
   items,
-  signed,
-  fmt,
-  share,
+  signed = false,
+  fmt = (v) => v.toLocaleString(),
+  share = 'total',
+  empty = 'None yet.',
+  label,
 }: {
-  id: string;
+  /** Keeps the bars' gradients apart when one page draws several; one is made when left out. */
+  id?: string;
   items: Item[];
-  signed: boolean;
-  fmt: Fmt;
-  share: (v: number) => string;
+  /** Bars can go below zero (a loss); otherwise they start at zero. */
+  signed?: boolean;
+  fmt?: Fmt;
+  /** The small figure before each value: its % of all bars (`total`), of the first bar
+   *  (`first`, for a funnel), the app's own text, or `false` for none. */
+  share?: 'total' | 'first' | false | ((v: number) => string);
+  /** Shown in place of the bars when there are none. */
+  empty?: ReactNode;
+  /** What the bars show, for screen readers. */
+  label?: string;
 }) {
+  const ownId = useId();
+  const gid = id ?? ownId;
+  if (!items.length) return <p className="p-3 text-sm text-muted-foreground">{empty}</p>;
+  const base =
+    share === 'first' ? (items[0]?.v ?? 0) : items.reduce((t, i) => t + Math.abs(i.v), 0);
+  const shareText =
+    typeof share === 'function'
+      ? share
+      : share === false
+        ? () => ''
+        : (v: number) => (base ? `${Math.round((v / base) * 100)}%` : '');
   const ROW = 34;
   const lo = Math.min(0, ...items.map((i) => i.v));
   const hi = Math.max(0, ...items.map((i) => i.v));
@@ -326,6 +478,8 @@ export function RankedBars({
       config={config}
       className="aspect-auto w-full"
       style={{ height: items.length * ROW + 14 }}
+      role={label ? 'img' : undefined}
+      aria-label={label}
     >
       <BarChart
         data={items}
@@ -335,7 +489,7 @@ export function RankedBars({
       >
         <defs>
           {items.map((it, i) => (
-            <linearGradient key={it.name} id={`rb-${id}-${i}`} x1="0" x2="1" y1="0" y2="0">
+            <linearGradient key={it.name} id={`rb-${gid}-${i}`} x1="0" x2="1" y1="0" y2="0">
               <stop offset="0%" stopColor={it.fill} stopOpacity={it.v < 0 ? 1 : 0.35} />
               <stop offset="100%" stopColor={it.fill} stopOpacity={it.v < 0 ? 0.35 : 1} />
             </linearGradient>
@@ -351,9 +505,12 @@ export function RankedBars({
           isAnimationActive={false}
         >
           {items.map((it, i) => (
-            <Cell key={it.name} fill={`url(#rb-${id}-${i})`} style={{ color: it.fill }} />
+            <Cell key={it.name} fill={`url(#rb-${gid}-${i})`} style={{ color: it.fill }} />
           ))}
-          <LabelList dataKey="v" content={<RankLabel items={items} fmt={fmt} share={share} />} />
+          <LabelList
+            dataKey="v"
+            content={<RankLabel items={items} fmt={fmt} share={shareText} />}
+          />
         </Bar>
       </BarChart>
     </ChartContainer>
@@ -538,3 +695,20 @@ export function AllocationBar({
     </ChartContainer>
   );
 }
+
+/**
+ * Round axis steps (1, 2, 2.5 or 5 times a power of ten) from 0 to just above `max`, about four
+ * of them, so a value axis reads 0, 100k, 200k, 300k rather than 95k, 190k, 285k.
+ */
+function niceTicks(max: number, count = 4): number[] {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / count;
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  const step = ([1, 2, 2.5, 5, 10].find((m) => m * pow >= raw) ?? 10) * pow;
+  const n = Math.ceil(max / step - 1e-9);
+  return Array.from({ length: n + 1 }, (_, i) => Math.round(i * step * 1e6) / 1e6);
+}
+
+/** Room for the widest tick label (about 7px a character at text-xs), so none is clipped. */
+const axisWidth = (labels: string[]) =>
+  Math.max(24, Math.max(0, ...labels.map((l) => l.length)) * 7 + 8);

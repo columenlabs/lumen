@@ -2,8 +2,8 @@
 // new one, or clear it. Saves at once through the field's `edit`. Clicks stay off the row, which
 // opens its details.
 import { PencilLineIcon, PlusIcon, XIcon } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { ColorChip, colorIcon } from './color-dot';
+import { type ComponentType, type ReactNode, useEffect, useRef, useState } from 'react';
+import { ColorChip, colorIcon, tintedIcon } from './color-dot';
 import { cn } from './lib/utils';
 import { LumenSelector } from './lumen-selector';
 import { Input } from './ui/input';
@@ -147,6 +147,7 @@ export function EditManyCell({
   unused = [],
   note,
   colorOf,
+  iconOf,
   onSave,
 }: {
   label: string;
@@ -155,6 +156,8 @@ export function EditManyCell({
   unused?: string[];
   note?: string;
   colorOf?: (value: string) => string | undefined;
+  /** A value's icon (a label's), drawn in its colour on its chip and in the picker. */
+  iconOf?: (value: string) => ComponentType<{ className?: string }> | undefined;
   onSave: (values: string[]) => Promise<unknown>;
 }) {
   const [open, setOpen] = useState(false);
@@ -183,7 +186,12 @@ export function EditManyCell({
   };
   const row = (o: string) => {
     const c = colorOf?.(o);
-    return { value: o, label: o, ...(c ? { icon: colorIcon(c) } : {}) };
+    const i = iconOf?.(o);
+    return {
+      value: o,
+      label: o,
+      ...(i ? { icon: tintedIcon(i, c) } : c ? { icon: colorIcon(c) } : {}),
+    };
   };
   const all = [...options, ...unused];
   const picked = draft.filter((v) => !all.includes(v));
@@ -197,11 +205,11 @@ export function EditManyCell({
         <button
           type="button"
           aria-label={`${label}: ${values.join(', ')}`}
-          className="flex min-w-0 flex-wrap items-center gap-1 rounded text-left"
+          className="flex min-w-0 items-center gap-1 overflow-hidden rounded text-left"
           onClick={start}
         >
           {values.map((v) => (
-            <ColorChip key={v} color={colorOf?.(v)}>
+            <ColorChip key={v} color={colorOf?.(v)} icon={iconOf?.(v)}>
               {v}
             </ColorChip>
           ))}

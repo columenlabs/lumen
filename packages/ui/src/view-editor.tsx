@@ -2198,11 +2198,23 @@ function DetailsSection<T>({
         >
           {SHAPES.map((s) => {
             const Icon = shapeIcon(s.value);
-            return (
-              <ToggleGroupItem key={s.value} value={s.value} aria-label={s.label}>
+            const note =
+              s.value === 'table'
+                ? null
+                : (domain.groupNote ?? (s.value === 'pivot' ? domain.pivotNote : null));
+            const off = !!note && draft.shape !== s.value;
+            const item = (
+              <ToggleGroupItem key={s.value} value={s.value} aria-label={s.label} disabled={off}>
                 <Icon />
                 {s.label}
               </ToggleGroupItem>
+            );
+            return off ? (
+              <WhyOff key={s.value} note={note}>
+                {item}
+              </WhyOff>
+            ) : (
+              item
             );
           })}
         </ToggleGroup>
@@ -2483,6 +2495,7 @@ function ColumnList<T>({
     });
   };
   const groupNote = (f: ViewField<T>) =>
+    domain.groupNote ??
     f.groupNote ??
     (f.format === 'text' ? 'Not offered for grouping.' : 'Numbers can’t be grouped.');
   if (!rows.length)
@@ -2518,7 +2531,7 @@ function ColumnList<T>({
             const g = groupInfo(f);
             const shown = shownKeys.includes(f.key);
             const canF = canFilterKeys.includes(f.key);
-            const canG = groupKeys.includes(f.key);
+            const canG = !domain.groupNote && groupKeys.includes(f.key);
             return (
               <ColumnRow key={f.key} id={f.key} className={grid}>
                 <span className="flex min-w-0 items-center gap-2">
@@ -2623,6 +2636,21 @@ function ColumnList<T>({
                       }))}
                       value={placement(f.key)}
                       onChange={(v) => setPlacement(f.key, v)}
+                    />
+                  ) : f.showAs && f.showAs.length > 1 ? (
+                    <LumenSelector
+                      label={`Show ${f.label} as`}
+                      size="sm"
+                      className="h-7 w-full"
+                      options={f.showAs.map((o) => ({ value: o.id, label: o.label }))}
+                      value={draft.shows?.[f.key] ?? f.showAs[0]?.id ?? ''}
+                      onChange={(v) => {
+                        const { [f.key]: _, ...rest } = draft.shows ?? {};
+                        setDraft({
+                          ...draft,
+                          shows: v === f.showAs?.[0]?.id ? rest : { ...rest, [f.key]: v },
+                        });
+                      }}
                     />
                   ) : f.format !== 'text' ? (
                     <LumenSelector

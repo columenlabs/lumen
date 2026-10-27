@@ -11,7 +11,7 @@ import {
   whyBlank,
 } from '@columenlabs/lumen-ui-types/views';
 import type { LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ChartBand, ChartMarker, Series } from './growth-chart';
 import { formulaFields } from './view-formulas';
 
@@ -105,6 +105,19 @@ export interface ViewField<T> {
   /** Draws the cell instead of its formatted value (a sparkline); sorting and filters still use
    *  `value` (strategy lab). */
   render?: (row: T) => ReactNode;
+  /**
+   * Draws a group or Total row's cell from its rows instead of the rolled-up number: an amount with
+   * its unit, or a share worked out again as the rows' total over their allowance (never a sum of
+   * percents). Only where the field rolls up (`aggregate`). `level` says which line it draws: a
+   * group heading, a sub-group's folded line or the Total (a split bar on a fold only).
+   */
+  rollRender?: (rows: T[], level: RollLevel) => ReactNode;
+  /**
+   * Ways the column can read, picked per column in Edit view ("Show as"), e.g. an amount or its % of
+   * an allowance. The first is the field as defined; each other one's `field` replaces those parts
+   * of it (value, format, render, aggregate...). The pick saves with the view (`shows`).
+   */
+  showAs?: { id: string; label: string; field?: Partial<Omit<ViewField<T>, 'key' | 'showAs'>> }[];
   /** The ticker a click on the cell charts in the app's chart dialog (an option charts its
    *  underlying); null leaves the row's cell plain. */
   chart?: (row: T) => string | null;
@@ -117,8 +130,17 @@ export interface ViewField<T> {
    * cell, its chip and the edit picker. A CSS colour; a theme token reads in light and dark.
    */
   color?: (value: string) => string | undefined;
+  /** A text value's icon (a label's, a product's), drawn in its `color` on its chip, in the edit
+   *  picker and on its group's heading. */
+  iconOf?: (value: string) => ComponentType<{ className?: string }> | undefined;
   /** The cell's background, a theme colour mix (a P/L heat grid). */
   tint?: (row: T) => string | undefined;
+  /**
+   * The column's widest cell, a CSS length (`14rem`): past it the cell ends in an ellipsis on one
+   * line, the full text in its hover. The first column defaults to `--lead-col-max` (18rem);
+   * `false` lets it grow.
+   */
+  maxWidth?: string | false;
   /** Left out on phones, where the table has no room for it (a returns table's longer windows). */
   hideOnPhone?: boolean;
   /**
@@ -184,6 +206,11 @@ export interface ViewDomain<T> {
   fields: ViewField<T>[];
   /** Field groups in order; without them every field is one group. */
   groups?: ViewFieldGroup[];
+  /** Why its rows can't group at all (a server pages them, so a group would cover one page):
+   *  Edit view greys the Group and Pivot shapes and every Group box with it. */
+  groupNote?: string;
+  /** Why its rows can't pivot (a server pages them): Edit view greys the Pivot shape with it. */
+  pivotNote?: string;
   /**
    * The keys its rows carry (views from data domains): a reader per key, null
    * for a row without one (cash). The shell's `useJoins` attaches the registry's join fields for
@@ -278,6 +305,9 @@ export interface ViewDomain<T> {
  *  every row (no filter of its own, no linked chips). */
 export const summaryCash = (card: { cash?: boolean }, narrowed: boolean) => card.cash ?? !narrowed;
 
+/** The line a `rollRender` draws: a group heading, a sub-group's folded line, the Total. */
+export type RollLevel = 'group' | 'fold' | 'total';
+
 /** One choice of a domain's "Each row opens". */
 export interface ViewSubgroup<T> {
   key: string;
@@ -288,6 +318,15 @@ export interface ViewSubgroup<T> {
   name?: (row: T) => string;
   /** `under` folds a key even when one row has it (a field's second level of grouping). */
   always?: boolean;
+  /** Rows start open, their parts showing (a meter's labels); a click still closes one. */
+  open?: boolean;
+  /** Drawn before a folded line's key (a meter's product icon, in its colour). */
+  mark?: (key: string, rows: T[]) => ReactNode;
+  /**
+   * Group fields under which rows do not fold: each row is one line named by its `under` key (and
+   * `mark`) instead of its first column (grouped by label, a label's meters).
+   */
+  flat?: string[];
 }
 
 /**
@@ -362,13 +401,24 @@ export function withViewFields<T>(domain: ViewDomain<T>, c: CustomViewConfig): V
   const own = takesFormulas(domain) && formulasOf(c).length ? formulaFields<T>(formulasOf(c)) : [];
   const picked = c.formats ?? {};
   const aggs = c.aggs ?? {};
-  if (!own.length && !Object.keys(picked).length && !Object.keys(aggs).length) return domain;
+  const shows = c.shows ?? {};
+  if (
+    !own.length &&
+    !Object.keys(picked).length &&
+    !Object.keys(aggs).length &&
+    !Object.keys(shows).length
+  )
+    return domain;
   const mine = new Set(own.map((f) => f.key));
   // A text formula groups like any text field: each row's value is the formula
   // over that row alone. One that reads group_sum or total_sum depends on the rows shown, so it
   // cannot pick its own group.
   const rowValue = (f: ViewField<T>) => (r: T) => computedOf(full, [r], null).value(f, r);
-  const fields: ViewField<T>[] = [...domain.fields, ...own].map((f) => {
+  const shown = (f: ViewField<T>): ViewField<T> => {
+    const alt = f.showAs?.find((o) => o.id === shows[f.key]);
+    return alt?.field ? { ...f, ...alt.field } : f;
+  };
+  const fields: ViewField<T>[] = [...domain.fields, ...own].map(shown).map((f) => {
     if (f.format === 'text') {
       if (!mine.has(f.key) || !f.formula) return f;
       if (/\b(group_sum|total_sum)\s*\(/.test(f.formula))

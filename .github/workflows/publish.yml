@@ -89,7 +89,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          for pkg in ui-types ui ship auth ops ai; do
+          for pkg in ui-types ui ship auth ops ai people tasks; do
             name=$(jq -r .name "out/$pkg/package.json")
             if npm view "$name@$VERSION" version >/dev/null 2>&1; then
               echo "$name@$VERSION is already on npm"

@@ -1,7 +1,7 @@
 {
   "name": "@columenlabs/lumen-ai",
   "version": "0.0.0",
-  "description": "Lumen's assistant and agent parts: serving an MCP server from a Worker, read-only tool sets and metered tool calls.",
+  "description": "Lumen's assistant and agent parts: a chat assistant's server (Claude tiers, tools over MCP, the web, hand off, spend caps), serving an MCP server from a Worker, read-only tool sets and metered tool calls.",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
@@ -10,10 +10,15 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./mcp": "./src/mcp.ts"
+    "./mcp": "./src/mcp.ts",
+    "./assistant": "./src/assistant/index.ts"
   },
   "dependencies": {
-    "@columenlabs/lumen-ops": "workspace:*"
+    "@anthropic-ai/sdk": "0.133.0",
+    "@columenlabs/lumen-ops": "workspace:*",
+    "@columenlabs/lumen-ui-types": "workspace:*",
+    "openai": "7.32.0",
+    "zod": "^4.3.6"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"

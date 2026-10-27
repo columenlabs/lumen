@@ -1,5 +1,6 @@
 // What LumenCoverageMap and LumenCoverageCalendarMap share: one state per cell, its look, the legend of the states on screen and the cell with its
 // tooltip. A colour fix here reaches every coverage surface.
+import { CheckIcon, MinusIcon } from 'lucide-react';
 import { type ReactNode, memo, useRef, useState } from 'react';
 import { cn } from './lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
@@ -121,6 +122,9 @@ export const CoverageCell = memo(function CoverageCell({
   onClick,
   className,
   fill,
+  mark,
+  start = false,
+  preview = false,
 }: {
   level: CoverageLevel;
   label: string;
@@ -134,6 +138,13 @@ export const CoverageCell = memo(function CoverageCell({
   pickable?: boolean;
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   className?: string;
+  /** A backfill pick: a frame and a check (`add`) or a minus (`remove`, out of the queue).
+   *  Ink only, so it never reads as a state's colour or the queued dashes. */
+  mark?: 'add' | 'remove';
+  /** The first block of a range being picked: its mark pulses until the range ends. */
+  start?: boolean;
+  /** Inside the range the pointer would pick (or, with `mark`, unpick) next. */
+  preview?: boolean;
 }) {
   return (
     <button
@@ -148,11 +159,15 @@ export const CoverageCell = memo(function CoverageCell({
         coverageClass(level),
         'relative overflow-hidden',
         // outline-none would also hide the picked outline, so a picked cell must not carry it.
-        picked
-          ? 'outline-2 outline-offset-1 outline-foreground'
-          : level === 'queued' || level === 'failed'
-            ? ''
-            : 'outline-none',
+        mark && !preview
+          ? 'shadow-[inset_0_0_0_2px_var(--foreground),inset_0_0_0_3px_var(--card)] outline-none'
+          : preview
+            ? 'shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--foreground)_45%,transparent)] outline-none'
+            : picked
+              ? 'outline-2 outline-offset-1 outline-foreground'
+              : level === 'queued' || level === 'failed'
+                ? ''
+                : 'outline-none',
         pickable && !disabled && 'cursor-pointer',
         className,
       )}
@@ -163,6 +178,23 @@ export const CoverageCell = memo(function CoverageCell({
           className="pointer-events-none absolute inset-y-0 left-0 bg-cov-full"
           style={{ width: `${Math.round(fill * 100)}%` }}
         />
+      )}
+      {mark && (
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute top-1/2 right-0.5 flex size-2.5 -translate-y-1/2 items-center justify-center rounded-full bg-foreground text-background sm:size-3',
+            start && 'motion-safe:animate-pulse',
+            // A picked block inside an unpicking range: its check fades, about to go.
+            preview && 'opacity-40',
+          )}
+        >
+          {mark === 'add' ? (
+            <CheckIcon className="size-2 stroke-[3.5] sm:size-2.5" />
+          ) : (
+            <MinusIcon className="size-2 stroke-[3.5] sm:size-2.5" />
+          )}
+        </span>
       )}
     </button>
   );

@@ -48,11 +48,14 @@ const releases = [
 ];
 
 const api = '/whats-new-sample';
+const empty = '/whats-new-empty';
 const real = globalThis.fetch;
 globalThis.fetch = (input, init) =>
   String(input).startsWith(api)
     ? Promise.resolve(new Response(JSON.stringify({ releases })))
-    : real(input, init);
+    : String(input).startsWith(empty)
+      ? Promise.resolve(new Response(JSON.stringify({ releases: [] })))
+      : real(input, init);
 
 const meta = {
   title: 'App shell/WhatsNew',
@@ -71,3 +74,6 @@ const meta = {
 export default meta;
 
 export const AppChips: StoryObj<typeof meta> = {};
+
+/** An app before its first release: the button reads What's new and opens an empty state. */
+export const NoReleasesYet: StoryObj<typeof meta> = { args: { api: empty } };

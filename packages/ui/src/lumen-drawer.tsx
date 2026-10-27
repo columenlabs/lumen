@@ -40,7 +40,8 @@ export interface LumenDrawerProps {
  * edge, 320px to 60% by default. The sheet spans the screen so the resizable group has room; only
  * the handle and the drawer take the pointer, so a click beside it falls through to the overlay
  * and closes it (`!` beats the inline pointer-events Radix sets on a modal's content). Its body
- * holds DrawerSections; its footer is always there (actions on the right, Close by default).
+ * holds DrawerSections; its footer sits at the bottom (actions on the right, Close by default; on a
+ * phone it shows only when there are actions, as the sheet's X closes it).
  */
 export function LumenDrawer({
   open,
@@ -57,23 +58,26 @@ export function LumenDrawer({
   const isMobile = useIsMobile();
   const head = (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <SheetTitle className="truncate">{title}</SheetTitle>
+      <SheetTitle className="truncate" title={typeof title === 'string' ? title : undefined}>
+        {title}
+      </SheetTitle>
       <SheetDescription
         className={description ? 'truncate text-muted-foreground text-xs' : 'sr-only'}
+        title={typeof description === 'string' ? description : undefined}
       >
         {description ?? 'Details'}
       </SheetDescription>
     </div>
   );
   const body = <div className="flex flex-col px-4 pb-4">{children}</div>;
-  // Every drawer has a footer, styled like a dialog's: the body scrolls above
-  // it and always ends on a clear edge. Without actions of its own it offers Close.
-  // On a phone the drawer is a full screen and the footer a bar under the header, so the
-  // keyboard never covers its actions (Dialog does the same).
+  // Every drawer ends on a footer, styled like a dialog's: the body scrolls above it and always
+  // ends on a clear edge. Without actions of its own it offers Close, except on a phone, where the
+  // sheet's X already closes it and a second Close only took room.
+  const plain = !footer && !footerStart;
   const foot = (
     <footer
       data-slot="drawer-footer"
-      className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-4 py-2.5 max-md:order-first max-md:border-t-0 max-md:border-b"
+      className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-4 py-2.5"
     >
       {footerStart && (
         <div className="min-w-0 flex-1 truncate text-muted-foreground text-xs">{footerStart}</div>
@@ -94,10 +98,9 @@ export function LumenDrawer({
     <Sheet open={open} onOpenChange={(o) => !o && onClose()} modal={isMobile}>
       {isMobile ? (
         <SheetContent side="bottom" className="max-h-[85svh] gap-0 overflow-hidden">
-          <SheetHeader className="order-first shrink-0 border-b">{head}</SheetHeader>
-          {/* The footer is a bar at the top here, so the body fades out at the bottom (end-fade). */}
-          <div className="end-fade min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
-          {foot}
+          <SheetHeader className="order-first shrink-0 border-b pt-3">{head}</SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
+          {!plain && foot}
         </SheetContent>
       ) : (
         <SheetContent

@@ -20,7 +20,9 @@ export function LumenPager({
   onSize,
   noun = 'rows',
   sizes = viewPageSizes,
+  more = false,
 }: {
+  /** The rows there are, or (with `more`) the rows known so far. */
   total: number;
   page: number;
   size: number;
@@ -29,8 +31,10 @@ export function LumenPager({
   noun?: string;
   /** Page sizes offered; a server-paged source takes its own. */
   sizes?: readonly number[];
+  /** A server-paged source has rows past `total` it has not counted: shows `of 50+` and Next. */
+  more?: boolean;
 }) {
-  const pages = Math.max(1, Math.ceil(total / size));
+  const pages = Math.max(1, Math.ceil(total / size)) + (more ? 1 : 0);
   return (
     <nav aria-label="Pages" className="flex items-center">
       <DropdownMenu modal={false}>
@@ -42,8 +46,8 @@ export function LumenPager({
             aria-label="Rows per page"
           >
             {pages > 1
-              ? `${page * size + 1}–${Math.min((page + 1) * size, total)} of ${total}`
-              : `${total} ${noun}`}
+              ? `${(page * size + 1).toLocaleString()}–${Math.min((page + 1) * size, total).toLocaleString()} of ${total.toLocaleString()}${more ? '+' : ''}`
+              : `${total.toLocaleString()} ${noun}`}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">

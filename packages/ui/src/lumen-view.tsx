@@ -48,6 +48,7 @@ import {
   DownloadIcon,
   Grid3x3Icon,
   LayoutDashboardIcon,
+  ListCollapseIcon,
   PencilIcon,
   PlusIcon,
   Settings2Icon,
@@ -58,6 +59,7 @@ import {
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ComponentType } from 'react';
 import { useAssistantNote } from './assistant-context';
 import { ColorChip, ColorDot } from './color-dot';
 import { DrawerSection } from './drawer-section';
@@ -65,6 +67,7 @@ import { useFloatingHead } from './floating-head';
 import { FreshnessMark, freshnessLine, freshnessOf } from './freshness';
 import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import {
   type FilterField,
@@ -108,12 +111,14 @@ import { Skeleton } from './ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { UnitColumns } from './unit-value';
 import { EditCell, EditInputCell, EditManyCell } from './view-edit-cell';
-import { ViewEditDialog, type ViewEditorSection } from './view-editor';
+import type { ViewEditDialog as ViewEditDialogPart, ViewEditorSection } from './view-editor';
 import { fieldOptions } from './view-formulas';
 import {
   CHIP_TONE,
   FORMULAS_GROUP,
+  type RollLevel,
   type ViewCellValue,
   type ViewChipTone,
   type ViewDomain,
@@ -132,11 +137,18 @@ import {
   withViewFields,
 } from './view-model';
 
+// Loaded when it first shows (lazy-part.tsx).
+const ViewEditDialog = lazyPart(
+  () => import('./view-editor').then((m) => m.ViewEditDialog as ComponentType<object>),
+  null,
+) as unknown as typeof ViewEditDialogPart;
+
 export type {
   ViewCellValue,
   ViewChipTone,
   ViewDomain,
   ViewField,
+  RollLevel,
   ViewFieldGroup,
   ViewSource,
 } from './view-model';
@@ -387,6 +399,61 @@ export function DetailsBody<T extends RowData>({
   );
 }
 
+/**
+ * Rows a server pages: the view shows `rows` as one page, as given (the server already filtered
+ * and sorted them), and the pager turns pages through `onPage`.
+ */
+export interface ServerPaging {
+  /** The page shown, from 0. */
+  page: number;
+  size: number;
+  /** Every row the server has for the filter; null when it does not count them. */
+  total: number | null;
+  /** With no `total`: whether a page follows this one. */
+  more: boolean;
+  onPage: (page: number) => void;
+  onSize?: (size: number) => void;
+  sizes?: readonly number[];
+  /** The columns the server sorts by; the rest take no header sort, and the view groups nothing
+   *  (unless `groups`), since either would order or bucket one page only. */
+  sorts?: readonly string[];
+  /** Told the sort held (a header click, a revert), to fetch the rows in that order. */
+  onSort?: (sort: CustomViewConfig['sort']) => void;
+  /** The server groups the rows: the Group button offers the domain's groupable fields, and a
+   *  group's rows load when it opens. Without it a server's page groups nothing. */
+  groups?: ServerGroups;
+}
+
+/** One group a server counted: its key (the group field's value as the view shows it), its row
+ *  count (null: not counted), and, once open, the rows loaded so far. */
+export interface ServerGroup {
+  key: string;
+  n: number | null;
+  open: boolean;
+  /** The rows loaded for an open group, in the server's order. */
+  rows: unknown[];
+  /** The group has rows past those loaded: its Show more row loads the next. */
+  more?: () => void;
+  /** Its rows are loading. */
+  loading?: boolean;
+}
+
+export interface ServerGroups {
+  /** Told the field the person groups by (null: none), to fetch that field's groups. */
+  onGroup: (key: string | null) => void;
+  /** The picked field's groups, in order; null while they load. */
+  list: ServerGroup[] | null;
+  /** Groups past those listed: a More groups row asks for them. */
+  more?: () => void;
+  /** The groups come a page at a time instead: the header's pager turns the page (no More
+   *  groups row), and `list` is the page shown. */
+  pages?: Omit<ServerPaging, 'sorts' | 'onSort' | 'groups'> & { noun?: string };
+  /** A group header's click: open or close it. */
+  onToggle: (key: string) => void;
+  /** Expand all (true) or Collapse all (false): open or close every group listed. */
+  onToggleAll?: (open: boolean) => void;
+}
+
 export interface LumenViewProps<T> {
   /** The view's domain, its formula columns included (`withViewFields`). */
   domain: ViewDomain<T>;
@@ -395,6 +462,8 @@ export interface LumenViewProps<T> {
   rows: T[];
   /** Every row before the filter, for "12 of 40 rows"; left out: `rows`. */
   total?: number;
+  /** The rows are one page of a server's: the pager pages through the server. */
+  paging?: ServerPaging;
   /** The grouping the page picked (its Group by switch); null: flat rows. */
   groupBy?: ViewField<T> | null;
   /** Shows the view's pivot instead of its rows. */
@@ -561,8 +630,9 @@ export function LumenView<T extends RowData>({
   config,
   rows,
   total = rows.length,
-  groupBy = null,
-  pivot = false,
+  paging: server,
+  groupBy: pickedGroup = null,
+  pivot: pickedPivot = false,
   subgroup,
   load: sourceLoad,
   state,
@@ -593,6 +663,13 @@ export function LumenView<T extends RowData>({
   // scrolls with the page.
   const inLayout = inScroller && !cell;
   const columns = pick(domain.fields, config.columns);
+  // A server's page groups and pivots nothing (either would cover the one page only), unless the
+  // server groups it.
+  const groupBy = server && !server.groups ? null : pickedGroup;
+  const served = server?.groups && groupBy ? server.groups : null;
+  const onGroup = server?.groups?.onGroup;
+  useEffect(() => onGroup?.(groupBy?.key ?? null), [onGroup, groupBy?.key]);
+  const pivot = server ? false : pickedPivot;
   // Live columns on screen keep their source reading while the market trades (#861).
   const load = useLiveLoad(
     sourceLoad,
@@ -602,7 +679,16 @@ export function LumenView<T extends RowData>({
     }),
   );
   const chips = chipsOf(config);
-  const tableRows = useMemo(() => mergeRows(domain, rows, groupBy), [domain, rows, groupBy]);
+  // Server groups: the open groups' rows, each object once (a row in two groups shows in both).
+  const groupRows = useMemo(
+    () =>
+      served ? [...new Set((served.list ?? []).flatMap((g) => (g.open ? g.rows : [])))] : null,
+    [served],
+  ) as T[] | null;
+  const tableRows = useMemo(
+    () => groupRows ?? mergeRows(domain, rows, groupBy),
+    [groupRows, domain, rows, groupBy],
+  );
   const amountsHidden = useAmountsHidden();
   // Flat tables page their rows, 25 a page unless the view says otherwise; the size picker and
   // the page buttons sit in the card's header. Views saved before then
@@ -614,16 +700,31 @@ export function LumenView<T extends RowData>({
   useEffect(() => setPageSize(pagination.size), [pagination.size]);
   const sub = subgroupOf(domain, subgroup === undefined ? config.subgroup : subgroup);
   // Folded lines and their rows stay on one page, so a fold shows every row like a grouping.
-  const paging = pagination.on && on('pager') && !state && !groupBy && !pivot && !sub?.under;
+  const paging =
+    !server && pagination.on && on('pager') && !state && !groupBy && !pivot && !sub?.under;
   // A fit table wraps its text to the width there is; the rest scroll sideways.
   // A phone has no width to fit to: every table scrolls sideways there.
   const fit = config.width === 'fit' && !pivot && !isMobile;
   const pages = Math.max(1, Math.ceil(tableRows.length / pageSize));
   const page = Math.min(pageIndex, pages - 1);
   const count = rows.length === total ? `${total} rows` : `${rows.length} of ${total} rows`;
-  // A new filter or page size starts from the first page.
+  // The page holds while rows change in place (a tick, a label edit, a refresh, a bulk apply): only
+  // a new filter (a different set of rows), grouping, sort or page size starts from the first page.
+  // A page past the end after rows go is clamped above (`page`).
+  const rowSet = useMemo(
+    () =>
+      rows
+        .map((r) => domain.rowKey(r))
+        .sort()
+        .join('\u0000'),
+    [rows, domain],
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: resets on these changes only
-  useEffect(() => setPageIndex(0), [rows, pageSize]);
+  useEffect(() => setPageIndex(0), [rowSet, pageSize, groupBy?.key, sort?.key, sort?.desc]);
+  const sorted = (s: CustomViewConfig['sort']) => {
+    setPageIndex(0);
+    onSort?.(s);
+  };
 
   // Checked rows with a chart symbol open one compare chart (up to 8).
   const openChart = useSymbolChart();
@@ -648,7 +749,36 @@ export function LumenView<T extends RowData>({
       />
     ) : null;
 
-  const pager = paging ? (
+  // A server's page: the pager counts from the server's total, or the rows seen so far. Server
+  // groups page themselves: the header counts them.
+  const pager = served?.pages ? (
+    <LumenPager
+      total={
+        served.pages.total ?? served.pages.page * served.pages.size + (served.list?.length ?? 0)
+      }
+      page={served.pages.page}
+      size={served.pages.size}
+      onPage={served.pages.onPage}
+      onSize={served.pages.onSize ?? (() => {})}
+      sizes={served.pages.sizes ?? [served.pages.size]}
+      noun={served.pages.noun ?? 'groups'}
+      more={served.pages.total === null && served.pages.more}
+    />
+  ) : served ? (
+    <span className="num px-2 text-xs text-muted-foreground">
+      {served.list ? `${served.list.length.toLocaleString()}${served.more ? '+' : ''} groups` : ''}
+    </span>
+  ) : server ? (
+    <LumenPager
+      total={server.total ?? server.page * server.size + rows.length}
+      page={server.page}
+      size={server.size}
+      onPage={server.onPage}
+      onSize={server.onSize ?? (() => {})}
+      sizes={server.sizes ?? [server.size]}
+      more={server.total === null && server.more}
+    />
+  ) : paging ? (
     <LumenPager
       total={tableRows.length}
       page={page}
@@ -680,7 +810,9 @@ export function LumenView<T extends RowData>({
         selection={selection}
         groupActions={groupActions}
         sort={sort}
-        onSort={onSort}
+        onSort={sorted}
+        serverSorts={server ? (server.sorts ?? []) : undefined}
+        serverGroups={served}
         total={config.total !== false}
         add={
           onAddColumn || onColumns
@@ -863,6 +995,42 @@ const isDateText = (v: unknown) =>
   typeof v === 'string' && v.length <= 25 && /^\d{4}-\d{2}-\d{2}(?:$|[ T])/.test(v);
 const colOf = <T,>(f: ViewField<T> | undefined) =>
   cn(alignOf(f?.format ?? 'text'), f?.hideOnPhone && 'max-md:hidden');
+/**
+ * A column's cell props: its classes, its key (`data-col`), and `data-units` once a `UnitValue`
+ * has drawn in it. Every cell of such a column (header, dash, Total) then right-aligns on the
+ * numbers' edge while the units hang in the gutter (theme.css), so one column has one edge.
+ */
+const colPropsOf =
+  (units: ReadonlySet<string>) =>
+  <T,>(f: ViewField<T> | undefined, ...more: (string | false | undefined | null)[]) => ({
+    className: cn(colOf(f), ...more),
+    'data-col': f?.key,
+    'data-units': f && units.has(f.key) ? '' : undefined,
+  });
+
+/**
+ * A column's widest cell (`maxWidth`): the first column defaults to `--lead-col-max` (18rem in
+ * theme.css), so one long name never pushes the other columns off screen; `false` lifts it.
+ */
+const capOf = <T,>(f: ViewField<T>, i: number) =>
+  f.maxWidth === false ? undefined : (f.maxWidth ?? (i === 0 ? 'var(--lead-col-max)' : undefined));
+/** Holds a cell to its column's cap on one line: text past it ends in an ellipsis. */
+function CappedCell({
+  max,
+  title,
+  children,
+}: { max: string | undefined; title?: string; children: ReactNode }) {
+  if (!max) return children;
+  return (
+    <div
+      className="flex min-w-0 *:min-w-0 *:max-w-full *:truncate"
+      style={{ maxWidth: max }}
+      title={title}
+    >
+      {children}
+    </div>
+  );
+}
 
 /** The flat or grouped table: sortable headers, a Total row, group rows that collapse. */
 // Sorting, and paging of flat tables (the page is LumenView's, set right of the row count).
@@ -910,6 +1078,9 @@ export interface LumenTableProps<T> {
   sort?: CustomViewConfig['sort'];
   /** Told the sort a header click sets, so a page can hold or save it (rule C). */
   onSort?: (sort: CustomViewConfig['sort']) => void;
+  /** The rows come sorted by a server, which sorts by these columns only: a header click asks
+   *  the server (through `onSort`) and the other headers take no click. */
+  serverSorts?: readonly string[];
   /** The + Add column head at the end of the header. */
   add?: AddColumn & {
     field?: { domain: ViewDomain<T>; columns: ViewField<T>[]; onColumns: (keys: string[]) => void };
@@ -918,6 +1089,20 @@ export interface LumenTableProps<T> {
   total?: boolean;
   /** What each row opens under it (`subgroupOf`); null: rows open nothing but their panel. */
   subgroup?: ViewSubgroup<T> | null;
+  /** The groups come from a server (`ServerPaging.groups`): their order, counts and open state,
+   *  and each open group's rows. */
+  serverGroups?: ServerGroups | null;
+}
+
+/** The table's sort from a view's: none when its column is not shown, or the server cannot sort
+ *  by it. */
+function sortingOf<T>(
+  sort: CustomViewConfig['sort'] | undefined,
+  columns: ViewField<T>[],
+  serverSorts: readonly string[] | undefined,
+): SortingState {
+  if (!sort || (serverSorts && !serverSorts.includes(sort.key))) return [];
+  return columns.some((f) => f.key === sort.key) ? [{ id: sort.key, desc: sort.desc }] : [];
 }
 
 function LumenTableRows<T extends RowData>({
@@ -935,36 +1120,47 @@ function LumenTableRows<T extends RowData>({
   groupActions,
   sort,
   onSort,
+  serverSorts,
   total = true,
   subgroup = null,
   add,
+  serverGroups = null,
 }: LumenTableProps<T>) {
-  const [sorting, setSorting] = useState<SortingState>(
-    sort && columns.some((f) => f.key === sort.key) ? [{ id: sort.key, desc: sort.desc }] : [],
-  );
+  const isMobile = useIsMobile();
+  const [sorting, setSorting] = useState<SortingState>(() => sortingOf(sort, columns, serverSorts));
   // A saved sort patched while the table is open (the assistant's card move) applies at once.
   const savedSort = JSON.stringify(sort ?? null);
   const savedSortRef = useRef(savedSort);
   useEffect(() => {
     if (savedSortRef.current === savedSort) return;
     savedSortRef.current = savedSort;
-    setSorting(
-      sort && columns.some((f) => f.key === sort.key) ? [{ id: sort.key, desc: sort.desc }] : [],
-    );
-  }, [savedSort, sort, columns]);
+    setSorting(sortingOf(sort, columns, serverSorts));
+  }, [savedSort, sort, columns, serverSorts]);
   const paging = page !== null && !groupBy;
   const pagination: PaginationState = {
     pageIndex: paging ? page.index : 0,
     pageSize: paging ? page.size : Math.max(rows.length, 1),
   };
   // Groups whose state differs from where they start: open, or past OPEN_ALL rows only the first.
+  // Columns a UnitValue has drawn in (`UnitColumns`): their cells share the numbers' edge.
+  const [units, setUnits] = useState<ReadonlySet<string>>(() => new Set());
+  const markUnits = useCallback(
+    (key: string) => setUnits((s) => (s.has(key) ? s : new Set(s).add(key))),
+    [],
+  );
+  const col = colPropsOf(units);
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [more, setMore] = useState<Map<string, number>>(new Map());
-  // The grouped field is the group row's label, so its column hides.
+  // Under a sub-group's `flat` grouping each row names itself by its sub-group key instead of
+  // folding; the first column keeps its place to show that name.
+  const flat = !!groupBy && !!subgroup?.flat?.includes(groupBy.key);
+  // The grouped field is the group row's label, so its column hides (a flat lead stays).
   // Each key once: two columns under one React key can lose a cell on a re-render, and every
   // row after it slides left by one.
   const visible = columns.filter(
-    (f, i) => f.key !== groupBy?.key && columns.findIndex((x) => x.key === f.key) === i,
+    (f, i) =>
+      (f.key !== groupBy?.key || (flat && i === 0)) &&
+      columns.findIndex((x) => x.key === f.key) === i,
   );
   // Inline chips sit on the first column, next to the row's name, not in their own.
   const inline = visible.filter(
@@ -1077,6 +1273,7 @@ function LumenTableRows<T extends RowData>({
           unused={options.get(f.key)?.unused}
           note={edit.note?.(row)}
           colorOf={f.color}
+          iconOf={f.iconOf}
           onSave={(values) => many(row, values)}
         />
       );
@@ -1126,32 +1323,43 @@ function LumenTableRows<T extends RowData>({
           return computed.value(now[i] ?? f, r) ?? undefined;
         },
         sortUndefined: 'last',
-        header: f.label,
+        enableSorting: !serverSorts || serverSorts.includes(f.key),
+        header: i === 0 && flat && subgroup ? subgroup.label : f.label,
         cell: ({ row }) => {
           const { shown: now, cellOf, inline, chips, computed } = latest.current;
           const field = now[i] ?? f;
           const chip = chips.some((c) => c.key === field.key);
-          return i === 0 && inline.length ? (
-            <FirstCell
-              value={cellOf(field, row.original, chip)}
-              chips={inline.flatMap((x) => {
-                const v = computed.value(x, row.original);
-                if (!x.edit && (v === null || v === '')) return [];
-                return [{ key: x.key, node: cellOf(x, row.original, true) }];
-              })}
-            />
-          ) : (
-            cellOf(field, row.original, chip)
+          const v = computed.value(field, row.original);
+          return (
+            <CappedCell
+              max={capOf(field, i)}
+              title={!field.render && typeof v === 'string' ? v : undefined}
+            >
+              {i === 0 && inline.length ? (
+                <FirstCell
+                  value={cellOf(field, row.original, chip)}
+                  chips={inline.flatMap((x) => {
+                    const v = computed.value(x, row.original);
+                    if (!x.edit && (v === null || v === '')) return [];
+                    return [{ key: x.key, node: cellOf(x, row.original, true) }];
+                  })}
+                />
+              ) : (
+                cellOf(field, row.original, chip)
+              )}
+            </CappedCell>
           );
         },
       })),
-    [shownKeys, inlineOn],
+    [shownKeys, inlineOn, serverSorts?.join(','), flat],
   );
   const table = useTable({
     features: SORTING,
     data: rows,
     columns: defs,
     state: { sorting, pagination },
+    // A server's rows come sorted; the table only shows which column it sorted by.
+    manualSorting: !!serverSorts,
     onSortingChange: (u) => {
       const next = typeof u === 'function' ? u(sorting) : u;
       setSorting(next);
@@ -1174,6 +1382,12 @@ function LumenTableRows<T extends RowData>({
   const sorted = table.getRowModel().rows;
   const groups = useMemo(() => {
     if (!groupBy) return null;
+    if (serverGroups) {
+      const byRow = new Map(sorted.map((r) => [r.original as unknown, r]));
+      return (serverGroups.list ?? []).map(
+        (g) => [g.key, g.rows.flatMap((o) => byRow.get(o) ?? [])] as [string, typeof sorted],
+      );
+    }
     const m = new Map<string, typeof sorted>();
     for (const r of sorted) {
       const k = label(groupBy.value(r.original));
@@ -1181,13 +1395,19 @@ function LumenTableRows<T extends RowData>({
       b ? b.push(r) : m.set(k, [r]);
     }
     return [...m];
-  }, [groupBy, sorted]);
+  }, [groupBy, sorted, serverGroups]);
   const span = shown.length + (selection ? 1 : 0);
+  const served = new Map((serverGroups?.list ?? []).map((g) => [g.key, g]));
   const startsOpen = (i: number) => rows.length <= OPEN_ALL || i === 0;
-  const isOpen = (key: string, i: number) => startsOpen(i) !== flipped.has(key);
+  const isOpen = (key: string, i: number) =>
+    serverGroups ? !!served.get(key)?.open : startsOpen(i) !== flipped.has(key);
   const anyClosed = !!groups?.some(([k], i) => !isOpen(k, i));
   const setAll = (open: boolean) =>
-    setFlipped(new Set((groups ?? []).filter((_, i) => startsOpen(i) !== open).map(([k]) => k)));
+    serverGroups
+      ? serverGroups.onToggleAll?.(open)
+      : setFlipped(
+          new Set((groups ?? []).filter((_, i) => startsOpen(i) !== open).map(([k]) => k)),
+        );
   const keyOf = domain.rowKey;
   const toggle = (keys: string[], on: boolean) => {
     if (!selection) return;
@@ -1209,8 +1429,14 @@ function LumenTableRows<T extends RowData>({
       </TableCell>
     );
 
-  const [openParts, setOpenParts] = useState<Set<string>>(new Set());
-  const hasTotal = total && shown.some(rollsUp);
+  // The rows whose open state the person flipped: a sub-group that starts open (`open`) lists
+  // the closed ones, any other the open ones.
+  const [partFlips, setOpenParts] = useState<Set<string>>(new Set());
+  const openParts = {
+    has: (k: string) => (subgroup?.open && !domain.panel ? !partFlips.has(k) : partFlips.has(k)),
+  };
+  // A server group's roll-ups would add up its loaded rows only, so they and the Total stay off.
+  const hasTotal = total && !serverGroups && shown.some(rollsUp);
   // A group row's label spans the leading columns that roll nothing up.
   const rolls = (f: ViewField<T>) => !f.noRollup && (!!f.aggregate || !!f.rollFormula || !!f.share);
   const lead = Math.max(
@@ -1219,8 +1445,16 @@ function LumenTableRows<T extends RowData>({
       ? shown.length
       : shown.findIndex((f, i) => i > 0 && rolls(f)),
   );
-  const rollCell = (f: ViewField<T>, members: T[]) =>
-    rollsUp(f) ? (
+  // On a phone the hideOnPhone columns are gone, so the label spans only the leading ones still
+  // drawn; spanning the hidden ones too pushed the group's totals right of their headers.
+  const leadSpan = Math.max(
+    1,
+    lead - (isMobile ? shown.slice(0, lead).filter((f) => f.hideOnPhone).length : 0),
+  );
+  const rollCell = (f: ViewField<T>, members: T[], level: RollLevel) =>
+    rollsUp(f) && f.rollRender ? (
+      f.rollRender(members, level)
+    ) : rollsUp(f) ? (
       <ViewValueCell
         value={computed.roll(f, members)}
         format={f.aggregate && isCountAgg(f.aggregate) ? 'rounded' : f.format}
@@ -1230,8 +1464,8 @@ function LumenTableRows<T extends RowData>({
     ) : null;
   const rollCells = (members: T[]) =>
     shown.map((f) => (
-      <TableCell key={f.key} className={colOf(f)}>
-        {rollCell(f, members)}
+      <TableCell key={f.key} {...col(f)}>
+        {rollCell(f, members, 'total')}
       </TableCell>
     ));
 
@@ -1241,7 +1475,29 @@ function LumenTableRows<T extends RowData>({
   const panelOf = (row: T) => domain.panel?.render(row) ?? null;
   const opens = (row: T) => (domain.panel ? panelOf(row) !== null : partsOf(row).length > 1);
   const openLabel = () => domain.panel?.label ?? subgroup?.label.toLowerCase() ?? 'parts';
-  const folds = !domain.panel && !!subgroup?.under;
+  const folds = !domain.panel && !!subgroup?.under && !flat;
+  // Every folded line's key, so the header's menu can open or close them all at once.
+  const foldKeys = (): string[] => {
+    const under = folds ? subgroup?.under : undefined;
+    if (!under || !groups) return [];
+    return groups.flatMap(([g, ms]) => {
+      const counts = new Map<string, number>();
+      for (const r of ms) counts.set(under(r.original), (counts.get(under(r.original)) ?? 0) + 1);
+      return [...counts]
+        .filter(([, n]) => n > 1 || subgroup?.always)
+        .map(([k]) => `under:${g}\u0000${k}`);
+    });
+  };
+  const anyFoldClosed = folds && foldKeys().some((k) => !openParts.has(k));
+  const setAllParts = (open: boolean) =>
+    setOpenParts(new Set(open === !!subgroup?.open ? [] : foldKeys()));
+  const flatName = (row: T) =>
+    flat && subgroup?.under ? (
+      <span className="flex min-w-0 items-center gap-1.5">
+        {subgroup.mark?.(subgroup.under(row), [row])}
+        <span className="truncate">{subgroup.under(row)}</span>
+      </span>
+    ) : null;
   const nests = folds || sorted.some((r) => opens(r.original));
   const chevron = (k: string, name: string) => (
     <Button
@@ -1266,25 +1522,27 @@ function LumenTableRows<T extends RowData>({
     <TableRow
       key={`part:${keyOf(p)}`}
       className={cn(
-        'bg-muted/30 text-muted-foreground hover:bg-muted/40',
+        'bg-muted/30 text-muted-foreground hover:bg-muted',
         onDetails && 'cursor-pointer',
       )}
       onClick={onDetails ? () => onDetails(p) : undefined}
     >
       {selection && <TableCell />}
       {shown.map((f, i) => (
-        <TableCell key={f.key} className={cn(colOf(f), i === 0 && 'pl-12')}>
+        <TableCell key={f.key} {...col(f, i === 0 && 'pl-12')}>
           {i === 0 ? (
             <span className="flex items-center gap-2">
               <CornerDownRightIcon className="size-3.5 shrink-0" />
               {/* A field sub-group names no part: its rows show their own first column. */}
-              {name
-                ? name(p)
-                : cellOf(
-                    f,
-                    p,
-                    chips.some((c) => c.key === f.key),
-                  )}
+              <CappedCell max={capOf(f, 0)}>
+                {name
+                  ? name(p)
+                  : cellOf(
+                      f,
+                      p,
+                      chips.some((c) => c.key === f.key),
+                    )}
+              </CappedCell>
             </span>
           ) : (
             cellOf(
@@ -1323,7 +1581,7 @@ function LumenTableRows<T extends RowData>({
         {r.getAllCells().map((c, i) => (
           <TableCell
             key={c.id}
-            className={cn(colOf(shown[i]), groupBy && i === 0 && 'pl-8')}
+            {...col(shown[i], groupBy && i === 0 && 'pl-8')}
             style={{ background: shown[i]?.tint?.(r.original) }}
           >
             {i === 0 && nests ? (
@@ -1335,6 +1593,8 @@ function LumenTableRows<T extends RowData>({
                 )}
                 {flexRender(c.column.columnDef.cell, c.getContext())}
               </span>
+            ) : i === 0 && flat ? (
+              flatName(r.original)
             ) : (
               flexRender(c.column.columnDef.cell, c.getContext())
             )}
@@ -1367,18 +1627,30 @@ function LumenTableRows<T extends RowData>({
     const ms = members.map((m) => m.original);
     return (
       <Fragment key={k}>
-        <TableRow data-row={k}>
+        {/* The whole folded line opens and closes its rows. */}
+        <TableRow
+          data-row={k}
+          className="cursor-pointer hover:bg-muted has-aria-expanded:hover:bg-muted"
+          onClick={() =>
+            setOpenParts((o) => {
+              const n = new Set(o);
+              n.has(k) ? n.delete(k) : n.add(k);
+              return n;
+            })
+          }
+        >
           {selection && <TableCell />}
           {shown.map((f, i) => (
-            <TableCell key={f.key} className={cn(colOf(f), groupBy && i === 0 && 'pl-8')}>
+            <TableCell key={f.key} {...col(f, groupBy && i === 0 && 'pl-8')}>
               {i === 0 ? (
                 <span className="flex items-center gap-1">
                   {chevron(k, `${key} ${openLabel()}`)}
+                  {subgroup?.mark?.(key, ms)}
                   <span className="font-medium">{key}</span>
                   <span className="num text-xs text-muted-foreground">{ms.length}</span>
                 </span>
               ) : (
-                rollCell(f, ms)
+                rollCell(f, ms, 'fold')
               )}
             </TableCell>
           ))}
@@ -1429,6 +1701,41 @@ function LumenTableRows<T extends RowData>({
       </TableRow>,
     ];
   };
+  // A server group's rows as loaded, then its Show more (the server's next rows) or loading row.
+  const servedRows = (list: typeof sorted, key: string) => {
+    const g = served.get(key);
+    const out = rowsOf(list, key);
+    if (!g?.more && !g?.loading)
+      return out.length
+        ? out
+        : [
+            <TableRow key={`${key}:none`}>
+              <TableCell colSpan={span} className="py-2 text-center text-xs text-muted-foreground">
+                No rows match.
+              </TableCell>
+            </TableRow>,
+          ];
+    return [
+      ...out,
+      <TableRow key={`${key}:more`} data-more>
+        <TableCell colSpan={span} className="py-1">
+          {g.loading ? (
+            <span className="px-2 text-xs text-muted-foreground">Loading…</span>
+          ) : (
+            <Button variant="ghost" size="xs" onClick={g.more}>
+              <ChevronsDownIcon />
+              Show more
+              {g.n !== null && (
+                <span className="num font-normal text-muted-foreground">
+                  of {(g.n - list.length).toLocaleString()}
+                </span>
+              )}
+            </Button>
+          )}
+        </TableCell>
+      </TableRow>,
+    ];
+  };
   const box = useRef<HTMLDivElement>(null);
   useFloatingHead(box, !inView);
   return (
@@ -1439,176 +1746,236 @@ function LumenTableRows<T extends RowData>({
         fit && FIT,
       )}
     >
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((hg) => (
-            <TableRow key={hg.id}>
-              {selection && (
-                <TableHead className={cn('w-8 pr-0', PINNED_HEAD)}>
-                  <Checkbox
-                    checked={allOn ? true : someOn ? 'indeterminate' : false}
-                    onCheckedChange={(on) => toggle(allKeys, on === true)}
-                    aria-label="Select every row"
-                  />
-                </TableHead>
-              )}
-              {hg.headers.map((h, i) => (
-                <TableHead
-                  key={h.id}
-                  className={cn(colOf(shown[i]), PINNED_HEAD)}
-                  style={ruleOf(colorOf(domain, shown[i]))}
-                  onPointerDown={pressStart}
-                  onPointerUp={pressEnd}
-                  onPointerLeave={pressEnd}
-                  onPointerCancel={pressEnd}
-                  onContextMenu={(e) => {
-                    if (press.current) e.preventDefault();
-                  }}
-                  aria-sort={
-                    h.column.getIsSorted() === 'asc'
-                      ? 'ascending'
-                      : h.column.getIsSorted() === 'desc'
-                        ? 'descending'
-                        : undefined
-                  }
-                >
-                  {i === 0 && groups && (
-                    // Expand or collapse every group at once.
-                    <IconButton
-                      icon={anyClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon}
-                      size="icon-xs"
-                      className="-ml-2 mr-1 align-middle"
-                      label={anyClosed ? 'Expand all groups' : 'Collapse all groups'}
-                      onClick={() => setAll(anyClosed)}
+      <UnitColumns.Provider value={markUnits}>
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((hg) => (
+              <TableRow key={hg.id}>
+                {selection && (
+                  <TableHead className={cn('w-8 pr-0', PINNED_HEAD)}>
+                    <Checkbox
+                      checked={allOn ? true : someOn ? 'indeterminate' : false}
+                      onCheckedChange={(on) => toggle(allKeys, on === true)}
+                      aria-label="Select every row"
                     />
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className={cn('font-medium', !(i === 0 && groups) && '-mx-2')}
-                        style={{ color: colorOf(domain, shown[i]) ?? undefined }}
-                        onClick={h.column.getToggleSortingHandler()}
-                      >
-                        {shown[i] ? <FreshnessMark domain={domain} field={shown[i]} /> : null}
-                        {flexRender(h.column.columnDef.header, h.getContext())}
-                        <SortIcon dir={h.column.getIsSorted()} />
-                      </Button>
-                    </TooltipTrigger>
-                    {shown[i] && (domain.groups?.length || freshnessOf(domain, shown[i])) ? (
-                      <TooltipContent>
-                        {domain.groups?.length ? <div>{pathOf(domain, shown[i])}</div> : null}
-                        {freshnessLine(domain, shown[i]) ? (
-                          <div>{freshnessLine(domain, shown[i])}</div>
-                        ) : null}
-                      </TooltipContent>
-                    ) : null}
-                  </Tooltip>
-                </TableHead>
-              ))}
-              {add && (
-                <TableHead className={cn('w-8 pl-1', PINNED_HEAD)}>
-                  <AddColumnMenu add={add} fieldOpen={fieldOpen} onFieldOpen={setFieldOpen} />
-                </TableHead>
-              )}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {!rows.length && (
-            <TableRow>
-              <TableCell colSpan={span} className="py-6 text-center text-muted-foreground">
-                No rows match.
-              </TableCell>
-            </TableRow>
-          )}
-          {groups && groupBy
-            ? groups.map(([key, members], gi) => {
-                const open = isOpen(key, gi);
-                return (
-                  <Fragment key={key}>
-                    <TableRow className={ROLLUP} data-group={key}>
-                      {selection && (
-                        <TableCell className={cn('w-8 pr-0', PINNED_GROUP)}>
-                          <Checkbox
-                            checked={
-                              members.every((m) => selection.keys.has(keyOf(m.original)))
-                                ? true
-                                : members.some((m) => selection.keys.has(keyOf(m.original)))
-                                  ? 'indeterminate'
-                                  : false
+                  </TableHead>
+                )}
+                {hg.headers.map((h, i) => (
+                  <TableHead
+                    key={h.id}
+                    {...col(shown[i], PINNED_HEAD)}
+                    style={ruleOf(colorOf(domain, shown[i]))}
+                    onPointerDown={pressStart}
+                    onPointerUp={pressEnd}
+                    onPointerLeave={pressEnd}
+                    onPointerCancel={pressEnd}
+                    onContextMenu={(e) => {
+                      if (press.current) e.preventDefault();
+                    }}
+                    aria-sort={
+                      h.column.getIsSorted() === 'asc'
+                        ? 'ascending'
+                        : h.column.getIsSorted() === 'desc'
+                          ? 'descending'
+                          : undefined
+                    }
+                  >
+                    {i === 0 && groups && folds && !serverGroups && (
+                      // Groups and their folded lines: open everything, close the folded lines
+                      // only, or close every group.
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <IconButton
+                            icon={
+                              anyClosed || anyFoldClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon
                             }
-                            onCheckedChange={(on) =>
-                              toggle(
-                                members.map((m) => keyOf(m.original)),
-                                on === true,
-                              )
-                            }
-                            aria-label={`Select every row of ${key}`}
+                            size="icon-xs"
+                            className="-ml-2 mr-1 align-middle"
+                            label="Expand or collapse rows"
                           />
-                        </TableCell>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-52">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setAll(true);
+                              setAllParts(true);
+                            }}
+                          >
+                            <ChevronsUpDownIcon /> Expand all
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setAll(true);
+                              setAllParts(false);
+                            }}
+                          >
+                            <ListCollapseIcon /> Close every {subgroup?.label.toLowerCase()}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setAll(false)}>
+                            <ChevronsDownUpIcon /> Collapse all
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    {i === 0 &&
+                      groups &&
+                      !(folds && !serverGroups) &&
+                      (!serverGroups || serverGroups.onToggleAll) && (
+                        // Expand or collapse every group at once.
+                        <IconButton
+                          icon={anyClosed ? ChevronsUpDownIcon : ChevronsDownUpIcon}
+                          size="icon-xs"
+                          className="-ml-2 mr-1 align-middle"
+                          label={anyClosed ? 'Expand all groups' : 'Collapse all groups'}
+                          onClick={() => setAll(anyClosed)}
+                        />
                       )}
-                      {shown.slice(lead - 1).map((f, i) =>
-                        i === 0 ? (
-                          <TableCell key={f.key} colSpan={lead} className={PINNED_GROUP}>
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              className="-mx-2 hover:bg-transparent aria-expanded:bg-transparent"
-                              aria-expanded={open}
-                              aria-label={`${open ? 'Collapse' : 'Expand'} ${key}`}
-                              onClick={() =>
-                                setFlipped((c) => {
-                                  const n = new Set(c);
-                                  n.has(key) ? n.delete(key) : n.add(key);
-                                  return n;
-                                })
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className={cn('font-medium', !(i === 0 && groups) && '-mx-2')}
+                          style={{ color: colorOf(domain, shown[i]) ?? undefined }}
+                          onClick={
+                            h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined
+                          }
+                        >
+                          {shown[i] ? <FreshnessMark domain={domain} field={shown[i]} /> : null}
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          <SortIcon dir={h.column.getIsSorted()} />
+                        </Button>
+                      </TooltipTrigger>
+                      {shown[i] && (domain.groups?.length || freshnessOf(domain, shown[i])) ? (
+                        <TooltipContent>
+                          {domain.groups?.length ? <div>{pathOf(domain, shown[i])}</div> : null}
+                          {freshnessLine(domain, shown[i]) ? (
+                            <div>{freshnessLine(domain, shown[i])}</div>
+                          ) : null}
+                        </TooltipContent>
+                      ) : null}
+                    </Tooltip>
+                  </TableHead>
+                ))}
+                {add && (
+                  <TableHead className={cn('w-8 pl-1', PINNED_HEAD)}>
+                    <AddColumnMenu add={add} fieldOpen={fieldOpen} onFieldOpen={setFieldOpen} />
+                  </TableHead>
+                )}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {!rows.length && !serverGroups?.list?.length && (
+              <TableRow>
+                <TableCell colSpan={span} className="py-6 text-center text-muted-foreground">
+                  No rows match.
+                </TableCell>
+              </TableRow>
+            )}
+            {groups && groupBy
+              ? groups.map(([key, members], gi) => {
+                  const open = isOpen(key, gi);
+                  return (
+                    <Fragment key={key}>
+                      <TableRow className={ROLLUP} data-group={key}>
+                        {selection && (
+                          <TableCell className={cn('w-8 pr-0', PINNED_GROUP)}>
+                            <Checkbox
+                              checked={
+                                members.every((m) => selection.keys.has(keyOf(m.original)))
+                                  ? true
+                                  : members.some((m) => selection.keys.has(keyOf(m.original)))
+                                    ? 'indeterminate'
+                                    : false
                               }
-                            >
-                              <ChevronRightIcon
-                                className={cn('transition-transform', open && 'rotate-90')}
-                              />
-                              <groupBy.icon />
-                              {key}
-                              <span className="num font-normal text-muted-foreground">
-                                {members.length}
-                              </span>
-                            </Button>
-                            {groupActions?.(
-                              key,
-                              members.map((m) => m.original),
-                            )}
+                              onCheckedChange={(on) =>
+                                toggle(
+                                  members.map((m) => keyOf(m.original)),
+                                  on === true,
+                                )
+                              }
+                              aria-label={`Select every row of ${key}`}
+                            />
                           </TableCell>
-                        ) : (
-                          <TableCell key={f.key} className={cn(colOf(f), PINNED_GROUP)}>
-                            {rollCell(
-                              f,
-                              members.map((m) => m.original),
-                            )}
-                          </TableCell>
-                        ),
-                      )}
-                    </TableRow>
-                    {open && drawn(members, key)}
-                  </Fragment>
-                );
-              })
-            : drawn(sorted, '')}
-          {hasTotal && rows.length > 0 && (
-            <TableRow className={cn(ROLLUP, 'border-t-2')} data-total>
-              {selection && <TableCell />}
-              {rollCells(rows).map((cell, i) =>
-                i === 0 && !(shown[0] && rollsUp(shown[0])) ? (
-                  <TableCell key="total">Total</TableCell>
-                ) : (
-                  cell
-                ),
-              )}
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+                        )}
+                        {shown.slice(lead - 1).map((f, i) =>
+                          i === 0 ? (
+                            <TableCell key={f.key} colSpan={leadSpan} className={PINNED_GROUP}>
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                className="-mx-2 hover:bg-transparent aria-expanded:bg-transparent"
+                                aria-expanded={open}
+                                aria-label={`${open ? 'Collapse' : 'Expand'} ${key}`}
+                                onClick={() =>
+                                  serverGroups
+                                    ? serverGroups.onToggle(key)
+                                    : setFlipped((c) => {
+                                        const n = new Set(c);
+                                        n.has(key) ? n.delete(key) : n.add(key);
+                                        return n;
+                                      })
+                                }
+                              >
+                                <ChevronRightIcon
+                                  className={cn('transition-transform', open && 'rotate-90')}
+                                />
+                                <GroupMark field={groupBy} value={key} />
+                                {key}
+                                <span className="num font-normal text-muted-foreground">
+                                  {serverGroups
+                                    ? (served.get(key)?.n?.toLocaleString() ?? '')
+                                    : members.length}
+                                </span>
+                              </Button>
+                              {groupActions?.(
+                                key,
+                                members.map((m) => m.original),
+                              )}
+                            </TableCell>
+                          ) : (
+                            <TableCell key={f.key} {...col(f, PINNED_GROUP)}>
+                              {!serverGroups &&
+                                rollCell(
+                                  f,
+                                  members.map((m) => m.original),
+                                  'group',
+                                )}
+                            </TableCell>
+                          ),
+                        )}
+                      </TableRow>
+                      {open && (serverGroups ? servedRows(members, key) : drawn(members, key))}
+                    </Fragment>
+                  );
+                })
+              : drawn(sorted, '')}
+            {serverGroups?.more && !serverGroups.pages && (
+              <TableRow data-more>
+                <TableCell colSpan={span} className="py-1">
+                  <Button variant="ghost" size="xs" onClick={serverGroups.more}>
+                    <ChevronsDownIcon />
+                    More groups
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )}
+            {hasTotal && rows.length > 0 && (
+              <TableRow className={cn(ROLLUP, 'border-t-2')} data-total>
+                {selection && <TableCell />}
+                {rollCells(rows).map((cell, i) =>
+                  i === 0 && !(shown[0] && rollsUp(shown[0])) ? (
+                    <TableCell key="total">Total</TableCell>
+                  ) : (
+                    cell
+                  ),
+                )}
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </UnitColumns.Provider>
     </div>
   );
 }
@@ -1715,4 +2082,19 @@ function PivotTable<T>({
       </Table>
     </div>
   );
+}
+
+/** A group heading's mark: its value's icon in its colour, else its colour's dot, else the
+ *  field's icon. */
+function GroupMark<T>({ field, value }: { field: ViewField<T>; value: string }) {
+  const color = field.color?.(value);
+  const Icon = field.iconOf?.(value);
+  if (Icon)
+    return (
+      <span className="inline-flex" style={color ? { color } : undefined}>
+        <Icon className="size-3.5" />
+      </span>
+    );
+  if (color) return <ColorDot color={color} />;
+  return <field.icon />;
 }

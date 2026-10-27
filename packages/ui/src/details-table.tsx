@@ -16,17 +16,28 @@ import {
 } from './ui/table';
 
 export interface DetailsTableProps {
-  /** `grow` marks the column that takes the spare width; the last column does by default. */
-  head: { label: string; right?: boolean; grow?: boolean }[];
+  /** `grow` marks the column that takes the spare width; the last column does by default.
+   *  `hideOnPhone` drops a column on a phone, so the rest fit without scrolling sideways. */
+  head: { label: string; right?: boolean; grow?: boolean; hideOnPhone?: boolean }[];
   rows: { key: string; cells: ReactNode[] }[];
   /** An optional total row, one cell per column. */
   foot?: ReactNode[];
+  /** The key of the row shown as picked, when rows can be picked. */
+  selected?: string;
+  /** Makes each row pickable by click or Enter/Space, for example to chart the picked row below. */
+  onSelect?: (key: string) => void;
 }
 
-export function DetailsTable({ head, rows, foot }: DetailsTableProps) {
+export function DetailsTable({ head, rows, foot, selected, onSelect }: DetailsTableProps) {
   const marked = head.findIndex((h) => h.grow);
   const grow = marked >= 0 ? marked : head.length - 1;
-  const cell = (i: number) => cn('num', head[i]?.right && 'text-right', i !== grow && 'w-px');
+  const cell = (i: number) =>
+    cn(
+      'num',
+      head[i]?.right && 'text-right',
+      i !== grow && 'w-px',
+      head[i]?.hideOnPhone && 'max-md:hidden',
+    );
   return (
     <div className="-mx-1 overflow-x-auto overflow-y-hidden rounded-md border">
       <Table>
@@ -35,7 +46,11 @@ export function DetailsTable({ head, rows, foot }: DetailsTableProps) {
             {head.map((h, i) => (
               <TableHead
                 key={h.label}
-                className={cn(h.right && 'text-right', i !== grow && 'w-px')}
+                className={cn(
+                  h.right && 'text-right',
+                  i !== grow && 'w-px',
+                  h.hideOnPhone && 'max-md:hidden',
+                )}
               >
                 {h.label}
               </TableHead>
@@ -44,7 +59,25 @@ export function DetailsTable({ head, rows, foot }: DetailsTableProps) {
         </TableHeader>
         <TableBody>
           {rows.map((r) => (
-            <TableRow key={r.key}>
+            <TableRow
+              key={r.key}
+              data-state={r.key === selected ? 'selected' : undefined}
+              aria-current={r.key === selected || undefined}
+              tabIndex={onSelect ? 0 : undefined}
+              className={cn(
+                onSelect &&
+                  'cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+              )}
+              onClick={onSelect && (() => onSelect(r.key))}
+              onKeyDown={
+                onSelect &&
+                ((e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault();
+                  onSelect(r.key);
+                })
+              }
+            >
               {r.cells.map((c, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: cells are positional
                 <TableCell key={i} className={cell(i)}>

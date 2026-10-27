@@ -1,5 +1,5 @@
 import { ArgTypes, Meta } from '@storybook/addon-docs/blocks';
-import { Page, PageHeader, SidebarSection, LumenAppSwitcher, TasksButton, WhatsNew, StatusHealth, LumenFinderButton } from '@columenlabs/lumen-ui';
+import { Page, PageHeader, SidebarSection, LumenAppSwitcher, LumenSuiteSwitcher, TasksButton, WhatsNew, StatusHealth, LumenFinderButton } from '@columenlabs/lumen-ui';
 
 <Meta title="App shell/Frame parts" />
 
@@ -21,7 +21,11 @@ The page header: breadcrumbs, title and actions.
 
 ## SidebarSection
 
-A labelled group of sidebar items.
+A labelled group of sidebar items, each with an icon, an optional count and one nested level.
+
+- **One selected row.** Only the row whose link best matches the URL is selected (a link's query counts, so `/resources?label=a` beats `/resources`); on a tie the first wins. An open parent is never selected for being open. Give each item its own route anyway: two items that open the same page read as one.
+- **Counts line up.** Badges, sub-item badges included, sit at the right edge; the collapse chevron shows over the item's icon on hover, never beside the count.
+- **Sub-items** (`SectionSubItem`) carry an `icon` drawn in their `color` (a label's icon in the label's colour), or just a `color` dot, and a `badge` count. Titles stay on one line and truncate, with the full title on hover.
 
 <ArgTypes of={SidebarSection} />
 
@@ -29,17 +33,72 @@ A labelled group of sidebar items.
 
 Switches between a suite's apps, each with its access level.
 
+- **Groups.** An app's `group` puts it under its own heading; apps with none lead the menu under `menuLabel`.
+- **Another site.** An `external` app shows its host and an arrow, so a page of this app never looks like a separate one.
+- **Marks.** `icon`, else `iconUrl` (another site's favicon), else the name's first letter.
+
 <ArgTypes of={LumenAppSwitcher} />
+
+## LumenSuiteSwitcher
+
+The switcher of an app that joins a suite it doesn't run. It reads the apps from `source`, an address answering `{ apps: [{ id, name, url, icon?, iconUrl?, group? }] }` sent with the browser's cookies (the suite allows this origin), and marks the entry this page sits under. Set `source` per deployment; with none, or when the list can't be read, the menu lists only `current`.
+
+<ArgTypes of={LumenSuiteSwitcher} />
 
 ## TasksButton
 
-The header's background tasks button with its popover (a sheet on phone).
+The header's background tasks button with its popover (a sheet on phone): a ring while anything runs, the count, a gold dot for ended unseen tasks, and a toast with Open when one ends while the page is open. The server side is `@columenlabs/lumen-tasks`. The canonical wiring:
+
+```ts
+// worker: the ledger in any SQLite (a Durable Object's own, or D1)
+import { createTasks, doSql, taskRoutes } from '@columenlabs/lumen-tasks';
+const tasks = createTasks({ db: doSql(ctx.storage.sql) });
+const routes = taskRoutes({ base: '/api/tasks', tasks: () => tasks, owner: (req) => callerId(req) });
+app.all('/api/tasks/*', (c) => routes(c.req.raw));
+
+// an engine: start, report, finish; stop when progress says so (the person cancelled)
+const t = await tasks.start({ owner, app: 'jobs', kind: 'search', title: 'Search · Remote roles', ref: search.id, total: 3, unit: 'sources' });
+for (const [i, source] of sources.entries()) {
+  if ((await tasks.progress(t.id, { done: i })).stop) return;
+  await source.run();
+}
+await tasks.finish(t.id, { state: 'done', summary: '14 new jobs' });
+```
+
+```tsx
+<LumenShell
+  headerActions={<TasksButton />}
+  wrap={(frame) => <TasksProvider config={{ api: '/api/tasks' }}>{frame}</TasksProvider>}
+  …
+>
+// the button that started it: its POST answers the task, shown at once
+const tasks = useTasks();
+const task = useTaskFor('search', search.id); // Running 1/3 while it runs
+tasks?.track(res.task);
+```
+
+A host whose tasks API answers 404 hides the button.
 
 <ArgTypes of={TasksButton} />
 
 ## WhatsNew
 
-The status bar's latest release and its drawer of key takeaways.
+The status bar's latest release and its drawer of key takeaways. Turn it on with `LumenShell`'s `releases` prop, never by placing `WhatsNew` yourself. The canonical wiring:
+
+```ts
+// worker: lumen-ship writes changelog.json on each release
+import { listReleases, RELEASES_HEADERS, type Release } from '@columenlabs/lumen-ship/releases';
+import changelog from './changelog.json';
+app.get('/api/releases', (c) =>
+  c.json({ releases: listReleases(changelog as Release[], { limit: c.req.query('limit'), before: c.req.query('before') }) }, 200, RELEASES_HEADERS),
+);
+```
+
+```tsx
+<LumenShell releases="/api/releases" …>
+```
+
+Before the first release the button reads "What's new" and opens an empty state; a host whose releases API answers 404 hides it.
 
 <ArgTypes of={WhatsNew} />
 

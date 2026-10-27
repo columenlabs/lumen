@@ -2,6 +2,7 @@ import {
   type CardStyle,
   MAX_TILE_LINES,
   type MeterKind,
+  type ViewAgg,
   type ViewFormat,
   type ViewOwnTile,
   type ViewTile,
@@ -38,9 +39,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { PolarAngleAxis, RadialBar, RadialBarChart } from 'recharts';
 import { LumenConfirm } from './confirm';
 import { IconButton } from './icon-button';
+import { KIT } from './kit-config';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import {
   type FilterField,
@@ -53,7 +55,6 @@ import { ViewValueCell } from './lumen-view';
 import { Tile } from './tile';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { type ChartConfig, ChartContainer } from './ui/chart';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Progress } from './ui/progress';
@@ -213,7 +214,7 @@ export function LumenCard<T>({
     style !== 'number' && target && typeof v === 'number'
       ? Math.max(0, Math.min(100, (v / target) * 100))
       : null;
-  const tone = meterTone(meter, share, bands);
+  const tone = meterTone(meter, share, bands ?? (meter === 'usage' ? usageBands() : undefined));
   const of = target ? (
     <ViewValueCell value={target} format={figs.main.format} amount={figs.main.amount} />
   ) : null;
@@ -269,57 +270,24 @@ export function LumenCard<T>({
   );
 }
 
+/** A usage meter's bands from the app's `meterLevels`, in %. */
+const usageBands = () => ({
+  warn: KIT.meterLevels.watch * 100,
+  bad: KIT.meterLevels.alert * 100,
+});
+
+// The ring draws with the charts library, so it loads only when a card shows one.
+const ProgressRing = lazyPart(
+  () => import('./progress-ring').then((m) => m.ProgressRing),
+  <Skeleton className="size-16 shrink-0 rounded-full" />,
+);
+
 /** A meter's tone on a bar's fill (theme tokens, no glow). */
 const TONE_BAR = {
   success: '[&>[data-slot=progress-indicator]]:bg-success',
   warning: '[&>[data-slot=progress-indicator]]:bg-warning',
   destructive: '[&>[data-slot=progress-indicator]]:bg-destructive',
 } as const;
-
-/** A number's share of its target as a ring, its percent in the middle (Recharts); a meter's
- *  tone colours it, else the first chart colour. */
-function ProgressRing({
-  value,
-  tone,
-}: {
-  value: number | null;
-  tone: ReturnType<typeof meterTone>;
-}) {
-  const config: ChartConfig = {
-    v: { label: 'Progress', color: tone ? `var(--${tone})` : 'var(--chart-1)' },
-  };
-  return (
-    <ChartContainer config={config} className="aspect-square size-16 shrink-0">
-      <RadialBarChart
-        data={[{ v: value ?? 0 }]}
-        startAngle={90}
-        endAngle={-270}
-        innerRadius={24}
-        outerRadius={32}
-      >
-        <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-        <RadialBar
-          dataKey="v"
-          fill="var(--color-v)"
-          background={{ fill: 'var(--muted)' }}
-          cornerRadius={8}
-          isAnimationActive={false}
-        />
-        <text
-          x="50%"
-          y="50%"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          className="num fill-foreground"
-          fontSize={12}
-          fontWeight={600}
-        >
-          {value === null ? '—' : `${value.toFixed(0)}%`}
-        </text>
-      </RadialBarChart>
-    </ChartContainer>
-  );
-}
 
 /** A Summary's cards over its rows; null when it has none to show. */
 export function SummaryTiles<T>({
@@ -342,7 +310,9 @@ export function SummaryTiles<T>({
 }) {
   const shown = tiles.filter((t) => isOwnTile(t) || tile);
   if (!shown.length) return null;
-  const grid = 'grid grid-cols-2 gap-(--shell-section-gap) md:auto-cols-fr md:grid-flow-col';
+  // Each card fills its column, as a header's metric cards do (`TileRow fill`), not the fixed tile width.
+  const grid =
+    'grid grid-cols-2 gap-(--shell-section-gap) md:auto-cols-fr md:grid-flow-col lg:*:*:w-auto';
   if (loading)
     return (
       <div data-slot="view-tiles" aria-busy="true" className={grid}>
@@ -376,7 +346,20 @@ export function SummaryTiles<T>({
 
 const dragOptions = { activationConstraint: { distance: 4 } };
 
-const isNumber = <T,>(f: ViewField<T>) => f.format !== 'text' && !f.render;
+// A number the page draws its own way (a meter, a unit) still reads its raw value, so it rolls up.
+const isNumber = <T,>(f: ViewField<T>) => f.format !== 'text';
+
+/**
+ * The roll-up a card over `f` starts with, so any field makes a sensible number: text counts its
+ * different values, a percent or weight takes its highest (shares never add up), the rest sum.
+ * Given the card's `agg`, keeps it when it still fits the field.
+ */
+export function cardAgg<T>(f: ViewField<T> | undefined, agg?: ViewAgg): ViewAgg {
+  const share = f?.format === 'percent' || f?.format === 'weight';
+  if (agg && (isCountAgg(agg) || (f && isNumber(f) && !(share && agg === 'sum')))) return agg;
+  if (!f || !isNumber(f)) return 'distinct';
+  return share ? 'max' : 'sum';
+}
 
 /** What is wrong with each of the cards: a key, a label or a field; null where nothing. */
 export function summaryCardIssues(tiles: ViewTile[], fields: string[], domainTiles: string[]) {
@@ -637,7 +620,7 @@ export function SummaryCardsEditor<T>({
     tiles.find(isOwnTile)?.key ?? tiles[0]?.key ?? null,
   );
   const nums = domain.fields.filter(isNumber);
-  const pickable = domain.fields.filter((f) => !f.render);
+  const pickable = domain.fields;
   const fieldOf = (k: string) => domain.fields.find((f) => f.key === k);
   const i = tiles.findIndex((t) => t.key === current);
   const picked = tiles[i];

@@ -20,7 +20,9 @@
     "./frames": "./src/frames.ts",
     "./workspaces": "./src/workspaces.ts",
     "./tasks": "./src/tasks.ts",
-    "./registry": "./src/registry.ts"
+    "./people": "./src/people.ts",
+    "./registry": "./src/registry.ts",
+    "./assistant": "./src/assistant.ts"
   },
   "dependencies": {
     "@date-fns/utc": "2.1.0",

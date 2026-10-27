@@ -67,6 +67,9 @@ interface TasksState {
   /** Deletes one ended task, or every ended one; open tasks stay. */
   clear: (id?: string) => Promise<void>;
   open: (t: Task) => void;
+  /** Shows a task the app just started (its POST's answer) at once, before the next read, so its
+   *  end toasts even when it finishes within one poll. */
+  track: (t: Task) => void;
   /** `TasksConfig.apps`. */
   apps?: Record<string, string>;
 }
@@ -76,6 +79,15 @@ const TasksCtx = createContext<TasksState | null>(null);
 /** The Tasks list, or null where the app has none; `refresh()` after starting one shows it at once. */
 export function useTasks(): TasksState | null {
   return useContext(TasksCtx);
+}
+
+/** The newest task for one piece of work (`kind` + the engine's `ref`, such as a saved search's
+ *  id), so the button that starts it can show it running (`Running 1/3`) and come back when it
+ *  ends. Null when there is none or the app has no Tasks. */
+export function useTaskFor(kind: string, ref: string | null | undefined): Task | null {
+  const tasks = useTasks();
+  if (!tasks?.list || !ref) return null;
+  return tasks.list.tasks.find((t) => t.kind === kind && t.ref === ref) ?? null;
 }
 
 const POLL_MS = 3000;
@@ -143,6 +155,22 @@ function TasksLive({
     setList(next);
   }, [api, open, qc]);
 
+  const track = useCallback(
+    (t: Task) => {
+      activeIds.current = new Set([...(activeIds.current ?? []), t.id]);
+      setList((l) => {
+        const tasks = [t, ...(l?.tasks ?? []).filter((x) => x.id !== t.id)];
+        return {
+          tasks,
+          active: tasks.filter(isActive).length,
+          unseen: tasks.filter((x) => x.finished_at && !x.seen_at).length,
+        };
+      });
+      void refresh();
+    },
+    [refresh],
+  );
+
   const post = useCallback(
     async (path: string) => {
       await fetch(`${api}${path}`, {
@@ -204,8 +232,8 @@ function TasksLive({
   }, [active, refresh]);
 
   const value = useMemo(
-    () => (gone ? null : { list, refresh, cancel, seen, clear, open, apps }),
-    [gone, list, refresh, cancel, seen, clear, open, apps],
+    () => (gone ? null : { list, refresh, cancel, seen, clear, open, track, apps }),
+    [gone, list, refresh, cancel, seen, clear, open, track, apps],
   );
   return <TasksCtx.Provider value={value}>{children}</TasksCtx.Provider>;
 }
@@ -259,7 +287,7 @@ export function TasksButton() {
       data-slot="tasks-button"
     >
       {list.active > 0 ? <Ring share={share} /> : <ListChecksIcon />}
-      {list.active > 0 && <span className="font-mono text-xs tabular-nums">{list.active}</span>}
+      {list.active > 0 && <span className="font-num text-xs tabular-nums">{list.active}</span>}
       {list.unseen > 0 && (
         <span
           aria-hidden
@@ -282,7 +310,7 @@ export function TasksButton() {
           <SheetHeader className="flex-row items-baseline gap-2 border-b px-4 py-3">
             <SheetTitle>Tasks</SheetTitle>
             <SheetDescription>last 7 days</SheetDescription>
-            <span className="mr-8 ml-auto flex items-center gap-2 self-center">
+            <span className="ml-auto flex items-center gap-2 self-center">
               {list.active > 0 && (
                 <span className="text-xs text-muted-foreground">{list.active} running</span>
               )}
@@ -379,7 +407,7 @@ function Ring({ share }: { share: number | null }) {
 }
 
 function TaskPanel({ list, onClose }: { list: TaskList; onClose: () => void }) {
-  const { openSettings } = useShell();
+  const { openSettings, hasSettings } = useShell();
   return (
     <>
       <div className="max-h-[60svh] overflow-y-auto">
@@ -387,19 +415,21 @@ function TaskPanel({ list, onClose }: { list: TaskList; onClose: () => void }) {
           <TaskRow key={t.id} task={t} onClose={onClose} />
         ))}
       </div>
-      <div className="border-t px-3.5 py-2.5 text-xs text-muted-foreground">
-        Phone or email when a task ends:{' '}
-        <button
-          type="button"
-          className="text-primary hover:underline"
-          onClick={() => {
-            onClose();
-            openSettings('notifications');
-          }}
-        >
-          Settings ▸ Notifications
-        </button>
-      </div>
+      {hasSettings('notifications') && (
+        <div className="border-t px-3.5 py-2.5 text-xs text-muted-foreground">
+          Phone or email when a task ends:{' '}
+          <button
+            type="button"
+            className="text-primary hover:underline"
+            onClick={() => {
+              onClose();
+              openSettings('notifications');
+            }}
+          >
+            Settings ▸ Notifications
+          </button>
+        </div>
+      )}
     </>
   );
 }
@@ -470,7 +500,7 @@ function TaskRow({ task: t, onClose }: { task: Task; onClose: () => void }) {
       {t.state === 'running' && t.total ? (
         <>
           <Progress value={pct ?? 0} />
-          <div className="flex gap-2.5 font-mono text-[11.5px] text-muted-foreground tabular-nums">
+          <div className="flex gap-2.5 font-num text-[11.5px] text-muted-foreground tabular-nums">
             <span>
               {done.toLocaleString('en-US')} / {t.total.toLocaleString('en-US')}
               {t.unit ? ` ${t.unit}` : ''}
@@ -482,7 +512,7 @@ function TaskRow({ task: t, onClose }: { task: Task; onClose: () => void }) {
       ) : t.state === 'running' ? (
         <>
           <Progress />
-          <div className="font-mono text-[11.5px] text-muted-foreground tabular-nums">
+          <div className="font-num text-[11.5px] text-muted-foreground tabular-nums">
             {done ? `${done.toLocaleString('en-US')}${t.unit ? ` ${t.unit}` : ''} · ` : ''}
             running {took(Date.parse(t.started_at ?? t.created_at), now)}
           </div>
@@ -522,7 +552,7 @@ function Line({
     <div
       className={cn(
         'flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted-foreground',
-        mono && 'font-mono tabular-nums',
+        mono && 'font-num tabular-nums',
         className,
       )}
     >

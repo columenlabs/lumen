@@ -4,10 +4,18 @@ import type * as React from 'react';
 
 import { Button } from './button';
 import { XIcon } from 'lucide-react';
+import { useOverlayOpen } from '../hooks/use-back-close';
 import { usePhoneScreen } from '../hooks/use-keyboard-fit';
 
-function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+function Dialog({
+  open: given,
+  defaultOpen,
+  onOpenChange: changed,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  // Phone back closes it (useBackClose).
+  const state = useOverlayOpen({ open: given, defaultOpen, onOpenChange: changed });
+  return <DialogPrimitive.Root data-slot="dialog" {...state} {...props} />;
 }
 
 function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
@@ -53,8 +61,9 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        data-close={showCloseButton || undefined}
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-(--dialog-pad) text-sm [--dialog-pad:--spacing(4)] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm max-md:inset-0 max-md:h-full max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:content-start max-md:overflow-y-auto max-md:rounded-none max-md:pt-[calc(var(--dialog-pad)+env(safe-area-inset-top))] max-md:ring-0 max-md:end-fade max-md:[--end-fade:var(--dialog-pad)] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'group/dialog fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-(--dialog-pad) text-sm [--dialog-pad:--spacing(4)] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm max-md:inset-0 max-md:h-full max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:content-start max-md:overflow-y-auto max-md:rounded-none max-md:pt-[calc(var(--dialog-pad)+env(safe-area-inset-top))] max-md:ring-0 max-md:end-fade max-md:[--end-fade:var(--dialog-pad)] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}
@@ -80,7 +89,12 @@ function DialogContent({
 
 function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <div data-slot="dialog-header" className={cn('flex flex-col gap-2', className)} {...props} />
+    <div
+      data-slot="dialog-header"
+      // Its title stops short of the dialog's X, never running under it.
+      className={cn('flex flex-col gap-2 group-data-close/dialog:pr-8', className)}
+      {...props}
+    />
   );
 }
 

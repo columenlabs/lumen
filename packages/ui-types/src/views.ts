@@ -82,17 +82,26 @@ export const viewPivotSchema = z.object({
   value: viewKey.nullable().default(null),
   agg: z.enum(viewAggs).default('mean'),
 });
-/** A number condition on a number field: `value` is a number, or `a..b` for between. */
-export const viewTokenOps = ['gt', 'lt', 'eq', 'between'] as const;
+/**
+ * A number condition on a number field: `value` is a number, or `a..b` for between. `empty` is for
+ * a text field: the rows with no value for it (`not`: the rows with any); its `value` is `∅`.
+ */
+export const viewTokenOps = ['gt', 'lt', 'eq', 'between', 'empty'] as const;
+/** The value an `empty` token carries. */
+export const EMPTY_VALUE = '∅';
 export type ViewTokenOp = (typeof viewTokenOps)[number];
 const NUM = '-?\\d+(?:\\.\\d+)?';
 const numberToken = (t: { value: string; op?: ViewTokenOp }) =>
-  !t.op || new RegExp(t.op === 'between' ? `^${NUM}\\.\\.${NUM}$` : `^${NUM}$`).test(t.value);
+  !t.op ||
+  t.op === 'empty' ||
+  new RegExp(t.op === 'between' ? `^${NUM}\\.\\.${NUM}$` : `^${NUM}$`).test(t.value);
 /**
  * A filter token, `key:value` (symbol:QQQ); `not: true` excludes the value. On one key a row must
  * have one of its included values (if any) and none of its excluded ones; tokens on different keys
  * must all match. Text matches without case, a number by its value. With `op`, a number field
  * keeps the rows above (`gt`), below (`lt`), at (`eq`) or `between` the value (`a..b`, inclusive).
+ * `op: 'empty'` keeps the rows with no value on that key (`not`: with any value); next to included
+ * values it reads as "none or one of these".
  */
 export const viewTokenSchema = z
   .object({
@@ -391,10 +400,21 @@ export type CardStyle = (typeof cardStyles)[number];
  */
 export const meterKinds = ['health', 'usage'] as const;
 export type MeterKind = (typeof meterKinds)[number];
-/** Each meter's default bands, in % of the target. */
+/**
+ * Where a share of a cap (0 to 1) starts to need a look (`watch`, amber) and action (`alert`,
+ * red). The kit's canonical levels; an app moves them with `configureLumen({ meterLevels })`.
+ */
+export interface MeterLevels {
+  watch: number;
+  alert: number;
+}
+export const METER_LEVELS: MeterLevels = { watch: 0.75, alert: 0.9 };
+/** A share's level: `ok` (grey) under `watch`, `watch` (amber) from it, `alert` (red) from `alert`. */
+export type MeterLevel = 'ok' | 'watch' | 'alert';
+/** Each meter's default bands, in % of the target (`usage` follows `METER_LEVELS`). */
 export const METER_BANDS: Record<MeterKind, { warn: number; bad: number }> = {
   health: { warn: 100, bad: 90 },
-  usage: { warn: 75, bad: 90 },
+  usage: { warn: METER_LEVELS.watch * 100, bad: METER_LEVELS.alert * 100 },
 };
 /** The theme tone a share of the target (%) reads as, or null with no meter. */
 export function meterTone(
@@ -565,6 +585,7 @@ export const viewTableLayoutSchema = z.object({
   chips: z.array(viewChipSchema).max(MAX_FIELDS).default([]),
   formats: z.record(fieldKey, z.enum(viewNumberFormats)).optional(),
   aggs: z.record(fieldKey, z.enum(viewTotalAggs)).optional(),
+  shows: z.record(fieldKey, z.string().min(1).max(32)).optional(),
   group: z
     .object({
       fields: z.array(fieldKey).max(MAX_FIELDS).default([]),
@@ -1155,6 +1176,11 @@ export const customViewConfigSchema = z.object({
    * over the field's own, or `none` for blank. A formula keeps its own `agg`. Left out: the field's.
    */
   aggs: z.record(fieldKey, z.enum(viewTotalAggs)).optional(),
+  /**
+   * A column's "Show as" picked in Edit view, for a field that offers several (`showAs`: an amount
+   * or its % of an allowance). Left out: the field's first.
+   */
+  shows: z.record(fieldKey, z.string().min(1).max(32)).optional(),
   /** The sidebar icon, a lucide name or an emoji; null = the shape's icon. */
   icon: viewIconSchema.nullable().default(null),
   /** The summary tiles, in order: the domain's (`{key}`) and the view's own. */

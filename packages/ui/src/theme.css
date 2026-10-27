@@ -16,6 +16,10 @@
   --font-heading: var(--font-sans);
   --font-sans: var(--app-font);
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* `font-code`: code, keys and one-time codes. Always mono, whatever numbers use. */
+  --font-code: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* `font-num` (and `.num`): numbers in tables, tiles and charts. */
+  --font-num: var(--num-font);
   --color-gain: var(--gain);
   --color-kind-declarative: var(--kind-declarative);
   --color-kind-script: var(--kind-script);
@@ -90,11 +94,19 @@
   --shell-max-width: 1400px;
   /* The text font, picked in Settings ▸ Appearance (`data-font` on <html>, prefs.ts). */
   --app-font: "Manrope Variable", Manrope, ui-sans-serif, system-ui, sans-serif;
+  /* The numbers font. An app that wants its numbers in the text font sets
+     `--num-font: var(--app-font)`; tabular figures keep them lined up either way. */
+  --num-font: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   /* Compact density, the only density. */
   --card-pad: 12px;
   --row-h: 28px;
   --cell-x: 8px;
   --cell-y: 4px;
+  /* A UnitValue's unit slot (`GB`, `%`, `/day`), hung in the gutter of a units column. */
+  --unit-slot: 2rem;
+  /* A table's first (name) column stops growing here; longer names end in an ellipsis. On a phone
+     it leaves room for the next column (55% of the screen), so a long name never hides the rest. */
+  --lead-col-max: min(18rem, 55vw);
 
   --background: #f4f6fa;
   --foreground: #121826;
@@ -388,17 +400,41 @@
   }
 }
 
+/* A table column a UnitValue drew in (`data-units`, set by LumenView): every cell, header and
+   Total included, right-aligns on the numbers' edge; each UnitValue's unit slot hangs in the
+   widened gutter (out of flow, so no wrapper an app puts round it can shift it). One column, one edge, whatever an app's render draws beside it. */
+[data-units] {
+  padding-right: calc(var(--cell-x) + var(--unit-slot));
+}
+[data-units] [data-slot="unit-value"] {
+  position: relative;
+}
+[data-units] [data-slot="unit-value-unit"] {
+  position: absolute;
+  left: 100%;
+}
+
 @layer utilities {
   .bg-gap-hatch {
     background: repeating-linear-gradient(135deg, var(--gap) 0 3px, var(--gap-soft) 3px 6px);
   }
+  /* Copying and indexing take their own colours where an app sets --cov-run / --cov-index
+     (and their -soft stripe); left unset, they stay on the coverage ramp. */
   .bg-cov-running {
-    background: repeating-linear-gradient(135deg, var(--cov-full) 0 4px, var(--cov-low) 4px 8px);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--cov-run, var(--cov-full)) 0 4px,
+      var(--cov-run-soft, var(--cov-low)) 4px 8px
+    );
     background-size: 11.3px 11.3px;
     animation: lumen-cov-run 1s linear infinite;
   }
   .bg-cov-indexing {
-    background: repeating-linear-gradient(135deg, var(--cov-high) 0 4px, var(--cov-low) 4px 8px);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--cov-index, var(--cov-high)) 0 4px,
+      var(--cov-index-soft, var(--cov-low)) 4px 8px
+    );
   }
   .bg-cov-canceled {
     background: linear-gradient(
@@ -422,13 +458,28 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+  /* A fieldset keeps its content's min-content width by default, so a form in a drawer or
+     dialog pushed its fields past the edge; it fits its box like any block. */
+  fieldset {
+    min-inline-size: 0;
+  }
   html {
     @apply font-sans;
   }
 
   .num {
-    font-family: var(--font-mono);
+    font-family: var(--num-font);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Short values never wrap: a number, a time, a key. `07:18 PM` stays on one line; where room
+     runs out the holder truncates it (`truncate` and a `title`), never breaks it. A `.num` that
+     clamps on purpose (`line-clamp-*`) keeps its lines. */
+  span.num:not([class*="line-clamp"]),
+  dd.num,
+  time,
+  kbd {
+    white-space: nowrap;
   }
 }
 
@@ -489,6 +540,12 @@ body[data-pointing] [data-slot="lumen-card"]:not([data-spotlit]) {
 body[data-pointing],
 body[data-pointing] [data-slot="lumen-card"] * {
   cursor: crosshair;
+}
+body[data-spotlight="section"] [data-spotlit],
+body[data-pointing] [data-assistant-section][data-spotlit] {
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+  border-radius: calc(var(--radius) * 0.6);
+  transition: background 120ms ease-out;
 }
 body[data-spotlight="nav"] [data-spotlit] {
   background: var(--sidebar-accent);
@@ -567,7 +624,7 @@ body[data-spotlight="nav"] [data-spotlit] {
     margin: 0;
     padding: 0.5rem 0.75rem;
     background: transparent !important;
-    font-family: var(--font-mono);
+    font-family: var(--font-code);
     counter-reset: line;
   }
   .lumen-code.lumen-code-numbers pre {
@@ -598,7 +655,7 @@ body[data-spotlight="nav"] [data-spotlit] {
   }
   .lumen-code-editor .cm-editor {
     height: 100%;
-    font-family: var(--font-mono);
+    font-family: var(--font-code);
   }
   .lumen-code-editor .cm-editor.cm-focused {
     outline: none;

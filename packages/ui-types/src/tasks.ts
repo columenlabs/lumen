@@ -26,6 +26,9 @@ export interface Task {
   summary: string | null;
   /** Why it failed or was cancelled. */
   error: string | null;
+  /** The engine's own id for the work (a saved search's id), so a page can find the task its
+   *  button started (`useTaskFor` in the screens). Null when the engine keeps none. */
+  ref?: string | null;
   /** Whether Cancel works for it. */
   cancellable: boolean;
   /** ISO-8601. */

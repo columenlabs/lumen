@@ -42,10 +42,30 @@ export interface NavItem {
   items?: Omit<NavItem, 'items'>[];
 }
 
+/**
+ * How well a link matches where the person is: -1 when it doesn't, else higher for a closer
+ * match. A link's query (`/resources?label=a`) must be in the URL too, and each matched key
+ * outranks a bare path, so `?label=a` beats `/resources` on `/resources?label=a`.
+ */
+function useMatch() {
+  const { path, search } = useRouterState({
+    select: (s) => ({ path: s.location.pathname, search: s.location.searchStr }),
+  });
+  const here = new URLSearchParams(search);
+  return ({ to, exact }: { to: string; exact?: boolean }) => {
+    const [base = '', query] = to.split('?');
+    const want = new URLSearchParams(query);
+    for (const [k, v] of want) if (here.get(k) !== v) return -1;
+    const keys = [...want.keys()].length;
+    if (path === base) return 2 + keys * 10;
+    if (!exact && path.startsWith(`${base.replace(/\/$/, '')}/`)) return 1 + keys * 10;
+    return -1;
+  };
+}
+
 function useActive() {
-  const path = useRouterState({ select: (s) => s.location.pathname });
-  return ({ to, exact }: { to: string; exact?: boolean }) =>
-    path === to || (!exact && path.startsWith(`${to.replace(/\/$/, '')}/`));
+  const match = useMatch();
+  return (i: { to: string; exact?: boolean }) => match(i) >= 0;
 }
 
 /**
@@ -184,8 +204,12 @@ export interface SectionSubItem {
   id: string;
   title: string;
   to: string;
-  /** A colour dot before the title, matching the item's line on a chart. */
+  /** Its icon, drawn in `color` (a label's icon in the label's colour). */
+  icon?: NavIcon;
+  /** The icon's colour; without an icon, a colour dot before the title (a chart line's colour). */
   color?: string;
+  /** A count on the right, lined up with the section items' badges. */
+  badge?: ReactNode;
 }
 
 const SECTION_BADGE = 'num group-data-[collapsible=icon]:hidden';
@@ -193,18 +217,19 @@ const SECTION_BADGE = 'num group-data-[collapsible=icon]:hidden';
 /** One section item: a link, its badge, and the chevron and nested items when it has any. */
 function SectionRow({
   item,
-  active,
+  activeId,
   onRemove,
   removeLabel,
 }: {
   item: SectionItem;
-  active: (i: { to: string; exact?: boolean }) => boolean;
+  /** The one row in the section that is selected: `item.id`, or `item.id/sub.id`. */
+  activeId: string | null;
   onRemove?: (item: SectionItem) => void;
   removeLabel: (item: SectionItem) => string;
 }) {
   const subs = item.items ?? [];
-  const subActive = subs.some((s) => active({ to: s.to, exact: true }));
-  const isActive = active({ to: item.to, exact: true }) && !subActive;
+  const subActive = activeId?.startsWith(`${item.id}/`) ?? false;
+  const isActive = activeId === item.id;
   // The open item shows no trash icon.
   const remove = item.fixed || isActive ? undefined : onRemove;
   const row = (
@@ -219,7 +244,6 @@ function SectionRow({
         <SidebarMenuBadge
           className={cn(
             SECTION_BADGE,
-            subs.length > 0 && 'right-7',
             // The remove icon shows on hover from md up, and always below it: make room there.
             remove &&
               'max-md:right-7 md:group-focus-within/menu-item:opacity-0 md:group-hover/menu-item:opacity-0',
@@ -251,37 +275,67 @@ function SectionRow({
   return (
     <Collapsible
       asChild
-      defaultOpen={item.defaultOpen || subActive || active(item)}
+      defaultOpen={item.defaultOpen || subActive || isActive}
       className="group/collapsible"
     >
       <SidebarMenuItem>
         {row}
+        {/* The chevron sits over the item's icon and shows only on hover or keyboard focus, so
+            every badge in the section lines up at the right edge and an open item keeps its icon. */}
         <CollapsibleTrigger asChild>
           <SidebarMenuAction
             aria-label={`Show or hide ${item.title}`}
-            className="data-[state=open]:rotate-90"
+            className="right-auto left-1.5 bg-sidebar opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100 peer-data-[active=true]/menu-button:bg-sidebar-accent [&>svg]:transition-transform data-[state=open]:[&>svg]:rotate-90"
           >
             <ChevronRightIcon />
           </SidebarMenuAction>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <SidebarMenuSub>
-            {subs.map((sub) => (
-              <SidebarMenuSubItem key={sub.id}>
-                <SidebarMenuSubButton asChild isActive={active({ to: sub.to, exact: true })}>
-                  <Link to={sub.to}>
-                    {sub.color && (
-                      <span
-                        aria-hidden
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ background: sub.color }}
-                      />
-                    )}
-                    <span>{sub.title}</span>
-                  </Link>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            ))}
+          {/* No right inset, so sub-item counts line up with the section items' counts. */}
+          <SidebarMenuSub className="mr-0 pr-0">
+            {subs.map((sub) => {
+              const hasBadge = sub.badge !== undefined && sub.badge !== null;
+              return (
+                <SidebarMenuSubItem key={sub.id}>
+                  <SidebarMenuSubButton
+                    asChild
+                    isActive={activeId === `${item.id}/${sub.id}`}
+                    className={cn(hasBadge && 'pr-8')}
+                  >
+                    <Link to={sub.to} title={sub.title}>
+                      {sub.icon ? (
+                        <span
+                          aria-hidden
+                          className="flex shrink-0 [&>svg]:size-4"
+                          style={{ color: sub.color }}
+                        >
+                          <sub.icon />
+                        </span>
+                      ) : (
+                        sub.color && (
+                          <span
+                            aria-hidden
+                            className="mx-1 size-2 shrink-0 rounded-full"
+                            style={{ background: sub.color }}
+                          />
+                        )
+                      )}
+                      <span>{sub.title}</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                  {hasBadge && (
+                    <span
+                      className={cn(
+                        'pointer-events-none absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center px-1 text-xs text-muted-foreground',
+                        typeof sub.badge === 'number' && 'num',
+                      )}
+                    >
+                      {sub.badge}
+                    </span>
+                  )}
+                </SidebarMenuSubItem>
+              );
+            })}
           </SidebarMenuSub>
         </CollapsibleContent>
       </SidebarMenuItem>
@@ -316,7 +370,7 @@ export function SidebarSection({
   loading?: boolean;
   /** Shown when there are no items. */
   empty?: ReactNode;
-  /** Extra content under the items (a search box, a retry line). */
+  /** Extra content under the items (a search box, a retry line); left out on the icon rail. */
   children?: ReactNode;
   /** What its items stand for in the assistant's @ picker; plain pages by default. */
   pageType?: AssistantPageType;
@@ -335,7 +389,19 @@ export function SidebarSection({
     label,
     pageType,
   );
-  const active = useActive();
+  const match = useMatch();
+  // One selected row per section: the closest match wins, the first on a tie, so two items that
+  // open the same page never both look selected. An open parent is never selected for being open.
+  let activeId: string | null = null;
+  let best = -1;
+  for (const i of items) {
+    const own = match({ to: i.to, exact: true });
+    if (own > best) [best, activeId] = [own, i.id];
+    for (const sub of i.items ?? []) {
+      const m = match({ to: sub.to, exact: true });
+      if (m > best) [best, activeId] = [m, `${i.id}/${sub.id}`];
+    }
+  }
   return (
     <FoldGroup
       label={label}
@@ -359,7 +425,7 @@ export function SidebarSection({
                 <SectionRow
                   key={item.id}
                   item={item}
-                  active={active}
+                  activeId={activeId}
                   onRemove={onRemove}
                   removeLabel={removeLabel}
                 />
@@ -370,7 +436,8 @@ export function SidebarSection({
             </li>
           )}
         </SidebarMenu>
-        {children}
+        {/* Extra content has no icon form, so the rail leaves it out. */}
+        {children && <div className="group-data-[collapsible=icon]:hidden">{children}</div>}
       </SidebarGroupContent>
     </FoldGroup>
   );
