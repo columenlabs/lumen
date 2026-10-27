@@ -619,16 +619,19 @@ function SharedKeys({ client }: { client: AssistantAdapter }) {
                 <SharedProviderKey key={p.id} client={client} p={p} />
               ))}
             </LumenExpandList>
-            <Row
-              label="Each person may spend"
-              info="A month on the shared keys, every provider together. Past it, a person's own key pays."
-            >
-              <CapInput
-                label="Allowance per person"
-                value={s.caps.app}
-                onSave={(n) => void apply('cap', () => client.appCap(n))}
-              />
-            </Row>
+            {/* A one-off allowance has no monthly cap: starter and grants set it. */}
+            {s.allowance?.period !== 'once' && (
+              <Row
+                label="Each person may spend"
+                info="A month on the shared keys, every provider together. Past it, a person's own key pays."
+              >
+                <CapInput
+                  label="Allowance per person"
+                  value={s.caps.app}
+                  onSave={(n) => void apply('cap', () => client.appCap(n))}
+                />
+              </Row>
+            )}
           </div>
         ) : (
           <p className="text-muted-foreground text-sm">Only an admin can change these.</p>
