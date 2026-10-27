@@ -33,7 +33,7 @@ concurrency:
 jobs:
   publish:
     if: inputs.tag == '' || inputs.tag == null
-    runs-on: [self-hosted, openship, linux, arm64]
+    runs-on: [self-hosted, openship, linux]
     timeout-minutes: 15
     env:
       LUMEN_FORBIDDEN_NAMES: ${{ vars.LUMEN_FORBIDDEN_NAMES }}
@@ -127,7 +127,7 @@ jobs:
 
   release:
     if: inputs.tag != '' && inputs.tag != null
-    runs-on: [self-hosted, openship, linux, arm64]
+    runs-on: [self-hosted, openship, linux]
     timeout-minutes: 15
     env:
       LUMEN_FORBIDDEN_NAMES: ${{ vars.LUMEN_FORBIDDEN_NAMES }}
