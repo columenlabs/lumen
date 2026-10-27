@@ -143,6 +143,12 @@ export interface ViewField<T> {
   maxWidth?: string | false;
   /** Left out on phones, where the table has no room for it (a returns table's longer windows). */
   hideOnPhone?: boolean;
+  /**
+   * Where a table has too little room (a docked drawer beside it), its columns drop until it fits:
+   * the lowest `priority` first (default 0; `hideOnPhone` ones count one lower), right to left.
+   * The name and the sorted column never drop.
+   */
+  priority?: number;
   /** Left out of a table when no row in it has a value (none, empty or 0): an Attachments column on mail with none. */
   hideEmpty?: boolean;
   /** On a phone card, where no header names it: the word after a bare count (`msgs`, so `5,861 msgs`). */
