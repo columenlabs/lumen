@@ -323,6 +323,12 @@ export interface ViewSubgroup<T> {
   /** Drawn before a folded line's key (a meter's product icon, in its colour). */
   mark?: (key: string, rows: T[]) => ReactNode;
   /**
+   * A folded (or flat) line's name instead of its key, given the field the rows are grouped by:
+   * under a group that already names part of the key, say only the rest (a meter's own name
+   * under its product's group).
+   */
+  title?: (key: string, rows: T[], groupBy: string | null) => string;
+  /**
    * Group fields under which rows do not fold: each row is one line named by its `under` key (and
    * `mark`) instead of its first column (grouped by label, a label's meters).
    */
