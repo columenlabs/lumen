@@ -7,6 +7,7 @@
 // takeaway carries a chip of the app it is about (`apps` on the takeaway; none: everyone), and a
 // release where one app has `GROUP_AT` or more is split into one sub-section per app.
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { SparklesIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import Markdown from 'react-markdown';
 import { DrawerSection } from './drawer-section';
@@ -92,11 +93,14 @@ export function WhatsNew({
       <Button
         variant="ghost"
         size="sm"
-        className="num h-6 px-1.5 text-muted-foreground text-xs"
+        className="h-6 gap-1 px-1.5 text-muted-foreground text-xs"
         onClick={() => setOpen(true)}
-        title="What's new"
+        title={latest ? `What's new · ${latest.tag}` : "What's new"}
+        aria-label="What's new"
       >
-        {latest?.tag ?? "What's new"}
+        {/* The version and its build name live in the drawer (each release's title), not the bar. */}
+        <SparklesIcon className="size-3.5" />
+        <span className="max-md:hidden">What's new</span>
       </Button>
       <LumenDrawer
         open={open}

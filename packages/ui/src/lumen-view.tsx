@@ -1117,7 +1117,7 @@ function LumenTableRows<T extends RowData>({
     (key: string) => setUnits((s) => (s.has(key) ? s : new Set(s).add(key))),
     [],
   );
-  const col = colPropsOf(units);
+  const colProps = colPropsOf(units);
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [more, setMore] = useState<Map<string, number>>(new Map());
   // Under a sub-group's `flat` grouping each row names itself by its sub-group key instead of
@@ -1136,6 +1136,21 @@ function LumenTableRows<T extends RowData>({
     (f, i) => i > 0 && chips.some((c) => c.key === f.key && c.placement === 'inline'),
   );
   const shown = visible.filter((f) => !inline.includes(f));
+  // On a narrow phone each row reads as a card (theme.css, `data-card`): its name and one figure
+  // (the sorted one, else the first number or date) on the first line, the rest on the second.
+  // Numbers and dates keep their width there; only text shortens.
+  const short = (f: ViewField<T>) =>
+    f.format !== 'text' || (rows[0] !== undefined && isDateText(f.value(rows[0])));
+  const meta = (
+    shown.find((f, i) => i > 0 && f.key === sorting[0]?.id && short(f)) ??
+    shown.find((f, i) => i > 0 && short(f))
+  )?.key;
+  const cardOf = (f: ViewField<T>) =>
+    f === shown[0] ? 'lead' : f.key === meta ? 'meta' : short(f) ? 'num' : 'text';
+  const col = (f: ViewField<T> | undefined, ...more: (string | false | undefined | null)[]) => ({
+    ...colProps(f, ...more),
+    'data-card': f ? cardOf(f) : undefined,
+  });
   const computed = useMemo(() => computedOf(domain, rows, groupBy), [domain, rows, groupBy]);
   // Values per editable field, offered when a cell is edited: the field's own list when it has
   // one (every value, in use or not), else the values in the shown rows.
@@ -1389,7 +1404,7 @@ function LumenTableRows<T extends RowData>({
   const someOn = allKeys.some((k) => selection?.keys.has(k));
   const selectCell = (key: string, name: string) =>
     selection && (
-      <TableCell className="w-8 pr-0" onClick={(e) => e.stopPropagation()}>
+      <TableCell data-card="select" className="w-8 pr-0" onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={selection.keys.has(key)}
           onCheckedChange={(on) => toggle([key], on === true)}
@@ -1723,7 +1738,7 @@ function LumenTableRows<T extends RowData>({
       )}
     >
       <UnitColumns.Provider value={markUnits}>
-        <Table>
+        <Table data-cards="">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
