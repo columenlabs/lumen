@@ -50,6 +50,9 @@ export function TileSpark({
   );
 }
 
+/** A value with no digit in it ("Workers Paid", "Healthy") is a word, not a number. */
+const isWord = (v: ReactNode) => typeof v === 'string' && !/\d/.test(v);
+
 function TileBody({
   label,
   value,
@@ -70,11 +73,19 @@ function TileBody({
   return (
     <>
       <span className="w-full truncate text-xs text-muted-foreground">{label}</span>
-      <span className={cn('num truncate text-xl leading-7 font-semibold', valueClassName)}>
+      {/* A number takes the number font; a word value (a plan's name) keeps the text font. */}
+      <span
+        className={cn(
+          !isWord(value) && 'num',
+          'truncate text-xl leading-7 font-semibold',
+          valueClassName,
+        )}
+      >
         {value}
       </span>
       {caption ? (
-        <span className="num line-clamp-2 text-xs text-muted-foreground">{caption}</span>
+        // A caption is a phrase ("Paid, beyond included"): the text font, its digits still tabular.
+        <span className="line-clamp-2 text-xs text-muted-foreground tabular-nums">{caption}</span>
       ) : null}
       {lines?.map((l, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: a card's lines in their saved order

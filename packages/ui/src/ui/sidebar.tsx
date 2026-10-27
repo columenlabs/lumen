@@ -172,6 +172,8 @@ function Sidebar({
   if (isMobile) {
     return (
       <>
+        {/* On a phone the drawer shows the sheet's close ×, so it always has a way out; the header
+            leaves room for it. */}
         {/* The closed drawer keeps its nav mounted (hidden), so the pages it registers for the assistant's
             page map and @ picker exist on phone too (LumenShell, 2026-10-15). */}
         {!openMobile && <div hidden>{children}</div>}
@@ -181,7 +183,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&_[data-sidebar=header]]:pr-11"
           style={
             {
               '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
