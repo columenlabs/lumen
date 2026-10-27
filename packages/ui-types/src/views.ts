@@ -363,11 +363,13 @@ export const domainTiles = (...keys: string[]): ViewTile[] => keys.map((key) => 
 /** Page sizes a view's table offers. */
 export const viewPageSizes = [25, 50, 100, 250] as const;
 export type ViewPageSize = (typeof viewPageSizes)[number];
-/** A view's pagination: on by default, 25 rows a page. */
+/** A view's pagination: on by default, 25 rows a page; `footer` adds the page footer under the
+ *  table (first, last, numbered pages, Go to), off by default. */
 export const viewPaginationSchema = z
   .object({
     on: z.boolean().default(true),
     size: z.literal(viewPageSizes).default(25),
+    footer: z.boolean().default(false),
   })
   .prefault({});
 export type ViewPagination = z.infer<typeof viewPaginationSchema>;

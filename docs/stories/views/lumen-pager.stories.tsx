@@ -1,4 +1,4 @@
-import { LumenPager } from '@columenlabs/lumen-ui';
+import { LumenPageFooter, LumenPager } from '@columenlabs/lumen-ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useArgs } from 'storybook/preview-api';
 
@@ -28,3 +28,12 @@ const meta = {
 
 export default meta;
 export const Pager: StoryObj<typeof meta> = {};
+
+/** The page footer under a table (`pagination.footer`): first, last, numbered pages and Go to. */
+export const PageFooter: StoryObj<typeof LumenPageFooter> = {
+  args: { total: 3243, page: 3, size: 50, onPage: () => {} },
+  render: function Render(args) {
+    const [, update] = useArgs();
+    return <LumenPageFooter {...args} onPage={(page) => update({ page })} />;
+  },
+};

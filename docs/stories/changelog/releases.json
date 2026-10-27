@@ -1,5 +1,987 @@
 [
   {
+    "tag": "v0.1.115",
+    "date": "2026-10-27T16:49:57Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Phone table rows never wrap",
+        "body": "In the `@columenlabs/lumen-ui` theme, every card row of a `table[data-cards]` table on a phone is now a single non-wrapping line, with the select box, the name (`data-card=\"lead\"`, truncated) and one value (`data-card=\"meta\"`) on the right, so your tables no longer show two-line rows."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "LumenView picks the one phone value for you",
+        "body": "In `LumenView`, the value shown on a phone row is now the sorted column, else the first number or date column, else the next column, so changing the sort changes which value the row shows."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`hideOnPhone` columns are skipped when choosing the phone value",
+        "body": "In `LumenView`, a column marked `hideOnPhone` is never picked for the row's one value, so a table whose second column is hidden on phone still shows a value on the right."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A two-line row now fails the interaction smoke",
+        "body": "The interaction smoke check at 390×844 now fails on any `tbody tr` that wraps onto two lines, so you can catch a wrapping row in your own app before it ships."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.114",
+    "date": "2026-10-27T16:41:18Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Keep the status bar tidy with `StatusMessages`",
+        "body": "From `@columenlabs/lumen-ui`, pass `StatusMessages` a `messages` array of `{ text, tone?, count? }` and an optional `max` (default 2), and it shows one line per message, errors first, with extra messages behind a `+N` chip and repeats merged into `×N`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Read full status messages on touch and keyboard",
+        "body": "In `StatusMessages`, a long message is cut off with an ellipsis and its full text opens in a pop-up on mouse hover, on a finger tap or from the keyboard, so phone users can read it too."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Status pop-ups no longer close each other",
+        "body": "In `StatusHealth`, moving the mouse from one open status pop-up to another used to close the new one because focus went back to the old trigger, and now the new pop-up stays open."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.113",
+    "date": "2026-10-27T16:28:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Esc closes only the topmost popup",
+        "body": "In `@columenlabs/lumen-ui`, `DialogContent`, `SheetContent` and `AlertDialogContent` now use `escapeToPicker` as their `onEscapeKeyDown`, so pressing Esc while a `LumenSelector` or `Combobox` popup is open closes only that popup and not the dialog around it."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Sort by on phones",
+        "body": "`LumenView` now shows a `Sort by` picker and a High to low / Low to high toggle above its card rows on small screens, so users can sort a table on a phone, where the header row is hidden."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Readable tag chips",
+        "body": "`ColorChip` text is now its colour mixed 55% with `--foreground`, so any chip hue reaches 4.5:1 contrast in light and dark themes, and the tint and dot stay the same."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Higher-contrast tinted badges",
+        "body": "The `success`, `warning`, `info` and `destructive` badge variants now lean their text 20% toward the foreground, up from about 4.2:1, so no change is needed in your app."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.112",
+    "date": "2026-10-27T16:03:02Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Cards scroll with their page outside the grid",
+        "body": "In `@columenlabs/lumen-ui`, `LumenWidget` (and `LumenViewCard`, which builds on it) is now as tall as its content, so a card in a scrolling column such as a Settings panel or a drawer no longer clips its rows and the column scrolls to the end."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Grid cells still fill their height",
+        "body": "In `@columenlabs/lumen-ui`, a `LumenWidget` placed in a `LumenGrid` cell is stretched to the cell's full height, so dashboards laid out in the grid look the same as before."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Folded state is exposed as `data-folded`",
+        "body": "A folded `LumenWidget` now renders a `data-folded` attribute, which you can target in CSS (for example `[data-folded]`) to style or size folded cards differently."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.111",
+    "date": "2026-10-27T15:59:29Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan-sign-in requests no longer send an output cap",
+        "body": "In the `@columenlabs/lumen-ai` assistant engine, requests made through a provider's plan sign-in route now omit `max_output_tokens`, so answers that used to end empty come back normally. The API-key path still sends the tier's cap."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tool schemas drop the `$schema` line",
+        "body": "The assistant engine in `@columenlabs/lumen-ai` now strips the generated `$schema` line (via `withoutMeta`) from every tool schema it sends, for every provider."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The low-effort retry only runs when the model wrote tokens",
+        "body": "In the `@columenlabs/lumen-ai` assistant engine, a stop with 0 output tokens is no longer asked again, which avoids a pointless second call."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer message when the model stops before reading",
+        "body": "The assistant engine in `@columenlabs/lumen-ai` now tells users the provider stopped before reading the message and suggests trying again or picking another model for the tier. The \"spent the whole answer thinking\" message now appears only for answers that were all thinking."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.110",
+    "date": "2026-10-27T14:23:03Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Group and fold rows stay on one line on a phone",
+        "body": "In `LumenView`'s phone card layout (`table[data-cards]`), group headers and sub-group folds now carry `data-rollup` and render as a single non-wrapping line, so the roll-up figure (such as share %) stays on the right instead of dropping to a second line."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "The Total row label shows on a phone",
+        "body": "In `LumenView`, the Total row's name cell is now marked `data-card=\"lead\"`, so the \"Total\" label is no longer hidden in the card layout."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Long group names truncate instead of wrapping",
+        "body": "In `LumenView`, group and fold names now truncate with the full name on hover, counts never shrink, and group names cap at the `--lead-col-max` CSS variable. Content you pass through `mark`, `rollRender` or `groupActions` can no longer wrap the row."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.109",
+    "date": "2026-10-27T10:06:15Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Coverage map opens on whole blocks on phones",
+        "body": "In `LumenCoverageMap` from @columenlabs/lumen-ui, the year strip still opens at today on a small screen, but `snapToEnd` now leaves just enough room at its end for the left edge to land on a whole block, so labels like \"13\" are no longer cut to \"3\"."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Readable chip text on any background",
+        "body": "From @columenlabs/lumen-ui, the new `readableInk(bg, ink?, min = 4.5)` returns your own text colour when it reads at the `min` contrast ratio on `bg`, and otherwise returns near-black or white, whichever reads better."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Measure contrast between two colours",
+        "body": "From @columenlabs/lumen-ui, the new `contrast(a, b)` returns the contrast ratio of two colours, so you can check or test text legibility yourself."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.108",
+    "date": "2026-10-27T09:42:33Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Phone cards can name their counts",
+        "body": "In `@columenlabs/lumen-ui-types`, the new optional `ViewField.cardUnit` is shown after the number on a phone card when no header names a bare count (`5,861 msgs`)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Scrolling rows fade at their edges",
+        "body": "From `@columenlabs/lumen-ui`, the new `useScrollFade` hook sets `data-fade` (`start`, `end` or `both`) on a sideways-scrolling row, and the theme fades that edge. `LumenTabs` and the `LumenCoverageMap` strip already use it."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Status items keep their label on a phone",
+        "body": "`StatusItem` in `@columenlabs/lumen-ui` no longer drops its label on a narrow screen, so a status bar reads `Label · Up to date` instead of a bare value."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Units sit next to their numbers on cards",
+        "body": "`UnitValue` inside a phone card now puts the unit right after the number (`2.2 GB`) instead of in the column's narrow unit slot, which left a wide gap."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Coverage map rows are readable on a phone",
+        "body": "On a phone, `LumenCoverageMap` puts each row's name on its own line above its blocks, so blocks never draw under the name."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.107",
+    "date": "2026-10-27T09:30:04Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "DetailsTable's growing column no longer collapses",
+        "body": "In `@columenlabs/lumen-ui`, a `DetailsTable` column marked `grow` now keeps a minimum width of `min(10rem, 40vw)`, so names stay readable in a half-width card, and long names still end in an ellipsis."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.106",
+    "date": "2026-10-27T09:15:52Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Long names in DetailsTable now truncate",
+        "body": "In `DetailsTable` from `@columenlabs/lumen-ui`, a column marked `grow` (usually the name) now ends a long value such as `<account-id>_market-data` in an ellipsis instead of stretching the row."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`grow` takes only the spare width",
+        "body": "A `grow` column in `DetailsTable` now fills the leftover space and no more, and its content is capped at the cell width, so you can mark your name column `grow` without extra CSS."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Other columns stay inside the card",
+        "body": "The columns next to a `grow` column in `DetailsTable` are no longer pushed out of the card on desktop, and the table no longer scrolls sideways on phones."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.105",
+    "date": "2026-10-27T08:57:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Text values on `Tile` keep the text font",
+        "body": "In `Tile` from `@columenlabs/lumen-ui`, a string `value` with no digit, such as \"Workers Paid\" or \"Healthy\", now renders in the text font, while numeric values stay in the mono `.num` style."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`Tile` captions read as text",
+        "body": "In `Tile` from `@columenlabs/lumen-ui`, the `caption` now uses the text font with `tabular-nums` instead of `.num`, so phrases like \"Paid, beyond included\" or \"8 at 90% or more\" look like sentences and digits still line up."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Phone `Sidebar` shows its close button",
+        "body": "In `Sidebar` from `@columenlabs/lumen-ui`, the phone drawer now shows the sheet's close × and pads the header on the right, so users can always dismiss it and the brand never runs under the button."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.104",
+    "date": "2026-10-27T08:53:33Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Phone tables as cards",
+        "body": "In `LumenView` from @columenlabs/lumen-ui, tables below 640px now show each row as a card, and you can style the parts through the new `data-card` attribute on each cell (`lead`, `meta`, `num`, `text`, `select`)."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Phone tables no longer run off the edge",
+        "body": "`LumenView` tables now fit the view on a phone instead of widening their card, so numbers, dates and units keep their full width while only text shortens with an ellipsis."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Custom closed-field text for selectors",
+        "body": "`LumenSelector` has a new `display` prop, so you can set what the closed field shows instead of the picked option's label."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Plainer status bar",
+        "body": "`StatusItem` now separates label and value with a \"·\" (for example \"Mail · Up to date\") and shows the value in the text font with tabular figures, and `StatusTimeZone` shows the zone's short name such as \"PT\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Compact What's new trigger",
+        "body": "`WhatsNew` now shows a sparkle and \"What's new\" (icon only on a phone), and the version and build name appear only in the drawer."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.103",
+    "date": "2026-10-27T08:37:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Smaller first load for every page",
+        "body": "In an app's production build, the entry file from `@columenlabs/lumen-ui` drops from 343 KB to 310 KB gzipped, so pages using Lumen components load less code up front."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "`LumenDrawer` fetches its resizable panels late",
+        "body": "On desktop, the drawer's resizable panels are now a lazy part fetched 2 seconds after a `LumenDrawer` mounts, so the first open already has them, and phones never download them."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "`LumenWidget` no longer pulls in the Edit-widget settings",
+        "body": "Pages that only draw a widget with `LumenWidget` stop downloading the settings editor and its drag-and-drop library."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`SummaryCardsEditor` split from the read-only cards",
+        "body": "`LumenCard`, `SummaryTiles`, `cardAgg` and `summaryCardIssues` no longer share a module with the drag-to-reorder editor, so the drag library only loads where the editor is used."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.102",
+    "date": "2026-10-27T07:59:14Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Sizes in their own unit",
+        "body": "In `ViewFormat`, the new `format: 'bytes'` shows each value in its own decimal unit (`2.2 GB`, `84.1 MB`, `120 KB`), so you no longer divide by a fixed unit and label the column `Size (MB)`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Byte helpers for custom code",
+        "body": "From `@columenlabs/lumen-ui-types/views`, `bytesParts(b)` returns `['45.2', 'MB']` and `formatBytes(b)` returns the full string, so your own cells and labels match the built-in format."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Short zone names",
+        "body": "`@columenlabs/lumen-ui` now exports `zoneAbbr(tz)` from prefs, which returns a short generic zone name such as `PT`, `ET` or `UTC` (never `PDT`, `PST` or `GMT+0`)."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Times in the person's zone, with its name",
+        "body": "The People pages' `when()` (Last seen, Sent, Saved by) and the Audit log's Day and When columns now use `getPrefs().timeZone` and name the zone, so `today 02:18 AM` becomes `today 7:18 PM PT`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Schedules read in the viewer's zone",
+        "body": "The Schedules When column now converts clock times from the schedule's own `tz` into the viewer's zone, so `Daily at 3:15 AM UTC` reads `Daily at 8:15 PM PT`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.101",
+    "date": "2026-10-27T07:55:19Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan sign-in answers are no longer empty",
+        "body": "In the `@columenlabs/lumen-ai` assistant engine, requests made through a plan sign-in now send `max_output_tokens`, taken from the tier's `out` value (16K by default), so the model can no longer spend its whole output on reasoning and return only \"…(cut)\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One automatic retry for all-thinking answers",
+        "body": "If a plan answer still comes back incomplete with reason `max_output_tokens` and no words or tool calls, the assistant engine now asks once more with `reasoning.effort` set to `low`, so your users get text instead of a cut mark."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Silent turns stay out of chat history",
+        "body": "Earlier assistant turns that said nothing (only \"…(cut)\") are now dropped from the history the engine sends upstream, so stored plan chats stop inheriting the empty answers."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer message when nothing works",
+        "body": "If the retry also fails, the assistant now shows a message explaining that the model spent the whole answer thinking and wrote nothing, instead of a bare reason code."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.100",
+    "date": "2026-10-27T07:51:27Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tile rows no longer leave a gap under cards",
+        "body": "In `LumenGrid` from @columenlabs/lumen-ui, a card's floating corner actions no longer count toward its measured height, so tile rows sit 12px apart instead of 40px."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Dark-mode chart grids stay subtle",
+        "body": "`LumenEChart` now applies your `axisStyle` under every `xAxis` and `yAxis` your option sets (your own keys still win), so a chart that names no axis colours no longer draws a bright white grid in dark mode."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Phone tile grids fill every row",
+        "body": "On a phone, `SummaryTiles` now makes an odd last tile span the full row, and `TileToggleGroup` shows two tiles per row instead of three with an empty grey cell."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Phone status bar keeps its far end visible",
+        "body": "In `StatusItem`, on a phone a label with a value now drops and a lone label truncates, so items at the end of the bar (such as a version or time zone) stay on screen."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "`DetailsTable` text matches `LumenView`",
+        "body": "Only right-aligned (number) columns now take the `.num` font, so name and badge columns keep the regular text font inside drawers."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.99",
+    "date": "2026-10-27T07:46:53Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Query cache that survives reloads",
+        "body": "`createDeskQueryClient` in @columenlabs/lumen-ui takes a new `persist: { key, buster?, maxAge? }` option that saves successful reads to `localStorage` and shows them on the first render after a reload or an app switch, then refetches anything past `staleTime` in the background."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Tasks tray reads once per load",
+        "body": "In @columenlabs/lumen-ui, `TasksProvider` now has a stable `refresh`, so the tray makes one task-list request per page load instead of 5 to 7, and polling slows from 3 s to 15 s once a task has run for a minute."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Smaller first load for icons, emoji and CSV",
+        "body": "In @columenlabs/lumen-ui, `iconOf` and `lucideIcon`, the `IconPicker` name list and Emoji tab, and the `LumenView` Download CSV button now load their code on first use, which cut one dashboard app's entry bundle from 1,442 KB to 1,118 KB raw (423 KB to 343 KB gzipped)."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Clear messages for stream errors",
+        "body": "In @columenlabs/lumen-ai, an error event inside an assistant answer's stream is now logged as `assistant_openai_error` and shown to the person as a plain sentence chosen by its error code, instead of the generic \"refused the request (error)\"."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.98",
+    "date": "2026-10-27T07:41:51Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Name a fold line under its group",
+        "body": "In `LumenView`, a `ViewSubgroup` now takes an optional `title` function, `(key, rows, groupBy) => string`, so a folded or flat line can show a short name (for example \"Reads\" instead of \"Product · Reads\") while the full key stays in the hover title."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Row bands reach the table's right edge",
+        "body": "In the `LumenView` table, group, fold, part, data and Total rows now draw the `+` (add column) cell and full-width rows span it, so group tints and row hover no longer stop one column short and leave a white gap."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.97",
+    "date": "2026-10-27T07:08:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Answers no longer come back empty when the final event has no output",
+        "body": "the assistant engine in `@columenlabs/lumen-ai` now reads output items from the streamed item-done events, and falls back to the streamed text, so a plan that used to answer with 0 tokens and a bare `…(cut)` now returns its answer."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "An answer with no words says why",
+        "body": "when the assistant engine in `@columenlabs/lumen-ai` gets no words and no tool calls, it now shows \"stopped before answering\" with the reason, or \"sent no answer\", instead of a bare `…(cut)`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Empty and failed answers are logged with their shape",
+        "body": "the assistant engine in `@columenlabs/lumen-ai` now logs a dedicated event for each case, so you can find the cause in your logs without any message content being recorded."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.96",
+    "date": "2026-10-27T06:09:21Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "LumenWidget loads its chart code only when it draws one",
+        "body": "In `@columenlabs/lumen-ui`, `LumenWidget`'s allocation widget (bar list, donut and allocation bar) now loads as a lazy part, so an app's first file no longer includes the charts library on pages without an allocation chart. Props and markup are unchanged."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "LumenCard's progress ring loads on demand",
+        "body": "In `@columenlabs/lumen-ui`, `LumenCard` with style `progress_circle` now loads the ring lazily behind a round skeleton of the same size, so cards in other styles no longer pull in the charts library."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "OverviewPage defers its chart widgets",
+        "body": "In `@columenlabs/lumen-ui`, `OverviewPage`'s ring, bars and timeline widgets now load lazily, so the charts library becomes a separate chunk instead of part of every app's first file."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.95",
+    "date": "2026-10-27T05:52:03Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Check for a Settings section from the shell",
+        "body": "In `@columenlabs/lumen-ui`, `useShell()` now returns `hasSettings(id)`, so you can check whether the shell's own Settings section list includes a section such as `hasSettings('notifications')` before linking to it."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tasks tray no longer links to a missing Notifications section",
+        "body": "In `@columenlabs/lumen-ui`, the `TaskPanel` footer (\"Phone or email when a task ends: Settings ▸ Notifications\") now appears only when `hasSettings('notifications')` is true, so apps without that section no longer show a dead link."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.94",
+    "date": "2026-10-27T05:44:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Doc reads in one request are batched into a single store call",
+        "body": "In `@columenlabs/lumen-ai`, `Docs.cached()` now gathers the reads asked in the same tick and sends them as one `getMany`, so a request that reads several docs makes far fewer store round trips."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Stores can now implement an optional `getMany`",
+        "body": "Add `AssistantStore.getMany?(refs)` to your own store to return several docs in one call, in the order asked; `sqlAssistantStore` already implements it with a single `SELECT`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The assistant `/status` reads run in parallel",
+        "body": "The assistant `/status` handler in `@columenlabs/lumen-ai` now fans its reads out with `Promise.all`, so its many store calls drop to a few, one per await step."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.93",
+    "date": "2026-10-27T05:32:42Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One card for every key, sign-in and connector",
+        "body": "From `@columenlabs/lumen-ui`, `LumenConnection` renders a collapsed row (logo, name, meta line, one status pill) that opens to show how the connection is set up."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Several ways to connect, with one in use",
+        "body": "In `LumenConnection`, each way is either pasted `fields` (prefix checks are reported through `SaveButton` issues), a `signin` (opens a tab, then you paste back the address it ended on) or your own `form`. With two or more ways, each gets a radio and the active one is tagged **In use**."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Test, remove and replace built in",
+        "body": "Each way that is set up in `LumenConnection` shows who or what it is (`ident`), when it last worked, and the actions Test, Remove (confirmed with `LumenConfirm`) and Replace or Sign in again."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Icons on expandable rows",
+        "body": "`LumenExpandRow` now takes an `icon` prop, so the row can show a logo or glyph next to its title."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Status helpers",
+        "body": "`@columenlabs/lumen-ui` also exports `ConnectionLogo`, `ConnectionBadge`, `connectionStatus` and `activeWay`, so you can reuse the logo, the status pill and the status logic outside the card."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.92",
+    "date": "2026-10-27T05:20:44Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Background jobs on the server",
+        "body": "The new `@columenlabs/lumen-tasks` package has `createTasks({ db, onEnd?, keepDays? })`, which keeps a job ledger in any SQLite database (use the `doSql` or `d1Sql` adapter for `db`), so any app can run async jobs."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Ready-made task routes",
+        "body": "`taskRoutes({ base, tasks, owner })` from `@columenlabs/lumen-tasks` returns a plain fetch handler that serves the routes `TasksProvider` already calls, and it only accepts same-origin JSON writes."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Stuck jobs clean themselves up",
+        "body": "In `@columenlabs/lumen-tasks`, every read runs the reaper, which fails a task left open past `limitMinutes` (default 15), so `progress` answers `stop: true` to a cancelled or reaped job and no cron is needed."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Buttons that show their own job",
+        "body": "In `@columenlabs/lumen-ui`, `useTaskFor(kind, ref)` lets a button show that its own job is running, and `useTasks().track(task)` shows a just-started task at once."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Tasks carry the engine's id",
+        "body": "In `@columenlabs/lumen-ui-types`, `Task` has a new optional `ref` field for the engine's own id for the work, which `useTaskFor` matches on."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.91",
+    "date": "2026-10-27T05:11:48Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A shared bar for ticked rows",
+        "body": "From `@columenlabs/lumen-ui`, the new `LumenBulkBar` takes `count`, `label`, `onClear` and your actions as children, so an app can show how many rows are ticked, offer bulk actions and clear the selection without building its own bar."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The bar hides itself at zero",
+        "body": "`LumenBulkBar` renders nothing when `count` is 0, so you can pair it with LumenLayout's `selection` and it appears only while rows are ticked."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "LumenPeople uses the shared bar",
+        "body": "The bulk bar in `LumenPeople` now renders through `LumenBulkBar` with unchanged behaviour, so existing apps need no changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.90",
+    "date": "2026-10-27T05:00:36Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A table's name column no longer fills a phone screen",
+        "body": "In the `@columenlabs/lumen-ui` table, the lead column's `--lead-col-max` CSS variable now defaults to `min(18rem, 55vw)`, so the next column stays visible on a 390 px phone without sideways scrolling, and desktop width is unchanged."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.89",
+    "date": "2026-10-27T04:56:40Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Leaner first load for lumen-ui apps",
+        "body": "In `@columenlabs/lumen-ui`, the Edit widget dialog in `LumenView` and `LumenLayout`, the charts in `LumenWidget` and in `LumenChart`'s dialog, `WhatsNew` in the shell, and the assistant panel's markdown rendering now load when they first appear. One hub app's entry chunk dropped from 2.59 MB to 1.14 MB raw (764 KB to 342 KB gzip), with no import changes."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "One read per stored doc per request",
+        "body": "In `@columenlabs/lumen-ai`, `Docs.cached()` returns a docs handle that reads each stored document at most once per request, so repeated lookups in one request stop hitting the store."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Assistant on cached docs",
+        "body": "In `@columenlabs/lumen-ai`, `Assistant.forRequest()` gives you an assistant view over the request's cached docs, so it shares those single reads instead of fetching again."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.88",
+    "date": "2026-10-27T04:45:32Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Forms inside a fieldset now fit their drawer",
+        "body": "A `<fieldset>` wrapped around a form, for example to disable it for read-only viewers, no longer grows wider than its `LumenDrawer` from `@columenlabs/lumen-ui` or a dialog, because the Lumen theme's base styles now set `fieldset { min-inline-size: 0 }`, so inputs are no longer cut off on the right."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.87",
+    "date": "2026-10-27T03:11:40Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "FactList for label/value rows",
+        "body": "`@columenlabs/lumen-ui` now exports `FactList`, which renders label/value rows where each label stays on one line and each value truncates with its full text in the `title` attribute."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Drawers and expand rows truncate instead of wrapping",
+        "body": "In `LumenDrawer`, the title and description now stay on one line with an ellipsis and show the full text on hover, and `LumenExpandRow` does the same for its name and meta."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Times and short values never wrap",
+        "body": "The `@columenlabs/lumen-ui` theme styles now keep `span.num` (except `line-clamp-*`), `dd.num`, `<time>` and `<kbd>` on one line, so times and ids no longer break across lines."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Relative times no longer split",
+        "body": "The People `when()` and `fromNow()` helpers now use non-breaking spaces, so `07:18 PM` and `in 7 d` stay together in any text you put them in."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.86",
+    "date": "2026-10-27T02:18:35Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Failed email sends show the server's own reason",
+        "body": "In `LumenEmailSettings` from @columenlabs/lumen-ui, the Send test action now reports why the server refused a send, such as \"Sender is not same as SMTP authenticate username\", instead of only \"The server answered 500\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Error bodies are read for `message`, then `error`",
+        "body": "When a send fails, the email sending function now reads the API's error body and uses its `message` field, or `error` if there is no `message`, so you can fix a mail setup without digging through server logs."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Reasons stay short and readable",
+        "body": "The appended reason is cut to a single line of up to 200 characters and shown as \"The server answered 500: …\", so a long or multi-line error body won't flood the Send test result."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.85",
+    "date": "2026-10-27T01:29:29Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The assistant knows its tier and model",
+        "body": "In `createAssistant` from `@columenlabs/lumen-ai/assistant`, the main tier's rules now state the tier, the model and its provider, so the assistant can answer when asked what it runs on instead of saying it can't see the model name."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`#` refs define what \"this\" means",
+        "body": "In an assistant built with `createAssistant`, a part the person points at with `#` is now what \"this\" refers to in their message."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`#` refs limit what gets changed",
+        "body": "In an assistant built with `createAssistant`, when the person asks for a change and has pointed at a part with `#`, that part is the only one the assistant changes, while it still reads the page, other records and its tools for context."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.84",
+    "date": "2026-10-27T01:15:22Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Let people request more allowance on shared keys",
+        "body": "In `@columenlabs/lumen-ai/assistant`, the new `allowance` option on `createAssistant` lets an app set the unit, period, starter amount, offered amounts, approvers and notifications for requests, and the kit handles the rest."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Request and approve over HTTP",
+        "body": "`createAssistant` now serves `POST /allowance/request` with `{amount, why}`, and for approvers `GET /allowance/requests` and `POST /allowance/requests/:id` with `{action: \"grant\" | \"decline\", amount?}`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "See allowance state in the assistant status",
+        "body": "`AssistantStatus.allowance` (an `AllowanceState`) now tells you what the person has in the app's unit: total, used and left, their newest request, the amounts the form offers, and whether they can approve."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Drop allowance into settings pages",
+        "body": "Pass `allowance: true` to `assistantSettingsSections` to add an Allowance section with a Request more form, or to `assistantAdminSections` to add an Allowance requests list for approvers."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Show approvers who is asking",
+        "body": "Pass the new `Caller.label`, such as an email, and approvers will see each request under that label."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.83",
+    "date": "2026-10-27T01:09:30Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Plan sign-in helpers are now public",
+        "body": "From `@columenlabs/lumen-ai/assistant`, you can import `startChatgpt`, `finishChatgpt`, `refreshChatgpt`, `staleChatgpt`, `testChatgpt`, `CHATGPT_REDIRECT`, `CHATGPT_RESOURCE` and `SigninError` to run the plan sign-in flow in an app without mounting the whole assistant."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Standalone sign-in row",
+        "body": "`@columenlabs/lumen-ui` now exports `LumenChatgptSignin`, which takes `state`, `start`, `finish`, `signOut` and `test` props, so an app that keeps its own tokens can drop in the same sign-in row the assistant uses."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Assistant reuses the shared component",
+        "body": "The Model providers section of the assistant now renders `LumenChatgptSignin` instead of its own private copy, so the assistant and your app share one sign-in UI."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.82",
     "date": "2026-10-27T00:45:19Z",
     "takeaways": [
