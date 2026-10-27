@@ -1,3 +1,4 @@
+export * from './bindings';
 export * from './events';
 export * from './points';
 export * from './queries';

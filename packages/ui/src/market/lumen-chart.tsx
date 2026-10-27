@@ -37,9 +37,11 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { ComponentType } from 'react';
 import { useInView } from 'react-intersection-observer';
 import { useAssistantMoves } from '../assistant-screen';
 import { IconButton } from '../icon-button';
+import { lazyPart } from '../lazy-part';
 import { cn } from '../lib/utils';
 import { type LumenLoad, useLumenLoad } from '../lumen-source';
 import { usePrefs } from '../prefs';
@@ -49,7 +51,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '../ui/input';
 import { Skeleton } from '../ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
-import { CompareChart, type CompareExtra, type ComparePane } from './compare-chart';
+import { type TimeSpan, indexSpan, secOf } from './chart-span';
+import type { CompareChart as CompareChartPart, CompareExtra, ComparePane } from './compare-chart';
 import { ALL_SHOWN, IndicatorPicker } from './indicator-picker';
 import {
   CHART_INDICATORS,
@@ -61,7 +64,17 @@ import {
   resolveIndicator,
 } from './indicators';
 import { extendedOf, todayOf, useMarket } from './live';
-import { type ChartBar, PriceChart, type TimeSpan, indexSpan, secOf } from './price-chart';
+import type { ChartBar, PriceChart as PriceChartPart } from './price-chart';
+
+// The charts load when the dialog first draws one (lazy-part.tsx).
+const PriceChart = lazyPart(
+  () => import('./price-chart').then((m) => m.PriceChart as ComponentType<object>),
+  <Skeleton className="h-96 w-full" />,
+) as unknown as typeof PriceChartPart;
+const CompareChart = lazyPart(
+  () => import('./compare-chart').then((m) => m.CompareChart as ComponentType<object>),
+  <Skeleton className="h-96 w-full" />,
+) as unknown as typeof CompareChartPart;
 
 /** Opens the chart dialog: one symbol, or up to 8 to compare, with its indicators if given. */
 export type OpenChart = (symbols: string | string[], indicators?: IndicatorSpec[]) => void;

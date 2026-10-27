@@ -48,6 +48,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { ComponentType } from 'react';
 import { AddFormulaDialog, YourDataDialog } from './add-column';
 import { useAssistant } from './assistant-context';
 import { useAssistantNote } from './assistant-context';
@@ -58,6 +59,7 @@ import { useGroup } from './group-button';
 import { useIsMobile } from './hooks/use-mobile';
 import { SourceStatusItems, useJoins } from './joins';
 import { useYourData } from './joins';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenDrawer } from './lumen-drawer';
 import {
@@ -110,7 +112,7 @@ import { type Crumb, IconButton, Page } from './page';
 import { SourcedCard } from './sourced-card';
 import { LumenCard, SummaryTiles } from './summary-cards';
 import { Button } from './ui/button';
-import { ViewEditDialog, type ViewEditorSection } from './view-editor';
+import type { ViewEditDialog as ViewEditDialogPart, ViewEditorSection } from './view-editor';
 import {
   type ViewDomain,
   computedOf,
@@ -123,6 +125,12 @@ import {
   withSavedFilters,
   withViewFields,
 } from './view-model';
+
+// Loaded when it first shows (lazy-part.tsx).
+const ViewEditDialog = lazyPart(
+  () => import('./view-editor').then((m) => m.ViewEditDialog as ComponentType<object>),
+  null,
+) as unknown as typeof ViewEditDialogPart;
 
 /** Rows of a view the assistant sees with each message. */
 const ASSISTANT_ROWS = 10;

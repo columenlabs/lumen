@@ -35,7 +35,8 @@ import {
   XIcon,
 } from 'lucide-react';
 import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react';
-import Markdown from 'react-markdown';
+import type { ComponentType } from 'react';
+import type MarkdownPart from 'react-markdown';
 import {
   LumenAssistantButton,
   LumenAssistantChats,
@@ -45,6 +46,7 @@ import {
 } from '../assistant-panel';
 import { IconButton } from '../icon-button';
 import { errorText } from '../integrations';
+import { lazyPart } from '../lazy-part';
 import { cn } from '../lib/utils';
 import {
   type LumenOption,
@@ -80,6 +82,11 @@ import {
   useShownAssistantSources,
 } from './sources';
 import { type AssistantChatState, type LiveItem, useAssistantChat } from './use-assistant-chat';
+
+// The Markdown renderer loads with the first answer (lazy-part.tsx).
+const Markdown = lazyPart(() =>
+  import('react-markdown').then((m) => m.default as ComponentType<object>),
+) as unknown as typeof MarkdownPart;
 
 /** The main model's context drawn full (tokens); the mark sits where the assistant compacts. */
 const CONTEXT_MAX = 200_000;

@@ -6,13 +6,19 @@
  */
 import type { Context, MiddlewareHandler } from 'hono';
 import { routePath } from 'hono/route';
+import { flushCalls } from './bindings';
 import { codeOf } from './fields';
 import { foldRoute } from './queries';
-import { type RequestPoint, meterRequest, withRequest } from './requests';
+import { type RequestPoint, meterRequest, serverTiming, withRequest } from './requests';
 
 export interface RequestMeterOptions {
-  /** The app, or the part of it, answering. */
-  app: string;
+  /** The app, or the part of it, answering; a function when one Worker serves several apps. */
+  app: string | ((c: Context) => string);
+  /** The route template, when Hono's own can't name it (a Worker that hands requests on to other
+   * apps by path sees only its catch-all); fold ids out of it with `foldRoute`. */
+  route?: (c: Context) => string | undefined;
+  /** Send the request's time per kind of call back as `Server-Timing` (do, ai, fetch, app, total). */
+  serverTiming?: boolean;
   env?: (c: Context) => string | undefined;
   version?: (c: Context) => string | undefined;
   /** Which part was asked and who called, read after the answer (auth has run by then). */
@@ -43,17 +49,31 @@ export function requestMeter(opts: RequestMeterOptions): MiddlewareHandler {
   return async (c, next) => {
     const t0 = performance.now();
     const requestId = codeOf((c.var as Record<string, unknown>).requestId) || newId();
-    const scope = { app: opts.app, requestId, env: opts.env?.(c), version: opts.version?.(c) };
+    const app = typeof opts.app === 'function' ? opts.app(c) : opts.app;
+    const scope = { app, requestId, env: opts.env?.(c), version: opts.version?.(c) };
     await withRequest(scope, foldRoute(c.req.path), async () => {
       await next();
       try {
         // The template of the deepest route that ran (Hono leaves its index set once the chain
         // unwinds); `-1` would name the last route that merely matched, a catch-all say. A path
         // only this middleware matched is `/*`, so junk never lands.
-        const route = routePath(c) || '*';
+        const hono = routePath(c);
+        const route =
+          opts.route?.(c) || (hono && hono !== '*' && hono !== '/*' ? hono : '') || hono || '*';
         const outcome = c.error
           ? 'exception'
           : await (opts.outcome ? opts.outcome(c) : errorCode(c));
+        const ms = performance.now() - t0;
+        if (opts.serverTiming && c.res.status !== 101) {
+          try {
+            c.res.headers.set('server-timing', serverTiming(ms));
+          } catch {
+            // A response with frozen headers (a passed-through fetch): copy it once.
+            c.res = new Response(c.res.body, c.res);
+            c.res.headers.set('server-timing', serverTiming(ms));
+          }
+        }
+        flushCalls();
         const cf = (c.req.raw as { cf?: { colo?: string; country?: string } }).cf;
         meterRequest({
           surface: 'other',
@@ -61,7 +81,7 @@ export function requestMeter(opts: RequestMeterOptions): MiddlewareHandler {
           method: c.req.method,
           route,
           status: c.res.status,
-          ms: performance.now() - t0,
+          ms,
           outcome,
           colo: cf?.colo,
           country: cf?.country,

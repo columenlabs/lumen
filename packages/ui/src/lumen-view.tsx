@@ -59,6 +59,7 @@ import {
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ComponentType } from 'react';
 import { useAssistantNote } from './assistant-context';
 import { ColorChip, ColorDot } from './color-dot';
 import { DrawerSection } from './drawer-section';
@@ -66,6 +67,7 @@ import { useFloatingHead } from './floating-head';
 import { FreshnessMark, freshnessLine, freshnessOf } from './freshness';
 import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import {
   type FilterField,
@@ -111,7 +113,7 @@ import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { UnitColumns } from './unit-value';
 import { EditCell, EditInputCell, EditManyCell } from './view-edit-cell';
-import { ViewEditDialog, type ViewEditorSection } from './view-editor';
+import type { ViewEditDialog as ViewEditDialogPart, ViewEditorSection } from './view-editor';
 import { fieldOptions } from './view-formulas';
 import {
   CHIP_TONE,
@@ -134,6 +136,12 @@ import {
   withSavedFilters,
   withViewFields,
 } from './view-model';
+
+// Loaded when it first shows (lazy-part.tsx).
+const ViewEditDialog = lazyPart(
+  () => import('./view-editor').then((m) => m.ViewEditDialog as ComponentType<object>),
+  null,
+) as unknown as typeof ViewEditDialogPart;
 
 export type {
   ViewCellValue,
