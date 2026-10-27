@@ -17,6 +17,7 @@ import { type ReactNode, useState } from 'react';
 // own paid ntfy.sh token) and webhooks, then which event goes to which target. The app passes its
 // API base (`/api/notifications`), its product's name and the address email comes from.
 import { LumenConfirm } from './confirm';
+import { fetchWithin } from './fetch-within';
 import {
   ErrorLine,
   IntegrationRow,
@@ -79,7 +80,7 @@ const NTFY_IOS = 'https://apps.apple.com/us/app/ntfy/id1625396347';
 const NTFY_ANDROID = 'https://play.google.com/store/apps/details?id=io.heckel.ntfy';
 
 async function call<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetchWithin(url, {
     method,
     headers: body === undefined ? {} : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
