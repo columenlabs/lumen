@@ -1,7 +1,8 @@
 // Service health in the status bar ("consolidate into a clickable or hoverable
 // pop-up"): one chip with the worst state of every service the app checks, opening a list of each
 // service and its latency, on hover with a mouse and on tap with a finger or keyboard.
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useHoverOpen } from './hooks/use-hover-open';
 import { cn } from './lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
@@ -13,9 +14,6 @@ export interface HealthProbe {
   /** Why it is down, or anything else worth a line. */
   note?: string;
 }
-
-/** How long the list stays after the mouse leaves, so it can travel from chip to list. */
-const HOVER_CLOSE_MS = 150;
 
 /** Keeps the list off the window's edge on a narrow screen. */
 const COLLISION_PAD = 8;
@@ -46,15 +44,7 @@ export function StatusHealth({
   /** The check itself failed (no answer from the Worker). */
   error?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const hover = (on: boolean) => (e: React.PointerEvent) => {
-    if (e.pointerType !== 'mouse') return;
-    clearTimeout(timer.current);
-    if (on) setOpen(true);
-    else timer.current = setTimeout(() => setOpen(false), HOVER_CLOSE_MS);
-  };
+  const { open, setOpen, hover, content: pop } = useHoverOpen();
   if (!probes.length && !error) return null;
   const s = error ? { ok: false, text: 'Check failed' } : summary(probes);
   return (
@@ -62,8 +52,7 @@ export function StatusHealth({
       <PopoverTrigger
         aria-label={`Services: ${s.text}`}
         className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 hover:bg-muted hover:text-foreground"
-        onPointerEnter={hover(true)}
-        onPointerLeave={hover(false)}
+        {...hover}
       >
         <span aria-hidden className={dot(s.ok)} />
         Services
@@ -76,9 +65,7 @@ export function StatusHealth({
         align="end"
         collisionPadding={COLLISION_PAD}
         className="w-auto min-w-56 gap-1.5 text-xs"
-        onPointerEnter={hover(true)}
-        onPointerLeave={hover(false)}
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        {...pop}
       >
         <ul aria-label="Services" className="flex flex-col gap-1">
           {probes.map((p) => (
