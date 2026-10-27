@@ -39,10 +39,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { PolarAngleAxis, RadialBar, RadialBarChart } from 'recharts';
 import { LumenConfirm } from './confirm';
 import { IconButton } from './icon-button';
 import { KIT } from './kit-config';
+import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import {
   type FilterField,
@@ -55,7 +55,6 @@ import { ViewValueCell } from './lumen-view';
 import { Tile } from './tile';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { type ChartConfig, ChartContainer } from './ui/chart';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Progress } from './ui/progress';
@@ -277,57 +276,18 @@ const usageBands = () => ({
   bad: KIT.meterLevels.alert * 100,
 });
 
+// The ring draws with the charts library, so it loads only when a card shows one.
+const ProgressRing = lazyPart(
+  () => import('./progress-ring').then((m) => m.ProgressRing),
+  <Skeleton className="size-16 shrink-0 rounded-full" />,
+);
+
 /** A meter's tone on a bar's fill (theme tokens, no glow). */
 const TONE_BAR = {
   success: '[&>[data-slot=progress-indicator]]:bg-success',
   warning: '[&>[data-slot=progress-indicator]]:bg-warning',
   destructive: '[&>[data-slot=progress-indicator]]:bg-destructive',
 } as const;
-
-/** A number's share of its target as a ring, its percent in the middle (Recharts); a meter's
- *  tone colours it, else the first chart colour. */
-function ProgressRing({
-  value,
-  tone,
-}: {
-  value: number | null;
-  tone: ReturnType<typeof meterTone>;
-}) {
-  const config: ChartConfig = {
-    v: { label: 'Progress', color: tone ? `var(--${tone})` : 'var(--chart-1)' },
-  };
-  return (
-    <ChartContainer config={config} className="aspect-square size-16 shrink-0">
-      <RadialBarChart
-        data={[{ v: value ?? 0 }]}
-        startAngle={90}
-        endAngle={-270}
-        innerRadius={24}
-        outerRadius={32}
-      >
-        <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-        <RadialBar
-          dataKey="v"
-          fill="var(--color-v)"
-          background={{ fill: 'var(--muted)' }}
-          cornerRadius={8}
-          isAnimationActive={false}
-        />
-        <text
-          x="50%"
-          y="50%"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          className="num fill-foreground"
-          fontSize={12}
-          fontWeight={600}
-        >
-          {value === null ? '—' : `${value.toFixed(0)}%`}
-        </text>
-      </RadialBarChart>
-    </ChartContainer>
-  );
-}
 
 /** A Summary's cards over its rows; null when it has none to show. */
 export function SummaryTiles<T>({

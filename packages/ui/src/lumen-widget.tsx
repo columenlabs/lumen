@@ -10,7 +10,6 @@ import {
 // cards out; this file draws the card frame every card shares (its header, ↻ and ⋯ menu), each
 // widget, the Edit layout bar, Add widget (Pre-built and Build your own) and Edit widget.
 import {
-  ALLOCATION_MAX,
   type CustomViewConfig,
   VIEW_CARD_KIND_NAMES,
   type ViewCard,
@@ -69,6 +68,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
+import type { AllocationBody as AllocationBodyPart } from './allocation-body';
 import { useAssistant, useAssistantName } from './assistant-context';
 import { LumenConfirm } from './confirm';
 import { FoldChevron, useFolded, usePageKey } from './fold';
@@ -104,14 +104,6 @@ import {
   LumenStates,
 } from './lumen-source';
 import type { TrendBody as TrendBodyPart } from './lumen-trend';
-import {
-  AllocationBar,
-  Donut,
-  Headline,
-  RankedBars,
-  STACK_MAX,
-  StackedBars,
-} from './lumen-widget-charts';
 import { useHasMarket } from './market/live';
 import { useBarsUrl, useLumenChart } from './market/lumen-chart';
 import type { MarketWidget as MarketWidgetPart } from './market/market-widget';
@@ -120,7 +112,6 @@ import { SummaryCardsEditor, summaryCardIssues } from './summary-cards';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
-import { type ChartConfig, ChartTooltip, ChartTooltipContent } from './ui/chart';
 import { Checkbox } from './ui/checkbox';
 import {
   Dialog,
@@ -160,6 +151,7 @@ import {
 import { WidgetControlsEditor } from './widget-controls';
 import { PAGE_SOURCE, useWidgetDataOptions } from './widget-data';
 import { dateFields } from './widget-settings';
+import { COMPACT, MINUS } from './widget-values';
 
 // Loaded when it first shows (lazy-part.tsx).
 const MarketWidget = lazyPart(
@@ -178,6 +170,10 @@ const GrowthChart = lazyPart(
   () => import('./growth-chart').then((m) => m.GrowthChart as ComponentType<object>),
   <Skeleton className="h-full min-h-40 w-full" />,
 ) as unknown as typeof GrowthChartPart;
+const AllocationBody = lazyPart(
+  () => import('./allocation-body').then((m) => m.AllocationBody as ComponentType<object>),
+  <Skeleton className="h-full min-h-32 w-full" />,
+) as unknown as typeof AllocationBodyPart;
 
 /** Each style's icon, by its id in `WIDGET_STYLES`; a style left out takes its kind's. */
 const STYLE_ICONS: Record<string, LucideIcon> = {
@@ -234,55 +230,6 @@ export function cardFilterFields<T>(fields: ViewField<T>[]): FilterField<T>[] {
   }));
 }
 
-// ── Values ─────────────────────────────────────────────────────────────────────────────────────
-
-const MINUS = '−';
-const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
-/** A chart value in short form: $12.3K, −4.1%, 1.2M; masked while Hide amounts is on. */
-function short(v: number, format: ViewFormat, hidden: boolean) {
-  if (hidden) return maskAmount('0');
-  const sign = v < 0 ? MINUS : '';
-  const abs = Math.abs(v);
-  if (format === 'percent' || format === 'weight') return `${sign}${abs.toFixed(1)}%`;
-  if (isDollarFormat(format)) return `${sign}$${COMPACT.format(abs)}`;
-  return `${sign}${COMPACT.format(abs)}`;
-}
-/** A chart value in full, for tooltips: $491,712.34, −4.1%; masked while Hide amounts is on. */
-function exact(v: number, format: ViewFormat, hidden: boolean) {
-  if (hidden) return maskAmount('0');
-  const sign = v < 0 ? MINUS : '';
-  const abs = Math.abs(v);
-  if (format === 'percent' || format === 'weight') return `${sign}${abs.toFixed(2)}%`;
-  const n = abs.toLocaleString('en-US', {
-    maximumFractionDigits: format === 'rounded' || format === 'price_rounded' ? 0 : 2,
-    useGrouping: format !== 'integer',
-  });
-  return `${sign}${isDollarFormat(format) ? '$' : ''}${n}`;
-}
-const pct = (v: number, total: number) => `${total ? ((v / total) * 100).toFixed(1) : '0.0'}%`;
-
-/** One colour per name, by size, so the largest never share one; Cash is always grey. */
-const PALETTE = [1, 2, 3, 4, 5, 6, 9, 7, 10].map((i) => `var(--chart-${i})`);
-const colorOf = (name: string, i: number) =>
-  /cash/i.test(name) ? 'var(--chart-8)' : (PALETTE[i % PALETTE.length] ?? 'var(--chart-1)');
-
-/** `value` summed by `by` over the rows, largest first; rows with no `by` read as —. */
-function sumBy<T>(
-  rows: T[],
-  by: ViewField<T>,
-  value: ViewField<T>,
-  read: (f: ViewField<T>, r: T) => ViewCellValue,
-) {
-  const m = new Map<string, number>();
-  for (const r of rows) {
-    const v = read(value, r);
-    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
-    const k = label(read(by, r));
-    m.set(k, (m.get(k) ?? 0) + v);
-  }
-  return [...m].map(([name, v]) => ({ name, v })).sort((a, b) => b.v - a.v);
-}
-
 // ── Widget bodies ──────────────────────────────────────────────────────────────────────────────
 
 const Empty = ({ children = 'Nothing to show for these rows.' }: { children?: ReactNode }) => (
@@ -307,7 +254,6 @@ export function WidgetBody<T>({
   merge: (rows: T[]) => T[];
   onDetails?: (row: T) => void;
 }) {
-  const hidden = useAmountsHidden();
   const own = useMemo(() => filterByTokens(rows, fields, card.filter), [rows, fields, card.filter]);
   // Shares and formulas read against every shown row, not just the card's.
   const computed = useMemo(() => computedOf(domain, rows, null), [domain, rows]);
@@ -379,170 +325,7 @@ export function WidgetBody<T>({
     );
   }
   if (card.kind !== 'allocation') return null;
-  const by = field(card.by);
-  const value = field(card.value);
-  if (!by || !value) return <Empty>This widget's fields are not in this view.</Empty>;
-  const masked = hidden && !!value.amount;
-  const fmt = (v: number) => short(v, value.format, masked);
-  const sums = sumBy(own, by, value, read);
-  // An empty value reads "No sector", not "—"; counts say "1 sector", "3 sectors".
-  const shown = (name: string, f: { label: string }) =>
-    name === label(null) ? `No ${f.label.toLowerCase()}` : name;
-  const count = (n: number) => `${n} ${by.label.toLowerCase()}${n === 1 ? '' : 's'}`;
-  if (card.style === 'bar_list') {
-    const bars = sums
-      .filter((x) => x.v !== 0)
-      .sort((a, b) => (card.desc ? b.v - a.v : a.v - b.v))
-      .slice(0, card.n);
-    if (!bars.length) return <Empty />;
-    const net = bars.reduce((t, x) => t + x.v, 0);
-    const abs = bars.reduce((t, x) => t + Math.abs(x.v), 0);
-    const up = bars.filter((b) => b.v > 0).length;
-    // Split by: each bar's parts by a text field, its 5 largest overall coloured as a donut of
-    // that field colours them, the rest Other.
-    const stackF = !card.signed && card.stack ? field(card.stack) : undefined;
-    const stack = (() => {
-      if (!stackF || stackF.key === by.key) return null;
-      const order = sumBy(own, stackF, value, read).filter((x) => x.v > 0);
-      // A split needs two known parts; with fewer (no sectors set yet) plain bars read better.
-      if (order.filter((x) => x.name !== label(null)).length < 2) return null;
-      const top = order.slice(0, STACK_MAX).map((x) => x.name);
-      const parts = [...top, ...(order.length > STACK_MAX ? ['Other'] : [])].map((name, i) => ({
-        name: shown(name, stackF),
-        key: `p${i}`,
-        fill: name === 'Other' ? 'var(--muted-foreground)' : colorOf(name, i),
-      }));
-      const keyOf = (n: string) => `p${top.includes(n) ? top.indexOf(n) : top.length}`;
-      const rows = bars.map((b) => {
-        const r: Record<string, number | string> = { name: shown(b.name, by), total: b.v };
-        for (const x of own) {
-          if (label(read(by, x)) !== b.name) continue;
-          const v = read(value, x);
-          if (typeof v !== 'number' || v <= 0) continue;
-          const k = keyOf(label(read(stackF, x)));
-          r[k] = ((r[k] as number) ?? 0) + v;
-        }
-        return r;
-      });
-      return { rows, parts };
-    })();
-    return (
-      <>
-        <Headline
-          value={`${card.signed && net > 0 ? '+' : ''}${fmt(net)}`}
-          tone={card.signed ? (net >= 0 ? 'gain' : 'loss') : undefined}
-          caption={
-            card.signed
-              ? `net · ${up} up, ${bars.length - up} down`
-              : `${value.label.toLowerCase()} across ${count(bars.length)}`
-          }
-        />
-        {stack ? (
-          <StackedBars
-            rows={stack.rows}
-            parts={stack.parts}
-            fmt={fmt}
-            exact={(v) => exact(v, value.format, masked)}
-            share={(v) => pct(v, abs)}
-          />
-        ) : (
-          <RankedBars
-            id={card.id}
-            items={bars.map((b, i) => ({
-              ...b,
-              name: shown(b.name, by),
-              fill: card.signed ? (b.v >= 0 ? 'var(--gain)' : 'var(--loss)') : colorOf(b.name, i),
-            }))}
-            signed={card.signed}
-            fmt={fmt}
-            share={(v) => pct(Math.abs(v), abs)}
-          />
-        )}
-      </>
-    );
-  }
-  const parts = sums.filter((x) => x.v > 0).map((x) => ({ ...x, name: shown(x.name, by) }));
-  const total = parts.reduce((t, x) => t + x.v, 0);
-  const known = parts.filter((x) => x.name !== shown(label(null), by)).length;
-  if (!total) return <Empty />;
-  // Donut: `max` slices in all, Other the last. Allocation: the largest `max`, then Other.
-  const keep = card.style === 'donut' ? card.max - 1 : (card.max ?? ALLOCATION_MAX);
-  const limit = card.style === 'donut' ? card.max : keep;
-  const rest = parts.length > limit ? parts.slice(keep) : [];
-  const slices = rest.length
-    ? [...parts.slice(0, keep), { name: 'Other', v: rest.reduce((t, x) => t + x.v, 0) }]
-    : parts;
-  const colored = slices.map((s, i) => ({
-    ...s,
-    key: `s${i}`,
-    fill: s.name === 'Other' ? 'var(--muted-foreground)' : colorOf(s.name, i),
-  }));
-  if (card.style === 'donut')
-    return (
-      <Donut
-        items={colored}
-        total={total}
-        fmt={fmt}
-        share={(v) => pct(v, total)}
-        caption={count(known)}
-        legend={controlOn(card, 'legend')}
-      />
-    );
-  // Allocation: one stacked bar, no legend; each wide slice names itself, and hovering a slice
-  // gives its exact value and share, Other its 10 largest. The tooltip may leave the card.
-  const config: ChartConfig = Object.fromEntries(
-    colored.map((s) => [s.key, { label: s.name, color: s.fill }]),
-  );
-  const line = (name: string, v: number, fill?: string) => (
-    <span key={name} className="flex w-full items-center gap-2">
-      {fill && <span className="size-2 shrink-0 rounded-full" style={{ background: fill }} />}
-      <span className="truncate font-medium">{name}</span>
-      <span className="num ml-auto pl-3 whitespace-nowrap">
-        {exact(v, value.format, masked)} · {pct(v, total)}
-      </span>
-    </span>
-  );
-  return (
-    <div className="py-1">
-      <Headline
-        value={fmt(total)}
-        caption={`${count(known)} · largest ${colored[0]?.name ?? ''} ${pct(colored[0]?.v ?? 0, total)}`}
-      />
-      <AllocationBar
-        items={colored}
-        total={total}
-        config={config}
-        share={(v) => pct(v, total)}
-        tooltip={
-          <ChartTooltip
-            cursor={false}
-            shared={false}
-            allowEscapeViewBox={{ x: false, y: true }}
-            wrapperStyle={{ zIndex: 50 }}
-            content={
-              <ChartTooltipContent
-                hideLabel
-                className="min-w-48 max-w-72"
-                formatter={(v, name) => {
-                  const s = colored.find((c) => c.key === name);
-                  if (s?.name !== 'Other') return line(s?.name ?? String(name), Number(v), s?.fill);
-                  return (
-                    <span className="flex w-full flex-col gap-1">
-                      {line(`Other (${rest.length})`, Number(v), s.fill)}
-                      <span className="flex flex-col gap-0.5 border-t pt-1 text-muted-foreground">
-                        {rest.slice(0, 10).map((x) => line(x.name, x.v))}
-                        {rest.length > 10 && <span>+{rest.length - 10} more</span>}
-                      </span>
-                    </span>
-                  );
-                }}
-              />
-            }
-          />
-        }
-      />
-    </div>
-  );
+  return <AllocationBody card={card} own={own} read={read} field={field} />;
 }
 
 /** A top-N cell as its field reads, short where the field is short. */
