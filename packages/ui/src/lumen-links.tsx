@@ -265,7 +265,7 @@ export function LinkPicker({
         <Button
           variant="ghost"
           size="icon-xs"
-          className={cn('size-5 shrink-0', className)}
+          className={cn('size-5 shrink-0 max-md:size-6', className)}
           aria-label={`${label} link colour: ${color ? LINK_NAMES[color] : 'None'}`}
           title={color ? `Linked: ${LINK_NAMES[color]}` : 'Link colour'}
         >

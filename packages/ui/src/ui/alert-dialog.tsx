@@ -5,6 +5,7 @@ import type * as React from 'react';
 import { useOverlayOpen } from '../hooks/use-back-close';
 import { usePhoneScreen } from '../hooks/use-keyboard-fit';
 import { Button } from './button';
+import { escapeToPicker } from './overlay-guard';
 
 function AlertDialog({
   open: given,
@@ -63,6 +64,7 @@ function AlertDialogContent({
           className,
         )}
         {...props}
+        onEscapeKeyDown={escapeToPicker(props.onEscapeKeyDown)}
         style={style}
       />
     </AlertDialogPortal>

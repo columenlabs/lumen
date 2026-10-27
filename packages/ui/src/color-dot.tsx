@@ -67,7 +67,13 @@ export function ColorChip({
     <span
       className="inline-flex h-5 shrink-0 items-center gap-1 rounded-sm bg-secondary px-1.5 text-xs font-medium whitespace-nowrap text-secondary-foreground"
       style={
-        color ? { background: `color-mix(in oklab, ${color} 18%, transparent)`, color } : undefined
+        color
+          ? {
+              background: `color-mix(in oklab, ${color} 18%, transparent)`,
+              // The colour pulled toward the text colour, so a light hue (yellow, sky) still reads.
+              color: `color-mix(in oklab, ${color} 55%, var(--foreground))`,
+            }
+          : undefined
       }
     >
       {Icon && <Icon className="size-3 shrink-0" />}
