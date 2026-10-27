@@ -5,14 +5,19 @@ import type { ViewIcon } from '@columenlabs/lumen-ui-types/views';
 import { RotateCcwIcon, SearchIcon, ShapesIcon, SmileIcon } from 'lucide-react';
 import { useState } from 'react';
 import { IconButton } from './icon-button';
+import { lazyPart } from './lazy-part';
 import type { NavIcon } from './nav';
 import { Button } from './ui/button';
-import { EmojiPicker, EmojiPickerContent, EmojiPickerSearch } from './ui/emoji-picker';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Separator } from './ui/separator';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
-import { VIEW_ICONS, iconOf, lucideIconNames } from './view-icons';
+import { VIEW_ICONS, iconOf, useLucideIconNames } from './view-icons';
+
+const EmojiTab = lazyPart(
+  () => import('./emoji-tab').then((m) => m.EmojiTab),
+  <div className="h-80 w-full" />,
+);
 
 /** Icon matches shown at once; search narrows the rest of lucide's set. */
 const ICON_MATCHES = 120;
@@ -41,6 +46,8 @@ export function IconPicker({
   const [kind, setKind] = useState<'icons' | 'emoji'>('icons');
   const [q, setQ] = useState('');
   const Icon = iconOf(value, fallback);
+  // The full list loads when the picker first opens.
+  const lucideIconNames = useLucideIconNames(open);
   const pick = (icon: ViewIcon | null) => {
     onChange(icon);
     setOpen(false);
@@ -99,7 +106,11 @@ export function IconPicker({
                 </InputGroupAddon>
                 <InputGroupInput
                   aria-label="Search icons"
-                  placeholder={`Search ${lucideIconNames.length.toLocaleString()} icons`}
+                  placeholder={
+                    lucideIconNames.length
+                      ? `Search ${lucideIconNames.length.toLocaleString()} icons`
+                      : 'Search icons'
+                  }
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -131,14 +142,7 @@ export function IconPicker({
             </div>
           </div>
         ) : (
-          <EmojiPicker
-            className="h-80 w-full"
-            columns={9}
-            onEmojiSelect={({ emoji }) => pick(emoji)}
-          >
-            <EmojiPickerSearch placeholder="Search emoji" />
-            <EmojiPickerContent />
-          </EmojiPicker>
+          <EmojiTab onPick={pick} />
         )}
         <Separator />
         <IconButton
