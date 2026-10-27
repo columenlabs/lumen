@@ -261,7 +261,7 @@ export { LumenChatgptSignin, type LumenChatgptSigninProps } from './chatgpt-sign
 export { LumenExpandList, LumenExpandRow } from './expand-list';
 export { type Fact, FactList, type FactListProps } from './fact-list';
 export { LumenPager } from './pager';
-export { createDeskQueryClient } from './query-client';
+export { clearPersistedQueries, createDeskQueryClient, type PersistOptions } from './query-client';
 export {
   type ClientPoint,
   type ClientPointKind,
