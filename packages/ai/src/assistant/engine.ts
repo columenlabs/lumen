@@ -1528,6 +1528,10 @@ export class Assistant {
       // the SDK does not know and its accumulator throws on them. The final response rides on the
       // completed, incomplete or failed event; every other event but text deltas is skipped.
       let partial = '';
+      // Event types seen and the items finished one by one: a plan sign-in's final event may carry
+      // an empty `output`, its items having come only as `response.output_item.done`.
+      const seen: Record<string, number> = {};
+      const items: OpenAI.Responses.ResponseOutputItem[] = [];
       const res = await (async () => {
         const stream = await client.responses.create(
           {
@@ -1545,6 +1549,9 @@ export class Assistant {
         );
         let done: OpenAI.Responses.Response | undefined;
         for await (const e of stream as AsyncIterable<{ type: string } & Record<string, unknown>>) {
+          seen[e.type] = (seen[e.type] ?? 0) + 1;
+          if (e.type === 'response.output_item.done' && e.item)
+            items.push(e.item as OpenAI.Responses.ResponseOutputItem);
           if (e.type === 'response.output_text.delta' && typeof e.delta === 'string') {
             partial += e.delta;
             emit('text', { delta: e.delta });
@@ -1567,6 +1574,16 @@ export class Assistant {
       if (res.status === 'failed') {
         if (partial) sink.push({ kind: 'text', text: partial });
         const code = res.error?.code ?? '';
+        console.error(
+          JSON.stringify({
+            event: 'assistant_openai_failed',
+            model: session.model.id,
+            plan,
+            code,
+            message: res.error?.message?.slice(0, 300) ?? null,
+            events: seen,
+          }),
+        );
         throw new AssistantError(
           /usage_limit/.test(code)
             ? 'Your ChatGPT plan reached its usage limit for now: try again later, or pick another model.'
@@ -1590,13 +1607,44 @@ export class Assistant {
         o.context?.(u.input_tokens + u.output_tokens);
       }
       o.called();
-      const cut = res.incomplete_details?.reason === 'max_output_tokens' ? ' …(cut)' : '';
-      if (cut) emit('text', { delta: cut });
+      const output = (
+        res.output?.length ? res.output : items
+      ) as OpenAI.Responses.ResponseOutputItem[];
+      res.output = output;
       // Raw events carry no `output_text`: the words are the output messages' text parts.
-      const words = (res.output as OpenAI.Responses.ResponseOutputItem[])
-        .flatMap((b) => (b.type === 'message' ? b.content : []))
-        .map((c) => (c.type === 'output_text' ? c.text : ''))
-        .join('');
+      const words =
+        output
+          .flatMap((b) => (b.type === 'message' ? b.content : []))
+          .map((c) => (c.type === 'output_text' ? c.text : ''))
+          .join('') || partial;
+      const hasCall = output.some((b) => b.type === 'function_call');
+      if (!words && !hasCall) {
+        // Nothing to show: say why instead of an empty or bare "cut" answer, and log the shape.
+        console.error(
+          JSON.stringify({
+            event: 'assistant_openai_empty',
+            model: session.model.id,
+            plan,
+            status: res.status,
+            incomplete: res.incomplete_details ?? null,
+            usage: res.usage ?? null,
+            events: seen,
+            output: output.map((b) => b.type),
+          }),
+        );
+        if (!answer)
+          throw new AssistantError(
+            res.incomplete_details?.reason
+              ? `OpenAI stopped before answering (${res.incomplete_details.reason}).`
+              : 'OpenAI sent no answer.',
+            'upstream',
+          );
+      }
+      const cut =
+        res.incomplete_details?.reason === 'max_output_tokens' && (words || hasCall)
+          ? ' …(cut)'
+          : '';
+      if (cut) emit('text', { delta: cut });
       const text = words + cut;
       if (text) {
         answer += (answer ? '\n\n' : '') + text;
@@ -1604,8 +1652,8 @@ export class Assistant {
         emit('text_end', {});
       }
       // Reasoning, words and calls go back as they came, so the model keeps its own thread.
-      input.push(...(res.output as OpenAI.Responses.ResponseInputItem[]));
-      const calls = (res.output as OpenAI.Responses.ResponseOutputItem[]).filter(
+      input.push(...(output as unknown as OpenAI.Responses.ResponseInputItem[]));
+      const calls = output.filter(
         (b): b is OpenAI.Responses.ResponseFunctionToolCall => b.type === 'function_call',
       );
       if (calls.length === 0) break;
