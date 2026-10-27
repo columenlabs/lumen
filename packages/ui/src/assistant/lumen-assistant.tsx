@@ -19,7 +19,10 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CircleAlertIcon,
+  CopyIcon,
   CornerDownRightIcon,
+  CrosshairIcon,
+  FileTextIcon,
   LightbulbIcon,
   PencilIcon,
   PlusIcon,
@@ -48,6 +51,15 @@ import {
   type LumenSelectorListHandle,
 } from '../lumen-selector';
 import { lumenToast } from '../lumen-toast';
+import {
+  type PointedAt,
+  cardsOnScreen,
+  kindName,
+  pointAt,
+  sectionsOnScreen,
+  targetEl,
+  textOf,
+} from '../spotlight';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
@@ -55,8 +67,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Spinner } from '../ui/spinner';
 import { Textarea } from '../ui/textarea';
 import type { AssistantAdapter } from './client';
+import { chatMarkdown, chatTurns, copyMarkdown, turnMarkdown } from './copy';
 import {
   type AssistantSource,
+  composeAssistant,
   selectionRef,
   useComposeRequest,
   usePageSelection,
@@ -145,6 +159,7 @@ export function LumenAssistant({
     enabled: false,
   });
   const s = status.data;
+  const name = s?.name ?? 'Assistant';
   // A finished answer changes the spend and the chats list.
   useEffect(() => {
     if (chat.busy) return;
@@ -167,6 +182,15 @@ export function LumenAssistant({
       name: 'compact',
       about: 'Summarise the chat so far to free up context',
       run: () => '/compact',
+    },
+    {
+      name: 'copy',
+      about: 'Copy the last turn as Markdown',
+      run: () => {
+        const last = chatTurns(chat.items).at(-1);
+        if (last) copyMarkdown(turnMarkdown(last.items, name), 'Turn');
+        return undefined;
+      },
     },
     {
       name: 'clear',
@@ -251,6 +275,12 @@ export function LumenAssistant({
           onOpen={(c) => void chat.open(c.id)}
         />
         <IconButton
+          icon={CopyIcon}
+          label="Copy chat"
+          disabled={!chat.items.length}
+          onClick={() => copyMarkdown(chatMarkdown(chat.title, chat.items, name), 'Chat')}
+        />
+        <IconButton
           icon={PlusIcon}
           label="New chat"
           disabled={!chat.items.length}
@@ -260,7 +290,9 @@ export function LumenAssistant({
           <IconButton icon={XIcon} label={`Close ${s?.name ?? 'assistant'}`} onClick={onClose} />
         )}
       </div>
-      <Messages chat={chat} status={s} onSettings={onSettings} />
+      <AssistantName.Provider value={name}>
+        <Messages chat={chat} status={s} onSettings={onSettings} />
+      </AssistantName.Provider>
       <LumenComposer
         name={s?.name ?? 'the assistant'}
         busy={chat.busy}
@@ -269,6 +301,7 @@ export function LumenAssistant({
         commands={allCommands}
         tiers={tiers}
         sources={allSources}
+        page={context?.label}
         onSend={(text, extra) => chat.send(text, { ...(context ? { context } : {}), ...extra })}
         onStop={chat.stop}
       />
@@ -321,7 +354,7 @@ function Messages({
       ) : (
         <TierNames.Provider value={(id) => status?.tiers.find((t) => t.id === id)?.label ?? id}>
           <UndoWrite.Provider value={chat.undo}>
-            <Items items={chat.items} onSettle={chat.settle} busy={chat.busy} />
+            <Items items={chat.items} onSettle={chat.settle} busy={chat.busy} turns />
           </UndoWrite.Provider>
         </TierNames.Provider>
       )}
@@ -351,6 +384,8 @@ const WAIT: Record<
   own_cap: () => 'Your own keys reached their monthly cap. Raise it in Settings ▸ Model providers.',
 };
 
+/** The assistant's name, for a copied turn's headings. */
+const AssistantName = createContext('Assistant');
 /** A tier's name for a message's `@` chip. */
 const TierNames = createContext<(id: string) => string>((id) => id);
 /** Takes back a change made at once (Undo on its line). */
@@ -360,11 +395,38 @@ function Items({
   items,
   onSettle,
   busy,
+  turns,
 }: {
   items: (ChatItem | LiveItem)[];
   onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
   busy: boolean;
+  /** At the top level each turn sits in one block with a copy icon (on hover; always on touch). */
+  turns?: boolean;
 }) {
+  const name = useContext(AssistantName);
+  if (turns)
+    return (
+      <div className="flex flex-col gap-3">
+        {chatTurns(items).map((t) => {
+          const open = busy && t.from + t.items.length === items.length;
+          return (
+            <div key={t.from} data-slot="assistant-turn" className="group/turn flex flex-col gap-3">
+              <Items items={t.items} onSettle={onSettle} busy={busy} />
+              {!open && (
+                <div className="-mt-2 flex justify-end opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                  <IconButton
+                    icon={CopyIcon}
+                    label="Copy this turn"
+                    className="size-6 text-muted-foreground"
+                    onClick={() => copyMarkdown(turnMarkdown(t.items as ChatItem[], name), 'Turn')}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
   // Cards drafted one after another sit in one stack, so many of them skim as lines.
   const rows: ({ at: number; item: LiveItem } | { at: number; drafts: DraftItem[] })[] = [];
   items.forEach((item, at) => {
@@ -823,10 +885,13 @@ export function LumenComposer({
   commands = [],
   tiers = [],
   sources = [],
+  page,
   onSend,
   onStop,
 }: {
   name: string;
+  /** The page's name for `#` This page; the document's title by default. */
+  page?: string;
   busy: boolean;
   queued: string | null;
   disabled?: boolean;
@@ -870,12 +935,7 @@ export function LumenComposer({
   const open = closed !== `${text}|${caret}`;
   const slash =
     m && commands.length ? (m[2] === undefined ? 'command' : cmd?.options ? 'arg' : null) : null;
-  const at =
-    trigger === '@' && tiers.length > 1
-      ? '@'
-      : trigger === '#' && (sources.length || selection)
-        ? '#'
-        : null;
+  const at = trigger === '@' && tiers.length > 1 ? '@' : trigger === '#' ? '#' : null;
   const picking = open ? (slash ?? at) : null;
 
   const extra = (): ComposerExtra => ({
@@ -930,9 +990,70 @@ export function LumenComposer({
     });
   };
 
-  const sourceItems = new Map<string, AssistantRefNote>();
+  // Each `#` row makes its chip when picked, so what it carries (a card's words) is read then.
+  const sourceItems = new Map<string, () => AssistantRefNote>();
   const picked = selection ? selectionRef(selection) : null;
-  if (picked) sourceItems.set('selection', picked);
+  const added = (r: AssistantRefNote) =>
+    refs.some((x) => sameRef(x, r)) ? { disabled: 'Added' } : {};
+  const onPage: LumenOption[] = [];
+  if (picking === '#') {
+    const pageRef = (): AssistantRefNote => ({
+      kind: 'page',
+      label: page || document.title || 'This page',
+      path: location.pathname + location.search,
+      text: textOf(document.querySelector('main') ?? document.body, 6000),
+    });
+    sourceItems.set('page', pageRef);
+    onPage.push({
+      value: 'page',
+      label: 'This page',
+      group: 'On this page',
+      icon: FileTextIcon,
+      detail: page || document.title,
+      keywords: ['screen', 'page'],
+      ...added({ kind: 'page', label: page || document.title || 'This page' }),
+    });
+    for (const c of cardsOnScreen()) {
+      const label = c.title || kindName(c.kind);
+      const ref = { kind: 'card', label, id: c.id };
+      sourceItems.set(`card:${c.id}`, () => ({
+        ...ref,
+        card_kind: kindName(c.kind),
+        text: textOf(targetEl(`card:${c.id}`)),
+      }));
+      onPage.push({
+        value: `card:${c.id}`,
+        label,
+        group: 'On this page',
+        detail: kindName(c.kind),
+        target: `card:${c.id}`,
+        ...added(ref),
+      });
+    }
+    for (const x of sectionsOnScreen().slice(0, 60)) {
+      const ref = { kind: x.kind, label: x.label, id: x.id };
+      sourceItems.set(`section:${x.id}`, () => ({
+        ...ref,
+        text: textOf(targetEl(`section:${x.id}`)),
+      }));
+      onPage.push({
+        value: `section:${x.id}`,
+        label: x.label,
+        group: 'On this page',
+        detail: x.kind,
+        target: `section:${x.id}`,
+        ...added(ref),
+      });
+    }
+    onPage.push({
+      value: 'point',
+      label: 'Point at something…',
+      group: 'On this page',
+      icon: CrosshairIcon,
+      description: 'Click a card or a part of the page; Esc cancels',
+    });
+  }
+  if (picked) sourceItems.set('selection', () => picked);
   const sourceOptions: LumenOption[] =
     picking === '#'
       ? [
@@ -943,14 +1064,15 @@ export function LumenComposer({
                   label: picked.label,
                   group: 'Selected text',
                   ...(selection?.where ? { detail: selection.where } : {}),
-                  ...(refs.some((r) => sameRef(r, picked)) ? { disabled: 'Added' } : {}),
+                  ...added(picked),
                 },
               ]
             : []),
+          ...onPage,
           ...sources.flatMap((s) =>
             s.items(asked).map((i) => {
               const value = `${s.id}:${i.id}`;
-              sourceItems.set(value, i.ref);
+              sourceItems.set(value, () => i.ref);
               return {
                 value,
                 label: i.label,
@@ -959,18 +1081,30 @@ export function LumenComposer({
                 ...(s.icon ? { icon: s.icon } : {}),
                 ...(i.keywords ? { keywords: i.keywords } : {}),
                 ...(i.target ? { target: i.target } : {}),
-                ...(refs.some((r) => sameRef(r, i.ref)) ? { disabled: 'Added' } : {}),
+                ...added(i.ref),
               };
             }),
           ),
         ]
       : [];
+  // Point at…: on a phone the sheet covers the page, so it steps aside while the person picks and
+  // comes back with the pick as a chip and the words typed so far.
+  const point = async () => {
+    const phone = window.matchMedia('(max-width: 767px)').matches;
+    const typed = text.slice(0, caret - 1 - asked.length) + text.slice(caret).replace(/^ /, '');
+    if (phone) assistantOpen.write(false);
+    const p = await pointAt();
+    if (phone)
+      composeAssistant({
+        text: typed,
+        refs: [...refs, ...(p ? [pointedRef(p)] : [])],
+        ...(tier ? { tier } : {}),
+      });
+    else if (p) setRefs((prev) => [...prev, pointedRef(p)]);
+    requestAnimationFrame(() => box.current?.focus());
+  };
   const tierLabel = tiers.find((t) => t.id === tier)?.label;
-  const hints = [
-    commands.length && '/',
-    tiers.length > 1 && '@',
-    (sources.length || selection) && '#',
-  ].filter(Boolean);
+  const hints = [commands.length && '/', tiers.length > 1 && '@', '#'].filter(Boolean);
 
   return (
     <div className="shrink-0 border-t p-3">
@@ -1038,9 +1172,13 @@ export function LumenComposer({
           options={sourceOptions}
           empty="Nothing matches"
           onPick={(o) => {
-            const r = sourceItems.get(o.value);
-            if (r) setRefs((p) => [...p, r]);
             dropWord();
+            if (o.value === 'point') {
+              void point();
+              return;
+            }
+            const r = sourceItems.get(o.value)?.();
+            if (r) setRefs((p) => [...p, r]);
           }}
           onClose={() => setClosed(`${text}|${caret}`)}
         />
@@ -1104,8 +1242,24 @@ export function LumenComposer({
   );
 }
 
-const sameRef = (a: AssistantRefNote, b: AssistantRefNote) =>
-  a.kind === b.kind && JSON.stringify(a) === JSON.stringify(b);
+// The same thing pointed at twice: its kind and what finds it, whatever its words read then.
+const refKey = (r: AssistantRefNote) =>
+  r.kind === 'page'
+    ? 'page'
+    : JSON.stringify([r.kind, r.id ?? r.label, r.kind === 'selection' ? r.text : null]);
+const sameRef = (a: AssistantRefNote, b: AssistantRefNote) => refKey(a) === refKey(b);
+
+/** A card or section the person pointed at, as a chip with its words. */
+const pointedRef = (p: PointedAt): AssistantRefNote =>
+  p.kind === 'card'
+    ? {
+        kind: 'card',
+        label: p.card.title || kindName(p.card.kind),
+        id: p.card.id,
+        card_kind: kindName(p.card.kind),
+        text: textOf(p.el),
+      }
+    : { kind: p.section.kind, label: p.section.label, id: p.section.id, text: textOf(p.el) };
 
 /** The chat's cost and tokens (a popup splits them per part), and how full the context is. */
 function UsageLine({ usage }: { usage: ChatUsage | null }) {

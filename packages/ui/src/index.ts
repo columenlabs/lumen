@@ -52,8 +52,14 @@ export {
   cardsOnScreen,
   kindName,
   onScreen,
+  pointAt,
   pointAtCard,
+  type PointedAt,
+  type SectionOnScreen,
+  sectionsOnScreen,
   spotlight,
+  targetEl,
+  textOf,
 } from './spotlight';
 export { LinkDot, LinkPicker, type LinkColor, linkVar } from './lumen-links';
 export { CardSegments, CardSwitch } from './card-switch';

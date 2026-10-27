@@ -824,7 +824,7 @@ export class Assistant {
       const page =
         this.cardNews(doc) +
         (req.refs?.length
-          ? `The person points at: ${JSON.stringify(req.refs).slice(0, 8000)}\n\n`
+          ? `The person points at: ${JSON.stringify(req.refs).slice(0, 16000)}\n\n`
           : '') +
         (req.context
           ? `Page: ${req.context.label}${req.context.note === undefined ? '' : `\n${JSON.stringify(req.context.note).slice(0, 4000)}`}\n\n`

@@ -525,6 +525,12 @@ body[data-pointing],
 body[data-pointing] [data-slot="lumen-card"] * {
   cursor: crosshair;
 }
+body[data-spotlight="section"] [data-spotlit],
+body[data-pointing] [data-assistant-section][data-spotlit] {
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+  border-radius: calc(var(--radius) * 0.6);
+  transition: background 120ms ease-out;
+}
 body[data-spotlight="nav"] [data-spotlit] {
   background: var(--sidebar-accent);
   color: var(--sidebar-accent-foreground);

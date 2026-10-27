@@ -14,7 +14,6 @@ import {
   assistantSettingsSections,
   composeAssistant,
   selectionRef,
-  useAssistantSource,
   useLumenAssistantDock,
 } from '@columenlabs/lumen-ui/assistant';
 import { Button } from '@columenlabs/lumen-ui/ui/button';
@@ -497,14 +496,6 @@ function Docked({
     context: { label: 'Home' },
     sources: [NOTES_SOURCE],
   });
-  // The page's own things, listed under # while it is shown.
-  useAssistantSource({
-    id: 'page',
-    label: 'On this page',
-    items: () => [
-      { id: 'welcome', label: 'Welcome card', ref: { kind: 'card', label: 'Welcome card' } },
-    ],
-  });
   const [sections] = useState<SettingsSectionDef[]>(() =>
     // The admin's shared keys sit in the app's admin settings; the story lists them last.
     [
@@ -531,10 +522,28 @@ function Docked({
     >
       <div className="flex flex-col gap-3 p-6 text-sm">
         <p className="text-muted-foreground">The app's page sits here.</p>
-        <p data-assistant-where="Launch plan ▸ Goals" className="max-w-prose">
-          Ship the beta to forty teams by March, then open sign-ups once support can answer within a
-          day.
-        </p>
+        {/* Marked sections: `#` lists them under On this page, and Point at… picks them. */}
+        <section
+          data-assistant-section="Goals"
+          data-assistant-kind="plan section"
+          data-assistant-id="goals"
+          className="max-w-prose"
+        >
+          <h3 className="font-medium">Goals</h3>
+          <p data-assistant-where="Launch plan ▸ Goals">
+            Ship the beta to forty teams by March, then open sign-ups once support can answer within
+            a day.
+          </p>
+        </section>
+        <section
+          data-assistant-section="Risks"
+          data-assistant-kind="plan section"
+          data-assistant-id="risks"
+          className="max-w-prose"
+        >
+          <h3 className="font-medium">Risks</h3>
+          <p>Support may not keep up with forty teams at once.</p>
+        </section>
         <Button
           size="sm"
           variant="outline"
