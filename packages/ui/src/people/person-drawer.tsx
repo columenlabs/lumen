@@ -23,6 +23,7 @@ import {
 import { useState } from 'react';
 import { LumenConfirm } from '../confirm';
 import { DrawerSection } from '../drawer-section';
+import { FactList } from '../fact-list';
 import { InfoLabel, InfoTip } from '../info-tip';
 import { errorText } from '../integrations';
 import { LumenDrawer } from '../lumen-drawer';
@@ -137,30 +138,23 @@ export function PersonDrawer({
             {guard && p.role === 'admin' && <NoteLine icon={ShieldCheckIcon} title={guard} />}
           </DrawerSection>
           <DrawerSection icon={KeyRoundIcon} title="Sign-in" defaultOpen>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
-              <dt className="text-muted-foreground">Last seen</dt>
-              <dd>{when(p.lastSeen)}</dd>
-              <dt className="text-muted-foreground">Invited by</dt>
-              <dd className="truncate">{p.invitedBy ?? '—'}</dd>
-              {pending && (
-                <>
-                  <dt className="text-muted-foreground">Invite</dt>
-                  <dd>
-                    {p.status === 'expired'
+            <FactList
+              facts={[
+                { label: 'Last seen', value: when(p.lastSeen) },
+                { label: 'Invited by', value: p.invitedBy ?? '—' },
+                pending && {
+                  label: 'Invite',
+                  value:
+                    p.status === 'expired'
                       ? `expired ${when(p.expiresAt)}`
-                      : `expires ${fromNow(p.expiresAt)}`}
-                  </dd>
-                </>
-              )}
-              {view.sync && (
-                <>
-                  <dt className="text-muted-foreground">Sign-in provider</dt>
-                  <dd>
-                    {view.sync.ok ? 'Synced' : 'Out of step'} · {when(view.sync.at)}
-                  </dd>
-                </>
-              )}
-            </dl>
+                      : `expires ${fromNow(p.expiresAt)}`,
+                },
+                view.sync && {
+                  label: 'Sign-in provider',
+                  value: `${view.sync.ok ? 'Synced' : 'Out of step'} · ${when(view.sync.at)}`,
+                },
+              ]}
+            />
           </DrawerSection>
           {adapter.audit && <ActivitySection adapter={adapter} person={p} />}
           <DangerSection adapter={adapter} person={p} guard={guard} onGone={onClose} />
@@ -294,14 +288,19 @@ function ActivitySection({ adapter, person }: { adapter: PeopleAdapter; person: 
       {q.isError ? (
         <p className="text-destructive text-sm">{errorText(q.error)}</p>
       ) : events.length ? (
-        <ul className="flex flex-col gap-1.5 text-sm">
+        // One grid, so every time sits in a column as wide as the longest and never wraps.
+        <ul className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
           {events.map((e) => (
-            <li key={e.id} className="flex gap-3">
-              <span className="num w-24 shrink-0 text-muted-foreground">{when(e.at)}</span>
-              <span className="min-w-0 flex-1 truncate" title={e.detail}>
-                {e.actor} · {e.detail}
+            <li key={e.id} className="col-span-2 grid grid-cols-subgrid items-center">
+              <time dateTime={new Date(e.at).toISOString()} className="num text-muted-foreground">
+                {when(e.at)}
+              </time>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate" title={`${e.actor} · ${e.detail}`}>
+                  {e.actor} · {e.detail}
+                </span>
+                {e.refused && <Badge variant="destructive">Refused</Badge>}
               </span>
-              {e.refused && <Badge variant="destructive">Refused</Badge>}
             </li>
           ))}
         </ul>

@@ -244,6 +244,7 @@ export {
 } from './integrations';
 export { LumenChatgptSignin, type LumenChatgptSigninProps } from './chatgpt-signin';
 export { LumenExpandList, LumenExpandRow } from './expand-list';
+export { type Fact, FactList, type FactListProps } from './fact-list';
 export { LumenPager } from './pager';
 export { createDeskQueryClient } from './query-client';
 export {

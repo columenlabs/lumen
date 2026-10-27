@@ -760,7 +760,7 @@ function Draft({
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
           {lines.slice(0, 12).map(([k, v]) => (
             <div key={k} className="contents">
-              <dt className="text-muted-foreground">{k}</dt>
+              <dt className="whitespace-nowrap text-muted-foreground">{k}</dt>
               <dd className="font-code break-words">{v}</dd>
             </div>
           ))}

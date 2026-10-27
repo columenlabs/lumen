@@ -369,18 +369,16 @@ export function PermissionsSection({ frame }: { frame: PeopleFrame }) {
           icon: ListOrderedIcon,
           link: false,
           children: (
-            <ol className="flex flex-col gap-2 text-sm">
+            <ol className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
               {levels.map((l, i) => (
-                <li key={l.id} className="flex gap-3">
-                  <span className="num w-4 shrink-0 text-muted-foreground">{i + 1}</span>
-                  <span className="w-20 shrink-0 font-medium">{l.label}</span>
-                  <span className="min-w-0 flex-1 text-muted-foreground">
-                    {l.description ?? ''}
-                  </span>
+                <li key={l.id} className="col-span-3 grid grid-cols-subgrid">
+                  <span className="num text-muted-foreground">{i + 1}</span>
+                  <span className="whitespace-nowrap font-medium">{l.label}</span>
+                  <span className="text-muted-foreground">{l.description ?? ''}</span>
                 </li>
               ))}
               {parent && (
-                <li className="pt-1 text-muted-foreground text-xs">
+                <li className="col-span-3 pt-1 text-muted-foreground text-xs">
                   No grant of its own: the level on {parent.name}, by rank.
                 </li>
               )}
@@ -395,11 +393,11 @@ export function PermissionsSection({ frame }: { frame: PeopleFrame }) {
           link: false,
           children: (
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt className="font-medium">Admin</dt>
+              <dt className="whitespace-nowrap font-medium">Admin</dt>
               <dd className="text-muted-foreground">
                 The top level on every scope; manages People. One is always kept.
               </dd>
-              <dt className="font-medium">Member</dt>
+              <dt className="whitespace-nowrap font-medium">Member</dt>
               <dd className="text-muted-foreground">
                 Only the levels set per scope. The default for invites.
               </dd>

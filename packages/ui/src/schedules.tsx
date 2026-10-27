@@ -334,7 +334,7 @@ function Editor({
             .filter(([, v]) => v)
             .map(([k, v]) => (
               <Fragment key={k}>
-                <dt className="text-muted-foreground">{k}</dt>
+                <dt className="whitespace-nowrap text-muted-foreground">{k}</dt>
                 <dd>{v}</dd>
               </Fragment>
             ))}

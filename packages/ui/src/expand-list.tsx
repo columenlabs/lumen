@@ -68,8 +68,20 @@ export function LumenExpandRow({
           className="flex w-full items-center gap-3 px-1 py-3 text-left hover:bg-muted/50"
         >
           <span className="min-w-0 flex-1">
-            <span className="block font-medium">{name}</span>
-            {meta && <span className="block truncate text-xs text-muted-foreground">{meta}</span>}
+            <span
+              className="block truncate font-medium"
+              title={typeof name === 'string' ? name : undefined}
+            >
+              {name}
+            </span>
+            {meta && (
+              <span
+                className="block truncate text-xs text-muted-foreground"
+                title={typeof meta === 'string' ? meta : undefined}
+              >
+                {meta}
+              </span>
+            )}
           </span>
           {badge}
           <ChevronRightIcon

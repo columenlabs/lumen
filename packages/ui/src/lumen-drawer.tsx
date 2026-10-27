@@ -58,9 +58,12 @@ export function LumenDrawer({
   const isMobile = useIsMobile();
   const head = (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <SheetTitle className="truncate">{title}</SheetTitle>
+      <SheetTitle className="truncate" title={typeof title === 'string' ? title : undefined}>
+        {title}
+      </SheetTitle>
       <SheetDescription
         className={description ? 'truncate text-muted-foreground text-xs' : 'sr-only'}
+        title={typeof description === 'string' ? description : undefined}
       >
         {description ?? 'Details'}
       </SheetDescription>
