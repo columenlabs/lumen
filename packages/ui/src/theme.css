@@ -443,9 +443,11 @@
 }
 
 /* A LumenView table on a narrow phone (`data-cards`): each row is a card, so nothing runs off
-   the right edge. Line 1: the row's name (shortens) and one figure (`data-card="meta"`); line 2:
-   the other values, small and muted. Numbers, dates and their units keep their width; only text
-   shortens, in an ellipsis. Group, Total and More rows span the card's width. */
+   the right edge, and every row is ONE line, whatever an app draws in it: the row's name (shortens
+   in an ellipsis), then one figure (`data-card="meta"`, the sorted one, else the first number or
+   date) on the right. The other values wait in the row's detail (its drawer or panel), never on a
+   second line. Group, fold and Total rows (`data-rollup`) read the same way. More and empty rows
+   are one cell across the card. */
 @media (max-width: 639px) {
   table[data-cards],
   table[data-cards] > tbody,
@@ -462,55 +464,46 @@
   }
   table[data-cards] tr {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
+    flex-wrap: nowrap;
+    align-items: center;
     column-gap: 0.75rem;
-    row-gap: 0.125rem;
     padding: 0.5rem var(--cell-x);
+    white-space: nowrap;
   }
   table[data-cards] td {
     padding: 0 !important;
     width: auto !important;
     min-width: 0;
+    white-space: nowrap;
   }
   table[data-cards] td[colspan] {
     flex: 1 1 100%;
   }
-  table[data-cards] td:not([data-card]):not([colspan]) {
+  /* A row's panel (`row-panel`) is a box of its own under the row, not a row: it keeps its lines. */
+  table[data-cards] tr[data-slot="row-panel"],
+  table[data-cards] tr[data-slot="row-panel"] > td {
+    white-space: normal;
+  }
+  table[data-cards] td:not([data-card]):not([colspan]),
+  table[data-cards] td:is([data-card="num"], [data-card="text"]) {
     display: none;
   }
   table[data-cards] td[data-card="select"] {
     order: 0;
     flex: none;
-    align-self: center;
   }
   table[data-cards] td[data-card="lead"] {
     order: 1;
     flex: 1 1 0;
     overflow: hidden;
+    text-overflow: ellipsis;
     font-weight: 500;
   }
   table[data-cards] td[data-card="meta"] {
     order: 2;
     flex: none;
-  }
-  table[data-cards] tr:has(> td[data-card="lead"])::after {
-    content: "";
-    order: 3;
-    flex-basis: 100%;
-  }
-  table[data-cards] td:is([data-card="num"], [data-card="text"]) {
-    order: 4;
-    font-size: 0.8125rem;
-    color: var(--muted-foreground);
-  }
-  table[data-cards] td[data-card="num"] {
-    flex: none;
-  }
-  table[data-cards] td[data-card="text"] {
-    flex: 0 1 auto;
+    max-width: 50%;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
   table[data-cards] [data-slot="unit-value-unit"] {
     position: static;
@@ -519,31 +512,7 @@
     margin-left: 0.25em;
     font-size: inherit;
   }
-  /* Group, fold and Total rows (`data-rollup`) are one line at every width: the name shortens
-     in an ellipsis, the row's one figure keeps its width on the right, and the rest waits in the
-     open rows. Whatever an app draws in them (a mark, a roll-up, group actions) never wraps.
-     The group band pins as a whole row here: a cell can't pin inside a one-line flex row. */
-  table[data-cards] tr[data-rollup] {
-    flex-wrap: nowrap;
-    align-items: center;
-    white-space: nowrap;
-  }
-  table[data-cards] tr[data-rollup]::after {
-    display: none;
-  }
-  table[data-cards] tr[data-rollup] > td {
-    white-space: nowrap;
-  }
-  table[data-cards] tr[data-rollup] > td[data-card="lead"] {
-    flex: 1 1 0;
-    min-width: 0;
-    overflow: hidden;
-  }
-  table[data-cards]
-    tr[data-rollup]
-    > td:is([data-card="num"], [data-card="text"], :not([data-card])) {
-    display: none;
-  }
+  /* The group band pins as a whole row here: a cell can't pin inside a one-line flex row. */
   table[data-cards] tr[data-group] {
     position: sticky;
     top: var(--pin-top, 0px);
