@@ -32,8 +32,16 @@ export function savedAnswers<C = unknown>({
   restoreMs = 1500,
   writeMs = 1000,
 }: SavedAnswersOptions): SavedAnswersPersister<C> {
-  // No IndexedDB (a test runner, a locked-down browser): nothing is saved, every load asks the server.
-  if (typeof indexedDB === 'undefined')
+  // No IndexedDB (a test runner, a locked-down browser where even reading `indexedDB` throws):
+  // nothing is saved, every load asks the server.
+  const idb = (() => {
+    try {
+      return typeof indexedDB === 'undefined' ? undefined : indexedDB;
+    } catch {
+      return undefined;
+    }
+  })();
+  if (!idb)
     return {
       persistClient: () => {},
       restoreClient: async () => undefined,
@@ -44,7 +52,8 @@ export function savedAnswers<C = unknown>({
   const open = () => {
     if (!db)
       db = new Promise<IDBDatabase>((resolve, reject) => {
-        const req = indexedDB.open(name, 1);
+        // `open` itself can throw (a private window that refuses storage): that rejects too.
+        const req = idb.open(name, 1);
         req.onupgradeneeded = () => req.result.createObjectStore('cache');
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
