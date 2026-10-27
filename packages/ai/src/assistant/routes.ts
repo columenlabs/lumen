@@ -14,6 +14,9 @@
  *   PUT    /my-key/cap {cap_usd}    what the person may spend a month on their own keys
  *   POST   /my-signin               starts a ChatGPT plan sign-in (`?provider=openai`): {url, redirect}
  *   POST   /my-signin/finish {url}  finishes it from the 127.0.0.1 address the sign-in ended on
+ *   DELETE /my-signin               signs out of the plan (the person's key, if set, runs on)
+ *                                   (`POST /my-key/test?way=key|plan` tests one; the plan and the
+ *                                   key are kept side by side, `own_use` in /settings picks)
  *   PUT    /web/scrapeql {client_id, client_secret}, DELETE /web/scrapeql, POST /web/test   admin
  *   POST   /chat                    one answer as server-sent events; closing the request stops it
  *   GET    /chats, GET|DELETE /chats/:id
@@ -30,6 +33,7 @@
 import {
   ASSISTANT_ACCESS,
   ASSISTANT_EFFORTS,
+  ASSISTANT_OWN_WAYS,
   ASSISTANT_PAYERS,
   type AssistantMessage,
   type AssistantProvider,
@@ -38,7 +42,7 @@ import {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { type Assistant, AssistantError, type Caller } from './engine';
 import { PROVIDERS } from './models';
-import { type KeyDoc, type PersonDoc, type TokenDoc, keyDocName } from './state';
+import { type KeyDoc, type PersonDoc, type TokenDoc, keyDocName, planDocName } from './state';
 import { APP_SCOPE } from './store';
 
 type Awaitable<T> = T | Promise<T>;
@@ -115,6 +119,13 @@ function settingsChange(a: Assistant, groups: string[], b: Record<string, unknow
   if (p.web !== undefined && (typeof p.web !== 'object' || typeof p.web?.fetch !== 'boolean'))
     return 'web is {fetch: true | false}.';
   if (p.pay !== undefined && !oneOf(ASSISTANT_PAYERS, p.pay)) return 'pay is app or own.';
+  if (p.own_use !== undefined) {
+    if (!p.own_use || typeof p.own_use !== 'object') return 'own_use is {provider: key | plan}.';
+    for (const [prov, w] of Object.entries(p.own_use)) {
+      if (!a.providers.includes(prov as AssistantProvider)) return `No provider ${prov}.`;
+      if (!oneOf(ASSISTANT_OWN_WAYS, w)) return `No way ${w}.`;
+    }
+  }
   return (d: PersonDoc): PersonDoc => {
     const tiers = { ...(d.tiers ?? {}) };
     for (const [id, t] of Object.entries(p.tiers ?? {})) {
@@ -132,6 +143,7 @@ function settingsChange(a: Assistant, groups: string[], b: Record<string, unknow
       ...(p.access !== undefined ? { access: { ...(d.access ?? {}), ...p.access } } : {}),
       ...(p.web !== undefined ? { web: p.web.fetch } : {}),
       ...(p.pay !== undefined ? { pay: p.pay } : {}),
+      ...(p.own_use !== undefined ? { own_use: { ...(d.own_use ?? {}), ...p.own_use } } : {}),
     };
   };
 }
@@ -210,6 +222,10 @@ export function assistantRoutes(
           const test = await a.testKey(prov, key);
           if (!test.ok) return fail(test.detail, 400, 'key_refused');
           const scope = mine ? caller.id : APP_SCOPE;
+          // A plan sign-in from before 2026-10-27 sits in the key's doc: move it beside the key.
+          const legacy = mine ? await a.state.ownPlan(caller.id, prov) : null;
+          if (legacy?.name === docName)
+            await docs.write<KeyDoc>(scope, planDocName(prov), legacy.doc);
           await docs.write<KeyDoc>(scope, docName, { api_key: key, saved_at: Date.now(), test });
           return status();
         }
@@ -235,6 +251,10 @@ export function assistantRoutes(
         case 'POST /my-signin':
           return json(await a.startSignin(caller, prov));
 
+        case 'DELETE /my-signin':
+          await a.signOut(caller, prov);
+          return status();
+
         case 'POST /my-signin/finish': {
           const pasted = str((await body(req)).url, 4000);
           if (!pasted) return fail('Paste the address the sign-in ended on.');
@@ -243,9 +263,11 @@ export function assistantRoutes(
         }
 
         case 'POST /my-key/test': {
-          const test = await a.testOwn(caller, prov);
-          if (!test) return fail('No key is set.', 404);
-          await docs.update<KeyDoc>(caller.id, docName, (d) => (d ? { ...d, test } : null));
+          const askedWay = url.searchParams.get('way');
+          const way = oneOf(ASSISTANT_OWN_WAYS, askedWay);
+          if (askedWay !== null && !way) return fail('way is key or plan.');
+          const test = await a.testOwn(caller, prov, way);
+          if (!test) return fail(way === 'plan' ? 'Not signed in.' : 'No key is set.', 404);
           return json(test);
         }
 

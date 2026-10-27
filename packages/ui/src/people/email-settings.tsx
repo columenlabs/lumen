@@ -8,18 +8,20 @@ import {
   CheckIcon,
   CircleHelpIcon,
   GlobeIcon,
+  KeyRoundIcon,
   MailIcon,
   PlugZapIcon,
   XIcon,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useState } from 'react';
+import { ConnectionLogo, LumenConnection } from '../connection';
+import { LumenExpandList } from '../expand-list';
 import { type FormIssue, SaveButton } from '../form-issues';
+import { IconButton } from '../icon-button';
 import { InfoLabel } from '../info-tip';
 import { errorText } from '../integrations';
 import { LumenChoice } from '../lumen-choice';
 import { lumenToast } from '../lumen-toast';
-import { SettingsActions, SettingsFooter } from '../settings';
-import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Spinner } from '../ui/spinner';
@@ -44,35 +46,102 @@ const same = (a: EmailDraft, b: EmailDraft) =>
   a.from === b.from &&
   a.fromName === b.fromName;
 
-/** The Email section's body. In LumenSettings its badge sits in the header and Save in the footer;
- *  `inline` draws both in the body instead. */
+/** The Email section's body: the relay as one connection (its key, its last check, Test, Remove),
+ *  set up or changed in place through the four steps. */
 export function LumenEmailSettings({
   adapter,
-  inline = false,
 }: {
   adapter: PeopleAdapter;
+  /** Kept for apps that pass it; the steps always sit in the row now. */
   inline?: boolean;
 }) {
   const api = adapter.email;
+  const qc = useQueryClient();
+  const key = ['lumen-people', adapter.key, 'email'];
   const q = useQuery({
-    queryKey: ['lumen-people', adapter.key, 'email'],
+    queryKey: key,
     queryFn: () => api?.view() ?? Promise.reject(new Error('Email settings are not set up here.')),
   });
-  if (!q.data)
+  if (!q.data || !api)
     return (
       <p className="text-muted-foreground text-sm">{q.isError ? errorText(q.error) : 'Loading…'}</p>
     );
-  return <EmailForm adapter={adapter} view={q.data} inline={inline} />;
+  const view = q.data;
+  const cur = view.current;
+  const last = view.lastTest;
+  const refresh = () => qc.invalidateQueries({ queryKey: ['lumen-people', adapter.key] });
+  const failed = last?.steps.find((x) => x.ok === false);
+  return (
+    <LumenExpandList defaultOpen={cur ? null : 'email'}>
+      <LumenConnection
+        id="email"
+        name="Email relay"
+        logo={<ConnectionLogo icon={MailIcon} />}
+        meta={
+          cur
+            ? `${cur.fromName ? `${cur.fromName} · ` : ''}${cur.from}`
+            : 'Invites and alerts are not emailed'
+        }
+        ways={[
+          {
+            id: 'api',
+            label: 'Email API',
+            icon: KeyRoundIcon,
+            info: 'A Resend-compatible email API: Resend itself or a self-hosted one.',
+            set: !!cur,
+            ident: cur?.keyHint,
+            test: last
+              ? {
+                  at: last.at,
+                  ok: last.ok,
+                  detail: last.kind === 'test' ? 'Test email sent' : 'Connection checked',
+                  error: last.ok ? null : (failed?.text ?? 'The last check failed.'),
+                }
+              : null,
+            addLabel: 'Set up',
+            onTest: async () => {
+              const check = await api.check(blank(view));
+              await refresh();
+              if (!check.ok)
+                throw new Error(
+                  check.steps.find((x) => x.ok === false)?.text ?? 'The check failed.',
+                );
+            },
+            onRemove: async () => {
+              await api.clear();
+              await refresh();
+            },
+            removeTitle: 'Remove the email relay?',
+            removeText: 'Nothing is emailed until it is set up again.',
+            form: (close) => <EmailForm adapter={adapter} view={view} onDone={close} />,
+          },
+        ]}
+        lines={
+          cur
+            ? [
+                {
+                  label: 'Reached through',
+                  value: view.routes.find((r) => r.id === cur.route)?.label ?? cur.route,
+                },
+                { label: 'Server', value: cur.url, mono: true },
+                { label: 'Saved', value: `${cur.updatedBy ?? '—'} ${when(cur.updatedAt)}` },
+              ]
+            : undefined
+        }
+      />
+    </LumenExpandList>
+  );
 }
 
 function EmailForm({
   adapter,
   view,
-  inline,
+  onDone,
 }: {
   adapter: PeopleAdapter;
   view: EmailSettingsView;
-  inline: boolean;
+  /** Saved or cancelled: the row closes the steps. */
+  onDone: () => void;
 }) {
   const api = adapter.email;
   const qc = useQueryClient();
@@ -123,6 +192,7 @@ function EmailForm({
       setReplacing(false);
       setResult(null);
       lumenToast.success('Email saved. Invites now go out by email.');
+      onDone();
     } catch (e) {
       lumenToast.error(errorText(e));
     } finally {
@@ -145,19 +215,6 @@ function EmailForm({
   if (ready && changed && !passed)
     issues.push({ where: 'Test it', message: 'Check the connection or send a test first' });
 
-  const badge = passed ? (
-    <Badge variant="secondary">Ready to save</Badge>
-  ) : view.current ? (
-    view.lastTest && !view.lastTest.ok ? (
-      <Badge variant="destructive">Last test failed</Badge>
-    ) : (
-      <Badge variant="secondary" className="text-gain">
-        Working
-      </Badge>
-    )
-  ) : (
-    <Badge variant="outline">Not set up</Badge>
-  );
   const footer = (
     <div className="flex w-full items-center gap-2">
       <span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
@@ -167,31 +224,13 @@ function EmailForm({
             ? `Saved by ${view.current.updatedBy ?? '—'} ${when(view.current.updatedAt)}`
             : 'Test to save'}
       </span>
-      {changed && (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            setDraft(blank(view));
-            setReplacing(!view.current);
-            setPerRoute({});
-            setResult(null);
-          }}
-        >
-          Revert
-        </Button>
-      )}
+      <IconButton icon={XIcon} label="Cancel" onClick={onDone} />
       <SaveButton issues={issues} busy={busy === 'save'} disabled={!changed} onSave={save} />
     </div>
   );
 
   return (
-    <div className="flex flex-col">
-      {inline ? (
-        <div className="flex justify-end pb-2">{badge}</div>
-      ) : (
-        <SettingsActions>{badge}</SettingsActions>
-      )}
+    <div className="flex flex-col border-t">
       <Step n={1} title="Reach the server through">
         <LumenChoice
           label="Reach the server through"
@@ -333,11 +372,7 @@ function EmailForm({
           </p>
         )}
       </Step>
-      {inline ? (
-        <div className="border-t pt-3">{footer}</div>
-      ) : (
-        <SettingsFooter>{footer}</SettingsFooter>
-      )}
+      <div className="border-t pt-3">{footer}</div>
     </div>
   );
 }

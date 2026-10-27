@@ -8,6 +8,7 @@ import type {
   AllowanceRequest,
   AssistantAccess,
   AssistantEffort,
+  AssistantOwnWay,
   AssistantProviderRow,
   AssistantSettingsPatch,
   AssistantStatus,
@@ -16,25 +17,27 @@ import type {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  CheckIcon,
   CoinsIcon,
-  ExternalLinkIcon,
   GlobeIcon,
   InboxIcon,
   KeyRoundIcon,
   LayersIcon,
+  LogInIcon,
   ReceiptIcon,
   SparklesIcon,
-  Trash2Icon,
   WrenchIcon,
 } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
-import { LumenChatgptSignin } from '../chatgpt-signin';
+import {
+  ConnectionLogo,
+  type ConnectionTest,
+  type ConnectionWay,
+  LumenConnection,
+} from '../connection';
 import { LumenExpandList, LumenExpandRow } from '../expand-list';
 import { type FormIssue, SaveButton } from '../form-issues';
-import { IconButton } from '../icon-button';
 import { InfoLabel } from '../info-tip';
-import { KeyTestLine, TestBadge, errorText } from '../integrations';
+import { errorText } from '../integrations';
 import { LumenSelector } from '../lumen-selector';
 import { lumenToast } from '../lumen-toast';
 import type { SettingsSectionDef } from '../settings';
@@ -121,16 +124,6 @@ function Row({ label, info, children }: { label: string; info?: ReactNode; child
   );
 }
 
-const testOf = (k: KeyState) =>
-  k.test
-    ? {
-        at: new Date(k.test.at).toISOString(),
-        ok: k.test.ok,
-        detail: k.test.detail,
-        error: k.test.ok ? null : k.test.detail,
-      }
-    : null;
-
 // ---------------------------------------------------------------- the assistant
 
 function General({ client }: { client: AssistantAdapter }) {
@@ -201,126 +194,6 @@ function General({ client }: { client: AssistantAdapter }) {
 
 // ---------------------------------------------------------------- model providers
 
-/** Paste a key, Save tests it first; then its hint, Test and Remove. */
-function KeyBlock({
-  label,
-  info,
-  prefix,
-  provider,
-  state,
-  canEdit,
-  onSave,
-  onRemove,
-  onTest,
-  keysUrl,
-}: {
-  label: string;
-  info?: string;
-  prefix: string;
-  provider: string;
-  /** Where a key is made: a link that opens in a new tab beside the empty field. */
-  keysUrl?: string;
-  state: KeyState & { from_env?: boolean };
-  canEdit: boolean;
-  onSave: (key: string) => Promise<boolean>;
-  onRemove: () => Promise<boolean>;
-  onTest: () => Promise<unknown>;
-}) {
-  const id = useId();
-  const [key, setKey] = useState('');
-  const [replacing, setReplacing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const editing = canEdit && (!state.set || replacing);
-  const issues: FormIssue[] = [];
-  if (editing && key.trim() && !key.trim().startsWith(prefix))
-    issues.push({ where: label, message: `An ${provider} key starts with ${prefix}`, target: id });
-  const save = async () => {
-    setBusy(true);
-    if (await onSave(key.trim())) {
-      setKey('');
-      setReplacing(false);
-    }
-    setBusy(false);
-  };
-  return (
-    <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
-      <div className="flex items-center gap-2">
-        <InfoLabel className="flex-1 font-medium text-sm" info={info}>
-          {label}
-        </InfoLabel>
-        {state.set ? (
-          state.hint ? (
-            <span className="font-code text-muted-foreground text-xs">{state.hint}</span>
-          ) : (
-            <Badge variant="secondary">Set</Badge>
-          )
-        ) : state.from_env ? (
-          <Badge variant="secondary">From the server</Badge>
-        ) : (
-          <Badge variant="outline">Not set</Badge>
-        )}
-        {state.set && state.test && <TestBadge test={state.test} />}
-      </div>
-      {editing ? (
-        <div className="flex gap-2">
-          <Input
-            id={id}
-            type="password"
-            autoComplete="off"
-            placeholder={`${prefix}…`}
-            className="font-code text-xs"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-          />
-          {keysUrl && (
-            <IconButton
-              icon={ExternalLinkIcon}
-              label={`Get an ${provider} key`}
-              href={keysUrl}
-              variant="outline"
-            />
-          )}
-          {replacing && (
-            <IconButton
-              icon={Trash2Icon}
-              label="Keep the saved key"
-              onClick={() => setReplacing(false)}
-            />
-          )}
-          <SaveButton
-            issues={issues}
-            busy={busy}
-            disabled={!key.trim()}
-            label="Test and save"
-            onSave={save}
-          />
-        </div>
-      ) : (
-        state.set &&
-        canEdit && (
-          <>
-            <KeyTestLine test={testOf(state)} run={onTest} />
-            <div className="flex justify-end gap-2">
-              <IconButton
-                icon={Trash2Icon}
-                label={`Remove ${label.toLowerCase()}`}
-                variant="outline"
-                onClick={() => void onRemove()}
-              />
-              <SaveButton
-                issues={[]}
-                icon={KeyRoundIcon}
-                label="Replace"
-                onSave={() => setReplacing(true)}
-              />
-            </div>
-          </>
-        )
-      )}
-    </div>
-  );
-}
-
 /** A dollar cap a month, saved on Enter or leaving the field. */
 function CapInput({
   label,
@@ -350,64 +223,68 @@ function CapInput({
   );
 }
 
-/** A person's ChatGPT plan sign-in, on the assistant's own routes. */
-function ChatgptSignin({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
-  const { apply, refresh } = useApply(client);
-  return (
-    <LumenChatgptSignin
-      state={p.own}
-      start={() => client.startSignin(p.id)}
-      finish={(url) => apply(`signin:${p.id}`, () => client.finishSignin(p.id, url), 'Signed in')}
-      signOut={() => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Signed out')}
-      test={() => client.testOwnKey(p.id).finally(refresh)}
-    />
-  );
-}
+/** A key's last test as a connection way shows it; a plan that failed asks for a new sign-in. */
+const wayTest = (k: KeyState | undefined, plan = false): ConnectionTest | null =>
+  k?.test
+    ? {
+        at: k.test.at,
+        ok: k.test.ok,
+        detail: k.test.detail,
+        error: k.test.ok ? null : k.test.detail,
+        expired: plan && !k.test.ok,
+      }
+    : null;
 
-const ready = (
-  <Badge variant="outline" className="text-gain">
-    <CheckIcon />
-    Ready
-  </Badge>
-);
-const notSet = <Badge variant="outline">Not set</Badge>;
+/** A provider's mark: its initial on a tile. */
+const mark = (label: string) => <ConnectionLogo text={label.charAt(0)} />;
 
-/** One provider, collapsed to a row: the person's own key (or their ChatGPT plan sign-in). */
+/** One provider, collapsed to a row: the person's own key and, where it has one, their plan sign-in. */
 function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
   const { apply, refresh } = useApply(client);
-  const plan = p.own.via === 'chatgpt';
-  const badge =
-    p.own.set && p.own.test && !p.own.test.ok ? (
-      <TestBadge test={{ ok: false }} />
-    ) : p.own.set ? (
-      ready
-    ) : (
-      notSet
-    );
+  const ways: ConnectionWay[] = [];
+  if (p.signin === 'chatgpt')
+    ways.push({
+      id: 'plan',
+      label: 'ChatGPT plan',
+      icon: LogInIcon,
+      info: 'Run OpenAI models on your own ChatGPT plan instead of an API key.',
+      set: !!p.plan?.set,
+      ident: p.plan?.hint,
+      test: wayTest(p.plan, true),
+      signin: { start: () => client.startSignin(p.id), provider: 'ChatGPT' },
+      onFinish: (url) => apply(`signin:${p.id}`, () => client.finishSignin(p.id, url), 'Signed in'),
+      onTest: () => client.testOwnKey(p.id, 'plan').finally(refresh),
+      onRemove: () => apply(`plan:${p.id}`, () => client.signOut(p.id), 'Signed out'),
+      removeTitle: 'Sign out of your ChatGPT plan?',
+      removeText: 'Your API key, if you set one, runs from then on.',
+      removeLabel: 'Sign out',
+    });
+  ways.push({
+    id: 'key',
+    label: 'API key',
+    icon: KeyRoundIcon,
+    info: `Your own ${p.label} key, billed by ${p.label}.`,
+    set: p.own.set,
+    ident: p.own.hint,
+    test: wayTest(p.own),
+    fields: [{ id: 'key', label: `${p.label} API key`, secret: true, prefix: p.prefix }],
+    getUrl: p.keys_url,
+    onSave: (v) => apply(`own:${p.id}`, () => client.ownKey(p.id, v.key ?? ''), 'Key saved'),
+    onTest: () => client.testOwnKey(p.id, 'key').finally(refresh),
+    onRemove: () => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed'),
+    removeTitle: `Remove your ${p.label} key?`,
+  });
   return (
-    <LumenExpandRow
+    <LumenConnection
       id={p.id}
       name={p.label}
-      meta={plan ? 'Your ChatGPT plan' : p.own.set ? 'Your key' : 'No key'}
-      badge={badge}
-    >
-      <div className="flex flex-col">
-        {p.signin === 'chatgpt' && (!p.own.set || plan) && <ChatgptSignin client={client} p={p} />}
-        {!plan && (
-          <KeyBlock
-            label={p.signin && !p.own.set ? 'Or your API key' : 'Your key'}
-            prefix={p.prefix}
-            provider={p.label}
-            state={p.own}
-            canEdit
-            keysUrl={p.keys_url}
-            onSave={(k) => apply(`own:${p.id}`, () => client.ownKey(p.id, k), 'Key saved')}
-            onRemove={() => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed')}
-            onTest={() => client.testOwnKey(p.id).finally(refresh)}
-          />
-        )}
-      </div>
-    </LumenExpandRow>
+      logo={mark(p.label)}
+      ways={ways}
+      use={p.use}
+      onUse={(use) =>
+        apply(`use:${p.id}`, () => client.settings({ own_use: { [p.id]: use as AssistantOwnWay } }))
+      }
+    />
   );
 }
 
@@ -423,7 +300,7 @@ function Providers({ client }: { client: AssistantAdapter }) {
               <OwnProviderKey key={p.id} client={client} p={p} />
             ))}
           </LumenExpandList>
-          {s.providers.some((p) => p.own.set) && (
+          {s.providers.some((p) => p.own.set || p.plan?.set) && (
             <Row label="Your keys may spend" info="On your keys, every provider together.">
               <CapInput
                 label="Your monthly cap"
@@ -441,35 +318,36 @@ function Providers({ client }: { client: AssistantAdapter }) {
 /** One provider's shared key, which an admin sets for everyone. */
 function SharedProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
   const { apply, refresh } = useApply(client);
-  const on = p.app.set || !!p.app.from_env;
-  const badge =
-    p.app.set && p.app.test && !p.app.test.ok ? (
-      <TestBadge test={{ ok: false }} />
-    ) : on ? (
-      ready
-    ) : (
-      notSet
-    );
+  const env = !p.app.set && !!p.app.from_env;
   return (
-    <LumenExpandRow
+    <LumenConnection
       id={p.id}
       name={p.label}
-      meta={p.app.from_env ? 'From the server' : on ? 'Shared key' : 'No key'}
-      badge={badge}
-    >
-      <KeyBlock
-        label="Shared key"
-        info="Everyone's answers run on it, within the monthly allowance below."
-        prefix={p.prefix}
-        provider={p.label}
-        state={p.app}
-        canEdit
-        keysUrl={p.keys_url}
-        onSave={(k) => apply(`app:${p.id}`, () => client.appKey(p.id, k), 'Key saved')}
-        onRemove={() => apply(`app:${p.id}`, () => client.appKey(p.id, null), 'Key removed')}
-        onTest={() => client.testAppKey(p.id).finally(refresh)}
-      />
-    </LumenExpandRow>
+      logo={mark(p.label)}
+      ways={[
+        {
+          id: 'key',
+          label: 'Shared key',
+          icon: KeyRoundIcon,
+          info: "Everyone's answers run on it, within the allowance below.",
+          set: p.app.set || env,
+          ident: env ? 'From the server' : p.app.hint,
+          test: wayTest(p.app),
+          fields: [{ id: 'key', label: `${p.label} API key`, secret: true, prefix: p.prefix }],
+          getUrl: p.keys_url,
+          onSave: (v) => apply(`app:${p.id}`, () => client.appKey(p.id, v.key ?? ''), 'Key saved'),
+          onTest: () => client.testAppKey(p.id).finally(refresh),
+          ...(p.app.set
+            ? {
+                onRemove: () =>
+                  apply(`app:${p.id}`, () => client.appKey(p.id, null), 'Key removed'),
+                removeTitle: `Remove the shared ${p.label} key?`,
+                removeText: 'Answers on it stop until a key is set again.',
+              }
+            : {}),
+        },
+      ]}
+    />
   );
 }
 
@@ -523,7 +401,7 @@ function Models({ client }: { client: AssistantAdapter }) {
           <div className="flex flex-col">
             {s.tiers.map((t) => {
               const p = s.providers.find((x) => x.id === t.provider);
-              const keyless = p && !p.app.set && !p.app.from_env && !p.own.set;
+              const keyless = p && !p.app.set && !p.app.from_env && !p.own.set && !p.plan?.set;
               return (
                 <Row key={t.id} label={t.label} info={t.about}>
                   <div className="flex flex-wrap items-center justify-end gap-2">
@@ -618,116 +496,47 @@ function Tools({ client }: { client: AssistantAdapter }) {
 
 function ScrapeqlBlock({ client, s }: { client: AssistantAdapter; s: AssistantStatus }) {
   const { apply, refresh } = useApply(client);
-  const ids = useId();
-  const [id, setId] = useState('');
-  const [secret, setSecret] = useState('');
-  const [replacing, setReplacing] = useState(false);
-  const [busy, setBusy] = useState(false);
   const state = s.web.scrapeql;
   if (!state) return null;
-  const editing = s.admin && (!state.set || replacing);
-  const issues: FormIssue[] = [];
-  if (editing && id && !secret)
-    issues.push({
-      where: 'Client Secret',
-      message: 'Paste the secret too',
-      target: `${ids}-secret`,
-    });
-  const save = async () => {
-    setBusy(true);
-    if (
-      await apply(
-        'scrapeql',
-        () => client.scrapeql({ client_id: id.trim(), client_secret: secret.trim() }),
-        'Token saved',
-      )
-    ) {
-      setId('');
-      setSecret('');
-      setReplacing(false);
-    }
-    setBusy(false);
-  };
   return (
-    <div className="flex flex-col gap-3 border-b py-3 last:border-b-0">
-      <div className="flex items-center gap-2">
-        <span className="flex-1 font-medium text-sm">
-          <InfoLabel info="Search and pages that need a real browser. Paste a Cloudflare Access service token that ScrapeQL lets in.">
-            ScrapeQL
-          </InfoLabel>
-        </span>
-        {state.set ? (
-          state.hint ? (
-            <span className="font-code text-muted-foreground text-xs">{state.hint}</span>
-          ) : (
-            <Badge variant="secondary">Set</Badge>
-          )
-        ) : (
-          <Badge variant="outline">Not set</Badge>
-        )}
-        {state.set && state.test && <TestBadge test={state.test} />}
-      </div>
-      {editing ? (
-        <div className="grid grid-cols-1 gap-2">
-          <Input
-            id={`${ids}-id`}
-            aria-label="Client ID"
-            placeholder="Client ID"
-            autoComplete="off"
-            className="font-code text-xs"
-            value={id}
-            onChange={(e) => setId(e.target.value)}
-          />
-          <Input
-            id={`${ids}-secret`}
-            aria-label="Client Secret"
-            placeholder="Client Secret"
-            type="password"
-            autoComplete="off"
-            className="font-code text-xs"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-          />
-          <div className="flex justify-end gap-2">
-            {replacing && (
-              <IconButton
-                icon={Trash2Icon}
-                label="Keep the saved token"
-                onClick={() => setReplacing(false)}
-              />
-            )}
-            <SaveButton
-              issues={issues}
-              busy={busy}
-              disabled={!id.trim() || !secret.trim()}
-              label="Test and save"
-              onSave={save}
-            />
-          </div>
-        </div>
-      ) : (
-        state.set &&
-        s.admin && (
-          <>
-            <KeyTestLine test={testOf(state)} run={() => client.testScrapeql().finally(refresh)} />
-            <div className="flex justify-end gap-2">
-              <IconButton
-                icon={Trash2Icon}
-                label="Remove the token"
-                variant="outline"
-                onClick={() => void apply('scrapeql', () => client.scrapeql(null), 'Token removed')}
-              />
-              <SaveButton
-                issues={[]}
-                icon={KeyRoundIcon}
-                label="Replace"
-                onSave={() => setReplacing(true)}
-              />
-            </div>
-          </>
-        )
-      )}
-    </div>
+    <LumenExpandList>
+      <LumenConnection
+        id="scrapeql"
+        name="ScrapeQL"
+        logo={<ConnectionLogo icon={GlobeIcon} />}
+        meta={state.set ? undefined : 'Search and pages that need a real browser'}
+        ways={[
+          {
+            id: 'token',
+            label: 'Service token',
+            icon: KeyRoundIcon,
+            info: 'A Cloudflare Access service token that ScrapeQL lets in.',
+            set: state.set,
+            ident: state.hint,
+            test: wayTest(state),
+            readOnly: !s.admin,
+            fields: [
+              { id: 'client_id', label: 'Client ID' },
+              { id: 'client_secret', label: 'Client Secret', secret: true },
+            ],
+            onSave: (v) =>
+              apply(
+                'scrapeql',
+                () =>
+                  client.scrapeql({
+                    client_id: v.client_id ?? '',
+                    client_secret: v.client_secret ?? '',
+                  }),
+                'Token saved',
+              ),
+            ...(s.admin ? { onTest: () => client.testScrapeql().finally(refresh) } : {}),
+            onRemove: () => apply('scrapeql', () => client.scrapeql(null), 'Token removed'),
+            removeTitle: 'Remove the ScrapeQL token?',
+            removeText: 'Search and browser pages stop until a token is set again.',
+          },
+        ]}
+      />
+    </LumenExpandList>
   );
 }
 

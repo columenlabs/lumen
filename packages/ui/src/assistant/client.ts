@@ -6,6 +6,7 @@ import type {
   AssistantChatRow,
   AssistantEvent,
   AssistantMessage,
+  AssistantOwnWay,
   AssistantProvider,
   AssistantSettingsPatch,
   AssistantStatus,
@@ -31,11 +32,14 @@ export interface AssistantAdapter {
   ownKey(provider: AssistantProvider, key: string | null): Promise<AssistantStatus>;
   /** What the person may spend a month on their own keys. */
   ownCap(usd: number): Promise<AssistantStatus>;
-  testOwnKey(provider: AssistantProvider): Promise<Test>;
+  /** Tests the person's key or plan (`way`; by default the one in use). */
+  testOwnKey(provider: AssistantProvider, way?: AssistantOwnWay): Promise<Test>;
   /** Starts a plan sign-in (ChatGPT): the address to open and the one it ends on. */
   startSignin(provider: AssistantProvider): Promise<{ url: string; redirect: string }>;
   /** Finishes it from the address the sign-in tab ended on. */
   finishSignin(provider: AssistantProvider, url: string): Promise<AssistantStatus>;
+  /** Signs out of the plan; the person's key, if set, runs on. */
+  signOut(provider: AssistantProvider): Promise<AssistantStatus>;
   /** Admin: ScrapeQL's Access service token; null removes it. */
   scrapeql(token: { client_id: string; client_secret: string } | null): Promise<AssistantStatus>;
   testScrapeql(): Promise<Test>;
@@ -113,9 +117,10 @@ export function assistantClient(base: string): AssistantAdapter {
         ? send('PUT', `/my-key?provider=${p}`, { api_key: key })
         : send('DELETE', `/my-key?provider=${p}`),
     ownCap: (usd) => send('PUT', '/my-key/cap', { cap_usd: usd }),
-    testOwnKey: (p) => send('POST', `/my-key/test?provider=${p}`),
+    testOwnKey: (p, way) => send('POST', `/my-key/test?provider=${p}${way ? `&way=${way}` : ''}`),
     startSignin: (p) => send('POST', `/my-signin?provider=${p}`),
     finishSignin: (p, url) => send('POST', `/my-signin/finish?provider=${p}`, { url }),
+    signOut: (p) => send('DELETE', `/my-signin?provider=${p}`),
     scrapeql: (token) =>
       token ? send('PUT', '/web/scrapeql', token) : send('DELETE', '/web/scrapeql'),
     testScrapeql: () => send('POST', '/web/test'),

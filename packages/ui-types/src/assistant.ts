@@ -203,8 +203,17 @@ export interface AssistantProviderRow {
   signin?: 'chatgpt';
   /** The app's key: its state for admins; for others only whether one is set. */
   app: KeyState & { from_env?: boolean };
+  /** The person's own API key. */
   own: KeyState;
+  /** The person's plan sign-in (`signin` providers only). */
+  plan?: KeyState;
+  /** Which of their own runs when both are set: the one they picked, else the one set. */
+  use?: AssistantOwnWay;
 }
+
+/** A person's own way to a provider: their API key or their plan sign-in. */
+export const ASSISTANT_OWN_WAYS = ['key', 'plan'] as const;
+export type AssistantOwnWay = (typeof ASSISTANT_OWN_WAYS)[number];
 
 /** A sealed key as Settings shows it: never the key, only its last characters and last check. */
 export interface KeyState {
@@ -326,4 +335,6 @@ export interface AssistantSettingsPatch {
   access?: Record<string, AssistantAccess>;
   web?: { fetch?: boolean };
   pay?: AssistantPayer;
+  /** Which of their own runs on each provider, their key or their plan. */
+  own_use?: Partial<Record<AssistantProvider, AssistantOwnWay>>;
 }

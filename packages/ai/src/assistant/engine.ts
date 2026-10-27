@@ -27,6 +27,7 @@ import type {
   AssistantChatRow,
   AssistantEffort,
   AssistantMessage,
+  AssistantOwnWay,
   AssistantProvider,
   AssistantStatus,
   ChatItem,
@@ -65,6 +66,7 @@ import {
   State,
   keyDocName,
   keyState,
+  planDocName,
   waitText,
 } from './state';
 import { type AssistantStore, Docs, type Sealer } from './store';
@@ -540,10 +542,12 @@ export class Assistant {
       this.state.person(caller.id),
       Promise.all(
         this.providers.map(async (id) => {
-          const [doc, key, own] = await Promise.all([
+          const [doc, key, own, plan, use] = await Promise.all([
             this.state.appKey(id),
             this.state.appApiKey(id),
             this.state.ownKey(caller.id, id),
+            PROVIDERS[id].signin ? this.state.ownPlan(caller.id, id) : Promise.resolve(null),
+            this.state.ownUse(caller.id, id),
           ]);
           const app = caller.admin
             ? keyState(doc, (d) => (d as { api_key: string }).api_key)
@@ -556,6 +560,10 @@ export class Assistant {
             ...(PROVIDERS[id].signin ? { signin: PROVIDERS[id].signin } : {}),
             app: { ...app, ...(key?.fromEnv ? { from_env: true } : {}) },
             own: keyState(own, (d) => (d as { api_key: string }).api_key),
+            ...(PROVIDERS[id].signin
+              ? { plan: keyState(plan?.doc ?? null, (d) => (d as { api_key: string }).api_key) }
+              : {}),
+            ...(use ? { use } : {}),
           };
         }),
       ),
@@ -1858,7 +1866,10 @@ export class Assistant {
     return { url, redirect: CHATGPT_REDIRECT };
   }
 
-  /** Finishes it from the address it ended on; the plan then stands in for the person's own key. */
+  /**
+   * Finishes it from the address it ended on. The plan is kept beside the person's key; a person who
+   * already has a key keeps running on it until they pick the plan.
+   */
   async finishSignin(caller: Caller, provider: AssistantProvider, pasted: string) {
     const name = `signin:${provider}`;
     try {
@@ -1869,28 +1880,52 @@ export class Assistant {
       );
       await this.state.docs.write(caller.id, name, reg);
       const test = await testChatgpt(tokens, this.o.fetch ?? fetch);
-      await this.state.docs.write<KeyDoc>(caller.id, keyDocName(provider), {
+      const legacy = await this.state.ownPlan(caller.id, provider);
+      await this.state.docs.write<KeyDoc>(caller.id, planDocName(provider), {
         api_key: tokens.access_token,
         saved_at: Date.now(),
         test,
         chatgpt: tokens,
       });
+      if (legacy && legacy.name !== planDocName(provider))
+        await this.state.docs.remove(caller.id, legacy.name);
+      if (await this.state.ownKey(caller.id, provider))
+        await this.state.setPerson(caller.id, (d) =>
+          d.own_use?.[provider] ? d : { ...d, own_use: { ...d.own_use, [provider]: 'key' } },
+        );
     } catch (err) {
       if (err instanceof SigninError) throw new AssistantError(err.message, 'signin_failed');
       throw err;
     }
   }
 
-  /** Tests a person's own key, refreshing a plan sign-in first. */
-  async testOwn(caller: Caller, provider: AssistantProvider) {
-    const d = await this.state.ownKey(caller.id, provider);
-    if (!d) return null;
-    if (!d.chatgpt) return this.testKey(provider, d.api_key);
-    const fresh = await this.state.ownApiKey(caller.id, provider);
-    const now = await this.state.ownKey(caller.id, provider);
-    if (!fresh || !now?.chatgpt)
-      return now?.test ?? { ok: false, detail: 'Sign in again.', at: Date.now() };
-    return testChatgpt(now.chatgpt, this.o.fetch ?? fetch);
+  /** Signs the person out of their plan; their key, if any, runs from then on. */
+  async signOut(caller: Caller, provider: AssistantProvider) {
+    const found = await this.state.ownPlan(caller.id, provider);
+    if (found) await this.state.docs.remove(caller.id, found.name);
+  }
+
+  /**
+   * Tests one of the person's own (`way`, else the one in use), refreshing a plan first, and keeps
+   * the result on it.
+   */
+  async testOwn(caller: Caller, provider: AssistantProvider, way?: AssistantOwnWay) {
+    const w = way ?? (await this.state.ownUse(caller.id, provider));
+    if (w === 'key') {
+      const d = await this.state.ownKey(caller.id, provider);
+      if (!d) return null;
+      const test = await this.testKey(provider, d.api_key);
+      await this.state.docs.write<KeyDoc>(caller.id, keyDocName(provider), { ...d, test });
+      return test;
+    }
+    if (w !== 'plan' || !(await this.state.ownPlan(caller.id, provider))) return null;
+    const token = await this.state.planToken(caller.id, provider);
+    const now = await this.state.ownPlan(caller.id, provider);
+    if (!token || !now)
+      return now?.doc.test ?? { ok: false, detail: 'Sign in again.', at: Date.now() };
+    const test = await testChatgpt(now.doc.chatgpt, this.o.fetch ?? fetch);
+    await this.state.docs.write<KeyDoc>(caller.id, now.name, { ...now.doc, test });
+    return test;
   }
 
   /** One free call (reading a model) that says whether the provider takes the key. */
