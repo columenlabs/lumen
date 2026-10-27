@@ -1326,26 +1326,43 @@ export class Assistant {
       // On a plan a forced call is the one tool offered, with any call required.
       const only = plan && typeof force === 'object' ? force.name : undefined;
       const choice = only ? 'required' : force;
-      const stream = client.responses.stream(
-        {
-          model: session.model.id,
-          instructions,
-          input,
-          ...sent(only),
-          store: false,
-          stream: true,
-          include: ['reasoning.encrypted_content'],
-          ...(effort ? { reasoning: { effort } } : {}),
-          ...(choice ? { tool_choice: choice } : {}),
-        } as OpenAI.Responses.ResponseCreateParamsStreaming,
-        signal ? { signal } : {},
-      );
+      // The raw event stream, not the SDK's accumulator: a plan sign-in's backend sends event types
+      // the SDK does not know and its accumulator throws on them. The final response rides on the
+      // completed, incomplete or failed event; every other event but text deltas is skipped.
       let partial = '';
-      stream.on('response.output_text.delta', (e) => {
-        partial += e.delta;
-        emit('text', { delta: e.delta });
-      });
-      const res = await stream.finalResponse().catch((err: unknown) => {
+      const res = await (async () => {
+        const stream = await client.responses.create(
+          {
+            model: session.model.id,
+            instructions,
+            input,
+            ...sent(only),
+            store: false,
+            stream: true,
+            include: ['reasoning.encrypted_content'],
+            ...(effort ? { reasoning: { effort } } : {}),
+            ...(choice ? { tool_choice: choice } : {}),
+          } as OpenAI.Responses.ResponseCreateParamsStreaming,
+          signal ? { signal } : {},
+        );
+        let done: OpenAI.Responses.Response | undefined;
+        for await (const e of stream as AsyncIterable<{ type: string } & Record<string, unknown>>) {
+          if (e.type === 'response.output_text.delta' && typeof e.delta === 'string') {
+            partial += e.delta;
+            emit('text', { delta: e.delta });
+          } else if (
+            e.type === 'response.completed' ||
+            e.type === 'response.incomplete' ||
+            e.type === 'response.failed'
+          ) {
+            done = e.response as OpenAI.Responses.Response;
+          } else if (e.type === 'error') {
+            throw new AssistantError('OpenAI could not finish the answer.', 'upstream');
+          }
+        }
+        if (!done) throw new AssistantError('OpenAI ended the answer early.', 'upstream');
+        return done;
+      })().catch((err: unknown) => {
         if (signal?.aborted && partial) sink.push({ kind: 'text', text: partial });
         throw err;
       });
@@ -1377,7 +1394,12 @@ export class Assistant {
       o.called();
       const cut = res.incomplete_details?.reason === 'max_output_tokens' ? ' …(cut)' : '';
       if (cut) emit('text', { delta: cut });
-      const text = (res.output_text ?? '') + cut;
+      // Raw events carry no `output_text`: the words are the output messages' text parts.
+      const words = (res.output as OpenAI.Responses.ResponseOutputItem[])
+        .flatMap((b) => (b.type === 'message' ? b.content : []))
+        .map((c) => (c.type === 'output_text' ? c.text : ''))
+        .join('');
+      const text = words + cut;
       if (text) {
         answer += (answer ? '\n\n' : '') + text;
         sink.push({ kind: 'text', text });
