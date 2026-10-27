@@ -41,6 +41,7 @@ import type {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
 import OpenAI from 'openai';
+import { type BearingsExtra, type BearingsNow, bearings } from './bearings';
 import {
   CHATGPT_REDIRECT,
   type ChatgptRegistration,
@@ -224,8 +225,15 @@ export interface AssistantOptions {
   defaultCap?: number;
   /** An allowance on the shared keys a person can ask to raise (Request more). */
   allowance?: AllowanceOptions;
-  /** Months and dates in this zone; UTC by default. */
+  /** Months and dates in this zone, and a person's zone when their browser sends none; UTC by default. */
   timeZone?: string;
+  /** The app's name, told to the model in its bearings (`App: …`). */
+  app?: string;
+  /**
+   * The app's own lines for the bearings at the top of each message (a market's session, a billing
+   * day). Given 300 ms; late or failing, its lines are left out.
+   */
+  bearings?: (b: BearingsNow, caller: Caller) => ReturnType<BearingsExtra>;
   /** Chats are deleted this many days after their last message (`purge`); 30. */
   keepDays?: number;
   /** The fetch the model providers and ScrapeQL calls go through. */
@@ -1061,7 +1069,15 @@ export class Assistant {
         }
       }
 
+      const told = await bearings({
+        timeZone: req.time_zone,
+        fallbackZone: this.o.timeZone,
+        lastAt: (prev as { at?: number } | null)?.at,
+        app: this.o.app,
+        ...(this.o.bearings ? { extras: (b: BearingsNow) => this.o.bearings?.(b, caller) } : {}),
+      });
       const page =
+        told +
         this.cardNews(doc) +
         (req.refs?.length
           ? `The person points at these parts: they are what "this" means, and when the person asks for a change they are the only parts to change. Read anything else you need (the rest of the page, other records, your tools) for context, but leave it as it is unless they ask.\n${JSON.stringify(req.refs).slice(0, 16000)}\n\n`
@@ -1200,7 +1216,7 @@ export class Assistant {
     failed: number,
   ) {
     const lines = [
-      `You are ${this.name}. Today is ${new Date().toISOString().slice(0, 10)}.`,
+      `You are ${this.name}. Each message starts with Bearings: the time now in the person's zone and where they are. Take today, now and how long ago from it; never guess the date.`,
       'Answer in short plain sentences. Use the tools for facts; never guess a number a tool can give you. Call several tools at once when they do not depend on each other.',
       'A tool marked DRAFT ONLY makes a card the person saves or dismisses; it changes nothing by itself. Say what the card will do; never claim it is done. The next message tells you how each card ended.',
       'A tool marked WRITES AT ONCE makes its change when you call it; the person can undo it from the chat. Change only what they asked for, and say what you changed.',

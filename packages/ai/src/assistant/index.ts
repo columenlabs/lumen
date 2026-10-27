@@ -12,6 +12,7 @@
  * The ChatGPT plan sign-in's parts are exported on their own too, for an app that keeps the tokens and
  * calls OpenAI itself (`LumenChatgptSignin` is the panel's part for it).
  */
+export * from './bearings';
 export * from './chatgpt';
 export * from './engine';
 export * from './models';

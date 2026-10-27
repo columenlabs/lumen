@@ -170,6 +170,8 @@ export interface AssistantMessage {
   refs?: AssistantRefNote[];
   /** The tier the person picked for this message (`@`): a higher one takes it as a task, the same or a lower one answers it. */
   tier?: string;
+  /** The browser's IANA zone, for the assistant's bearings (the time now where the person is). */
+  time_zone?: string;
 }
 
 /** A tier as the person set it, with what it runs. */
