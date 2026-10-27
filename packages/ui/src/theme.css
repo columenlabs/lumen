@@ -414,15 +414,28 @@
   left: 100%;
 }
 
-/* A row that scrolls sideways (LumenTabs) fades at an edge with more beyond it. */
+/* A row that scrolls sideways (LumenTabs, a view's page) fades at an edge with more beyond it.
+   `--fade-inset` keeps a vertical scrollbar at the end edge out of the fade. */
 [data-fade="end"] {
-  mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  mask-image: linear-gradient(
+    to left,
+    #000 var(--fade-inset, 0px),
+    transparent var(--fade-inset, 0px),
+    #000 calc(var(--fade-inset, 0px) + 2rem)
+  );
 }
 [data-fade="start"] {
   mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent);
 }
 [data-fade="both"] {
-  mask-image: linear-gradient(to right, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
+  mask-image: linear-gradient(
+    to left,
+    #000 var(--fade-inset, 0px),
+    transparent var(--fade-inset, 0px),
+    #000 calc(var(--fade-inset, 0px) + 2rem),
+    #000 calc(100% - 2rem),
+    transparent
+  );
 }
 
 /* A LumenView table on a narrow phone (`data-cards`): each row is a card, so nothing runs off

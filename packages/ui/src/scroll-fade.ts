@@ -20,8 +20,10 @@ export function useScrollFade(given?: RefObject<HTMLDivElement | null>) {
     const el = ref.current;
     if (!el) return;
     update();
+    // The row's content can grow while the row keeps its size (a new page of wider rows).
     const seen = new ResizeObserver(update);
     seen.observe(el);
+    if (el.firstElementChild) seen.observe(el.firstElementChild);
     return () => seen.disconnect();
   }, [ref, update]);
   return { ref, side, update };
