@@ -223,7 +223,11 @@ export function StackedColumns({
   // The highest part with a value carries the column's rounded cap.
   const top = (r: Record<string, number | string>) =>
     parts.findLast((p) => Number(r[p.key]) > 0)?.key;
-  const ticks = niceTicks(Math.max(0, ...rows.map(total)));
+  const ticks = niceTicks(
+    Math.max(0, ...rows.map(total)),
+    4,
+    rows.every((r) => Number.isInteger(total(r))),
+  );
   return (
     <div className="flex flex-col gap-2">
       <ChartContainer
@@ -340,7 +344,8 @@ export function TimeLines({
   );
   const axis = (right: boolean) => {
     const keys = lines.filter((l) => !!l.right === right).map((l) => l.key);
-    return niceTicks(Math.max(0, ...rows.flatMap((r) => keys.map((k) => Number(r[k]) || 0))));
+    const values = rows.flatMap((r) => keys.map((k) => Number(r[k]) || 0));
+    return niceTicks(Math.max(0, ...values), 4, values.every(Number.isInteger));
   };
   const left = axis(false);
   const hasRight = lines.some((l) => l.right);
@@ -699,13 +704,15 @@ export function AllocationBar({
 
 /**
  * Round axis steps (1, 2, 2.5 or 5 times a power of ten) from 0 to just above `max`, about four
- * of them, so a value axis reads 0, 100k, 200k, 300k rather than 95k, 190k, 285k.
+ * of them, so a value axis reads 0, 100k, 200k, 300k rather than 95k, 190k, 285k. When every value
+ * is a whole number (a count), so is every step: 0, 1, 2 rather than 0, 0.5, 1, 1.5.
  */
-function niceTicks(max: number, count = 4): number[] {
+function niceTicks(max: number, count = 4, whole = false): number[] {
   if (!(max > 0)) return [0, 1];
   const raw = max / count;
   const pow = 10 ** Math.floor(Math.log10(raw));
-  const step = ([1, 2, 2.5, 5, 10].find((m) => m * pow >= raw) ?? 10) * pow;
+  const steps = whole ? [1, 2, 5, 10] : [1, 2, 2.5, 5, 10];
+  const step = Math.max(whole ? 1 : 0, (steps.find((m) => m * pow >= raw) ?? 10) * pow);
   const n = Math.ceil(max / step - 1e-9);
   return Array.from({ length: n + 1 }, (_, i) => Math.round(i * step * 1e6) / 1e6);
 }

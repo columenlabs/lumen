@@ -180,17 +180,20 @@ export function PageHeader({ crumbs, actions, layout, meta, status }: PageHeader
   );
 }
 
-/** The page body: the shell's gutter, section gap and max width. */
+/**
+ * The page body: the shell's gutter, section gap and max width. A plain block, since the shell's
+ * inset is the page's one `main` landmark.
+ */
 export function PageBody({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <main
+    <div
       className={cn(
         'mx-auto flex w-full max-w-(--shell-max-width) min-w-0 flex-1 flex-col gap-(--shell-section-gap) p-(--shell-gutter)',
         className,
       )}
     >
       {children}
-    </main>
+    </div>
   );
 }
 
