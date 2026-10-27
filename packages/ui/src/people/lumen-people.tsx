@@ -329,7 +329,7 @@ function PeopleList({
                 value={people.length}
                 caption={`${active} active${disabled ? ` · ${disabled} disabled` : ''}`}
               />
-              <Tile label="Admins" value={admins.length} caption="at least 1 always kept" />
+              <Tile label="Admins" value={admins.length} caption="Can’t remove the last admin" />
               <Tile
                 label="Invites pending"
                 value={invited}
