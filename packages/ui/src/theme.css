@@ -414,6 +414,30 @@
   left: 100%;
 }
 
+/* A row that scrolls sideways (LumenTabs, a view's page) fades at an edge with more beyond it.
+   `--fade-inset` keeps a vertical scrollbar at the end edge out of the fade. */
+[data-fade="end"] {
+  mask-image: linear-gradient(
+    to left,
+    #000 var(--fade-inset, 0px),
+    transparent var(--fade-inset, 0px),
+    #000 calc(var(--fade-inset, 0px) + 2rem)
+  );
+}
+[data-fade="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent);
+}
+[data-fade="both"] {
+  mask-image: linear-gradient(
+    to left,
+    #000 var(--fade-inset, 0px),
+    transparent var(--fade-inset, 0px),
+    #000 calc(var(--fade-inset, 0px) + 2rem),
+    #000 calc(100% - 2rem),
+    transparent
+  );
+}
+
 /* A LumenView table on a narrow phone (`data-cards`): each row is a card, so nothing runs off
    the right edge. Line 1: the row's name (shortens) and one figure (`data-card="meta"`); line 2:
    the other values, small and muted. Numbers, dates and their units keep their width; only text
@@ -486,7 +510,17 @@
   }
   table[data-cards] [data-slot="unit-value-unit"] {
     position: static;
+    width: auto;
+    padding-left: 0;
     margin-left: 0.25em;
+    font-size: inherit;
+  }
+  /* A bare count names what it counts (`cardUnit`): no header says it on a card. */
+  table[data-cards] td[data-card-unit]::after {
+    content: attr(data-card-unit);
+    margin-left: 0.25em;
+    color: var(--muted-foreground);
+    font-weight: 400;
   }
 }
 

@@ -143,6 +143,10 @@ export interface ViewField<T> {
   maxWidth?: string | false;
   /** Left out on phones, where the table has no room for it (a returns table's longer windows). */
   hideOnPhone?: boolean;
+  /** Left out of a table when no row in it has a value (none, empty or 0): an Attachments column on mail with none. */
+  hideEmpty?: boolean;
+  /** On a phone card, where no header names it: the word after a bare count (`msgs`, so `5,861 msgs`). */
+  cardUnit?: string;
   /**
    * How the value updates (live domains): `live` moves with the market while it
    * trades (a quote), `asof` is a daily or snapshot value (a close, a fact, the assistant frame's column).

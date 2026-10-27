@@ -109,6 +109,7 @@ import {
 } from './lumen-widget';
 import { OriginLegend } from './origin-legend';
 import { type Crumb, IconButton, Page } from './page';
+import { useScrollFade } from './scroll-fade';
 import { SourcedCard } from './sourced-card';
 import { LumenCard, SummaryTiles } from './summary-cards';
 import type { ViewEditDialog as ViewEditDialogPart, ViewEditorSection } from './view-editor';
@@ -389,6 +390,7 @@ function Scroller({ fit, children }: { fit?: boolean; children: ReactNode }) {
   // it (theme.css): this lines that paint up with the fixed wash and stops pinned headers below its
   // fade. Nothing here runs on scroll: the row is sticky, so it never moves on screen.
   const ref = useRef<HTMLDivElement>(null);
+  const edge = useScrollFade(ref);
   const watched = useRef<{ intro: HTMLElement; off: () => void } | null>(null);
   useEffect(() => {
     const el = ref.current;
@@ -440,7 +442,13 @@ function Scroller({ fit, children }: { fit?: boolean; children: ReactNode }) {
     return () => seen.disconnect();
   }, []);
   return (
-    <div ref={ref} data-slot="view-scroll" className={VIEW_SCROLL}>
+    <div
+      ref={ref}
+      data-slot="view-scroll"
+      data-fade={edge.side}
+      onScroll={edge.update}
+      className={cn(VIEW_SCROLL, '[--fade-inset:var(--view-sb,0px)]')}
+    >
       <div
         className={cn(
           'flex flex-col gap-(--shell-section-gap)',

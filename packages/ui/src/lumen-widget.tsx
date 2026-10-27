@@ -393,6 +393,7 @@ export function LumenWidget({
   note,
   controls,
   tools,
+  phoneTitle,
   filter,
   filterCount = 0,
   load,
@@ -435,6 +436,9 @@ export function LumenWidget({
   controls?: CardControls;
   /** Buttons before the ↻, e.g. a view's pager. */
   tools?: ReactNode;
+  /** False: a phone leaves the title out and gives the header to `tools` (a view whose
+   *  page header names it already). */
+  phoneTitle?: boolean;
   /** The card's own filter (a view's LumenTokenizedFilter and Group): on the title's line
    *  when the header is wide, on a line under it when narrow, behind a funnel button on phone. */
   filter?: ReactNode;
@@ -548,10 +552,13 @@ export function LumenWidget({
               <LinkPicker color={link.color} onPick={link.onPick} label={title} className="-mr-1" />
             )}
             {!compact && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+            {/* A title cut to one letter says nothing: a card that sets phoneTitle false
+                gives its tools the room on a phone. */}
             <span
               className={cn(
                 'truncate',
                 compact ? 'text-xs text-muted-foreground' : 'text-sm font-semibold',
+                phoneTitle === false && !layout && 'max-md:hidden',
               )}
             >
               {title}
