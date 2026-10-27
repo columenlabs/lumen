@@ -22,7 +22,8 @@ type Retry = NonNullable<NonNullable<QueryClientConfig['defaultOptions']>['queri
 export interface PersistOptions {
   /** The storage key; one per app (`career`), so apps never read each other's shapes. */
   key: string;
-  /** Changes when stored shapes would no longer fit (the app's build id); a mismatch drops them. */
+  /** Changes when stored shapes would no longer fit; a mismatch drops them. Defaults to the
+   *  page's entry script address, which has a new hash on every build. */
   buster?: string;
   /** Oldest data shown at load, in ms (a day by default). */
   maxAge?: number;
@@ -65,7 +66,10 @@ interface Stored {
   state: DehydratedState;
 }
 
-function persistQueries(qc: QueryClient, { key, buster = '', maxAge = DAY }: PersistOptions) {
+function persistQueries(
+  qc: QueryClient,
+  { key, buster = entryScript(), maxAge = DAY }: PersistOptions,
+) {
   if (typeof window === 'undefined') return;
   const storageKey = PREFIX + key;
   try {
@@ -114,6 +118,11 @@ function persistQueries(qc: QueryClient, { key, buster = '', maxAge = DAY }: Per
     },
     true,
   );
+}
+
+function entryScript(): string {
+  if (typeof document === 'undefined') return '';
+  return document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src ?? '';
 }
 
 function clearKey(k: string) {
