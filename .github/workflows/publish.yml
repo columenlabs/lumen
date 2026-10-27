@@ -5,6 +5,9 @@
 # Signs in to npm with the repository secret NPM_TOKEN. Then lumen-ship (packages/ship) makes the
 # version's GitHub release, its notes written by Claude (secret ANTHROPIC_API_KEY).
 # Run workflow with a tag only writes that tag's release (redo: write its notes again).
+# The vault (packages/vault) is the exception: it is published by its own job, only when it changed
+# since its last version on npm, from the `vault` environment, which waits for the owner's approval
+# and holds its own token (NPM_TOKEN_VAULT). Without that token it is not published.
 name: Publish
 on:
   push:
@@ -35,6 +38,9 @@ jobs:
     if: inputs.tag == '' || inputs.tag == null
     runs-on: [self-hosted, openship, linux, arm64]
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      vault: ${{ steps.vault.outputs.changed }}
     env:
       LUMEN_FORBIDDEN_NAMES: ${{ vars.LUMEN_FORBIDDEN_NAMES }}
     steps:
@@ -124,6 +130,51 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: packages/ship/bin/lumen-ship release tag "v${{ steps.version.outputs.version }}"
+      - name: Did the vault change
+        id: vault
+        run: |
+          last=$(npm view @columenlabs/lumen-vault version 2>/dev/null || true)
+          if [ -z "$last" ] || ! git rev-parse -q --verify "refs/tags/v$last" >/dev/null \
+            || ! git diff --quiet "v$last" HEAD -- packages/vault; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "The vault changed since ${last:-never published}: its job waits for approval"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  vault:
+    needs: publish
+    if: needs.publish.outputs.vault == 'true'
+    runs-on: [self-hosted, openship, linux, arm64]
+    timeout-minutes: 15
+    # Required reviewer: the owner. Its secret NPM_TOKEN_VAULT can publish only this package.
+    environment: vault
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - run: scripts/pack.sh out
+        env:
+          LUMEN_VERSION: ${{ needs.publish.outputs.version }}
+      - name: Publish the vault
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_VAULT }}
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN_VAULT is not set on the vault environment: not published"
+            exit 1
+          fi
+          if npm view "@columenlabs/lumen-vault@$VERSION" version >/dev/null 2>&1; then
+            echo "@columenlabs/lumen-vault@$VERSION is already on npm"; exit 0
+          fi
+          (cd out/vault && npm publish --access public --tag latest)
 
   release:
     if: inputs.tag != '' && inputs.tag != null

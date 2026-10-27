@@ -1,0 +1,6 @@
+# The vault seals every person's data in the apps that use it: any change to it, to how it is
+# published, or to this file needs the owner's review (a branch rule makes it required).
+/packages/vault/ @bchoor
+/.github/workflows/publish.yml @bchoor
+/scripts/pack.sh @bchoor
+/.github/CODEOWNERS @bchoor
