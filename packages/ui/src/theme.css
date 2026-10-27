@@ -556,6 +556,11 @@ tr[aria-selected="true"]:hover > td {
 tr[aria-selected="true"] > td:first-child {
   box-shadow: inset 3px 0 0 var(--primary);
 }
+/* The open row's fill and bar already mark where ↑ and ↓ are; a ring on top doubles them. A row
+   that has focus without being open keeps its ring. */
+tr[aria-selected="true"]:focus-visible {
+  outline: none;
+}
 /* A phone's card row is one flex box: the fill and bar go on the row itself. */
 @media (max-width: 639px) {
   table[data-cards] tr[aria-selected="true"] {
