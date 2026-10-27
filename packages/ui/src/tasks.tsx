@@ -29,7 +29,7 @@ import { toast } from 'sonner';
 // ended unseen. It opens a popover on desktop and a bottom sheet on phone with the last 7 days;
 // opening it marks the ended ones seen. ✕ clears one ended task, the brush every ended one
 //. A task that ends while the page is open shows a toast with
-// Open. The list polls one cheap read every 3 s only while something runs and the tab is visible;
+// Open. The list polls one cheap read every 3 s (15 s after a minute) only while something runs and the tab is visible;
 // otherwise it reads again on focus. The product mounts `TasksProvider` and `TasksButton` in the
 // shell's slots; where the API answers 404 nothing shows.
 import { LumenConfirm } from './confirm';
@@ -91,6 +91,7 @@ export function useTaskFor(kind: string, ref: string | null | undefined): Task |
 }
 
 const POLL_MS = 3000;
+const SLOW_POLL_MS = 15_000;
 
 export function TasksProvider({ config, children }: { config?: TasksConfig; children: ReactNode }) {
   if (!config) return children;
@@ -135,7 +136,16 @@ function TasksLive({
     [router, shell],
   );
 
-  const refresh = useCallback(async () => {
+  // The newest `open` and query client, read through refs so `refresh` stays one function for
+  // the provider's life: a new one would re-run the first-read effect and fetch the list again.
+  const openRef = useRef(open);
+  openRef.current = open;
+  const qcRef = useRef(qc);
+  qcRef.current = qc;
+  // Reads already on the wire share one request.
+  const inflight = useRef<Promise<void> | null>(null);
+
+  const read = useCallback(async () => {
     const res = await fetch(api, { headers: { accept: 'application/json' } }).catch(() => null);
     if (!res) return;
     if (res.status === 404) {
@@ -147,13 +157,20 @@ function TasksLive({
     const before = activeIds.current;
     if (before) {
       const ended = next.tasks.filter((t) => before.has(t.id) && !isActive(t));
-      for (const t of ended) endedToast(t, open);
+      for (const t of ended) endedToast(t, openRef.current);
       // A task's results are new data: drop the cache once (query-client.ts).
-      if (ended.length) void qc.invalidateQueries();
+      if (ended.length) void qcRef.current.invalidateQueries();
     }
     activeIds.current = new Set(next.tasks.filter(isActive).map((t) => t.id));
     setList(next);
-  }, [api, open, qc]);
+  }, [api]);
+
+  const refresh = useCallback(() => {
+    inflight.current ??= read().finally(() => {
+      inflight.current = null;
+    });
+    return inflight.current;
+  }, [read]);
 
   const track = useCallback(
     (t: Task) => {
@@ -221,14 +238,19 @@ function TasksLive({
     };
   }, [refresh]);
 
-  // Every 3 s only while something is queued or running and the tab is visible.
+  // Every 3 s while something is queued or running and the tab is visible, easing to every 15 s
+  // once it has run a minute (a long search needs no second-by-second count).
   const active = (list?.active ?? 0) > 0;
   useEffect(() => {
     if (!active) return;
-    const id = window.setInterval(() => {
+    const since = Date.now();
+    let id: number;
+    const tick = () => {
       if (document.visibilityState === 'visible') void refresh();
-    }, POLL_MS);
-    return () => window.clearInterval(id);
+      id = window.setTimeout(tick, Date.now() - since > 60_000 ? SLOW_POLL_MS : POLL_MS);
+    };
+    id = window.setTimeout(tick, POLL_MS);
+    return () => window.clearTimeout(id);
   }, [active, refresh]);
 
   const value = useMemo(
