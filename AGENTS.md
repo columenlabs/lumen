@@ -17,7 +17,7 @@ One repo for the Lumen family: each package is a folder `packages/<name>` publis
 - General over specific: a part one app needs should be built so any app could use it, through props or slots, never by checking which app is running.
 - No hand-rolled components where a shadcn or Radix part fits. Compose them.
 - A card is as tall as its content; only a `LumenGrid` cell stretches its card to the cell (`data-folded` keeps a folded one short). Never give a card `h-full` outside the grid: in a scrolling column (Settings, a drawer, a sheet) it clips at one screen and leaves nothing to scroll.
-- Every card body sits in `LumenBoundary`. Pickers are `LumenSelector`, drawers `LumenDrawer`, tabs `LumenTabs`.
+- Every card body sits in `LumenBoundary`. Pickers are `LumenSelector`, drawers `LumenDrawer`, tabs `LumenTabs`. A drawer that a list's rows each open passes `dock`, so it sits beside the page and the next row swaps it in place.
 - A settings list of things (providers, channels, accounts) is `LumenExpandList` of `LumenExpandRow`s: each row starts collapsed, shows its name, a line and a badge, and opens in place to its own settings, one at a time.
 - A `useExhaustiveDependencies` suppression needs a reason of three words or more (`lumen-ship check suppressions`). Settings section descriptions are one plain line of 64 characters or less (`lumen-ship check settings-copy`). Hard-coded px/rem class values may only go down (`lumen-ship check magic-numbers`, `scripts/magic-numbers.baseline`).
 - Any field makes a Row of numbers or Number card (`cardAgg`): numbers sum, a percent or weight takes its max (never sum %), text counts its distinct values. A number the app draws with `render` still rolls up from `value`.
