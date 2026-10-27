@@ -35,9 +35,9 @@ export function DetailsTable({ head, rows, foot, selected, onSelect }: DetailsTa
     cn(
       head[i]?.right && 'num text-right',
       i !== grow && 'w-px',
-      // A marked `grow` column (a name) takes the spare width and no more: a long name ends in an
-      // ellipsis instead of pushing the other columns out of the card.
-      i === marked && 'w-full max-w-0 truncate [&>*]:max-w-full',
+      // A marked `grow` column (a name) takes the spare width, at least 10rem and no more: a long
+      // name ends in an ellipsis instead of pushing the other columns out of the card.
+      i === marked && 'w-full max-w-0 min-w-[min(10rem,40vw)] truncate [&>*]:max-w-full',
       head[i]?.hideOnPhone && 'max-md:hidden',
     );
   return (
