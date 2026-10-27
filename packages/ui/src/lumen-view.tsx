@@ -1631,6 +1631,7 @@ function LumenTableRows<T extends RowData>({
         {/* The whole folded line opens and closes its rows. */}
         <TableRow
           data-row={k}
+          data-rollup=""
           className="cursor-pointer hover:bg-muted has-aria-expanded:hover:bg-muted"
           onClick={() =>
             setOpenParts((o) => {
@@ -1644,13 +1645,13 @@ function LumenTableRows<T extends RowData>({
           {shown.map((f, i) => (
             <TableCell key={f.key} {...col(f, groupBy && i === 0 && 'pl-8')}>
               {i === 0 ? (
-                <span className="flex items-center gap-1">
+                <span className="flex min-w-0 items-center gap-1 whitespace-nowrap">
                   {chevron(k, `${key} ${openLabel()}`)}
                   {subgroup?.mark?.(key, ms)}
-                  <span className="font-medium" title={titleOf(key, ms) === key ? undefined : key}>
+                  <span className="truncate font-medium" title={key}>
                     {titleOf(key, ms)}
                   </span>
-                  <span className="num text-xs text-muted-foreground">{ms.length}</span>
+                  <span className="num shrink-0 text-xs text-muted-foreground">{ms.length}</span>
                 </span>
               ) : (
                 rollCell(f, ms, 'fold')
@@ -1882,9 +1883,9 @@ function LumenTableRows<T extends RowData>({
                   const open = isOpen(key, gi);
                   return (
                     <Fragment key={key}>
-                      <TableRow className={ROLLUP} data-group={key}>
+                      <TableRow className={ROLLUP} data-group={key} data-rollup="">
                         {selection && (
-                          <TableCell className={cn('w-8 pr-0', PINNED_GROUP)}>
+                          <TableCell data-card="select" className={cn('w-8 pr-0', PINNED_GROUP)}>
                             <Checkbox
                               checked={
                                 members.every((m) => selection.keys.has(keyOf(m.original)))
@@ -1905,38 +1906,47 @@ function LumenTableRows<T extends RowData>({
                         )}
                         {shown.slice(lead - 1).map((f, i) =>
                           i === 0 ? (
-                            <TableCell key={f.key} colSpan={leadSpan} className={PINNED_GROUP}>
-                              <Button
-                                variant="ghost"
-                                size="xs"
-                                className="-mx-2 hover:bg-transparent aria-expanded:bg-transparent"
-                                aria-expanded={open}
-                                aria-label={`${open ? 'Collapse' : 'Expand'} ${key}`}
-                                onClick={() =>
-                                  serverGroups
-                                    ? serverGroups.onToggle(key)
-                                    : setFlipped((c) => {
-                                        const n = new Set(c);
-                                        n.has(key) ? n.delete(key) : n.add(key);
-                                        return n;
-                                      })
-                                }
-                              >
-                                <ChevronRightIcon
-                                  className={cn('transition-transform', open && 'rotate-90')}
-                                />
-                                <GroupMark field={groupBy} value={key} />
-                                {key}
-                                <span className="num font-normal text-muted-foreground">
-                                  {serverGroups
-                                    ? (served.get(key)?.n?.toLocaleString() ?? '')
-                                    : members.length}
-                                </span>
-                              </Button>
-                              {groupActions?.(
-                                key,
-                                members.map((m) => m.original),
-                              )}
+                            <TableCell
+                              key={f.key}
+                              colSpan={leadSpan}
+                              data-card="lead"
+                              className={PINNED_GROUP}
+                            >
+                              {/* One line at every width: the name shortens, never the counts. */}
+                              <span className="flex max-w-(--lead-col-max) min-w-0 items-center whitespace-nowrap">
+                                <Button
+                                  variant="ghost"
+                                  size="xs"
+                                  title={key}
+                                  className="-mx-2 min-w-0 hover:bg-transparent aria-expanded:bg-transparent"
+                                  aria-expanded={open}
+                                  aria-label={`${open ? 'Collapse' : 'Expand'} ${key}`}
+                                  onClick={() =>
+                                    serverGroups
+                                      ? serverGroups.onToggle(key)
+                                      : setFlipped((c) => {
+                                          const n = new Set(c);
+                                          n.has(key) ? n.delete(key) : n.add(key);
+                                          return n;
+                                        })
+                                  }
+                                >
+                                  <ChevronRightIcon
+                                    className={cn('transition-transform', open && 'rotate-90')}
+                                  />
+                                  <GroupMark field={groupBy} value={key} />
+                                  <span className="truncate">{key}</span>
+                                  <span className="num shrink-0 font-normal text-muted-foreground">
+                                    {serverGroups
+                                      ? (served.get(key)?.n?.toLocaleString() ?? '')
+                                      : members.length}
+                                  </span>
+                                </Button>
+                                {groupActions?.(
+                                  key,
+                                  members.map((m) => m.original),
+                                )}
+                              </span>
                             </TableCell>
                           ) : (
                             <TableCell key={f.key} {...col(f, PINNED_GROUP)}>
@@ -1968,11 +1978,13 @@ function LumenTableRows<T extends RowData>({
               </TableRow>
             )}
             {hasTotal && rows.length > 0 && (
-              <TableRow className={cn(ROLLUP, 'border-t-2')} data-total>
+              <TableRow className={cn(ROLLUP, 'border-t-2')} data-total data-rollup="">
                 {selection && <TableCell />}
                 {rollCells(rows).map((cell, i) =>
                   i === 0 && !(shown[0] && rollsUp(shown[0])) ? (
-                    <TableCell key="total">Total</TableCell>
+                    <TableCell key="total" data-card="lead">
+                      Total
+                    </TableCell>
                   ) : (
                     cell
                   ),
