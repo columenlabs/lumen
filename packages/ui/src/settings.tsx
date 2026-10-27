@@ -375,6 +375,15 @@ export function LumenSettings({
       .map((el) => el.dataset.settingsSection ?? '');
     setFound((f) => (f.join() === ids.join() ? f : ids));
   });
+  // A long nav scrolls; keep the open section's row in view (Settings can open at one far down).
+  const navList = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() =>
+      navList.current?.querySelector('[data-active=true]')?.scrollIntoView({ block: 'nearest' }),
+    );
+    return () => cancelAnimationFrame(id);
+  }, [open]);
   const shown = (s: SettingsSectionDef) => !q || found.includes(s.id);
   const go = (id: string) => {
     setQuery('');
@@ -464,30 +473,36 @@ export function LumenSettings({
         </DialogDescription>
         <nav
           aria-label="Settings sections"
-          className="hidden w-56 shrink-0 flex-col border-r bg-sidebar py-2 md:flex"
+          className="hidden min-h-0 w-56 shrink-0 flex-col border-r bg-sidebar pt-2 md:flex"
         >
-          <div className="px-2 pt-1 pb-1">{search}</div>
-          {navGroups.map((g) => (
-            <SidebarGroup key={g.label} className="py-1">
-              <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {g.items.map((s) => (
-                    <SidebarMenuItem key={s.id}>
-                      <SidebarMenuButton
-                        isActive={!q && s.id === current.id}
-                        className={s.sub ? 'pl-7' : undefined}
-                        onClick={() => go(s.id)}
-                      >
-                        <s.icon />
-                        <span>{s.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))}
+          <div className="shrink-0 px-2 pt-1 pb-1">{search}</div>
+          <div
+            ref={navList}
+            data-slot="settings-nav-list"
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-2 *:shrink-0"
+          >
+            {navGroups.map((g) => (
+              <SidebarGroup key={g.label} className="py-1">
+                <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {g.items.map((s) => (
+                      <SidebarMenuItem key={s.id}>
+                        <SidebarMenuButton
+                          isActive={!q && s.id === current.id}
+                          className={s.sub ? 'pl-7' : undefined}
+                          onClick={() => go(s.id)}
+                        >
+                          <s.icon />
+                          <span>{s.title}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
+          </div>
         </nav>
         <div className="flex flex-col gap-2 border-b p-3 pr-12 md:hidden">
           {search}

@@ -59,3 +59,21 @@ const meta = {
 
 export default meta;
 export const Shell: StoryObj<typeof meta> = {};
+
+/** Many apps' Settings groups: the dialog's section list scrolls under its pinned search (press Ctrl+,). */
+export const LongSettings: StoryObj<typeof meta> = {
+  args: {
+    settingsGroups: ['Hub', 'Tools', 'Career', 'Cards', 'Recipes', 'Watch', 'Assistant'].map(
+      (label) => ({
+        label,
+        sections: ['Connection', 'Alerts', 'Model providers', 'Allowance'].map((title) => ({
+          id: `${label}-${title}`.toLowerCase().replace(/\W+/g, '-'),
+          title,
+          icon: SettingsIcon,
+          description: `${title} for ${label}.`,
+          content: <p className="text-sm text-muted-foreground">{title}</p>,
+        })),
+      }),
+    ),
+  },
+};
