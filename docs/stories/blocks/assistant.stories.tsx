@@ -137,7 +137,20 @@ const STATUS: AssistantStatus = {
       keys_url: 'https://platform.openai.com/api-keys',
       signin: 'chatgpt',
       app: { set: false },
-      own: { set: false },
+      own: {
+        set: true,
+        hint: 'sk-proj…f3Ab',
+        saved_at: NOW - 9 * 86_400_000,
+        test: { at: NOW - 2 * 86_400_000, ok: true, detail: 'OpenAI took the key.' },
+      },
+      plan: {
+        set: true,
+        via: 'chatgpt',
+        hint: 'ada@example.com',
+        saved_at: NOW - 86_400_000,
+        test: { at: NOW - 600_000, ok: true, detail: 'ChatGPT plan sign-in works.' },
+      },
+      use: 'plan',
     },
   ],
   caps: { app: 10, own: 10 },
@@ -343,6 +356,11 @@ function mockAdapter(
         ...(p.hand_off ? { hand_off: p.hand_off } : {}),
         ...(p.advice ? { advice: p.advice } : {}),
         ...(p.pay ? { pay: p.pay } : {}),
+        ...(p.own_use
+          ? {
+              providers: status.providers.map((x) => ({ ...x, use: p.own_use?.[x.id] ?? x.use })),
+            }
+          : {}),
         ...(p.web ? { web: { ...status.web, fetch: !!p.web.fetch } } : {}),
         ...(p.access
           ? { groups: status.groups.map((g) => ({ ...g, access: p.access?.[g.id] ?? g.access })) }
@@ -399,14 +417,23 @@ function mockAdapter(
           p.id === id
             ? {
                 ...p,
-                own: {
+                plan: {
                   set: true,
                   via: 'chatgpt' as const,
                   hint: 'ada@example.com',
                   test: { ...ok, detail: 'ChatGPT plan sign-in works.' },
                 },
+                use: p.use ?? 'plan',
               }
             : p,
+        ),
+      });
+    },
+    signOut: async (id) => {
+      await wait(400);
+      return done({
+        providers: status.providers.map((p) =>
+          p.id === id ? { ...p, plan: { set: false }, use: p.own.set ? 'key' : undefined } : p,
         ),
       });
     },

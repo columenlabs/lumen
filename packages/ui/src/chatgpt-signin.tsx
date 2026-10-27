@@ -37,7 +37,10 @@ const testOf = (k: KeyState) =>
       }
     : null;
 
-/** Sign in with ChatGPT: opens in a new tab, finished by pasting back where it ended. */
+/**
+ * Sign in with ChatGPT: opens in a new tab, finished by pasting back where it ended.
+ * @deprecated Use `LumenConnection` with a `signin` way; the assistant keeps the plan apart from the key.
+ */
 export function LumenChatgptSignin({
   state,
   start,

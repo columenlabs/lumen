@@ -243,6 +243,20 @@ export {
   errorText,
   useClock,
 } from './integrations';
+export {
+  ConnectionBadge,
+  type ConnectionField,
+  type ConnectionLine,
+  ConnectionLogo,
+  type ConnectionSignin,
+  type ConnectionStatus,
+  type ConnectionTest,
+  type ConnectionWay,
+  LumenConnection,
+  type LumenConnectionProps,
+  activeWay,
+  connectionStatus,
+} from './connection';
 export { LumenChatgptSignin, type LumenChatgptSigninProps } from './chatgpt-signin';
 export { LumenExpandList, LumenExpandRow } from './expand-list';
 export { type Fact, FactList, type FactListProps } from './fact-list';

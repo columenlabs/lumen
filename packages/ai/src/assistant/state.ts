@@ -23,6 +23,7 @@ import type {
   AllowanceRequest,
   AssistantAccess,
   AssistantEffort,
+  AssistantOwnWay,
   AssistantPayer,
   AssistantProvider,
   AssistantWait,
@@ -54,6 +55,9 @@ export interface KeyDoc {
 export const keyDocName = (provider: AssistantProvider) =>
   provider === 'anthropic' ? 'key' : `key:${provider}`;
 
+/** Where a person's plan sign-in is kept, beside their key (before 2026-10-27 it replaced the key). */
+export const planDocName = (provider: AssistantProvider) => `plan:${provider}`;
+
 export interface TokenDoc {
   client_id: string;
   client_secret: string;
@@ -77,6 +81,8 @@ export interface PersonDoc {
   pay?: AssistantPayer;
   /** USD a month on their own keys. */
   own_cap?: number;
+  /** Which of their own runs on a provider when both a key and a plan are set. */
+  own_use?: Partial<Record<AssistantProvider, AssistantOwnWay>>;
 }
 
 /** How the app counts allowance on its shared keys (`createAssistant` `allowance`). */
@@ -237,30 +243,62 @@ export class State {
     const env = await this.o.appKey?.(provider);
     return env ? { key: env, fromEnv: true } : null;
   }
-  ownKey(id: string, provider: AssistantProvider) {
-    return this.docs.read<KeyDoc>(id, keyDocName(provider));
+  /** The person's own API key (a key doc that holds a plan sign-in is their plan). */
+  async ownKey(id: string, provider: AssistantProvider) {
+    const d = await this.docs.read<KeyDoc>(id, keyDocName(provider));
+    return d && !d.chatgpt ? d : null;
   }
-  /** The person's own key, a plan sign-in refreshed first when it is about to run out. */
-  async ownApiKey(id: string, provider: AssistantProvider) {
-    const d = await this.ownKey(id, provider);
-    if (!d) return null;
-    if (!d.chatgpt) return { key: d.api_key, plan: false };
-    if (!staleChatgpt(d.chatgpt)) return { key: d.chatgpt.access_token, plan: true };
+  /** The person's plan sign-in and the doc it is kept in (the key's, for a sign-in from before). */
+  async ownPlan(id: string, provider: AssistantProvider) {
+    for (const name of [planDocName(provider), keyDocName(provider)]) {
+      const doc = await this.docs.read<KeyDoc>(id, name);
+      if (doc?.chatgpt) return { doc: doc as KeyDoc & { chatgpt: ChatgptTokens }, name };
+    }
+    return null;
+  }
+  /** Which of their own runs: the one they picked while it is set, else the plan, else the key. */
+  async ownUse(id: string, provider: AssistantProvider): Promise<AssistantOwnWay | null> {
+    const [p, key, plan] = await Promise.all([
+      this.person(id),
+      this.ownKey(id, provider),
+      this.ownPlan(id, provider),
+    ]);
+    const use = p.own_use?.[provider];
+    if (use === 'key' && key) return 'key';
+    if (use === 'plan' && plan) return 'plan';
+    return plan ? 'plan' : key ? 'key' : null;
+  }
+  /** The plan's access token, refreshed first when it is about to run out; null once it fails. */
+  async planToken(id: string, provider: AssistantProvider) {
+    const found = await this.ownPlan(id, provider);
+    if (!found) return null;
+    const { doc: d, name } = found;
+    if (!staleChatgpt(d.chatgpt)) return d.chatgpt.access_token;
     try {
       const t = await refreshChatgpt(d.chatgpt, this.o.fetch ?? fetch);
-      await this.docs.write<KeyDoc>(id, keyDocName(provider), {
-        ...d,
-        api_key: t.access_token,
-        chatgpt: t,
-      });
-      return { key: t.access_token, plan: true };
+      await this.docs.write<KeyDoc>(id, name, { ...d, api_key: t.access_token, chatgpt: t });
+      return t.access_token;
     } catch (err) {
-      await this.docs.write<KeyDoc>(id, keyDocName(provider), {
+      await this.docs.write<KeyDoc>(id, name, {
         ...d,
         test: { at: Date.now(), ok: false, detail: (err as Error).message },
       });
       return null;
     }
+  }
+  /** The person's own key or plan, the one in use first, the other when that one fails. */
+  async ownApiKey(id: string, provider: AssistantProvider) {
+    const use = await this.ownUse(id, provider);
+    if (!use) return null;
+    const key = async () => {
+      const d = await this.ownKey(id, provider);
+      return d ? { key: d.api_key, plan: false } : null;
+    };
+    const plan = async () => {
+      const t = await this.planToken(id, provider);
+      return t ? { key: t, plan: true } : null;
+    };
+    return use === 'key' ? ((await key()) ?? (await plan())) : ((await plan()) ?? (await key()));
   }
   /** USD a month on the person's own keys. */
   async ownCap(id: string) {

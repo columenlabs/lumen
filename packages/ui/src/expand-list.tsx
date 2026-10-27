@@ -37,6 +37,7 @@ export function LumenExpandRow({
   name,
   meta,
   badge,
+  icon,
   open: openProp,
   onOpenChange,
   defaultOpen = false,
@@ -46,6 +47,8 @@ export function LumenExpandRow({
   name: ReactNode;
   meta?: ReactNode;
   badge?: ReactNode;
+  /** A logo or icon before the name. */
+  icon?: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   defaultOpen?: boolean;
@@ -67,6 +70,7 @@ export function LumenExpandRow({
           type="button"
           className="flex w-full items-center gap-3 px-1 py-3 text-left hover:bg-muted/50"
         >
+          {icon}
           <span className="min-w-0 flex-1">
             <span
               className="block truncate font-medium"
