@@ -21,14 +21,18 @@ import {
 } from '@columenlabs/lumen-ui-types/views';
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { dateFields } from './date-fields';
 import type { FilterField } from './lumen-filter';
 import { LumenSelector } from './lumen-selector';
-import { SummaryCardsEditor, cardAgg, summaryCardIssues } from './summary-cards';
+import { cardAgg, summaryCardIssues } from './summary-cards';
+import { SummaryCardsEditor } from './summary-cards-editor';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { MAX_TILES, fieldOptions } from './view-formulas';
+
+export { dateFields };
 import type { ViewDomain, ViewField } from './view-model';
 
 /** A widget the editor draws its own parts for: anything but a table of the rows. */
@@ -47,16 +51,6 @@ export function EditorRow({ label, children }: { label: string; children: ReactN
 export const isTextField = <T,>(f: ViewField<T>) => f.format === 'text' && !f.render;
 // A number the page draws its own way (a meter, a unit) still reads its raw value, so it rolls up.
 export const isNumberField = <T,>(f: ViewField<T>) => f.format !== 'text';
-const DATE_LIKE = /(^|_)(date|day|at|time|month|week|year)($|_)/i;
-/** A trend's date candidates: text fields, the date-like ones first. */
-export const dateFields = <T,>(domain: ViewDomain<T>) => {
-  // A rendered text field still reads its raw value (a report date drawn as Tue, Oct 20).
-  const texts = domain.fields.filter((f) => f.format === 'text');
-  return [
-    ...texts.filter((f) => DATE_LIKE.test(f.key)),
-    ...texts.filter((f) => !DATE_LIKE.test(f.key)),
-  ];
-};
 
 /**
  * One place a widget takes fields: what it takes (`accepts`, `why` when a field does not fit),

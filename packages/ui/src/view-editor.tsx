@@ -1,6 +1,5 @@
 import {
   CATALOG,
-  type CatalogDomain,
   FRAME_LINK,
   catalogKeys,
   linkColumns,
@@ -64,10 +63,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   ArrowDownIcon,
-  ArrowLeftIcon,
   ArrowUpIcon,
   CheckIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   Columns3Icon,
   CopyIcon,
@@ -82,16 +79,13 @@ import {
   PencilIcon,
   PlusIcon,
   ReplaceIcon,
-  RotateCcwIcon,
   SearchIcon,
   ShapesIcon,
   ShrinkIcon,
   SigmaIcon,
   SlidersHorizontalIcon,
-  SmileIcon,
   SparklesIcon,
   StarIcon,
-  TableIcon,
   ToggleRightIcon,
   Trash2Icon,
   Unlink2Icon,
@@ -149,11 +143,8 @@ import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
-import { Input } from './ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group';
 import { Label } from './ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Separator } from './ui/separator';
 import { Switch } from './ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Textarea } from './ui/textarea';
@@ -171,7 +162,7 @@ import {
   formulaIssues,
   formulaOptions,
 } from './view-formulas';
-import { VIEW_ICONS, shapeIcon, viewIcon } from './view-icons';
+import { shapeIcon } from './view-icons';
 import {
   FORMULAS_GROUP,
   type ViewDomain,

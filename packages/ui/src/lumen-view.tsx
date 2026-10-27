@@ -8,7 +8,6 @@ import {
   controlOn,
   isCountAgg,
   isDollarFormat,
-  viewPageSizes,
   viewPaginationSchema,
 } from '@columenlabs/lumen-ui-types/views';
 // Custom views: any number of views on any app, one page for all of them.
@@ -18,8 +17,6 @@ import {
 // one level deep with collapsible group rows, pivot, totals, sorting, paging), LumenTable and the
 // details drawer; LumenLayout (lumen-layout.tsx) is the page around it. Rows are the ones the app
 // already loaded; everything here runs on the client.
-import { DndContext, closestCenter } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import {
   type ColumnDef,
   type PaginationState,
@@ -39,7 +36,6 @@ import {
   ArrowUpIcon,
   ChartCandlestick,
   ChartSpline,
-  ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsDownIcon,
   ChevronsDownUpIcon,
@@ -47,20 +43,13 @@ import {
   Columns3CogIcon,
   CornerDownRightIcon,
   DownloadIcon,
-  Grid3x3Icon,
-  LayoutDashboardIcon,
   ListCollapseIcon,
-  PencilIcon,
   PlusIcon,
-  Settings2Icon,
   SigmaIcon,
-  SparklesIcon,
-  TableIcon,
   UserPenIcon,
 } from 'lucide-react';
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
-import { useAssistantNote } from './assistant-context';
 import { ColorChip, ColorDot } from './color-dot';
 import { DrawerSection } from './drawer-section';
 import { useFloatingHead } from './floating-head';
@@ -69,51 +58,28 @@ import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
 import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
-import {
-  type FilterField,
-  type FilterToken,
-  LumenTokenizedFilter,
-  useLumenFilter,
-} from './lumen-filter';
 import { useGridCell } from './lumen-grid';
 import { LumenSelector } from './lumen-selector';
-import {
-  LumenLazy,
-  type LumenLoad,
-  LumenLoadFooter,
-  LumenRefresh,
-  LumenSkeleton,
-  LumenStates,
-  useLiveLoad,
-} from './lumen-source';
+import { type LumenLoad, LumenSkeleton, LumenStates, useLiveLoad } from './lumen-source';
 import { type CardControls, type CardLink, LumenWidget } from './lumen-widget';
 import { MAX_COMPARE, useSymbolChart } from './market/lumen-chart';
-import { type Crumb, Page } from './page';
 import { LumenPager } from './pager';
 import { maskAmount, useAmountsHidden } from './shell';
 import { useSymbolSheet } from './symbol-sheet-context';
-import { Tile } from './tile';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Card } from './ui/card';
 import { Checkbox } from './ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Popover, PopoverAnchor, PopoverContent } from './ui/popover';
-import { Skeleton } from './ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { UnitColumns, UnitValue } from './unit-value';
 import { EditCell, EditInputCell, EditManyCell } from './view-edit-cell';
-import type { ViewEditDialog as ViewEditDialogPart, ViewEditorSection } from './view-editor';
+import type { ViewEditDialog as ViewEditDialogPart } from './view-editor';
 import { fieldOptions } from './view-formulas';
 import {
   CHIP_TONE,
@@ -126,15 +92,12 @@ import {
   type ViewSubgroup,
   chipsOf,
   computedOf,
-  filterFieldsOf,
   groupOf,
   label,
   pick,
   rollUp,
   rollsUp,
   subgroupOf,
-  withSavedFilters,
-  withViewFields,
 } from './view-model';
 
 // Loaded when it first shows (lazy-part.tsx).

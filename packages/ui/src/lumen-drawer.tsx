@@ -1,9 +1,9 @@
 import { XIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
+import { lazyPart } from './lazy-part';
 import { Button } from './ui/button';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './ui/resizable';
 import {
   Sheet,
   SheetClose,
@@ -12,6 +12,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from './ui/sheet';
+
+/** The resizable panels load with the first drawer opened; until then it opens at its default width. */
+const loadPanels = () => import('./lumen-drawer-panels');
+const DrawerPanels = lazyPart(() => loadPanels().then((m) => m.DrawerPanels));
 
 /** A drawer's width on desktop, as the resizable panel takes it ("32%", "320px"). */
 type Size = `${number}%` | `${number}px`;
@@ -56,6 +60,12 @@ export function LumenDrawer({
   maxSize = '60%',
 }: LumenDrawerProps) {
   const isMobile = useIsMobile();
+  // Fetched once the page is idle, so the first drawer opened on a desktop has its panels ready.
+  useEffect(() => {
+    if (isMobile) return;
+    const t = setTimeout(loadPanels, 2000);
+    return () => clearTimeout(t);
+  }, [isMobile]);
   const head = (
     <div className="flex min-w-0 flex-col gap-0.5">
       <SheetTitle className="truncate" title={typeof title === 'string' ? title : undefined}>
@@ -113,28 +123,18 @@ export function LumenDrawer({
           }
           className="pointer-events-none! gap-0 border-0 bg-transparent shadow-none data-[side=right]:left-0 data-[side=right]:w-auto data-[side=right]:border-l-0 data-[side=right]:sm:max-w-none"
         >
-          <ResizablePanelGroup orientation="horizontal">
-            <ResizablePanel minSize="40%" />
-            <ResizableHandle withHandle className="pointer-events-auto" />
-            <ResizablePanel
-              defaultSize={defaultSize}
-              minSize={minSize}
-              maxSize={maxSize}
-              data-slot="lumen-drawer"
-              className="pointer-events-auto bg-popover shadow-lg"
-            >
-              <section className="flex h-full flex-col overflow-hidden">
-                <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-                  {head}
-                  <SheetClose asChild>
-                    <IconButton icon={XIcon} label="Close" className="ml-auto" />
-                  </SheetClose>
-                </header>
-                <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
-                {foot}
-              </section>
-            </ResizablePanel>
-          </ResizablePanelGroup>
+          <DrawerPanels defaultSize={defaultSize} minSize={minSize} maxSize={maxSize}>
+            <section className="flex h-full flex-col overflow-hidden">
+              <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
+                {head}
+                <SheetClose asChild>
+                  <IconButton icon={XIcon} label="Close" className="ml-auto" />
+                </SheetClose>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
+              {foot}
+            </section>
+          </DrawerPanels>
         </SheetContent>
       )}
     </Sheet>

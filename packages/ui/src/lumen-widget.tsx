@@ -1,8 +1,4 @@
-import {
-  type MarketWindow,
-  OUTLOOK_INDEXES,
-  marketWindows,
-} from '@columenlabs/lumen-ui-types/market';
+import { OUTLOOK_INDEXES } from '@columenlabs/lumen-ui-types/market';
 // LumenSavedWidget (as blocks; renamed): a page (LumenLayout) is an ordered list of cards, each a third, half, two thirds or the full width.
 // A card is the view (LumenView) or a widget. Chart and top-N widgets read every row of the view
 // (the table's filter is the table's), narrowed by their own tokens, and work their chart out here in the browser:
@@ -14,8 +10,6 @@ import {
   VIEW_CARD_KIND_NAMES,
   type ViewCard,
   type ViewCardKind,
-  type ViewFormat,
-  type ViewTile,
   type ViewWidget,
   WIDGET_STYLES,
   type WidgetControl,
@@ -24,7 +18,6 @@ import {
   isOwnTile,
   isRowCard,
   isTableCard,
-  trendBuckets,
   viewCardKinds,
   viewCardSchema,
   viewWidgetCatalog,
@@ -71,6 +64,7 @@ import type { ComponentType } from 'react';
 import type { AllocationBody as AllocationBodyPart } from './allocation-body';
 import { useAssistant, useAssistantName } from './assistant-context';
 import { LumenConfirm } from './confirm';
+import { dateFields } from './date-fields';
 import { FoldChevron, useFolded, usePageKey } from './fold';
 import type { GrowthChart as GrowthChartPart } from './growth-chart';
 import { useIsMobile } from './hooks/use-mobile';
@@ -79,12 +73,7 @@ import { useDomainReads } from './joins';
 import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenBoundary } from './lumen-boundary';
-import {
-  type FilterField,
-  LumenTokenizedFilter,
-  filterByTokens,
-  useLumenFilter,
-} from './lumen-filter';
+import { type FilterField, filterByTokens } from './lumen-filter';
 import { useGridCell } from './lumen-grid';
 import {
   CardIdProvider,
@@ -108,17 +97,13 @@ import { useHasMarket } from './market/live';
 import { useBarsUrl, useLumenChart } from './market/lumen-chart';
 import type { MarketWidget as MarketWidgetPart } from './market/market-widget';
 import { maskAmount, useAmountsHidden } from './shell';
-import { SummaryCardsEditor, summaryCardIssues } from './summary-cards';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
-import { Checkbox } from './ui/checkbox';
 import {
   Dialog,
-  DialogBody,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   dialogBody,
@@ -130,27 +115,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Skeleton } from './ui/skeleton';
-import { Switch } from './ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { fieldOptions } from './view-formulas';
-import {
-  type ViewCellValue,
-  type ViewDomain,
-  type ViewField,
-  computedOf,
-  label,
-  summaryCash,
-} from './view-model';
-import { WidgetControlsEditor } from './widget-controls';
+import { type ViewCellValue, type ViewDomain, type ViewField, computedOf } from './view-model';
 import { PAGE_SOURCE, useWidgetDataOptions } from './widget-data';
-import { dateFields } from './widget-settings';
 import { COMPACT, MINUS } from './widget-values';
 
 // Loaded when it first shows (lazy-part.tsx).

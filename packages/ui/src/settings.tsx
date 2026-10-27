@@ -6,7 +6,6 @@
 // A search box tops the list and filters the rows on every section.
 // `?settings=<section>` in the URL opens it at that section (GitHub's install page returns there).
 import {
-  LogOutIcon,
   MonitorIcon,
   MoonIcon,
   PaletteIcon,
@@ -27,7 +26,6 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { toast } from 'sonner';
 import { useAssistantMoves } from './assistant-screen';
 import { LumenSelector } from './lumen-selector';
 import {
@@ -40,9 +38,7 @@ import {
   usePrefs,
 } from './prefs';
 import { TimeZoneSelect } from './status';
-import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
-import { Input } from './ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group';
 import { Label } from './ui/label';
 import { Separator } from './ui/separator';
