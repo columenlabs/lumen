@@ -17,6 +17,7 @@ import {
   Rectangle,
   XAxis,
   YAxis,
+  type YAxisTickContentProps,
   usePlotArea,
 } from 'recharts';
 import { cn } from './lib/utils';
@@ -248,7 +249,7 @@ export function StackedColumns({
             domain={[0, ticks.at(-1) ?? 'auto']}
             ticks={ticks}
             width={axisWidth(ticks.map(fmt))}
-            tickFormatter={(v) => fmt(Number(v))}
+            tick={axisTick(fmt)}
           />
           <ChartTooltip
             cursor={{ fill: 'var(--muted)', opacity: 0.5 }}
@@ -370,7 +371,7 @@ export function TimeLines({
             domain={[0, left.at(-1) ?? 'auto']}
             ticks={left}
             width={axisWidth(left.map(fmt))}
-            tickFormatter={(v) => fmt(Number(v))}
+            tick={axisTick(fmt)}
           />
           {hasRight && (
             <YAxis
@@ -381,7 +382,7 @@ export function TimeLines({
               domain={[0, right.at(-1) ?? 'auto']}
               ticks={right}
               width={axisWidth(right.map(fmt))}
-              tickFormatter={(v) => fmt(Number(v))}
+              tick={axisTick(fmt)}
             />
           )}
           <ChartTooltip
@@ -709,6 +710,25 @@ function niceTicks(max: number, count = 4): number[] {
   return Array.from({ length: n + 1 }, (_, i) => Math.round(i * step * 1e6) / 1e6);
 }
 
-/** Room for the widest tick label (about 7px a character at text-xs), so none is clipped. */
+/** Room for the widest tick label (about 7.5px a character at text-xs), so none is clipped. */
 const axisWidth = (labels: string[]) =>
-  Math.max(24, Math.max(0, ...labels.map((l) => l.length)) * 7 + 8);
+  Math.max(24, Math.max(0, ...labels.map((l) => l.length)) * 7.5 + 8);
+
+/**
+ * A value axis's tick on one line: the chart's own text breaks a label at its space (`300` over
+ * `GB`) when the axis is a hair too narrow, and the top one then runs off the chart.
+ */
+const axisTick =
+  (fmt: Fmt) =>
+  ({ x, y, payload, textAnchor }: YAxisTickContentProps) => (
+    <text
+      x={x}
+      y={y}
+      dy="0.355em"
+      textAnchor={(textAnchor as 'start' | 'middle' | 'end' | undefined) ?? 'end'}
+      className="fill-muted-foreground"
+      style={{ whiteSpace: 'pre' }}
+    >
+      {fmt(Number(payload.value))}
+    </text>
+  );
