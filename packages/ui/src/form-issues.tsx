@@ -3,8 +3,9 @@
 // issue: the editor opens its section or tab (`reveal`), then the field scrolls into view, takes
 // the cursor and flashes red once. Nothing saves while an issue stands. Every editor and form in
 // the suite uses this in place of a silent disabled Save.
-import { CheckIcon, TriangleAlertIcon } from 'lucide-react';
+import { CheckIcon, LoaderCircleIcon, TriangleAlertIcon } from 'lucide-react';
 import { type ComponentType, useState } from 'react';
+import { IconButton } from './icon-button';
 import { cn } from './lib/utils';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -47,7 +48,8 @@ export function goToIssue(issue: FormIssue) {
 
 /**
  * Save, and before it, while anything needs fixing, a chip with the count that lists each issue.
- * Save stays tappable then and takes the person to the first issue instead of saving.
+ * Save stays tappable then and takes the person to the first issue instead of saving. Save is an
+ * icon (DESIGN.md, Actions: icon first): `label` is its tooltip and accessible name, never text.
  */
 export function SaveButton({
   issues,
@@ -61,7 +63,9 @@ export function SaveButton({
 }: {
   issues: FormIssue[];
   onSave?: () => void;
+  /** The tooltip and accessible name. */
   label?: string;
+  /** `null` is the check, as left out. */
   icon?: ComponentType<{ className?: string }> | null;
   /** Saving now: Save waits. */
   busy?: boolean;
@@ -87,10 +91,12 @@ export function SaveButton({
               type="button"
               variant="ghost"
               size="sm"
-              className="text-destructive hover:text-destructive"
+              aria-label={`${issues.length} to fix`}
+              title={`${issues.length} to fix`}
+              className="num text-destructive hover:text-destructive"
             >
               <TriangleAlertIcon />
-              {issues.length} to fix
+              {issues.length}
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-80 gap-1 p-1">
@@ -114,9 +120,13 @@ export function SaveButton({
           </PopoverContent>
         </Popover>
       )}
-      <Button
+      <IconButton
+        icon={busy ? LoaderCircleIcon : (Icon ?? CheckIcon)}
+        label={blocked ? `${label}: ${issues.length} to fix` : label}
+        variant="default"
+        size="icon-sm"
         type={blocked ? 'button' : type}
-        size="sm"
+        busy={busy}
         disabled={disabled || busy}
         aria-disabled={blocked || undefined}
         className={cn(blocked && 'opacity-50', className)}
@@ -126,10 +136,7 @@ export function SaveButton({
             go(first);
           } else if (type === 'button') onSave?.();
         }}
-      >
-        {Icon && <Icon />}
-        {label}
-      </Button>
+      />
     </>
   );
 }

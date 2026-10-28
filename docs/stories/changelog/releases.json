@@ -1,5 +1,113 @@
 [
   {
+    "tag": "v0.1.152",
+    "date": "2026-10-28T17:06:09Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Status bar driven by plain data",
+        "body": "In `LumenShell` from `@columenlabs/lumen-ui`, the new `bar={{ sync, messages, work }}` prop lets an app describe its current state as data, and the kit draws the status bar in a fixed five-slot order (Sync, Work, Message, Page facts, End)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Pages add their own status",
+        "body": "The new `useStatus({ sync, messages, facts })` hook lets a page contribute status while it is mounted. The newest sync wins, messages add up, and the first two facts show."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Turn a query into a sync state",
+        "body": "`querySync(query, label?)` converts a data query into a sync state (Updated, Syncing, Saved copy, Offline or Did not update) that you can pass to `bar.sync` or `useStatus`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Status bar on phones",
+        "body": "On a phone, the bar shows only the most urgent item (error, then warning, then work, then sync), plus an ⓘ N chip that opens every item in a bottom sheet."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Calmer bar",
+        "body": "The bar no longer scrolls sideways, and relative times refresh every 30 seconds only while the tab is visible."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.151",
+    "date": "2026-10-28T08:22:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Name the assistant's table",
+        "body": "In @columenlabs/lumen-ai, `sqlAssistantStore(sql, { table })` now keeps the assistant's documents in a table you name, so a module can use its own table name; without the option it still uses `assistant_docs`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Move one person's rows at a time",
+        "body": "In lumen-person, `exportRows(sql, table, after, { where })` and `rowStats(sql, tables, where)` now take a `RowFilter` (`{ sql, args }`), so you can export and check only the rows that belong to one person when an old store keeps many people's rows in one table."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Checked table names, bound filter values",
+        "body": "The new `table` option of `sqlAssistantStore` must be a plain identifier, and the values in a `RowFilter`'s `args` are bound as parameters, so only the filter's `sql` condition is code you write yourself."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.150",
+    "date": "2026-10-28T08:01:36Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Read images with a prompt",
+        "body": "In `@columenlabs/lumen-ai`, `Assistant.complete` now takes an optional `images` array of `CompleteImage` (`{ mediaType, data }`, with base64 `data`), so background work can read photos, screenshots or scanned pages through the assistant's own models."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Images work with both sign-in routes",
+        "body": "The `images` option on `Assistant.complete` works with an API key or a plan sign-in, and Lumen formats the images for each provider: image blocks go before the text for one, and `input_image` parts follow an `input_text` part for the other."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Existing calls are untouched",
+        "body": "Calls to `Assistant.complete` that omit `images` behave exactly as before, so this release needs no change in your app."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.149",
+    "date": "2026-10-28T07:37:55Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "One-shot assistant calls now work on a plan sign-in",
+        "body": "In @columenlabs/lumen-ai, `assistant.complete` and `compact` now send their prompt as a one-item user message list, so an app signed in with a subscription plan no longer gets a `400 Input must be a list` error. API-key sign-ins accept the same shape, so they need no change."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.148",
     "date": "2026-10-28T07:06:19Z",
     "takeaways": [
