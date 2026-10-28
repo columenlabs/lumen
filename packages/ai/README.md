@@ -163,7 +163,9 @@ The standard way to search an app's records (Columen's canonical setup, 2026-10-
 
 - **Filters** (tags, number and date ranges) are exact SQL.
 - **Words** are matched by an FTS5 index (`porter unicode61`, so "egg" finds "eggs"): `any`, `all`, `none` (leave out: "no milk"), and `in` to say which fields to look in.
-- **Meaning** comes from Vectorize: candidates for a loose ask, trimmed by the same filters and words. It is the next step on this part; until it lands, the model does the fuzzy part over what words and filters return.
+- **Meaning** comes from Vectorize, opt in per app: `like` ("something light for a hot day") asks the index for the nearest rows, and the same filters and words trim them.
+- **Worked-out fields**: a number, date or tag field may be the app's own SQL over the row (`sql: 'json_array_length(t.steps)'`) instead of a column.
+- **Counts**: the result carries `count` (all matches), `returned` and `same_name` (different rows that share a name), so the model says the right number.
 
 ```ts
 import { d1Sql, defineFind, findSql, findTool } from '@columenlabs/lumen-ai/assistant';
@@ -188,3 +190,22 @@ plainTools([await findTool(notesFind, d1Sql(env.DB))]);
 - `findTool` makes `<name>_find` with a flat input schema (every provider takes it) and reads each tag field's values once to list them. The assistant tells the model to put a whole question in one find call.
 - `runFind(def, sql, query)` is the same query without the tool: bound parameters only, never model-written SQL. It gives up after 3 s.
 - `findSql(def)` gives the index's SQL. `create` is an external-content FTS5 table plus triggers that keep it in step on every insert, update and delete, whoever writes. `fill` indexes the rows already there, and `drop` takes it all out. Put `create` and `fill` in a migration (D1) or a budgeted background step (a Durable Object), never on a request. Until the index exists, words fall back to a plain text match and the result says so, so code can ship before its migration.
+
+Meaning, for the apps whose people ask loosely (a recipe book, a career log; not for exact records like card benefits):
+
+```ts
+import { meaningStep, vectorMeaning, workersEmbed } from '@columenlabs/lumen-ai/assistant';
+
+// On the definition: what a row means, and the column every write moves.
+meaning: { fields: ['title', 'body', 'tags'], changed: 'updated_at' },
+
+const embed = workersEmbed(env.AI);              // bge-base-en-v1.5: a 768-dimension cosine index
+await findTool(notesFind, d1Sql(env.DB), { meaning: vectorMeaning({ embed, index: env.NOTES_INDEX }) });
+
+// Off the request path (waitUntil after a write and when the tool opens, an alarm, a queue):
+ctx.waitUntil(meaningStep({ def: notesFind, sql: d1Sql(env.DB), embed, index: env.NOTES_INDEX, mark }));
+```
+
+- `meaningStep` embeds only the rows whose `changed` column moved past its bookmark (`mark`: get and put, kept by the app), at most 50 a step in one embedding call and one upsert, and takes rows the find hides (its `where`) out of the index. It resumes where it stopped and runs safely twice at once; `done` is false while rows are left.
+- A person's own rows get a `namespace` each (`vectorMeaning` and `meaningStep` take one), so one index serves one app.
+- When the index cannot answer in 3 s, `like` is left out, the rest of the find runs and the result says so.

@@ -13,7 +13,13 @@
  *
  * Words are matched by the FTS5 index (stems: "egg" finds "eggs"). Until that index exists, words
  * fall back to a plain text match, so a build that lands before its index still answers.
+ *
+ * Meaning (opt in, `meaning` on the definition plus a `FindMeaning` given to `findTool`): `like`
+ * asks a vector index for the rows nearest a loose ask ("something light for a hot day") and the
+ * same SQL trims them, so filters and words still hold. `meaning.ts` gives the Vectorize index and
+ * the budgeted background step that keeps it in step.
  */
+import type { FindMeaning } from './meaning';
 import type { SqlRunner } from './store';
 import { type PlainTool, ToolError, withDeadline } from './tools';
 
@@ -24,6 +30,11 @@ export interface FindField {
   kind: FindKind;
   /** The table's column, when it is named differently. */
   column?: string;
+  /**
+   * Not a column but the app's own SQL over the row, its columns as `t.<column>`
+   * (`json_array_length(t.steps)`): a number, date or tag worked out per row. Never text.
+   */
+  sql?: string;
   /** Returned unless the call names its fields. False keeps it searchable but out of the default. */
   show?: boolean;
   /** The column holds JSON (a list of ingredients): returned parsed. */
@@ -52,10 +63,18 @@ export interface FindDef {
   /** Rows a call returns by default (25) and at most (200). */
   limit?: number;
   max?: number;
+  /** The field that names a row (the first text field by default): rows that share one are flagged. */
+  title?: string;
+  /**
+   * Search by meaning: which fields make up what a row means (embedded in the background) and
+   * the column that changes on every write, so the index step picks up only what changed.
+   */
+  meaning?: { fields: string[]; changed: string };
 }
 
 /** What the model sends: flat, so every provider takes the schema. Tag fields are their own keys. */
 export interface FindQuery {
+  like?: string;
   any?: string[];
   all?: string[];
   none?: string[];
@@ -69,17 +88,35 @@ export interface FindQuery {
 }
 
 export interface FindResult {
-  /** Rows that match, all of them, before `limit`. */
+  /** Rows that match, all of them, before `limit`. Say this number when asked how many. */
   count: number;
+  /** Rows in this answer (at most `limit`). */
+  returned: number;
   rows: Record<string, unknown>[];
-  /** Set when words were matched without the word index (it is not set up yet). */
+  /** Different rows that share a name: each is its own row, so say both. */
+  same_name?: { name: string; ids: unknown[] }[];
+  /** Set when a part of the query could not run as asked (no word index yet, meaning down). */
   note?: string;
 }
 
-const RESERVED = new Set(['any', 'all', 'none', 'in', 'ids', 'fields', 'sort', 'desc', 'limit']);
+const RESERVED = new Set([
+  'like',
+  'any',
+  'all',
+  'none',
+  'in',
+  'ids',
+  'fields',
+  'sort',
+  'desc',
+  'limit',
+]);
 const FIND_MS = 3_000;
 const TAG_VALUES = 60;
 const WORDS = 20;
+/** Rows nearest in meaning that `like` asks the index for, before the SQL trims them. */
+const NEAR_MIN = 20;
+const NEAR_MAX = 50;
 
 /** Checks a definition once, where the app declares it. */
 export function defineFind(def: FindDef): FindDef {
@@ -90,13 +127,30 @@ export function defineFind(def: FindDef): FindDef {
     if (!ident.test(n) || !ident.test(f.column ?? n))
       throw new Error(`find ${def.name}: field "${n}" is not a plain name`);
     if (RESERVED.has(n)) throw new Error(`find ${def.name}: field "${n}" is a reserved word`);
+    if (f.sql && f.kind === 'text')
+      throw new Error(`find ${def.name}: field "${n}" is text, which needs a column, not sql`);
   }
   if (!Object.values(def.fields).some((f) => f.kind === 'text'))
     throw new Error(`find ${def.name}: give at least one text field`);
+  if (def.title && def.fields[def.title]?.kind !== 'text')
+    throw new Error(`find ${def.name}: title "${def.title}" is not a text field`);
+  if (def.meaning) {
+    if (!ident.test(def.meaning.changed))
+      throw new Error(
+        `find ${def.name}: meaning.changed "${def.meaning.changed}" is not a plain name`,
+      );
+    const bad = def.meaning.fields.filter((f) => !def.fields[f]);
+    if (bad.length || !def.meaning.fields.length)
+      throw new Error(
+        `find ${def.name}: meaning.fields ${bad.join(', ') || '(none)'} are not fields`,
+      );
+  }
   return def;
 }
 
 const col = (def: FindDef, f: string) => def.fields[f]?.column ?? f;
+/** A field as SQL over the row aliased `t`: its column, or its own expression. */
+export const findRef = (def: FindDef, f: string) => def.fields[f]?.sql ?? `t.${col(def, f)}`;
 const ftsName = (def: FindDef) => def.fts ?? `${def.table}_fts`;
 const textFields = (def: FindDef) =>
   Object.entries(def.fields)
@@ -176,6 +230,7 @@ function checked(def: FindDef, q: FindQuery) {
   const max = def.max ?? 200;
   const limit = Math.max(1, Math.min(max, Math.trunc(Number(q.limit ?? def.limit ?? 25)) || 25));
   return {
+    like: typeof q.like === 'string' ? q.like.replace(/\s+/g, ' ').trim().slice(0, 300) : '',
     any: words(q.any),
     all: words(q.all),
     none: words(q.none),
@@ -200,15 +255,18 @@ function filterKeys(def: FindDef): string[] {
   );
 }
 
-/** One find as SQL and its bound values. `fts` false matches words with LIKE (no index yet). */
-function compile(def: FindDef, q: FindQuery, fts: boolean) {
+/**
+ * One find as SQL and its bound values. `fts` false matches words with LIKE (no index yet). `near`
+ * is the rows nearest in meaning, nearest first: only they can match, in that order.
+ */
+function compile(def: FindDef, q: FindQuery, fts: boolean, near?: number[]) {
   const c = checked(def, q);
   const t = 't';
   const where: string[] = [];
   const args: unknown[] = [];
   if (def.where) where.push(`(${def.where})`);
   for (const [n, f] of Object.entries(def.fields)) {
-    const column = `${t}.${col(def, n)}`;
+    const column = findRef(def, n);
     if (f.kind === 'tag') {
       const vals = strings(q[n]).slice(0, 50);
       if (vals.length) {
@@ -231,6 +289,13 @@ function compile(def: FindDef, q: FindQuery, fts: boolean) {
   if (c.ids.length) {
     where.push(`${t}.${def.key} IN (${c.ids.map(() => '?').join(', ')})`);
     args.push(...c.ids);
+  }
+  let nearOrder = '';
+  if (near?.length) {
+    where.push(`${t}.${def.key} IN (${near.map(() => '?').join(', ')})`);
+    args.push(...near);
+    // Literal integers, not bound: the ORDER BY comes after the WHERE's bound values.
+    nearOrder = `CASE ${t}.${def.key} ${near.map((id, i) => `WHEN ${Math.trunc(id)} THEN ${i}`).join(' ')} END`;
   }
   const fname = ftsName(def);
   const cols = c.in.map((f) => col(def, f));
@@ -262,8 +327,9 @@ function compile(def: FindDef, q: FindQuery, fts: boolean) {
     for (const w of c.none) where.push(`NOT ${like(w)}`);
   }
   const order = c.sort
-    ? `${t}.${col(def, c.sort)} ${c.desc ? 'DESC' : 'ASC'}`
-    : rank ||
+    ? `${findRef(def, c.sort)} ${c.desc ? 'DESC' : 'ASC'}`
+    : nearOrder ||
+      rank ||
       (def.order
         ? def.order
             .split(',')
@@ -271,60 +337,112 @@ function compile(def: FindDef, q: FindQuery, fts: boolean) {
             .join(', ')
         : `${t}.${def.key}`);
   const select = [...new Set([def.key, ...c.fields])]
-    .map((f) => (f === def.key ? `${t}.${def.key} AS ${def.key}` : `${t}.${col(def, f)} AS ${f}`))
+    .map((f) => (f === def.key ? `${t}.${def.key} AS ${def.key}` : `${findRef(def, f)} AS ${f}`))
     .join(', ');
   const sql = `SELECT ${select}, COUNT(*) OVER () AS _count FROM ${def.table} ${t}${join}${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY ${order} LIMIT ${c.limit}`;
-  return { sql, args, fields: c.fields, words: c.any.length + c.all.length + c.none.length > 0 };
+  return {
+    sql,
+    args,
+    fields: c.fields,
+    like: c.like,
+    limit: c.limit,
+    words: c.any.length + c.all.length + c.none.length > 0,
+  };
 }
 
 const missingIndex = (e: unknown) =>
   e instanceof Error && /no such table|no such module|fts5/i.test(e.message);
 
-/** Runs one find: one query, the rows' asked fields (JSON parsed) and how many match in all. */
-export async function runFind(def: FindDef, sql: SqlRunner, q: FindQuery): Promise<FindResult> {
+/**
+ * Runs one find: one query, the rows' asked fields (JSON parsed) and how many match in all. With
+ * `like` and a `meaning`, the index's nearest rows come first and the same SQL trims them.
+ */
+export async function runFind(
+  def: FindDef,
+  sql: SqlRunner,
+  q: FindQuery,
+  meaning?: FindMeaning,
+): Promise<FindResult> {
   let built = compile(def, q, true);
-  let note: string | undefined;
+  const notes: string[] = [];
+  let near: number[] | undefined;
+  if (built.like) {
+    if (!meaning || !def.meaning)
+      throw new ToolError('like: this find has no search by meaning; use words instead.');
+    const k = Math.min(NEAR_MAX, Math.max(NEAR_MIN, built.limit * 2));
+    try {
+      near = await withDeadline(`${def.name} meaning`, FIND_MS, meaning.near(built.like, k));
+    } catch {
+      near = undefined;
+    }
+    if (near?.length) built = compile(def, q, true, near);
+    else notes.push('Search by meaning is not available now: like was left out, the rest applied.');
+  }
   let rows: Record<string, unknown>[];
   try {
     rows = await withDeadline(`${def.name} find`, FIND_MS, sql.all(built.sql, ...built.args));
   } catch (e) {
     if (!built.words || !missingIndex(e)) throw e;
-    built = compile(def, q, false);
-    note = 'Words were matched as plain text: the word index is not set up yet.';
+    built = compile(def, q, false, near);
+    notes.push('Words were matched as plain text: the word index is not set up yet.');
     rows = await withDeadline(`${def.name} find`, FIND_MS, sql.all(built.sql, ...built.args));
   }
   const count = Number(rows[0]?._count ?? 0);
+  const out = rows.map((r) => {
+    const row: Record<string, unknown> = { [def.key]: r[def.key] };
+    for (const f of built.fields) {
+      const v = r[f];
+      if (def.fields[f]?.json && typeof v === 'string') {
+        try {
+          row[f] = JSON.parse(v);
+        } catch {
+          row[f] = v;
+        }
+      } else row[f] = v;
+    }
+    return row;
+  });
+  const same = sameNames(def, out, built.fields);
   return {
     count,
-    rows: rows.map((r) => {
-      const out: Record<string, unknown> = { [def.key]: r[def.key] };
-      for (const f of built.fields) {
-        const v = r[f];
-        if (def.fields[f]?.json && typeof v === 'string') {
-          try {
-            out[f] = JSON.parse(v);
-          } catch {
-            out[f] = v;
-          }
-        } else out[f] = v;
-      }
-      return out;
-    }),
-    ...(note ? { note } : {}),
+    returned: out.length,
+    rows: out,
+    ...(same.length ? { same_name: same } : {}),
+    ...(notes.length ? { note: notes.join(' ') } : {}),
   };
+}
+
+/** Rows in the answer that share a name, so the model counts and lists each of them. */
+function sameNames(def: FindDef, rows: Record<string, unknown>[], fields: string[]) {
+  const title = def.title ?? textFields(def)[0];
+  if (!title || !fields.includes(title)) return [];
+  const by = new Map<string, { name: string; ids: unknown[] }>();
+  for (const r of rows) {
+    const name = String(r[title] ?? '').trim();
+    if (!name) continue;
+    const k = name.toLowerCase();
+    const g = by.get(k) ?? { name, ids: [] };
+    g.ids.push(r[def.key]);
+    by.set(k, g);
+  }
+  return [...by.values()].filter((g) => g.ids.length > 1);
 }
 
 /** The values a tag field holds, to list in the tool's description. */
 async function tagValues(def: FindDef, sql: SqlRunner, field: string): Promise<string[]> {
-  const c = col(def, field);
+  const c = findRef(def, field);
   const rows = await sql.all(
-    `SELECT DISTINCT ${c} AS v FROM ${def.table}${def.where ? ` WHERE ${def.where}` : ''} ORDER BY ${c} LIMIT ${TAG_VALUES + 1}`,
+    `SELECT DISTINCT ${c} AS v FROM ${def.table} t${def.where ? ` WHERE ${def.where}` : ''} ORDER BY v LIMIT ${TAG_VALUES + 1}`,
   );
   return rows.map((r) => String(r.v ?? '')).filter(Boolean);
 }
 
 /** The tool's flat JSON Schema, from the fields. */
-function schemaOf(def: FindDef, tags: Record<string, string[]>): Record<string, unknown> {
+function schemaOf(
+  def: FindDef,
+  tags: Record<string, string[]>,
+  meaning: boolean,
+): Record<string, unknown> {
   const names = Object.keys(def.fields);
   const text = textFields(def);
   const list = (description: string, items: Record<string, unknown> = { type: 'string' }) => ({
@@ -333,6 +451,14 @@ function schemaOf(def: FindDef, tags: Record<string, string[]>): Record<string, 
     description,
   });
   const props: Record<string, unknown> = {
+    ...(meaning
+      ? {
+          like: {
+            type: 'string',
+            description: `A loose ask in plain words ("something light for a hot day", "good for a party"): the ${def.label}s nearest in meaning come first, and every other condition still applies. Use it for a mood, an occasion or a kind of thing, not for one exact word.`,
+          },
+        }
+      : {}),
     any: list('Rows with at least one of these words or phrases.'),
     all: list('Rows with every one of these words or phrases.'),
     none: list('Leave out rows with any of these words or phrases (an ingredient to avoid).'),
@@ -383,7 +509,12 @@ function schemaOf(def: FindDef, tags: Record<string, string[]>): Record<string, 
  * The find tool for one table, opened for one answer: its tag values are read once (one small query)
  * so the model picks real ones. A read; `find` marks it so the assistant puts a whole question in it.
  */
-export async function findTool(def: FindDef, sql: SqlRunner): Promise<PlainTool> {
+export async function findTool(
+  def: FindDef,
+  sql: SqlRunner,
+  opts: { meaning?: FindMeaning } = {},
+): Promise<PlainTool> {
+  const meaning = def.meaning ? opts.meaning : undefined;
   const tags: Record<string, string[]> = {};
   await Promise.all(
     Object.entries(def.fields)
@@ -399,10 +530,10 @@ export async function findTool(def: FindDef, sql: SqlRunner): Promise<PlainTool>
     .join(', ');
   return {
     name: `${def.name}_find`,
-    description: `Finds ${def.label}s in one query${def.about ? ` (${def.about})` : ''}: put every condition of the question in one call (filters, words to include or leave out, which fields to look in) and ask only for the fields the answer needs. Fields: ${fields}. Returns the matching ${def.label}s and how many match in all.`,
-    inputSchema: schemaOf(def, tags),
+    description: `Finds ${def.label}s in one query${def.about ? ` (${def.about})` : ''}: put every condition of the question in one call (filters, words to include or leave out, which fields to look in${meaning ? ', and like for a loose ask' : ''}) and ask only for the fields the answer needs. Fields: ${fields}. Returns the matching ${def.label}s, how many match in all (count) and any that share a name (same_name).`,
+    inputSchema: schemaOf(def, tags, Boolean(meaning)),
     read: true,
     find: true,
-    run: (args) => runFind(def, sql, (args ?? {}) as FindQuery),
+    run: (args) => runFind(def, sql, (args ?? {}) as FindQuery, meaning),
   };
 }

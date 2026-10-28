@@ -1,5 +1,741 @@
 [
   {
+    "tag": "v0.1.141",
+    "date": "2026-10-28T03:48:58Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One question becomes one query",
+        "body": "From `@columenlabs/lumen-ai`, `findTool(def, sql)` gives an assistant a `<name>_find` tool, so it can answer a question about an app's records with a single filtered query instead of listing records and opening them one by one."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Declare searchable fields once",
+        "body": "In `@columenlabs/lumen-ai`, `defineFind` lets an app declare its table and its text, tag, number and date fields once, with JSON columns flattened for the index."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Full-text index as a migration",
+        "body": "`findSql(def)` returns the additive full-text search table, its triggers and a `rebuild` fill, which you can run as a migration or a budgeted step."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Ranked, filtered search in one bound query",
+        "body": "`runFind(def, sql, q)` runs one parameter-bound SELECT that combines tag filters, number and date ranges, ranked word matching, excluded words, a column filter, chosen fields, sort, a limit and the total match count."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.140",
+    "date": "2026-10-28T02:31:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance",
+          "feature"
+        ],
+        "title": "Read many records in one batch step",
+        "body": "In the `@columenlabs/lumen-ai` engine, the new built-in `batch` tool is offered whenever any read tool is enabled, takes `{calls: [{tool, input}]}` with 1 to 25 reads, runs them in parallel, and shows them as a single step."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Plain checks no longer escalate",
+        "body": "The engine's escalation rule now treats checking many records against a plain rule (an ingredient, a date, a number, a name) as a lookup to do with `batch`, so the assistant answers it itself instead of handing it to a higher tier as \"judgement\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Batched reads keep dedupe, memory and step reporting",
+        "body": "Each call inside `batch` still goes through `runTool`, keeps the same-read-once dedupe and tool memory, and still fires `onStep`; results come back numbered, and drafts and writes are refused in a batch."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Reuse what is already in the chat",
+        "body": "The engine's system rule now tells the assistant to read several records with one `batch` call and to reuse results already in the conversation, rather than re-reading them."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.139",
+    "date": "2026-10-28T02:09:37Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Follow-up questions reuse earlier tool results",
+        "body": "In the `@columenlabs/lumen-ai` assistant, each answer's tool results are now stored on `Turn.ran` and replayed by `toolMemory` within one 40,000-character budget for the whole chat, so a follow-up like \"List them all\" no longer re-runs a list tool."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "The same read runs once per answer",
+        "body": "The `@columenlabs/lumen-ai` assistant no longer runs the same read tool with the same input twice within a single answer."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "`rowCount` counts the right rows",
+        "body": "In `@columenlabs/lumen-ai`, `rowCount` no longer takes the first array in a result as the rows, so a list with `categories` first no longer reports \"8 rows\" every time and a single record no longer reports its ingredient count as rows."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.138",
+    "date": "2026-10-28T01:49:59Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Assistant answers no longer open with its bearings",
+        "body": "In `@columenlabs/lumen-ai`, the assistant no longer starts replies by echoing the \"Bearings: date, time, timezone · …\" context line, so answers from your assistant begin with the actual answer."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Bearings are tagged for the model only",
+        "body": "In the `@columenlabs/lumen-ai` assistant, the bearings block is now wrapped in `<bearings> … </bearings>` and its header says it is for the model only and must never be repeated, so you can rely on the context staying out of user-facing text."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer rule about quoting bearings",
+        "body": "In the `@columenlabs/lumen-ai` assistant's `rules()`, the line that introduces bearings now tells the model never to quote them or start an answer with them, so you no longer need to add your own instruction to suppress the echo."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.137",
+    "date": "2026-10-27T23:48:03Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Bound web link Test now shows its result",
+        "body": "In `Assistant.status()` from @columenlabs/lumen-ai, an app that reaches its web-fetch service over a service binding now gets the `test` field on the web link's status, so the Settings ▸ Assistant ▸ Web badge shows the last result instead of staying on \"Not tested\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Bound link tests are saved",
+        "body": "`POST /web/test` on a bound link now stores its result in its own app-scope doc, so a Test you run is still there after you reload Settings."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Read the stored bound-link result from state",
+        "body": "The state object has a new reader for the bound link's saved doc, so custom code can read the last test without calling `Assistant.status()`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.136",
+    "date": "2026-10-27T22:37:25Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "The assistant now knows the current time and when the chat last spoke",
+        "body": "In `@columenlabs/lumen-ai/assistant`, `createAssistant` now puts a \"Bearings\" block (the server's current time in the user's zone and in UTC, plus how long ago the last message in the chat was) at the top of every user message, so the model no longer guesses the date."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Add your own app lines to the bearings",
+        "body": "`createAssistant` accepts a new `app` name and a `bearings: (b, caller) => lines` option, and any lines your hook returns appear under the app name; a hook that takes longer than 300 ms or throws is skipped so a turn is never held up."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Build bearings yourself",
+        "body": "`@columenlabs/lumen-ai/assistant` now exports `bearings()`, `bearingTime`, `bearingSpan` and `knownZone` for formatting the current time, elapsed spans and validating IANA zone names in your own code."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The browser's time zone travels with each message",
+        "body": "`useAssistantChat` from `@columenlabs/lumen-ui` now sends the browser's IANA zone with every message, using the new optional `time_zone` field on `AssistantMessage` from `@columenlabs/lumen-ui-types/assistant`, which is backward compatible."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The system prompt no longer carries a UTC date",
+        "body": "The assistant's system rule now tells the model to take today and now from the bearings, and because the bearings sit in the user message rather than the system prompt, the prompt cache still holds."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.135",
+    "date": "2026-10-27T22:06:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Reach scrapeql web tools over a service binding",
+        "body": "In `createAssistant` from `@columenlabs/lumen-ai`, the `web.scrapeql` option now takes an optional `fetch` (the fetch of a service binding), so the assistant calls the `/mcp` endpoint through the binding and needs no service token."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Assistant settings show a bound link",
+        "body": "In the `@columenlabs/lumen-ui` assistant settings, a bound `scrapeql` now appears as a `LumenConnection` with one read-only \"App link\" way and a Test button for admins, in place of the token form."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Status says when the link is bound",
+        "body": "In `@columenlabs/lumen-ui-types`, `AssistantStatus.web.scrapeql` gains an optional `bound` boolean, so a client can tell a binding from a stored token."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.134",
+    "date": "2026-10-27T21:43:29Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Long Settings section lists now scroll",
+        "body": "In `LumenSettings` from `@columenlabs/lumen-ui`, the desktop dialog's left section list scrolls on its own when an app has more sections than fit the dialog height, so every section can be reached."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Search stays pinned above the list",
+        "body": "In `LumenSettings`, the nav search no longer scrolls away, because only the groups live in the new scroll area (`data-slot=\"settings-nav-list\"`) that you can target for styling."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Deep-linked sections scroll into view",
+        "body": "When `LumenSettings` opens on a section far down the list, for example through the assistant's `settings` move or a `?settings=<id>` link, that row is now scrolled into view."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.133",
+    "date": "2026-10-27T21:18:19Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "`savedAnswers` no longer crashes on import when the browser blocks storage",
+        "body": "In `@columenlabs/lumen-ui`, `savedAnswers` now reads `indexedDB` inside a try, so a browser that throws a `SecurityError` on `window.indexedDB` no longer stops your app from drawing."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Missing storage falls back to the server",
+        "body": "When `indexedDB` is unavailable, `savedAnswers` switches to its no-op persister, so every load asks the server and your app still gets its data."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A throwing `open` is retried later",
+        "body": "If `indexedDB.open` throws synchronously, `savedAnswers` now rejects the promise instead of throwing, so the store is tried again on a later call."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.132",
+    "date": "2026-10-27T20:58:40Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "`StatusMessages` no longer takes `max`",
+        "body": "In `@columenlabs/lumen-ui`, delete the `max` prop from every `<StatusMessages>` you render, because the component now always shows a single line and TypeScript will flag any call that still passes it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The status bar shows only the latest message",
+        "body": "`StatusMessages` in `@columenlabs/lumen-ui` renders the first entry of `messages` (newest first). A new message replaces the one on screen, so two different errors no longer appear as two chips side by side."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Earlier messages sit behind the `+N` chip",
+        "body": "In `StatusMessages`, every message except the newest is listed behind the `+N` chip in the order it was posted. Errors are no longer sorted ahead of other messages, so the newest message always wins."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A wider status line",
+        "body": "The `--status-message-max` CSS variable is now `min(40rem, 45vw)` from 768px and `55vw` below that, so the single line has more room. Override the variable if your layout needs a different width."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.131",
+    "date": "2026-10-27T20:38:58Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Whole-number axes on stacked columns",
+        "body": "In `@columenlabs/lumen-ui`, `StackedColumns` now labels its value axis in whole steps of 1, 2 or 5 × 10ⁿ (never below 1) when every plotted value is a whole number, so a day with 2 API calls reads 0, 1, 2 instead of 0, 0.5, 1, 1.5, 2."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Whole-number axes on the line chart",
+        "body": "The line chart in `@columenlabs/lumen-ui` now uses the same `niceTicks` rule, so count data such as small usage totals no longer shows fractional ticks, while charts with fractional values are unchanged."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "One `main` landmark per page",
+        "body": "In `@columenlabs/lumen-ui`, `PageBody` now renders a `div` instead of a `<main>`, so pages inside the shell no longer nest `<main>` in the shell's `SidebarInset` (which is already the page's `<main>`) and screen readers hear a single main landmark."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.130",
+    "date": "2026-10-27T20:34:57Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "`fetchWithin` puts a deadline on any request",
+        "body": "From `@columenlabs/lumen-ui`, call `fetchWithin(url, init, ms)` to make a raw `fetch` reject with a `TimeoutError` after `ms` milliseconds. A `signal` you pass in `init` still aborts it, and the new `FETCH_MS` constant (15 s) is the default to pass."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Built-in requests no longer wait forever",
+        "body": "In `@columenlabs/lumen-ui`, the app switcher, What's new, notifications (reads and writes), tasks and market data now give up after `FETCH_MS`. The new-build check gives up after 5 s. A stalled network can no longer leave these hanging. The assistant's chat stream deliberately keeps the caller's `signal`, since a stream can legitimately run for a long time."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Prod safety rules are now concrete",
+        "body": "The repo's contributor guide now says where timeouts belong (`savedAnswers`, `API_TIMEOUT_MS`, `fetchWithin`, and `AbortSignal.timeout` in worker code). It also says that fixing up old data on read should go through `waitUntil`, and that a changed JSON shape gets a new key version. The review checklist now blocks any pull request that breaks one of these rules."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.129",
+    "date": "2026-10-27T20:30:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer Admins tile caption",
+        "body": "In `LumenPeople` from `@columenlabs/lumen-ui`, the Admins tile caption now reads \"Can’t remove the last admin\" instead of \"at least 1 always kept\", so your users see the rule in plain words with no prop or config change."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.128",
+    "date": "2026-10-27T20:24:30Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Requests no longer hang forever",
+        "body": "`apiJson` from @columenlabs/lumen-ui now gives up after 15 s for reads and 60 s for writes, so a request the network never answers no longer leaves a page loading indefinitely."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Set a timeout per call",
+        "body": "pass `timeoutMs` in the `init` argument of `apiJson` to override the limit for one request, or import the exported `API_TIMEOUT_MS` constant to see the defaults."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Timeouts land in your existing error states",
+        "body": "when `apiJson` times out it throws an `ApiError` with status 0 (\"The server didn't answer in time …\"), which is reported and counted like a network failure, so the error and empty states you already handle take over without code changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.127",
+    "date": "2026-10-27T20:10:55Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Prod safety rules for everyone working on Lumen",
+        "body": "This release changes no package code, so there is nothing to upgrade or migrate in `@columenlabs/lumen-ui`, `-ui-types`, `-ship`, `-auth`, `-ops` or `-ai`. The repo's agent guidelines now have a dedicated production safety section, which contributors and coding agents follow when changing the kit."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.126",
+    "date": "2026-10-27T19:34:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "The open row no longer shows a doubled focus marker",
+        "body": "In the Lumen theme stylesheet shipped with `@columenlabs/lumen-ui`, a table row marked `aria-selected=\"true\"` now sets `outline: none` on `:focus-visible`, so stepping through rows with ↑ / ↓ shows only the row's fill and left bar. A focused row that is not open keeps its normal focus ring."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.125",
+    "date": "2026-10-27T19:23:55Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Stacked bars trend style",
+        "body": "In `@columenlabs/lumen-ui` trend charts, set the trend style to the new `stacked_bars` value (now listed in `chartTrendStyles` and `WIDGET_STYLES`) to draw one bar per bucket with the series stacked, a 2px card-colour gap between parts, and a rounded end on the top part."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Legend toggles each series",
+        "body": "In a multi-series trend, `ChartLegendContent` now renders toggle buttons (new `off` and `onSeries` props, with `aria-pressed`), so users can tap a legend item to hide or show that series. The last visible series can't be hidden."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Total for stacked charts",
+        "body": "Charts using `stacked_bars` or `stacked` now read the total of the series currently shown, with the headline reading `Total · <bucket>` and the tooltip ending in a Total line."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Top gridline no longer overstates bars",
+        "body": "Every trend chart in `@columenlabs/lumen-ui` now leaves 8px above the top gridline, so a bar of 17.3K no longer looks like it reaches an `18K` label."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.124",
+    "date": "2026-10-27T19:12:54Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Mark the open row beside a docked drawer",
+        "body": "In `@columenlabs/lumen-ui`, `LumenView`, `LumenTable`, `LumenViewCard` and `LumenLayout` accept a new optional `openKey` prop (`string | null`), so an app with its own drawer opened through `onOpen` can pass the key of the open row and have it highlighted."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Open row is exposed to assistive tech",
+        "body": "With `openKey` set, the matching row gets `aria-selected=\"true\"` and the other rows get `false`, plus an accent fill and a 3px accent bar on its leading edge."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Arrow keys move the docked drawer",
+        "body": "In `LumenTable` and `LumenView`, pressing ↑ or ↓ on a focused row steps to the next data row, and while a row is open the step opens that row too, so the drawer follows the keyboard."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Open row scrolls into view",
+        "body": "When the row named by `openKey` appears, whether opened by keyboard or on a page that holds it, it scrolls into view clear of the pinned header."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.123",
+    "date": "2026-10-27T18:48:11Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Seal each person's data with the envelope codec",
+        "body": "From `@columenlabs/lumen-vault/envelope` (a new package), a master key can now seal values per person, with your app supplying a `WrappedKeyStore` and naming the AAD for each value."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Per-region keys with the regional codec",
+        "body": "From `@columenlabs/lumen-vault/regional`, `MasterKeys` caches one raw master key per region, and `dataKey` creates a person's data key on first use (the first stored key wins)."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Fails closed, and unlock events never carry secrets",
+        "body": "In the envelope codec, a missing master key now refuses to seal or open unless you pass `allowPlain` to opt into the readable `plain.` mode, and the `onUnlock` hook only receives `{owner, event, ms, error?}`, never a key or a value."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.122",
+    "date": "2026-10-27T18:33:08Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tabs fold into a More menu",
+        "body": "In `@columenlabs/lumen-ui`, `LumenTabs` now keeps the tabs that fit and folds the rest into a **More ▾** menu at the end of the row, so you no longer get a tab cut in half, and no code changes are needed."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The More button shows the open tab",
+        "body": "When the open tab sits inside the More menu of `LumenTabs`, the button shows that tab's icon, name and count and is underlined like any open tab, so users can always see where they are."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No false fade on tiny overflow",
+        "body": "In `@columenlabs/lumen-ui`, `useScrollFade` no longer counts an overflow of 2 px or less as \"more beyond\", so a page with a rounding overflow no longer fades its right edge."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.121",
+    "date": "2026-10-27T18:13:44Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "savedAnswers persister for react-query",
+        "body": "From `@columenlabs/lumen-ui`, pass `savedAnswers({ name, restoreMs?, writeMs? })` as the persister of `PersistQueryClientProvider` to keep query answers in IndexedDB."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A slow restore no longer leaves an app blank",
+        "body": "In `savedAnswers`, a restore that hasn't answered within the `restoreMs` option (default 1.5 s) now resolves empty, so the app asks the server instead of waiting on a hung read."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Aborted or blocked storage rejects instead of hanging",
+        "body": "`savedAnswers` now rejects when an IndexedDB transaction aborts or the open is blocked, and it retries a failed open on the next call."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Writes are batched",
+        "body": "Using the `writeMs` option (default one second), `savedAnswers` collects writes into a single stored record instead of writing on every change."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.120",
+    "date": "2026-10-27T18:08:25Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A filter that matches nothing no longer hides the filter",
+        "body": "In `LumenView` from @columenlabs/lumen-ui, while a filter is on (`filterCount > 0`) your `state` now shows in the table body under the headers, so the filter box, chips and tools stay visible and the filter can be seen and cleared (with no filter, `state` still replaces the table as before)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Clear filters button on empty tables",
+        "body": "`LumenView` and `LumenTable` have a new `onClearFilter` prop that shows a **Clear filters** button when a filtered table is empty, including under the kit's own \"No rows match.\", and `LumenLayout` and `LumenViewCard` already wire it to the new `useLumenFilter().clear`."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No filter counts over a single server page",
+        "body": "`useLumenFilter({ partial })` hides the counts in the filter menu (Text contains, values, fields, number condition) when your rows are only one page of a server's set, and `LumenLayout` sets it from `paging` when there are more pages, the page is above 0, or the total is larger than the rows."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Say what an empty table body says",
+        "body": "`LumenTable` has a new `emptyState` prop for the text or content shown in the body when no rows are left."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.119",
+    "date": "2026-10-27T18:05:02Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Narrow tables drop columns instead of scrolling",
+        "body": "In `LumenView` from @columenlabs/lumen-ui, a table that is too narrow for its columns, for example beside a docked `LumenDrawer`, now hides columns until it fits, so the page no longer scrolls sideways and the first column is no longer cut off."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose which columns go first",
+        "body": "On `ViewField` from @columenlabs/lumen-ui-types, the new `priority` number (default 0) lets you mark columns as more or less important, and the lowest-priority columns are dropped first."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Key columns always stay",
+        "body": "In `LumenView` tables, the name column and the currently sorted column are never dropped, and columns that set `hideOnPhone` count as one priority lower, so they go before other columns of the same priority."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.118",
+    "date": "2026-10-27T17:52:34Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Stacked chart value-axis labels stay on one line",
+        "body": "In `@columenlabs/lumen-ui`, `StackedColumns` now draws every value-axis tick as a single line, so a label like `300 GB` no longer splits at the space or runs off the top of the chart."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Column/line chart axes no longer wrap",
+        "body": "The column/line chart in `@columenlabs/lumen-ui` now uses the same single-line tick on both of its value axes, so your labels with units stay readable at desktop and phone widths."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Axis gutters leave more room per character",
+        "body": "The chart axis width calculation in `@columenlabs/lumen-ui` now allows 7.5px per character (was 7), so your axes reserve slightly more space for longer labels without any change to props."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.117",
+    "date": "2026-10-27T17:42:04Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Optional page footer under tables",
+        "body": "In `@columenlabs/lumen-ui-types`, `viewPaginationSchema` has a new `footer` field (default `false`), and setting `pagination.footer` to `true` on a view shows a footer pager under the table, for local paging, `ServerPaging` and server group pages."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "`LumenPageFooter` component",
+        "body": "`@columenlabs/lumen-ui` now exports `LumenPageFooter`, which shows the row range, first/previous/next/last buttons, numbered pages and a Go to box, so you can use it directly when building your own paged layouts."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "`pageList` helper",
+        "body": "`@columenlabs/lumen-ui` now exports `pageList(page, pages, more)`, which returns the numbered pages to show (first, last, current ±1) with `null` for each gap, so you can render your own page links."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "`foot` slot on `LumenWidget`",
+        "body": "`LumenWidget` accepts a new `foot` slot that renders under the body and above the load line, so you can add footer content to any widget."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.116",
+    "date": "2026-10-27T17:32:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Docked side panel for row details",
+        "body": "In `@columenlabs/lumen-ui`, `LumenDrawer` now takes `dock=\"<name>\"`, so inside `LumenShell` the drawer sits beside the page instead of over it, a click on the page leaves it open, and clicking the next row swaps its content."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Resize, fold and remember the dock",
+        "body": "A docked `LumenDrawer` can be dragged by its left edge (or with arrow keys on the focused edge, or double-clicked to reset) between `minSize` and `maxSize`, folded to a titled rail with the Collapse and Expand buttons, and its width and fold state are saved per dock name."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Esc behaves predictably in a docked drawer",
+        "body": "Pressing Esc inside a docked `LumenDrawer` closes it, unless a picker inside it is open, and Esc from a dialog opened by the drawer closes only that dialog."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Default footer Close is a plain button",
+        "body": "The default footer Close in `LumenDrawer` is now an ordinary button that calls your `onClose`, so it behaves the same whether the drawer is docked or an overlay."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.115",
     "date": "2026-10-27T16:49:57Z",
     "takeaways": [

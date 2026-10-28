@@ -1337,7 +1337,7 @@ export class Assistant {
       'Answer in short plain sentences. Use the tools for facts; never guess a number a tool can give you. Call several tools at once when they do not depend on each other.',
       ...([...fns.values()].some((f) => f.def.find)
         ? [
-            "Questions about an app's records go through its find tool (the tool named <app>_find): put every condition of the question in one call (filters, words to include or leave out, which fields to look in), ask only for the fields the answer needs, then judge the rest yourself from what it returns. Never list or open records one by one to filter them. Rows a find already returned in this chat you use again without asking for them again.",
+            'Questions about an app\'s records go through its find tool (the tool named <app>_find): put every condition of the question in one call (filters, words to include or leave out, which fields to look in), ask only for the fields the answer needs, then judge the rest yourself from what it returns. Never list or open records one by one to filter them. A loose ask (a mood, an occasion, "something light", "good for a party") goes in its like field when the tool has one; then pick from what it returns yourself. How many match is the result\'s count: say that number, and name each row in same_name, which are different records that share a name. Rows a find already returned you use again only when they answer the whole new question; a new condition (another ingredient, a kind of dish, how quick) is a new find call.',
           ]
         : []),
       ...([...fns.values()].some((f) => !f.draft && !f.write) && !fns.has(BATCH)
@@ -1366,7 +1366,7 @@ export class Assistant {
         const own = policy === 'any' ? reach : policy === 'next' ? reach.slice(0, 1) : [];
         lines.push(
           `Tiers: you run on ${main.tier.label}. The escalate tool hands one task to a higher tier (${reach.map((t) => t.label).join(' or ')}) with the same tools; it works in its own section of the chat and returns a memo. It costs more than answering yourself.`,
-          `Call it when the person names a tier or says "go deeper"${own.length ? `, and on your own (${own.map((t) => t.label).join(' or ')}) when the question needs judgement a lookup cannot settle (why "judgement"), after two of your tool calls failed (why "stuck"), or when a fix of a check still fails (why "check_failed")` : ''}. Lookups you answer yourself: reading or checking many records against a plain rule (an ingredient, a date, a number, a name) is a lookup, done with a find call or ${BATCH}, never escalated.`,
+          `Call it when the person names a tier or says "go deeper"${own.length ? `, and on your own (${own.map((t) => t.label).join(' or ')}) when the question needs judgement a lookup cannot settle (why "judgement"), after two of your tool calls failed (why "stuck"), or when a fix of a check still fails (why "check_failed")` : ''}. Lookups you answer yourself: reading or checking many records against a plain rule (an ingredient, a date, a number, a name) is a lookup, done with a find call or ${BATCH}, never escalated. Suggesting a few of an app's records for a loose ask (a dish for a hot day, something for a party) is a lookup too: one find call, then your own pick, never escalated.`,
           'Its task must carry every fact from this chat it needs: it does not see the chat. Then answer from its memo in your own short words.',
         );
       }
