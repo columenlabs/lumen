@@ -1,13 +1,16 @@
 // LumenForm:
-// a list of fields in, a laid-out form out. Label, input, hint and error sit the same way in every
+// a list of fields in, a laid-out form out. Label, (i), input and error sit the same way in every
 // app; each field's own check runs as the person types, and Save is LumenShell's SaveButton, which
 // lists what stands in the way and takes the person to it. A secret already saved shows masked and
 // is kept while its box stays empty. LumenForm only puts the kit's parts together.
+
+import { XIcon } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
 import { type FormIssue, SaveButton } from './form-issues';
+import { IconButton } from './icon-button';
+import { InfoTip } from './info-tip';
 import { type LumenOption, LumenSelector } from './lumen-selector';
-import { Button } from './ui/button';
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from './ui/field';
+import { Field, FieldError, FieldGroup, FieldLabel } from './ui/field';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 
@@ -21,7 +24,9 @@ export interface LumenFormField {
   /** `text` by default. `secret` hides what is typed; `select` and `multi` are LumenSelector. */
   kind?: 'text' | 'secret' | 'number' | 'date' | 'textarea' | 'select' | 'multi';
   required?: boolean;
-  /** A line under the field. */
+  /** More about the field, behind an (i) beside its label (`InfoTip`). Most fields need none. */
+  info?: ReactNode;
+  /** @deprecated Use `info`: drawn the same way, as an (i) beside the label, never a line under the field. */
   hint?: ReactNode;
   placeholder?: string;
   /** `select` and `multi`. */
@@ -181,9 +186,11 @@ export function LumenForm({
               <FieldLabel htmlFor={domId(f.id)}>
                 {f.label}
                 {f.required && <span className="font-normal text-muted-foreground">required</span>}
+                {(f.info ?? f.hint) && (
+                  <InfoTip label={`About ${f.label}`}>{f.info ?? f.hint}</InfoTip>
+                )}
               </FieldLabel>
               {input(f)}
-              {f.hint && !invalid && <FieldDescription>{f.hint}</FieldDescription>}
               {invalid && <FieldError>{errors[f.id]}</FieldError>}
             </Field>
           );
@@ -192,11 +199,7 @@ export function LumenForm({
       <div className="flex items-center justify-end gap-2 border-t pt-3">
         {footer}
         <div className="flex-1" />
-        {onCancel && (
-          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
-        )}
+        {onCancel && <IconButton type="button" icon={XIcon} label="Cancel" onClick={onCancel} />}
         {/* A tap on Save, blocked or not, shows every field's error. */}
         <span className="contents" onClickCapture={touchAll}>
           <SaveButton issues={issues} busy={busy} label={saveLabel} onSave={save} />

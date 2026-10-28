@@ -2,7 +2,7 @@ import { PanelRightCloseIcon, PanelRightOpenIcon, XIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useIsMobile } from './hooks/use-mobile';
-import { IconButton } from './icon-button';
+import { IconButton, type IconButtonProps } from './icon-button';
 import { lazyPart } from './lazy-part';
 import { ResizeEdge, tabState, useDockSlot } from './side-dock';
 import { pickerOpen } from './ui/overlay-guard';
@@ -19,6 +19,18 @@ import {
 const loadPanels = () => import('./lumen-drawer-panels');
 const DrawerPanels = lazyPart(() => loadPanels().then((m) => m.DrawerPanels));
 
+/**
+ * One of a drawer's actions, as data: the drawer draws it as an icon button with its name in the
+ * tooltip, so a drawer's actions are never text. Destructive ones go first, as the footer lists them.
+ */
+export type DrawerAction = Pick<
+  IconButtonProps,
+  'icon' | 'label' | 'onClick' | 'busy' | 'disabled' | 'pressed' | 'to' | 'href'
+> & {
+  /** Delete, remove: drawn in the destructive colour. */
+  destructive?: boolean;
+};
+
 /** A drawer's width on desktop, as the resizable panel takes it ("32%", "320px"). */
 type Size = `${number}%` | `${number}px`;
 
@@ -30,7 +42,9 @@ export interface LumenDrawerProps {
   description?: ReactNode;
   /** Stacked DrawerSections; the drawer pads and scrolls them. */
   children: ReactNode;
-  /** The footer's actions, right-aligned, icon first (`IconButton`, `SaveButton`); no footer when left out. */
+  /** The footer's actions as data, right-aligned in order, before `footer`: always icons. */
+  actions?: readonly DrawerAction[];
+  /** Last in the footer, after `actions`: the `SaveButton`. No footer when this, `actions` and `footerStart` are left out. */
   footer?: ReactNode;
   /** Left side of the footer: a count or status line ("12 releases"). */
   footerStart?: ReactNode;
@@ -62,6 +76,7 @@ export function LumenDrawer({
   title,
   description,
   children,
+  actions,
   footer,
   footerStart,
   defaultSize = '32%',
@@ -93,7 +108,8 @@ export function LumenDrawer({
   const body = <div className="flex flex-col px-4 pb-4">{children}</div>;
   // A drawer with actions ends on a footer, styled like a dialog's: the body scrolls above it and
   // ends on a clear edge. Without actions it has none: the header's × already closes it.
-  const foot = (footer || footerStart) && (
+  const acts = actions?.length ? actions : null;
+  const foot = (acts || footer || footerStart) && (
     <footer
       data-slot="drawer-footer"
       className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-4 py-2.5"
@@ -101,7 +117,16 @@ export function LumenDrawer({
       {footerStart && (
         <div className="min-w-0 flex-1 truncate text-muted-foreground text-xs">{footerStart}</div>
       )}
-      <div className="ml-auto flex items-center gap-2">{footer}</div>
+      <div className="ml-auto flex items-center gap-2">
+        {acts?.map(({ destructive, ...a }) => (
+          <IconButton
+            key={a.label}
+            {...a}
+            className={destructive ? 'text-destructive hover:text-destructive' : undefined}
+          />
+        ))}
+        {footer}
+      </div>
     </footer>
   );
   if (dock && !isMobile && slot)

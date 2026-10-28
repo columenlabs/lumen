@@ -29,6 +29,7 @@ Route                     [ Public internet   ▾ ]   select / multi: LumenSelec
   fields={[
     { id: 'name', label: 'Name', required: true },
     { id: 'url', label: 'Address', check: (v) => String(v).startsWith('https://') || 'Must start with https://' },
+    { id: 'key', label: 'API key', kind: 'secret', saved: '••••3f9a', info: 'Read only. Made in the provider’s console.' },
   ]}
   initial={job}
   onSave={(v) => save.mutate(v)}
@@ -44,9 +45,9 @@ const issues: FormIssue[] = url.startsWith('https://') ? [] : [{ where: 'Address
 <p className="text-xs text-muted-foreground">Must start with https://</p>
 ```
 
-- ✗ `hint` on a `LumenField` to explain a label. ✓ Leave it out, or an `InfoTip` (`InfoLabel`).
+- ✗ `hint` on a `LumenFormField` (deprecated; it now draws as an (i) too). ✓ Leave it out, or `info`, which the form draws as an `InfoTip` beside the label.
 - ✗ An error message under a field before the person tries to save. ✓ The `SaveButton` chip.
-- ✗ Cancel as a text button in a drawer: the drawer's × and Esc close it.
+- ✗ Cancel as a text button. ✓ `onCancel` on `LumenForm` draws an × icon labelled Cancel; in a drawer leave it out, the drawer's × and Esc close it.
 
 ## Checked by
 

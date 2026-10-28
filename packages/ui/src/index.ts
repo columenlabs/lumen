@@ -162,7 +162,7 @@ export {
 } from './coverage-calendar-map';
 export { DetailsTable, type DetailsTableProps, FactsTable } from './details-table';
 export { DrawerSection, type DrawerSectionProps } from './drawer-section';
-export { LumenDrawer, type LumenDrawerProps } from './lumen-drawer';
+export { type DrawerAction, LumenDrawer, type LumenDrawerProps } from './lumen-drawer';
 export { LumenCode, type LumenCodeProps, langOfPath } from './lumen-code';
 export {
   LumenCodeEditor,
