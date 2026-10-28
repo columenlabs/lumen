@@ -2225,6 +2225,76 @@ export class Assistant {
   }
 
   /** Swaps the history for a short summary. False with nothing to compact. */
+  /**
+   * One plain answer from OpenAI, metered on `s`: no tools, no chat. Streamed and read from the raw
+   * events like the chat loop, because a ChatGPT plan sign-in answers only streamed calls, takes no
+   * output cap and may send its words only as deltas.
+   */
+  private async openaiOnce(
+    clients: Clients,
+    s: Session,
+    instructions: string,
+    input: string,
+    max: number,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const client = clients.openai as OpenAI;
+    const plan = !!clients.openaiPlan;
+    let text = '';
+    let done: OpenAI.Responses.Response | undefined;
+    try {
+      const stream = await client.responses.create(
+        {
+          model: s.model.id,
+          instructions,
+          input,
+          store: false,
+          stream: true,
+          ...(plan ? {} : { max_output_tokens: max }),
+        } as OpenAI.Responses.ResponseCreateParamsStreaming,
+        signal ? { signal } : {},
+      );
+      for await (const e of stream as AsyncIterable<{ type: string } & Record<string, unknown>>) {
+        if (e.type === 'response.output_text.delta' && typeof e.delta === 'string') text += e.delta;
+        else if (
+          e.type === 'response.completed' ||
+          e.type === 'response.incomplete' ||
+          e.type === 'response.failed'
+        )
+          done = e.response as OpenAI.Responses.Response;
+        else if (e.type === 'error') {
+          const er = (e.error ?? e) as { code?: string; type?: string };
+          throw new AssistantError(openaiStreamError(er.code || er.type || '', plan), 'upstream');
+        }
+      }
+    } catch (err) {
+      // The SDK throws a stream's `error` event as an APIError with no HTTP status.
+      if (err instanceof OpenAI.APIError && err.status === undefined) {
+        const er = (err.error ?? {}) as { code?: string; type?: string };
+        throw new AssistantError(
+          openaiStreamError(er.code || er.type || err.code || '', plan),
+          'upstream',
+        );
+      }
+      throw err;
+    }
+    if (done?.status === 'failed')
+      throw new AssistantError(openaiStreamError(done.error?.code ?? '', plan), 'upstream');
+    const u = done?.usage;
+    if (u) {
+      const read = u.input_tokens_details?.cached_tokens ?? 0;
+      s.meter.add(
+        {
+          input_tokens: Math.max(0, u.input_tokens - read),
+          output_tokens: u.output_tokens,
+          cache_read_input_tokens: read,
+        },
+        plan,
+      );
+    }
+    return text || done?.output_text || '';
+  }
+
   private async compact(clients: Clients, s: Session, doc: ChatDoc, emit: Emit) {
     if (doc.history.length < 2) return false;
     const system = `Summarise this chat between a person and ${this.name}, their assistant, so ${this.name} can carry on from the summary alone. Keep what the person wants, the facts and numbers found, decisions made and cards drafted or saved, and anything still open. Plain bullets, at most 400 words. No preamble.`;
@@ -2233,21 +2303,7 @@ export class Assistant {
       .join('\n\n');
     let summary = '';
     if (s.model.provider === 'openai' && clients.openai) {
-      const res = await clients.openai.responses.create({
-        model: s.model.id,
-        instructions: system,
-        input: chat,
-        store: false,
-        max_output_tokens: 1500,
-      });
-      const u = res.usage;
-      if (u)
-        s.meter.add({
-          input_tokens: u.input_tokens - (u.input_tokens_details?.cached_tokens ?? 0),
-          output_tokens: u.output_tokens,
-          cache_read_input_tokens: u.input_tokens_details?.cached_tokens ?? 0,
-        });
-      summary = res.output_text ?? '';
+      summary = await this.openaiOnce(clients, s, system, chat, 1500);
     } else if (clients.anthropic) {
       const msg = await clients.anthropic.messages.create({
         model: s.model.id,
@@ -2293,27 +2349,7 @@ export class Assistant {
     let text = '';
     try {
       if (s.model.provider === 'openai' && clients.openai) {
-        const res = await clients.openai.responses.create(
-          {
-            model: s.model.id,
-            instructions: o.system,
-            input: o.prompt,
-            store: false,
-            max_output_tokens: max,
-          },
-          o.signal ? { signal: o.signal } : undefined,
-        );
-        const u = res.usage;
-        if (u)
-          s.meter.add(
-            {
-              input_tokens: u.input_tokens - (u.input_tokens_details?.cached_tokens ?? 0),
-              output_tokens: u.output_tokens,
-              cache_read_input_tokens: u.input_tokens_details?.cached_tokens ?? 0,
-            },
-            !!clients.openaiPlan,
-          );
-        text = res.output_text ?? '';
+        text = await this.openaiOnce(clients, s, o.system, o.prompt, max, o.signal);
       } else if (clients.anthropic) {
         const msg = await clients.anthropic.messages.create(
           {
