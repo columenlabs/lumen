@@ -19,11 +19,16 @@ export interface LumenCodeEditorProps {
 
 const Impl = lazy(() => import('./lumen-code-editor-impl'));
 
+// Its width comes from where it sits, never from its longest line (contain: inline-size), so a
+// long line scrolls inside the editor instead of pushing a drawer or form past its edge.
 export function LumenCodeEditor({ className, ...props }: LumenCodeEditorProps) {
   return (
     <div
       data-slot="lumen-code-editor"
-      className={cn('min-h-0 overflow-hidden rounded-lg border text-xs', className)}
+      className={cn(
+        'min-h-0 w-full min-w-0 max-w-full overflow-hidden rounded-lg border text-xs [contain:inline-size]',
+        className,
+      )}
     >
       <Suspense fallback={<Skeleton className="h-full w-full rounded-none" />}>
         <Impl {...props} className="lumen-code-editor h-full" />
