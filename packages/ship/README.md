@@ -100,9 +100,10 @@ lumen-ship check kit-neutral [paths]   # no name from LUMEN_FORBIDDEN_NAMES (def
 lumen-ship check suppressions          # a useExhaustiveDependencies suppression needs a reason of 3+ words
 lumen-ship check settings-copy         # a Settings section description is one plain line of 64 characters or less
 lumen-ship check magic-numbers         # hard-coded px/rem class values may only go down
+lumen-ship check parts <folders>       # the kit's part pages: hint-text, text-action, raw-overlay may only go down
 ```
 
-Run each from a package folder in its `lint` script. `magic-numbers` reads the repo's `scripts/magic-numbers.baseline` (or `LUMEN_SHIP_BASELINE`): one `<folder> <count>` a line, lowered in the change that removes one.
+Run each from a package folder in its `lint` script; run `parts` from the repo root with the app folders (`lumen-ship check parts apps/*/web/src`). `magic-numbers` reads the repo's `scripts/magic-numbers.baseline` (or `LUMEN_SHIP_BASELINE`): one `<folder> <count>` a line, lowered in the change that removes one. `parts` reads `scripts/parts.baseline` (or `LUMEN_SHIP_PARTS_BASELINE`): one `<folder> <rule> <count>` a line; `--write-baseline` writes today's counts on a first run. Each rule is explained, with what to write instead, at https://lumen.columenlabs.com/parts/README.md.
 
 ## Versions
 
