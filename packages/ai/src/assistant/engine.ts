@@ -257,6 +257,11 @@ const COMPACT_AT = 150_000;
 /** A tool result handed to the model is cut past this (about 4,000 tokens). */
 const RESULT_CHARS = 16_000;
 const MEMO_CHARS = 8000;
+/** The built-in tool that runs several reads at once, as one step. */
+const BATCH = 'batch';
+const BATCH_MAX = 25;
+/** What one batch returns at most, all its results together. */
+const BATCH_CHARS = 48_000;
 const ADVICE_MAX = 2;
 const ADVICE_TOKENS = 2048;
 const ADVISOR_BETA = 'advisor-tool-2026-03-01';
@@ -976,18 +981,52 @@ export class Assistant {
   }
 
   private toolsFor(fns: Map<string, Fn>): Anthropic.Tool[] {
-    return [...fns.entries()].map(([name, f]) => ({
-      name,
-      description:
-        `${f.draft ? "DRAFT ONLY: this call changes nothing. It puts a card on the person's screen that they Save or Dismiss. " : f.write ? 'WRITES AT ONCE: this call makes the change now; the person can undo it. ' : ''}${f.def.title ? `${f.def.title}. ` : ''}${f.def.description ?? ''}`.slice(
-          0,
-          4000,
-        ),
+    const batch = this.batchTool(fns);
+    return [
+      ...[...fns.entries()].map(([name, f]) => ({
+        name,
+        description:
+          `${f.draft ? "DRAFT ONLY: this call changes nothing. It puts a card on the person's screen that they Save or Dismiss. " : f.write ? 'WRITES AT ONCE: this call makes the change now; the person can undo it. ' : ''}${f.def.title ? `${f.def.title}. ` : ''}${f.def.description ?? ''}`.slice(
+            0,
+            4000,
+          ),
+        input_schema: {
+          type: 'object',
+          ...withoutMeta(f.def.inputSchema),
+        } as Anthropic.Tool.InputSchema,
+      })),
+      ...(batch ? [batch] : []),
+    ];
+  }
+
+  /** `batch`: any of the reads, up to BATCH_MAX at once, as one step. Null with no reads. */
+  private batchTool(fns: Map<string, Fn>): Anthropic.Tool | null {
+    if (fns.has(BATCH)) return null;
+    const reads = [...fns.entries()].filter(([, f]) => !f.draft && !f.write).map(([n]) => n);
+    if (!reads.length) return null;
+    return {
+      name: BATCH,
+      description: `Runs up to ${BATCH_MAX} read calls at once and returns each result, numbered in order. Use it to read several records (one tool with several inputs) or several tools that do not depend on each other, in one step instead of one call at a time. Reads only.`,
       input_schema: {
         type: 'object',
-        ...withoutMeta(f.def.inputSchema),
-      } as Anthropic.Tool.InputSchema,
-    }));
+        properties: {
+          calls: {
+            type: 'array',
+            minItems: 1,
+            maxItems: BATCH_MAX,
+            items: {
+              type: 'object',
+              properties: {
+                tool: { type: 'string', enum: reads },
+                input: { type: 'object', description: "The tool's own input." },
+              },
+              required: ['tool', 'input'],
+            },
+          },
+        },
+        required: ['calls'],
+      },
+    };
   }
 
   // ---------------------------------------------------------------- the turn
@@ -1296,6 +1335,11 @@ export class Assistant {
     const lines = [
       `You are ${this.name}. Each message starts with <bearings>: the time now in the person's zone and where they are. Take today, now and how long ago from it; never guess the date. It is for you only: never quote it or start an answer with it.`,
       'Answer in short plain sentences. Use the tools for facts; never guess a number a tool can give you. Call several tools at once when they do not depend on each other.',
+      ...([...fns.values()].some((f) => !f.draft && !f.write) && !fns.has(BATCH)
+        ? [
+            `To read several records, or one tool with several inputs, put the reads in one ${BATCH} call: one step for all of them, never one call at a time. Results you already have from earlier in the chat you use, without reading them again.`,
+          ]
+        : []),
       'A tool marked DRAFT ONLY makes a card the person saves or dismisses; it changes nothing by itself. Say what the card will do; never claim it is done. The next message tells you how each card ended.',
       'A tool marked WRITES AT ONCE makes its change when you call it; the person can undo it from the chat. Change only what they asked for, and say what you changed.',
     ];
@@ -1317,7 +1361,7 @@ export class Assistant {
         const own = policy === 'any' ? reach : policy === 'next' ? reach.slice(0, 1) : [];
         lines.push(
           `Tiers: you run on ${main.tier.label}. The escalate tool hands one task to a higher tier (${reach.map((t) => t.label).join(' or ')}) with the same tools; it works in its own section of the chat and returns a memo. It costs more than answering yourself.`,
-          `Call it when the person names a tier or says "go deeper"${own.length ? `, and on your own (${own.map((t) => t.label).join(' or ')}) when the question needs judgement across many results (why "judgement"), after two of your tool calls failed (why "stuck"), or when a fix of a check still fails (why "check_failed")` : ''}. Lookups you answer yourself.`,
+          `Call it when the person names a tier or says "go deeper"${own.length ? `, and on your own (${own.map((t) => t.label).join(' or ')}) when the question needs judgement a lookup cannot settle (why "judgement"), after two of your tool calls failed (why "stuck"), or when a fix of a check still fails (why "check_failed")` : ''}. Lookups you answer yourself: reading or checking many records against a plain rule (an ingredient, a date, a number, a name) is a lookup, done with ${BATCH}, never escalated.`,
           'Its task must carry every fact from this chat it needs: it does not see the chat. Then answer from its memo in your own short words.',
         );
       }
@@ -1526,6 +1570,8 @@ export class Assistant {
     session: Session,
     handoff: boolean,
     signal?: AbortSignal,
+    /** Part of a batch: runs and is remembered, but draws no step of its own. */
+    quiet = false,
   ): Promise<Anthropic.ToolResultBlockParam> {
     const reply = (content: string, is_error = false): Anthropic.ToolResultBlockParam => ({
       type: 'tool_result',
@@ -1533,6 +1579,8 @@ export class Assistant {
       content,
       is_error,
     });
+    if (use.name === BATCH && !fns.has(BATCH) && !quiet)
+      return this.runBatch(use, fns, sink, emit, runs, counts, session, handoff, signal);
     const f = fns.get(use.name);
     if (!f) return reply(`No tool ${use.name}.`, true);
     const title = f.def.title ?? f.def.name;
@@ -1569,7 +1617,7 @@ export class Assistant {
         }),
       );
     const id = newId('s');
-    emit('step_start', { id, tool: use.name, title });
+    if (!quiet) emit('step_start', { id, tool: use.name, title });
     const t0 = performance.now();
     let out: string;
     let ok = true;
@@ -1608,9 +1656,11 @@ export class Assistant {
         ? { write: { undo: !!this.groupById(f.group)?.undo, status: 'done' as const } }
         : {}),
     };
-    sink.push(item);
-    emit('step', item);
-    counts.steps += 1;
+    if (!quiet) {
+      sink.push(item);
+      emit('step', item);
+      counts.steps += 1;
+    }
     // A change made at once can make an earlier read stale: reads after it run again.
     if (f.write) counts.seen.clear();
     runs.push({ tool: use.name, key, result: out });
@@ -1635,6 +1685,97 @@ export class Assistant {
       if (!ok) counts.seen.delete(key);
     }
     return reply(cut, !ok);
+  }
+
+  /** A batch of reads: each runs as its own call (the same read twice runs once), in parallel, shown as one step. */
+  private async runBatch(
+    use: Anthropic.ToolUseBlock,
+    fns: Map<string, Fn>,
+    sink: ChatItem[],
+    emit: Emit,
+    runs: Ran[],
+    counts: {
+      steps: number;
+      writes?: NonNullable<ChatDoc['writes']>;
+      seen: Map<string, Promise<string>>;
+    },
+    session: Session,
+    handoff: boolean,
+    signal?: AbortSignal,
+  ): Promise<Anthropic.ToolResultBlockParam> {
+    const reply = (content: string, is_error = false): Anthropic.ToolResultBlockParam => ({
+      type: 'tool_result',
+      tool_use_id: use.id,
+      content,
+      is_error,
+    });
+    const raw = (use.input as { calls?: unknown } | null)?.calls;
+    const calls = (Array.isArray(raw) ? raw : []).map((c) => {
+      const o = (c && typeof c === 'object' ? c : {}) as { tool?: unknown; input?: unknown };
+      return {
+        tool: typeof o.tool === 'string' ? o.tool : '',
+        input: o.input && typeof o.input === 'object' ? o.input : {},
+      };
+    });
+    if (!calls.length)
+      return reply(`Give {calls: [{tool, input}]}: 1 to ${BATCH_MAX} reads.`, true);
+    if (calls.length > BATCH_MAX)
+      return reply(`At most ${BATCH_MAX} calls a batch: split them into batches.`, true);
+    const titles = [...new Set(calls.map((c) => fns.get(c.tool)?.def.title ?? c.tool))];
+    const title = titles.length === 1 ? `${titles[0]} ×${calls.length}` : `${calls.length} reads`;
+    const id = newId('s');
+    emit('step_start', { id, tool: BATCH, title });
+    const t0 = performance.now();
+    const done = await Promise.all(
+      calls.map(async (c, i) => {
+        const f = fns.get(c.tool);
+        if (!f) return { ...c, ok: false, text: `No tool ${c.tool}.` };
+        if (f.draft || f.write)
+          return { ...c, ok: false, text: 'Only reads go in a batch: call this tool on its own.' };
+        const r = await this.runTool(
+          {
+            type: 'tool_use',
+            id: `${use.id}_${i}`,
+            name: c.tool,
+            input: c.input,
+          } as Anthropic.ToolUseBlock,
+          fns,
+          sink,
+          emit,
+          runs,
+          counts,
+          session,
+          handoff,
+          signal,
+          true,
+        );
+        return { ...c, ok: !r.is_error, text: typeof r.content === 'string' ? r.content : '' };
+      }),
+    );
+    const failed = done.filter((d) => !d.ok).length;
+    const item: StepItem = {
+      kind: 'step',
+      id,
+      tool: BATCH,
+      title,
+      ok: failed < done.length,
+      ms: Math.round(performance.now() - t0),
+      ...(failed ? { error: `${failed} of ${done.length} failed` } : {}),
+    };
+    sink.push(item);
+    emit('step', item);
+    counts.steps += 1;
+    let left = BATCH_CHARS;
+    const parts = done.map((d, i) => {
+      const fits = d.text.length <= left;
+      left -= fits ? d.text.length : 0;
+      return `[${i + 1}] ${d.tool} ${stableJson(d.input)}${d.ok ? '' : ' (failed)'}\n${
+        fits
+          ? d.text
+          : '(left out: the batch passed its size; read this one again in a smaller batch)'
+      }`;
+    });
+    return reply(parts.join('\n\n'), failed === done.length);
   }
 
   /** Model calls and tool rounds until the model answers; returns its words. */
