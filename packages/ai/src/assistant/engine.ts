@@ -95,6 +95,12 @@ export interface AssistantCommandDef {
 }
 
 /** Who is asking: their id (the store's scope for their things) and whether they are an admin. */
+/** A photo `complete` reads with its prompt: base64 bytes and their media type (`image/jpeg`). */
+export interface CompleteImage {
+  mediaType: string;
+  data: string;
+}
+
 export interface Caller {
   id: string;
   admin: boolean;
@@ -2237,6 +2243,7 @@ export class Assistant {
     input: string,
     max: number,
     signal?: AbortSignal,
+    images?: CompleteImage[],
   ): Promise<string> {
     const client = clients.openai as OpenAI;
     const plan = !!clients.openaiPlan;
@@ -2248,7 +2255,21 @@ export class Assistant {
           model: s.model.id,
           instructions,
           // A plan sign-in takes only a list of items, never bare text ("Input must be a list").
-          input: [{ role: 'user', content: input }],
+          input: [
+            {
+              role: 'user',
+              content: images?.length
+                ? [
+                    { type: 'input_text', text: input },
+                    ...images.map((i) => ({
+                      type: 'input_image' as const,
+                      image_url: `data:${i.mediaType};base64,${i.data}`,
+                      detail: 'auto' as const,
+                    })),
+                  ]
+                : input,
+            },
+          ],
           store: false,
           stream: true,
           ...(plan ? {} : { max_output_tokens: max }),
@@ -2337,7 +2358,15 @@ export class Assistant {
    */
   async complete(
     caller: Caller,
-    o: { task: string; system: string; prompt: string; maxTokens?: number; signal?: AbortSignal },
+    o: {
+      task: string;
+      system: string;
+      prompt: string;
+      /** Photos read with the prompt (a scanned page, a screenshot). */
+      images?: CompleteImage[];
+      maxTokens?: number;
+      signal?: AbortSignal;
+    },
   ): Promise<{ text: string; usd: number; model: string }> {
     const s = await this.session(caller, await this.mainTier(caller, o.task));
     const { paying, wait } = await this.state.paying(caller.id, s.model.provider);
@@ -2350,14 +2379,31 @@ export class Assistant {
     let text = '';
     try {
       if (s.model.provider === 'openai' && clients.openai) {
-        text = await this.openaiOnce(clients, s, o.system, o.prompt, max, o.signal);
+        text = await this.openaiOnce(clients, s, o.system, o.prompt, max, o.signal, o.images);
       } else if (clients.anthropic) {
         const msg = await clients.anthropic.messages.create(
           {
             model: s.model.id,
             max_tokens: max,
             system: o.system,
-            messages: [{ role: 'user', content: o.prompt }],
+            messages: [
+              {
+                role: 'user',
+                content: o.images?.length
+                  ? [
+                      ...o.images.map((i) => ({
+                        type: 'image' as const,
+                        source: {
+                          type: 'base64' as const,
+                          media_type: i.mediaType as Anthropic.Base64ImageSource['media_type'],
+                          data: i.data,
+                        },
+                      })),
+                      { type: 'text' as const, text: o.prompt },
+                    ]
+                  : o.prompt,
+              },
+            ],
             ...effortParams(s.effort),
           },
           o.signal ? { signal: o.signal } : undefined,
