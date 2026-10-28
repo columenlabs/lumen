@@ -27,7 +27,7 @@ The details or the editor of one row, opened from a list, a card or a link. A ri
 - Every body is `DrawerSection`s. No heading, card or divider of the app's own between them.
 - Sections start folded; `defaultOpen` the one the person came for.
 - Label and value pairs are `FactList`. Fields are the kit's inputs with an `InfoTip` where one is truly needed.
-- The footer holds the drawer's actions, right-aligned: destructive first, `SaveButton` last. With no actions the kit shows Close.
+- The footer holds the drawer's actions as icons, right-aligned: destructive first, `SaveButton` last. With no actions there is no footer; the × closes it.
 
 ## Do / Don't
 
