@@ -261,12 +261,15 @@ const ADVICE_MAX = 2;
 const ADVICE_TOKENS = 2048;
 const ADVISOR_BETA = 'advisor-tool-2026-03-01';
 /**
- * What later turns remember of a turn's tool results: each as the model saw it, up to a budget a
- * turn, so a follow-up ("list them all", "which have no milk") answers from what was read instead
- * of calling the same tools again. Older turns go when the chat compacts.
+ * What later turns remember of the tools' results, so a follow-up ("list them all", "which have no
+ * milk") answers from what was read instead of calling the same tools again. Each result is kept
+ * as the model saw it (`RAN_CHARS`), at most `RAN_TURN` a turn as stored, and the whole chat sends
+ * at most `RAN_CHAT`: newest first, a call repeated later kept only in its latest turn, and past
+ * the budget an older result is named but dropped, so a long chat costs no more than a short one.
  */
 const RAN_CHARS = RESULT_CHARS;
-const RAN_TOTAL = 40_000;
+const RAN_TURN = 40_000;
+const RAN_CHAT = 40_000;
 const CHATS_LISTED = 200;
 
 const WHY_TEXT: Record<HandOffWhy, string> = {
@@ -279,6 +282,8 @@ const WHY_TEXT: Record<HandOffWhy, string> = {
 interface Turn {
   role: 'user' | 'assistant';
   content: string;
+  /** An answer's tool results, sent within the chat's budget (`toolMemory`). */
+  ran?: Ran[];
 }
 
 /** A chat as stored: what the screen shows, what the model is sent, and what it was told. */
@@ -340,6 +345,8 @@ interface Fn {
 /** What a turn ran, for the history later turns are sent. */
 interface Ran {
   tool: string;
+  /** The tool and its input; '' for a change, which is never taken as the same call. */
+  key: string;
   result: string;
 }
 
@@ -350,6 +357,50 @@ function stableJson(v: unknown): string {
       ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
       : x,
   );
+}
+
+/** A turn's tool results as stored: each cut to what the model saw, the turn to `RAN_TURN`. */
+function ranOf(runs: Ran[]): { ran?: Ran[] } {
+  let left = RAN_TURN;
+  const ran: Ran[] = [];
+  for (const r of runs) {
+    if (left <= 0) break;
+    const result = r.result.slice(0, Math.min(RAN_CHARS, left));
+    left -= result.length;
+    ran.push({ ...r, result: result.length < r.result.length ? `${result} …(cut)` : result });
+  }
+  return ran.length ? { ran } : {};
+}
+
+/**
+ * The history as sent: each answer followed by what its tools returned, within `RAN_CHAT` for the
+ * whole chat, newest first. A call made again later is kept only there; one past the budget is
+ * named so the model knows to call it again. Chats stored before `ran` carry it in `content`.
+ */
+function toolMemory(history: Turn[]): Anthropic.MessageParam[] {
+  let left = RAN_CHAT;
+  const later = new Set<string>();
+  const out: Anthropic.MessageParam[] = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const t = history[i] as Turn;
+    if (!t.ran?.length) {
+      out.push({ role: t.role, content: t.content });
+      continue;
+    }
+    const lines = t.ran.map((r) => {
+      if (r.key && later.has(r.key)) return `- ${r.tool} → (called again later; see there)`;
+      if (r.key) later.add(r.key);
+      if (left < 200) return `- ${r.tool} → (no longer kept; call it again if you need it)`;
+      const kept = r.result.slice(0, left);
+      left -= kept.length;
+      return `- ${r.tool} → ${kept}${kept.length < r.result.length ? ' …(cut)' : ''}`;
+    });
+    out.push({
+      role: t.role,
+      content: `${t.content}\n\n[Tools I used and what they returned]\n${lines.join('\n')}`,
+    });
+  }
+  return out.reverse();
 }
 
 const NO_USAGE: ChatUsage = { calls: 0, in: 0, read: 0, out: 0, usd: 0, parts: [] };
@@ -1116,7 +1167,7 @@ export class Assistant {
         ? `The person handed this message to ${handTo.label}: call escalate {tier: "${handTo.id}", why: "asked"} now, its task the message with every fact from this chat it needs, then answer from its memo.\n\n`
         : '';
       const messages: Anthropic.MessageParam[] = [
-        ...doc.history.map((t) => ({ role: t.role, content: t.content })),
+        ...toolMemory(doc.history),
         { role: 'user', content: `${page}${lead}${asked}` },
       ];
       const escalateTool = this.escalateTool(main.tier);
@@ -1170,7 +1221,7 @@ export class Assistant {
         emit('text_end', {});
       }
       doc.history.push({ role: 'user', content: `${page}${asked}` });
-      doc.history.push({ role: 'assistant', content: this.remember(answer, runs) });
+      doc.history.push({ role: 'assistant', content: answer, ...ranOf(runs) });
     } catch (err) {
       if (signal?.aborted) {
         outcome = 'stopped';
@@ -1562,7 +1613,7 @@ export class Assistant {
     counts.steps += 1;
     // A change made at once can make an earlier read stale: reads after it run again.
     if (f.write) counts.seen.clear();
-    runs.push({ tool: use.name, result: out });
+    runs.push({ tool: use.name, key, result: out });
     await Promise.resolve(
       this.o.onStep?.({
         kind: 'tool',
@@ -2031,7 +2082,7 @@ export class Assistant {
   private async compact(clients: Clients, s: Session, doc: ChatDoc, emit: Emit) {
     if (doc.history.length < 2) return false;
     const system = `Summarise this chat between a person and ${this.name}, their assistant, so ${this.name} can carry on from the summary alone. Keep what the person wants, the facts and numbers found, decisions made and cards drafted or saved, and anything still open. Plain bullets, at most 400 words. No preamble.`;
-    const chat = doc.history
+    const chat = toolMemory(doc.history)
       .map((t) => `${t.role === 'user' ? 'Person' : this.name}: ${t.content}`)
       .join('\n\n');
     let summary = '';
@@ -2092,21 +2143,6 @@ export class Assistant {
           `- ${d.title} ${JSON.stringify(d.args).slice(0, 300)}: ${d.status}${d.error ? ` (${d.error})` : ''}${d.result !== undefined ? ` → ${JSON.stringify(d.result).slice(0, 300)}` : ''}`,
       )
       .join('\n')}\n\n`;
-  }
-
-  /** The answer as later turns remember it: with what its tools returned, cut. */
-  private remember(answer: string, runs: Ran[]) {
-    if (!runs.length) return answer;
-    let left = RAN_TOTAL;
-    const lines: string[] = [];
-    for (const r of runs) {
-      if (left <= 0) break;
-      const kept = r.result.slice(0, Math.min(RAN_CHARS, left));
-      const line = `- ${r.tool} → ${kept}${kept.length < r.result.length ? ' …(cut)' : ''}`;
-      left -= line.length;
-      lines.push(line);
-    }
-    return `${answer}\n\n[Tools I used and what they returned]\n${lines.join('\n')}`;
   }
 
   // ---------------------------------------------------------------- keys
