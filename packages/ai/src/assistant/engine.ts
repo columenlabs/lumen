@@ -1335,6 +1335,11 @@ export class Assistant {
     const lines = [
       `You are ${this.name}. Each message starts with <bearings>: the time now in the person's zone and where they are. Take today, now and how long ago from it; never guess the date. It is for you only: never quote it or start an answer with it.`,
       'Answer in short plain sentences. Use the tools for facts; never guess a number a tool can give you. Call several tools at once when they do not depend on each other.',
+      ...([...fns.values()].some((f) => f.def.find)
+        ? [
+            "Questions about an app's records go through its find tool (the tool named <app>_find): put every condition of the question in one call (filters, words to include or leave out, which fields to look in), ask only for the fields the answer needs, then judge the rest yourself from what it returns. Never list or open records one by one to filter them. Rows a find already returned in this chat you use again without asking for them again.",
+          ]
+        : []),
       ...([...fns.values()].some((f) => !f.draft && !f.write) && !fns.has(BATCH)
         ? [
             `To read several records, or one tool with several inputs, put the reads in one ${BATCH} call: one step for all of them, never one call at a time. Results you already have from earlier in the chat you use, without reading them again.`,
@@ -1361,7 +1366,7 @@ export class Assistant {
         const own = policy === 'any' ? reach : policy === 'next' ? reach.slice(0, 1) : [];
         lines.push(
           `Tiers: you run on ${main.tier.label}. The escalate tool hands one task to a higher tier (${reach.map((t) => t.label).join(' or ')}) with the same tools; it works in its own section of the chat and returns a memo. It costs more than answering yourself.`,
-          `Call it when the person names a tier or says "go deeper"${own.length ? `, and on your own (${own.map((t) => t.label).join(' or ')}) when the question needs judgement a lookup cannot settle (why "judgement"), after two of your tool calls failed (why "stuck"), or when a fix of a check still fails (why "check_failed")` : ''}. Lookups you answer yourself: reading or checking many records against a plain rule (an ingredient, a date, a number, a name) is a lookup, done with ${BATCH}, never escalated.`,
+          `Call it when the person names a tier or says "go deeper"${own.length ? `, and on your own (${own.map((t) => t.label).join(' or ')}) when the question needs judgement a lookup cannot settle (why "judgement"), after two of your tool calls failed (why "stuck"), or when a fix of a check still fails (why "check_failed")` : ''}. Lookups you answer yourself: reading or checking many records against a plain rule (an ingredient, a date, a number, a name) is a lookup, done with a find call or ${BATCH}, never escalated.`,
           'Its task must carry every fact from this chat it needs: it does not see the chat. Then answer from its memo in your own short words.',
         );
       }

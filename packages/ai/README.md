@@ -156,3 +156,35 @@ createAssistant({
 ```
 
 An app with its own assistant loop builds the same block with `bearings({ timeZone, lastAt, app, extras })` and puts it before the message.
+
+### Find: one question, one query
+
+The standard way to search an app's records (Columen's canonical setup, 2026-10-28): every app that shows the assistant a collection gives it a find tool, never a list plus one-record reads. One call turns the question into one query that runs where the rows live (D1 or a Durable Object's SQLite). The model gets back only the matching rows and the fields it asked for, and makes the final call itself.
+
+- **Filters** (tags, number and date ranges) are exact SQL.
+- **Words** are matched by an FTS5 index (`porter unicode61`, so "egg" finds "eggs"): `any`, `all`, `none` (leave out: "no milk"), and `in` to say which fields to look in.
+- **Meaning** comes from Vectorize: candidates for a loose ask, trimmed by the same filters and words. It is the next step on this part; until it lands, the model does the fuzzy part over what words and filters return.
+
+```ts
+import { d1Sql, defineFind, findSql, findTool } from '@columenlabs/lumen-ai/assistant';
+
+export const notesFind = defineFind({
+  name: 'notes', label: 'note', table: 'notes', key: 'id',
+  where: 'deleted = 0',          // the app's own SQL, always applied
+  order: 'updated_at DESC',      // with no words to rank by
+  fields: {
+    title: { kind: 'text' },
+    body: { kind: 'text', show: false },     // searchable, returned only when asked
+    tags: { kind: 'text', json: true },      // a JSON column, returned parsed
+    folder: { kind: 'tag' },                 // exact filter; its values are listed to the model
+    updated_at: { kind: 'date' },            // updated_at_from, updated_at_to
+  },
+});
+
+// In a group's tool source, per answer (a Durable Object passes doSql(ctx.storage.sql)):
+plainTools([await findTool(notesFind, d1Sql(env.DB))]);
+```
+
+- `findTool` makes `<name>_find` with a flat input schema (every provider takes it) and reads each tag field's values once to list them. The assistant tells the model to put a whole question in one find call.
+- `runFind(def, sql, query)` is the same query without the tool: bound parameters only, never model-written SQL. It gives up after 3 s.
+- `findSql(def)` gives the index's SQL. `create` is an external-content FTS5 table plus triggers that keep it in step on every insert, update and delete, whoever writes. `fill` indexes the rows already there, and `drop` takes it all out. Put `create` and `fill` in a migration (D1) or a budgeted background step (a Durable Object), never on a request. Until the index exists, words fall back to a plain text match and the result says so, so code can ship before its migration.

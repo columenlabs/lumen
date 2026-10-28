@@ -17,6 +17,8 @@ export interface ToolDef {
   /** JSON Schema of its input (an object). */
   inputSchema: Record<string, unknown>;
   read: boolean;
+  /** A find tool (`findTool`): one query per question, so the assistant puts every condition in it. */
+  find?: boolean;
 }
 
 /** Tools opened for one answer: what they are, how to call one, and how to let them go. */
