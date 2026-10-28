@@ -1,0 +1,14 @@
+{
+  "name": "@columenlabs/lumen-person",
+  "version": "0.0.0",
+  "description": "Lumen's one store per person: a Durable Object whose SQLite holds every app's tables for that person, with migrations that fail per app, one alarm shared by every app, and backup, restore and delete per app or whole.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "biome check src && ../ship/scripts/check-kit-neutral.sh",
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

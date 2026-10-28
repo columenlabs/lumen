@@ -85,6 +85,10 @@
         "@columenlabs/lumen-ui-types": "workspace:*",
       },
     },
+    "packages/person": {
+      "name": "@columenlabs/lumen-person",
+      "version": "0.0.0",
+    },
     "packages/ship": {
       "name": "@columenlabs/lumen-ship",
       "version": "0.0.0",
@@ -309,6 +313,8 @@
     "@columenlabs/lumen-ops": ["@columenlabs/lumen-ops@workspace:packages/ops"],
 
     "@columenlabs/lumen-people": ["@columenlabs/lumen-people@workspace:packages/people"],
+
+    "@columenlabs/lumen-person": ["@columenlabs/lumen-person@workspace:packages/person"],
 
     "@columenlabs/lumen-ship": ["@columenlabs/lumen-ship@workspace:packages/ship"],
 
