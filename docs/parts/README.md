@@ -17,6 +17,7 @@ Each page has the same four headings:
 | `LumenShell bar`, `useStatus` | [status-bar.md](status-bar.md) | What is true right now, nobody has to act on |
 | `LumenSelector` | [selector.md](selector.md) | Every picker |
 | `LumenView`, `LumenLayout` | [table.md](table.md) | Every list of rows |
+| `LumenFilterPanel` | [filter-panel.md](filter-panel.md) | Browsing a big list by its fields' values, beside it |
 
 ## Three rules every page shares
 
