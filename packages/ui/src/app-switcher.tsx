@@ -32,6 +32,9 @@ export interface LumenApp {
   icon?: NavIcon;
   /** An image of its mark (another site's favicon). */
   iconUrl?: string;
+  /** Its `icon` or `iconUrl` is a whole app tile (its own coloured square, like a favicon): the
+   * switcher draws it at the box's full size instead of a small glyph inside the box. */
+  tile?: boolean;
   href: string;
   /** The heading it sits under; apps with none lead the menu under `menuLabel`. */
   group?: string;
@@ -97,9 +100,13 @@ export function LumenAppSwitcher({
               tooltip={current.name}
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <AppMark app={current} className="size-4" />
-              </div>
+              {current.tile ? (
+                <AppMark app={current} className="aspect-square size-8 shrink-0 rounded-lg" />
+              ) : (
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                  <AppMark app={current} className="size-4" />
+                </div>
+              )}
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{current.label ?? current.name}</span>
                 {product && (
@@ -128,9 +135,13 @@ export function LumenAppSwitcher({
                     className={cn('gap-2 p-2', a.id === current.id && 'bg-muted')}
                   >
                     <a href={a.href} aria-current={a.id === current.id ? 'page' : undefined}>
-                      <div className="flex size-6 shrink-0 items-center justify-center rounded-md border">
-                        <AppMark app={a} className="size-3.5 shrink-0" />
-                      </div>
+                      {a.tile ? (
+                        <AppMark app={a} className="size-6 shrink-0 rounded-md" />
+                      ) : (
+                        <div className="flex size-6 shrink-0 items-center justify-center rounded-md border">
+                          <AppMark app={a} className="size-3.5 shrink-0" />
+                        </div>
+                      )}
                       <span className={cn('truncate', a.external && 'shrink-0')}>
                         {a.label ?? a.name}
                       </span>
@@ -161,6 +172,8 @@ export interface SuiteApp {
   url: string;
   icon?: string;
   iconUrl?: string;
+  /** The icon is a whole app tile (LumenApp `tile`). */
+  tile?: boolean;
   group?: string;
 }
 
@@ -191,6 +204,7 @@ export function suiteApps(list: SuiteList, here: URL): LumenApp[] {
     href: a.url,
     icon: a.icon ? lucideIcon(a.icon) : undefined,
     iconUrl: a.iconUrl,
+    tile: a.tile,
     group: a.group,
     external: hostOf(a.url) !== here.host,
   }));
