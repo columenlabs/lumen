@@ -2247,7 +2247,8 @@ export class Assistant {
         {
           model: s.model.id,
           instructions,
-          input,
+          // A plan sign-in takes only a list of items, never bare text ("Input must be a list").
+          input: [{ role: 'user', content: input }],
           store: false,
           stream: true,
           ...(plan ? {} : { max_output_tokens: max }),
