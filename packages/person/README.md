@@ -74,6 +74,14 @@ The store's own module `_object` (or `personModule(...).own(method)` for one mod
 | `wipe` | Deletes the whole store (every table, key and the alarm) |
 | `counts` | Rows per table, migration levels and any module whose migration is failing |
 
+## Moving rows in from an older store
+
+An app that kept its own Durable Object moves into the person's store a page at a time, so no step holds either store for long:
+
+- The old store answers `exportRows(sql, table, after)`: rows after a rowid bookmark, at most 500 rows and about 4 MB a page (at least one row, so a big blob still moves), bytes as `{b64}`.
+- The module's wake writes each page with `importRows(sql, table, page)` inside `ctx.transaction`, keeps the bookmark and asks to wake again. Rows keep their rowids, so a page sent twice changes nothing.
+- When every table is across, `rowStats` on both sides (rows and highest rowid per table) must match before the app reads from the new store. Stop the old store's alarm and writes while it moves; a table whose stats differ goes again.
+
 Point-in-time recovery (`ctx.storage.getBookmarkForTime`) restores the whole store, every module at once. Restore one module from its dump instead, and keep PITR for the whole store.
 
 Virtual tables (an FTS5 word index from `@columenlabs/lumen-ai`'s `findSql`) are not copied: their triggers fill them as rows load, and a rebuild runs after.

@@ -5,6 +5,7 @@
  */
 import { OBJECT_MODULE, PersonError, type PersonReply, insideStore } from './object';
 
+export * from './move';
 export * from './object';
 
 /** What the Worker holds of the Durable Object namespace: the class's RPC `call` passes to `PersonObject.call`. */
