@@ -35,3 +35,29 @@ Every sheet, drawer, dialog, picker and menu can be closed the obvious way, on a
 - **Esc and back.** Esc closes the top overlay. On a phone the back button or gesture closes it too and leaves the page where it was (`useBackClose`); closing any other way pops that history entry again, unless a link inside already moved on.
 - **Safe areas.** Bottom sheets pad the home indicator, side sheets and full-screen dialogs the notch.
 - **Titles stop short of the ×.** A header's title truncates on one line before the close button (`SheetHeader`, `DialogHeader` reserve its room); a header's own actions sit left of it, never under it.
+
+## Status bar: the dashboard
+
+The status bar says what is true right now, at a glance, that nobody has to act on. Pick the surface by what the reader must do:
+
+| Surface | When | Example |
+|---|---|---|
+| Banner | The page's main job is broken until someone acts. | Feed not connected · Connect |
+| Toast | Someone just did something: confirm it, offer Undo, fade. | Saved 3 rows · Undo |
+| Badge | The state of one row, card or nav item. | Failing · 12 |
+| Status bar | The app's ambient state: fresh, busy, degraded. | Updated 3m ago · Syncing 40 of 112 |
+| Header line (`meta`) | What this page is, in static words. | Pages you watch |
+
+Five slots, in this order, drawn by the kit from data (`LumenShell bar`, `useStatus` in a page):
+
+1. **Sync.** How fresh the page's data is: Updated 3m ago, Syncing (with its count), Saved copy, Offline, Did not update. `querySync(query)` reads it from the page's main TanStack query; a page's sync wins over the app's.
+2. **Work.** This app's running task from the Tasks list, with its percent. It comes by itself where Tasks is mounted.
+3. **Message.** A warning or error that blocks nothing (Job boards offline). Latest only, `×N` for repeats, `+N` for earlier ones.
+4. **Page facts.** At most two facts this page has nowhere else to show (Next run in 12m). Never a row count the pager shows or a number a tile shows.
+5. **End.** Health (admins), What's new, time zone. Fixed.
+
+Rules:
+- Every item says what and when: "Updated 3m ago", never just "Updated". Relative times stay current while the tab shows.
+- One line, always. A long item ends in an ellipsis with the full text on hover or tap.
+- On a phone the most urgent item shows (error, then warning, then work, then sync), with a chip that opens every item in a bottom sheet. The bar never scrolls sideways.
+- Nothing in the bar waits or holds the page: it draws from what the page already has, and a read that has not answered shows its last state or nothing.

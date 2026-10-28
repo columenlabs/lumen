@@ -67,7 +67,7 @@ const COLLISION_PAD = 8;
  * keyboard, like the services chip, so a phone can read the full text too (a tooltip never opens
  * on touch). Styled on its own classes only: a trigger owns `data-state`.
  */
-function Pop({
+export function StatusPop({
   label: name,
   className,
   children,
@@ -97,13 +97,13 @@ function Pop({
   );
 }
 
-const TRIGGER =
+export const STATUS_TRIGGER =
   'flex h-6 items-center gap-1.5 rounded-md px-1.5 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none';
 
 function Line({ group }: { group: Group }) {
   return (
-    <Pop
-      className={cn(TRIGGER, 'min-w-0 max-w-(--status-message-max)')}
+    <StatusPop
+      className={cn(STATUS_TRIGGER, 'min-w-0 max-w-(--status-message-max)')}
       content={<p className={TEXT[group.tone]}>{label(group)}</p>}
     >
       <Dot tone={group.tone} />
@@ -113,7 +113,7 @@ function Line({ group }: { group: Group }) {
           ×{group.count}
         </span>
       )}
-    </Pop>
+    </StatusPop>
   );
 }
 
@@ -137,9 +137,9 @@ export function StatusMessages({
     <span aria-live="polite" className={cn('flex min-w-0 items-center gap-2', className)}>
       <Line group={latest} />
       {earlier.length > 0 && (
-        <Pop
+        <StatusPop
           label={`${earlier.length} earlier messages`}
-          className={cn(TRIGGER, 'num shrink-0 text-foreground/80')}
+          className={cn(STATUS_TRIGGER, 'num shrink-0 text-foreground/80')}
           content={
             <ul className="flex flex-col gap-1">
               {earlier.map((g) => (
@@ -154,7 +154,7 @@ export function StatusMessages({
           }
         >
           +{earlier.length}
-        </Pop>
+        </StatusPop>
       )}
     </span>
   );

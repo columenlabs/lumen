@@ -1,4 +1,12 @@
-import { LumenLayout, LumenShell, NavGroup, NoteLine, Tile, TileRow } from '@columenlabs/lumen-ui';
+import {
+  LumenLayout,
+  LumenShell,
+  NavGroup,
+  NoteLine,
+  Tile,
+  TileRow,
+  useStatus,
+} from '@columenlabs/lumen-ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { BarChart3Icon, HomeIcon, InfoIcon, SettingsIcon, StoreIcon } from 'lucide-react';
 
@@ -76,4 +84,32 @@ export const LongSettings: StoryObj<typeof meta> = {
       }),
     ),
   },
+};
+
+/** A page's facts reach the bar as data through `useStatus`. */
+function PageFacts() {
+  useStatus({ facts: [{ label: 'Next run', value: 'Store sync', at: Date.now() + 12 * 60_000 }] });
+  return null;
+}
+
+/** The status bar's five slots (DESIGN.md, Status bar): a sync under way, a warning that blocks
+ *  nothing and a page fact, then the end. On a phone the warning shows and ⓘ opens the rest. */
+export const StatusBar: StoryObj<typeof meta> = {
+  args: {
+    bar: {
+      sync: { state: 'syncing', label: 'Store feed', done: 40, total: 112 },
+      messages: [{ text: 'Faro feed offline · other stores still sync', tone: 'warning' }],
+    },
+    children: (
+      <>
+        <PageFacts />
+        {meta.args.children}
+      </>
+    ),
+  },
+};
+
+/** Healthy and idle: freshness only. */
+export const StatusBarIdle: StoryObj<typeof meta> = {
+  args: { bar: { sync: { state: 'ok', at: Date.now() - 3 * 60_000 } } },
 };
