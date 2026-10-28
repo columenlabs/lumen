@@ -73,6 +73,8 @@ export interface StatusPart {
 export interface StatusBarModel {
   sync?: StatusSync | null;
   messages?: StatusMessage[];
+  /** App-wide facts (`Next run in 12m`); a page's own come first, two show in all. */
+  facts?: StatusFact[];
   /** Shows this app's running task from the Tasks list (default true where Tasks is mounted). */
   work?: boolean;
 }
@@ -317,8 +319,7 @@ function useEntries(model: StatusBarModel | undefined, app: string): Entry[] {
     });
   }
 
-  parts
-    .flatMap((p) => p.facts ?? [])
+  [...parts.flatMap((p) => p.facts ?? []), ...(model?.facts ?? [])]
     .slice(0, MAX_FACTS)
     .forEach((f, i) => entries.push(factEntry(f, i, now)));
   return entries;
