@@ -115,7 +115,7 @@ export async function bearings(input: BearingsInput = {}): Promise<string> {
   };
   const utc = new Date(now).toISOString().slice(11, 16);
   const lines = [
-    "Bearings (the server's clock: use it for today, now and how long ago; never guess the date):",
+    "<bearings> (the server's clock, for you only: use it for today, now and how long ago; never guess the date, and never repeat it in your answer)",
     `Now: ${b.at(now)} (${timeZone}) · ${utc} UTC`,
   ];
   if (input.lastAt && input.lastAt < now)
@@ -124,5 +124,6 @@ export async function bearings(input: BearingsInput = {}): Promise<string> {
   const extras = input.extras ? (Array.isArray(input.extras) ? input.extras : [input.extras]) : [];
   const more = await Promise.all(extras.map((e) => within(e, b, input.extrasMs ?? EXTRAS_MS)));
   for (const l of more.flat()) lines.push(l.slice(0, 400));
+  lines.push('</bearings>');
   return `${lines.join('\n')}\n\n`;
 }
