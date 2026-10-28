@@ -163,6 +163,11 @@ export interface ToolGroup {
    * chat when `undo` is set. Off by default, so a group only drafts.
    */
   writes?: boolean;
+  /**
+   * Has read tools only: offered Off or Read, never Read + draft or Read + write, and a saved
+   * draft or write level reads as Read.
+   */
+  readOnly?: boolean;
   /** Takes back one change a write made at once (Undo on its line in the chat). */
   undo?: (caller: Caller, write: AssistantWrite) => Promise<void>;
   tools: (caller: Caller) => ToolSource | ToolSource[];
@@ -649,6 +654,7 @@ export class Assistant {
 
   private access(p: { access?: Record<string, AssistantAccess> }, g: ToolGroup) {
     const a = p.access?.[g.id] ?? g.access ?? 'read';
+    if (g.readOnly && (a === 'draft' || a === 'write')) return 'read';
     return a === 'write' && !g.writes ? 'draft' : a;
   }
 
@@ -742,8 +748,8 @@ export class Assistant {
         label: g.label,
         about: g.about,
         access: this.access(p, g),
-        drafts: true,
-        writes: !!g.writes,
+        drafts: !g.readOnly,
+        writes: !!g.writes && !g.readOnly,
       })),
       hand_off: p.hand_off ?? 'next',
       advice: p.advice && (p.advice === 'off' || this.tierById(p.advice)) ? p.advice : 'off',

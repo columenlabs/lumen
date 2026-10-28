@@ -305,6 +305,7 @@ export interface AssistantStatus {
     label: string;
     about: string;
     access: AssistantAccess;
+    /** Whether the group offers Read + draft (false for a group of read tools only). */
     drafts: boolean;
     /** Whether the group offers Read + write. */
     writes: boolean;
