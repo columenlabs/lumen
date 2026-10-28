@@ -412,12 +412,21 @@ export {
   TileToggleGroup,
 } from './tile';
 export {
+  type FacetCounts,
   type FilterField,
   type FilterToken,
   LumenTokenizedFilter,
   type LumenFilterState,
+  countsShown,
+  useFacetCounts,
   useLumenFilter,
 } from './lumen-filter';
+export {
+  LumenFilterPanel,
+  LumenFilterPanelButton,
+  type LumenFilterPanelProps,
+  useFilterPanel,
+} from './lumen-filter-panel';
 export { useIsMobile } from './hooks/use-mobile';
 export { useBackClose } from './hooks/use-back-close';
 export { VIEW_ICONS, iconOf, viewIcon } from './view-icons';

@@ -63,12 +63,14 @@ import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenDrawer } from './lumen-drawer';
 import {
+  type FacetCounts,
   type FilterField,
   type FilterToken,
   LumenTokenizedFilter,
   filterByTokens,
   useLumenFilter,
 } from './lumen-filter';
+import { LumenFilterPanel, LumenFilterPanelButton, useFilterPanel } from './lumen-filter-panel';
 import { type GridCard, type GridPlace, LumenGrid } from './lumen-grid';
 import {
   KEY_FIELDS,
@@ -255,6 +257,12 @@ export interface LumenLayoutViewProps<T> {
   columnPicker?: boolean;
   /** No filter box (a short list, e.g. a playbook's variants). */
   hideFilter?: boolean;
+  /** The server's counts for each filter field's values over the rows the other chips keep, so the
+   *  box and the filter panel count every row, not one page (with `paging`). */
+  facets?: FacetCounts | null;
+  /** A filter panel beside the page: the same filter as the box, each field's values ticked in
+   *  place. `id` keeps it open or hidden per device; `tips` gives a field an InfoTip. */
+  filterPanel?: { id: string; tips?: Record<string, ReactNode>; order?: string[]; title?: string };
   /**
    * How the person's chips, sort and grouping save (rule C, by surface):
    * `document` (a saved view, the default) holds them for the visit and shows Changed with Save
@@ -384,6 +392,11 @@ function useKeptColors(cards: (LumenLayoutCard[] | undefined)[]) {
 // peeks out beside it; shadows, unlike a wider box, never make the page scroll sideways.
 const INTRO =
   'sticky left-0 flex w-(--view-w) flex-col gap-(--shell-section-gap) has-[[data-slot=tabs-list]]:top-0 has-[[data-slot=tabs-list]]:z-30 has-[[data-slot=tabs-list]]:bg-background has-[[data-slot=tabs-list]]:shadow-[var(--shell-gutter)_0_0_0_var(--color-background),calc(-1*var(--shell-gutter))_0_0_0_var(--color-background)]';
+
+/** The filter panel beside the page's scroller: one screen tall like it, scrolling on its own,
+ *  in the page's left gutter. */
+const PANEL =
+  'ml-(--shell-gutter) h-[calc(100svh-var(--shell-header-height)-var(--shell-status-height)-2*var(--shell-gutter))] overflow-y-auto';
 
 /** The page's one scroller: cards, filter and table scroll together. */
 function Scroller({ fit, children }: { fit?: boolean; children: ReactNode }) {
@@ -619,6 +632,8 @@ function ViewLayout<T extends RowData>({
   viewTools,
   columnPicker,
   hideFilter,
+  facets,
+  filterPanel,
   save: saveMode = 'document',
 }: PageProps & LumenLayoutViewProps<T>) {
   const onConfigChange = canEdit === false ? undefined : saveConfig;
@@ -637,7 +652,9 @@ function ViewLayout<T extends RowData>({
     initial: config.filters.default,
     // A server's page is not every row: the menu's counts would be over that page only.
     partial: !!paging && (paging.more || paging.page > 0 || (paging.total ?? 0) > rows.length),
+    facets,
   });
+  const panel = useFilterPanel(filterPanel?.id ?? '');
   // A view patched while open (the assistant's card move, a save from another tab) applies its new saved
   // filters at once; the person's own unsaved tokens stay while the saved ones
   // do not change.
@@ -963,6 +980,13 @@ function ViewLayout<T extends RowData>({
   const viewFilter =
     !showBox && !groupButton ? undefined : (
       <>
+        {filterPanel && (
+          <LumenFilterPanelButton
+            filter={filter}
+            open={panel.open}
+            onOpenChange={panel.onOpenChange}
+          />
+        )}
         {showBox && (
           <LumenTokenizedFilter
             filter={filter}
@@ -1271,7 +1295,24 @@ function ViewLayout<T extends RowData>({
       }
     >
       <LinksProvider links={links}>
-        <Scroller fit={fit}>{body}</Scroller>
+        {filterPanel ? (
+          <div className="flex min-w-0">
+            <LumenFilterPanel
+              filter={filter}
+              open={panel.open}
+              onOpenChange={panel.onOpenChange}
+              tips={filterPanel.tips}
+              order={filterPanel.order}
+              title={filterPanel.title}
+              className={PANEL}
+            />
+            <div className="min-w-0 flex-1">
+              <Scroller fit={fit}>{body}</Scroller>
+            </div>
+          </div>
+        ) : (
+          <Scroller fit={fit}>{body}</Scroller>
+        )}
       </LinksProvider>
       <LumenDrawer open={open !== null} title={openTitle} onClose={() => setDetails(null)}>
         {open !== null && (

@@ -189,6 +189,47 @@ function onePerField(tokens: FilterToken[]) {
 /** How many values a field lists in the menu before typing narrows it. */
 const PER_FIELD = 8;
 
+/** A server's counts per field: each value's rows, and the rows with no value (`none`), over the
+ *  rows every other field's tokens keep. */
+export type FacetCounts = Record<string, { values: Record<string, number>; none?: number }>;
+
+/**
+ * Each field's values with their counts, shared by the filter box and the filter panel. A field
+ * counts the rows the other fields' tokens keep, so picking one value never hides its siblings.
+ * Over a server's page the counts come from the server (`facets`), never from the page.
+ */
+export function useFacetCounts<T>(filter: LumenFilterState<T>) {
+  const { fields, indexed, tokens, facets } = filter;
+  return useMemo(() => {
+    const counts = new Map<string, Map<string, number>>();
+    const empties = new Map<string, number>();
+    for (const f of fields) {
+      if (f.number) continue;
+      if (facets) {
+        const got = facets[f.key];
+        counts.set(f.key, new Map(Object.entries(got?.values ?? {})));
+        empties.set(f.key, got?.none ?? 0);
+        continue;
+      }
+      const m = new Map<string, number>();
+      let none = 0;
+      for (const { row, values, nums } of indexed) {
+        if (!passes(values, nums, tokens, fields, f.key)) continue;
+        const vs = new Set(f.values(row));
+        if (!vs.size) none++;
+        for (const v of vs) m.set(v, (m.get(v) ?? 0) + 1);
+      }
+      counts.set(f.key, m);
+      empties.set(f.key, none);
+    }
+    return { counts, empties };
+  }, [fields, indexed, tokens, facets]);
+}
+
+/** Whether a count means something: over a server's page only when the server counted. */
+export const countsShown = (filter: { partial: boolean; facets: FacetCounts | null }) =>
+  !filter.partial || !!filter.facets;
+
 /** Keeps the tokens and text, and filters `rows` by them. */
 export function useLumenFilter<T>(
   rows: T[],
@@ -197,14 +238,18 @@ export function useLumenFilter<T>(
     text: textOf,
     initial = [],
     partial = false,
+    facets,
   }: {
     /** Free-text haystack per row (a name, an id), besides the field values. */
     text?: (row: T) => string[];
     /** Tokens applied when the view opens (a view's default filters). */
     initial?: FilterToken[];
     /** `rows` are one page of a server's rows: a count over them is not the real count, so the
-     *  menu shows none. */
+     *  menu shows none (unless the server sends its own `facets`). */
     partial?: boolean;
+    /** The server's counts for each field's values, taken over every row the other fields'
+     *  tokens keep (one query where the rows live). Given, the box and the panel show these. */
+    facets?: FacetCounts | null;
   } = {},
 ) {
   const [tokens, setRaw] = useState<FilterToken[]>(() => onePerField(initial));
@@ -259,6 +304,7 @@ export function useLumenFilter<T>(
     results,
     hasText,
     partial,
+    facets: facets ?? null,
     clear,
   };
 }
@@ -531,9 +577,11 @@ export function LumenTokenizedFilter<T>({
    *  never shares (a widget's own fixed filter). */
   link?: FilterLink | null;
 }) {
-  const { fields, indexed, tokens, setTokens, text, setText, hasText, partial } = filter;
-  // Over one page of a server's rows a count is not the real one: show none.
-  const tally = (n: number) => (partial ? '' : n);
+  const { fields, indexed, tokens, setTokens, text, setText, hasText } = filter;
+  // Over one page of a server's rows a count is not the real one: show none, unless the server counted.
+  const tally = (n: number) => (countsShown(filter) ? n : '');
+  // Text counts are over the rows loaded: none over a server's page.
+  const pageTally = (n: number) => (filter.partial ? '' : n);
   // A box its card passes no link takes the card's own (every card carries a square).
   const link = useAutoFilterLink(tokens, given);
   // Phone: the box is one tappable row and the menu is a bottom sheet.
@@ -647,27 +695,8 @@ export function LumenTokenizedFilter<T>({
   };
   const dirty = !!onSave && (!!changed || !sameTokens(tokens, saved ?? []));
 
-  // Each field's values with counts. A field counts the rows the other fields' tokens keep, so a
-  // chip can take more values of its own field.
-  const { counts, empties } = useMemo(() => {
-    const counts = new Map<string, Map<string, number>>();
-    // Rows with no value on each field, for its "No <field>" row.
-    const empties = new Map<string, number>();
-    for (const f of fields) {
-      if (f.number) continue;
-      const m = new Map<string, number>();
-      let none = 0;
-      for (const { row, values, nums } of indexed) {
-        if (!passes(values, nums, tokens, fields, f.key)) continue;
-        const vs = new Set(f.values(row));
-        if (!vs.size) none++;
-        for (const v of vs) m.set(v, (m.get(v) ?? 0) + 1);
-      }
-      counts.set(f.key, m);
-      empties.set(f.key, none);
-    }
-    return { counts, empties };
-  }, [fields, indexed, tokens]);
+  // Each field's values with counts (the same counts the filter panel shows).
+  const { counts, empties } = useFacetCounts(filter);
   const picked = (key: string, value: string) => tokens.some((t) => same(t, { key, value }));
   /** A field's values matching `n`: picked ones first, then the most common. In the open field
    * "picked" means picked when it opened, so the order holds still while values are ticked. */
@@ -888,7 +917,9 @@ export function LumenTokenizedFilter<T>({
             label={activeField.label}
             current={tokens.find((t) => t.key === activeField.key)}
             tall={mobile}
-            count={partial ? undefined : (op, value) => numberCount(activeField.key, op, value)}
+            count={
+              filter.partial ? undefined : (op, value) => numberCount(activeField.key, op, value)
+            }
             onSet={(op, value) => setCondition(activeField.key, op, value)}
           />
         )}
@@ -904,7 +935,7 @@ export function LumenTokenizedFilter<T>({
               <TextSearchIcon className="text-muted-foreground" />
               <span className="min-w-0 truncate">“{containsWord}”</span>
               <CommandShortcut className={shortcut}>
-                {tally(wordOf(containsWord, notFor(CONTAINS_KEY)))}
+                {pageTally(wordOf(containsWord, notFor(CONTAINS_KEY)))}
               </CommandShortcut>
             </CommandItem>
           )}
@@ -949,7 +980,9 @@ export function LumenTokenizedFilter<T>({
               </span>
               “{word}”
             </span>
-            <CommandShortcut className={shortcut}>{tally(wordOf(word, negate))}</CommandShortcut>
+            <CommandShortcut className={shortcut}>
+              {pageTally(wordOf(word, negate))}
+            </CommandShortcut>
           </CommandItem>
         </CommandGroup>
       )}
