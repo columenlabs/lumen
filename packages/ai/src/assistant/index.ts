@@ -16,6 +16,7 @@ export * from './bearings';
 export * from './chatgpt';
 export * from './engine';
 export * from './find';
+export * from './meaning';
 export * from './models';
 export * from './routes';
 export {
