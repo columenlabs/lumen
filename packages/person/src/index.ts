@@ -26,10 +26,10 @@ export async function personCall<T>(
 ): Promise<T> {
   const here = insideStore();
   if (here?.owner === owner) {
-    // In place, through the same JSON round trip as a stub call, so callers see the same values.
+    // In place, copied as a stub call copies (structured clone, bytes included), so callers see the same values.
     try {
-      const out = await here.call(module, method, JSON.parse(JSON.stringify(args ?? null)));
-      return (out === undefined ? null : JSON.parse(JSON.stringify(out))) as T;
+      const out = await here.call(module, method, structuredClone(args ?? null));
+      return (out === undefined ? null : structuredClone(out)) as T;
     } catch (err) {
       if (err instanceof PersonError) throw err;
       throw new PersonError(502, `${module} failed`);
