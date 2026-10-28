@@ -7,6 +7,8 @@
 #   hint-text    a grey line under a field or title: <p className="... text-xs ... text-muted-foreground ...">
 #   text-action  a <Button> whose text is an action: an IconButton (or SaveButton) instead
 #   raw-overlay  an import of the kit's raw ui/sheet, ui/dialog, ui/select, ui/command or ui/combobox
+#   settings-page a route, link or nav item to a page of its own named settings: settings are sections
+#                of the one Settings dialog (LumenShell settings, opened at ?settings=<section>)
 set -euo pipefail
 write=0
 if [ "${1:-}" = "--write-baseline" ]; then
@@ -18,7 +20,7 @@ if [ $# -eq 0 ]; then
   exit 1
 fi
 baseline=${LUMEN_SHIP_PARTS_BASELINE:-$(git rev-parse --show-toplevel)/scripts/parts.baseline}
-rules="hint-text text-action raw-overlay"
+rules="hint-text text-action raw-overlay settings-page"
 
 # Prints `file:line` for each break of one rule in one folder.
 hits() {
@@ -31,6 +33,8 @@ hits() {
         $re = qr/<p\s[^>]*className="(?=[^"]*\btext-xs\b)(?=[^"]*\btext-muted-foreground\b)[^"]*"/;
       } elsif ($rule eq "text-action") {
         $re = qr/<Button\b[^>]*>\s*(?:<[A-Z]\w*[^>]*\/>\s*)?(?:\{[^}]*\?\s*)?\x27?(?:Save|Run|Test|Send|Sync|Refresh|Copy|Edit|Delete|Remove|Retry|Reset)\b/;
+      } elsif ($rule eq "settings-page") {
+        $re = qr/\b(?:path|to|href)\s*[:=]\s*\{?\s*[\x27"`](?:[^\x27"`]*\/)?settings(?=[\/?#\x27"`])/i;
       } else {
         $re = qr/from\s+[\x27"]\@columenlabs\/lumen-ui\/ui\/(?:sheet|dialog|select|command|combobox)[\x27"]/;
       }

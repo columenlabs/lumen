@@ -46,8 +46,9 @@ description: 'Pick a relay. Mail goes out through the relay you choose; a localh
 ```
 
 - ✗ `h-full` on a card in a section: Settings scrolls, the card clips at one screen.
-- ✗ A grey line under a row's fields. ✓ An `InfoTip` on the one label that needs it.
+- ✗ A grey line under a row's fields. ✓ An `InfoTip` on the one label that needs it; `SettingRow`'s `description` draws one.
+- ✗ A Settings page of the app's own (a `/settings` route or nav item). ✓ A section in the app's group of the one dialog, opened from anywhere with `?settings=<section>`.
 
 ## Checked by
 
-`lumen-ship check settings-copy` (the 64-character description) and `hint-text`, `text-action` (see [README](README.md#checked-by)).
+`lumen-ship check settings-copy` (the 64-character description) and `hint-text`, `text-action`, `settings-page` (see [README](README.md#checked-by)).
