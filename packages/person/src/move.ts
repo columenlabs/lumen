@@ -21,6 +21,16 @@ export type RowStats = Record<string, { n: number; max: number }>;
 const quote = (name: string) => `"${name.replace(/"/g, '""')}"`;
 
 /**
+ * Only some rows of the old store's tables: a condition and its bound values, for an old store that
+ * held many people's rows in one table (`{ sql: 'scope = ?', args: [email] }`). The condition is
+ * code, never a person's text; the values are bound.
+ */
+export interface RowFilter {
+  sql: string;
+  args: unknown[];
+}
+
+/**
  * Rows of `table` after rowid `after`, in rowid order: at most `limit` rows and about `maxBytes`
  * (at least one row a page, so a big blob still moves). Bytes come as `{b64}`, as in a dump.
  */
@@ -28,7 +38,7 @@ export function exportRows(
   sql: SqlLike,
   table: string,
   after: number,
-  opts: { limit?: number; maxBytes?: number } = {},
+  opts: { limit?: number; maxBytes?: number; where?: RowFilter } = {},
 ): RowsPage {
   const limit = Math.min(Math.max(opts.limit ?? 500, 1), 5000);
   const maxBytes = opts.maxBytes ?? 4_000_000;
@@ -39,8 +49,9 @@ export function exportRows(
   if (!cols.length) return { cols, rows: [], ids: [], next: null };
   const found = sql
     .exec<Record<string, unknown>>(
-      `SELECT rowid AS _rowid_, * FROM ${quote(table)} WHERE rowid > ? ORDER BY rowid LIMIT ?`,
+      `SELECT rowid AS _rowid_, * FROM ${quote(table)} WHERE rowid > ?${opts.where ? ` AND (${opts.where.sql})` : ''} ORDER BY rowid LIMIT ?`,
       after,
+      ...(opts.where?.args ?? []),
       limit,
     )
     .toArray();
@@ -87,14 +98,16 @@ export function importRows(
   return page.rows.length;
 }
 
-/** Row counts and highest rowids of `tables` (a missing table counts as empty). */
-export function rowStats(sql: SqlLike, tables: string[]): RowStats {
+/** Row counts and highest rowids of `tables` (a missing table counts as empty), of the rows
+ *  `where` picks when given. */
+export function rowStats(sql: SqlLike, tables: string[], where?: RowFilter): RowStats {
   const out: RowStats = {};
   for (const t of tables) {
     try {
       const r = sql
         .exec<{ n: number; max: number | null }>(
-          `SELECT COUNT(*) AS n, MAX(rowid) AS max FROM ${quote(t)}`,
+          `SELECT COUNT(*) AS n, MAX(rowid) AS max FROM ${quote(t)}${where ? ` WHERE ${where.sql}` : ''}`,
+          ...(where?.args ?? []),
         )
         .toArray()[0];
       out[t] = { n: Number(r?.n ?? 0), max: Number(r?.max ?? 0) };
