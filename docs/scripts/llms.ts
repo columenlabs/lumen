@@ -4,7 +4,7 @@
 // manifests/components.json and manifests/docs.json). Nothing here is written by hand, so it stays
 // as current as the build. It first strips the build machine's own folder from every file: docgen
 // records absolute paths.
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -103,6 +103,19 @@ const packages = readdirSync(join(repo, 'packages'))
 const readme = absolute(readFileSync(join(repo, 'README.md'), 'utf8'), '');
 for (const p of packages) writeFileSync(join(dist, `${p.name}.md`), p.md);
 
+// How to use each part (docs/parts): served at /parts/<name>.md, listed in the index and put first
+// in llms-full.txt, since an agent should read the rules before the props.
+const partsDir = join(repo, 'docs/parts');
+mkdirSync(join(dist, 'parts'), { recursive: true });
+const guides = readdirSync(partsDir)
+  .filter((f) => f.endsWith('.md'))
+  .sort((a, b) => Number(b === 'README.md') - Number(a === 'README.md') || a.localeCompare(b))
+  .map((file) => {
+    const md = absolute(readFileSync(join(partsDir, file), 'utf8'), 'docs/parts/');
+    writeFileSync(join(dist, 'parts', file), md);
+    return { file, md, title: md.match(/^# (.+)$/m)?.[1] ?? file };
+  });
+
 const index = [
   '# Lumen',
   '',
@@ -116,6 +129,12 @@ const index = [
     (p) =>
       `- [${p.title}](${host}/${p.name}.md): ${p.lede.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')}`,
   ),
+  '',
+  '## How to use the parts',
+  '',
+  'Read the page for a part before you add or change it in an app: when to use it, its anatomy, do and do not, and the lint rule that checks it.',
+  '',
+  ...guides.map((g) => `- [${g.title}](${host}/parts/${g.file})`),
   '',
   '## Docs',
   '',
@@ -137,6 +156,7 @@ const parts: string[] = [
     .replace(/^\| Edit layout \| Edit widget \|\n\|---\|---\|\n\|(?:\s*\|)+\n/m, '')
     .trim(),
   '',
+  ...guides.flatMap((g) => [g.md.replace(/^# /m, '# How to use: ').trim(), '']),
   ...packages.flatMap((p) => [p.md.replace(/^# /m, '# Package: ').trim(), '']),
   '# Components',
   '',

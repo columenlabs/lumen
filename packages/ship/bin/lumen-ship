@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lumen-ship: releases and lint guards shared by every app. Run from the repo root.
 #   lumen-ship release [patch | minor | notes | tag v<version>]   see scripts/release.sh
-#   lumen-ship check suppressions | settings-copy | magic-numbers | kit-neutral [paths]
+#   lumen-ship check suppressions | settings-copy | magic-numbers | kit-neutral | parts [paths]
 set -euo pipefail
 here=$(cd "$(dirname "$(readlink -f "$0")")/../scripts" && pwd)
 cmd=${1:-}
@@ -12,9 +12,9 @@ case "$cmd" in
     name=${1:-}
     shift || true
     case "$name" in
-      suppressions | settings-copy | magic-numbers | kit-neutral) exec "$here/check-$name.sh" "$@" ;;
+      suppressions | settings-copy | magic-numbers | kit-neutral | parts) exec "$here/check-$name.sh" "$@" ;;
     esac
-    echo "usage: lumen-ship check suppressions | settings-copy | magic-numbers | kit-neutral" >&2
+    echo "usage: lumen-ship check suppressions | settings-copy | magic-numbers | kit-neutral | parts" >&2
     exit 1
     ;;
 esac
