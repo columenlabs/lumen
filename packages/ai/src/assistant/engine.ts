@@ -2330,7 +2330,8 @@ export class Assistant {
           .filter((b): b is Anthropic.TextBlock => b.type === 'text')
           .map((b) => b.text)
           .join('');
-      } else throw new AssistantError(waitText('not_connected', s.model.provider), 'not_connected', 402);
+      } else
+        throw new AssistantError(waitText('not_connected', s.model.provider), 'not_connected', 402);
     } catch (e) {
       if (e instanceof AssistantError) throw e;
       throw new AssistantError(
