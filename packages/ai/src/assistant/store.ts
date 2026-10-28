@@ -86,9 +86,20 @@ export function d1Sql(db: {
 }
 
 /** The table name, so an app's own tables never clash with it. */
-const TABLE = 'assistant_docs';
+const DEFAULT_TABLE = 'assistant_docs';
 
-export function sqlAssistantStore(sql: SqlRunner): AssistantStore {
+export interface SqlAssistantStoreOptions {
+  /** The table to keep documents in (default `assistant_docs`): a store that must prefix its tables,
+   *  such as a module of a person's store (`sage_docs`), names its own. Letters, digits and `_`. */
+  table?: string;
+}
+
+export function sqlAssistantStore(
+  sql: SqlRunner,
+  opts: SqlAssistantStoreOptions = {},
+): AssistantStore {
+  const TABLE = opts.table ?? DEFAULT_TABLE;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(TABLE)) throw new Error(`Not a table name: ${TABLE}`);
   let ready: Promise<void> | null = null;
   const init = () => {
     ready ??= sql.run(
