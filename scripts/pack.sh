@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build every package into a publishable folder: out/ui-types, out/ui, out/ship, out/auth, out/ops, out/ai, out/people, out/tasks and out/vault.
+# Build every package into a publishable folder: out/ui-types, out/ui, out/ship, out/auth, out/ops, out/ai, out/people, out/tasks, out/person and out/vault.
 #   scripts/pack.sh          build into ./out
 #   scripts/pack.sh <dir>    build into <dir>
 #   LUMEN_VERSION=0.1.4 scripts/pack.sh   publish as that version (the publish workflow sets it)
@@ -11,7 +11,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$(mkdir -p "${1:-$ROOT/out}" && cd "${1:-$ROOT/out}" && pwd)
 
-for pkg in ui-types ui ship auth ops ai people tasks vault; do
+for pkg in ui-types ui ship auth ops ai people tasks person vault; do
   dir="$ROOT/packages/$pkg"
   rm -rf "$dir/dist" "$OUT/$pkg"
   (cd "$dir" && bunx tsc -p tsconfig.build.json)
