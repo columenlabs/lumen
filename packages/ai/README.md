@@ -165,7 +165,7 @@ The standard way to search an app's records (Columen's canonical setup, 2026-10-
 - **Words** are matched by an FTS5 index (`porter unicode61`, so "egg" finds "eggs"): `any`, `all`, `none` (leave out: "no milk"), and `in` to say which fields to look in.
 - **Meaning** comes from Vectorize, opt in per app: `like` ("something light for a hot day") asks the index for the nearest rows, and the same filters and words trim them.
 - **Worked-out fields**: a number, date or tag field may be the app's own SQL over the row (`sql: 'json_array_length(t.steps)'`) instead of a column.
-- **Counts**: the result carries `count` (all matches), `returned` and `same_name` (different rows that share a name), so the model says the right number.
+- **Counts**: the result carries `count` (all matches), `returned` and `same_name` (different rows that share a name), so the model says the right number. A search by meaning carries `nearest: true` and no `count`: its rows are the nearest few, not every row that fits, so the model never quotes them as a number of matches.
 
 ```ts
 import { d1Sql, defineFind, findSql, findTool } from '@columenlabs/lumen-ai/assistant';
