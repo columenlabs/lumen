@@ -102,6 +102,7 @@ app.all('/api/assistant/*', (c) => routes(c.req.raw));
 - **Web.** `fetch` is a plain GET from the Worker (10 s, 2 MB, never the app's own hosts or private addresses). ScrapeQL's own tools join over its MCP API once an admin pastes a Cloudflare Access service token (`PUT /web/scrapeql`). A Worker on ScrapeQL's own Cloudflare account passes its service binding instead, `scrapeql: { url: 'https://scrapeql/mcp', fetch: env.SCRAPEQL.fetch.bind(env.SCRAPEQL) }`: no token is stored, the tools are always on and Settings shows the link with a Test.
 - **Hand off and advice.** The `escalate` tool hands one task to a higher tier (the person sets next, any or only when asked); Anthropic's advisor tool lets a higher tier send a plan, at most two an answer.
 - **Chats** stream as server-sent events (`POST /chat`); closing the request stops the answer and keeps what was said. Past 150k tokens, or on `/compact`, the history sent to the model becomes a summary. Run `assistant.purge()` once a day to drop chats 30 days after their last message.
+- **Background work** an app runs for a person (a score, a summary) is `assistant.complete(caller, { task, system, prompt, maxTokens })`: one answer on the task's tier (`tasks`, so the person picks its model in Settings ▸ Models), no chat and no tools, billed to their payer and counted in their spend and allowance like a chat turn. It throws `AssistantError` `not_connected`, `app_cap` or `own_cap` when nobody can pay, so the caller waits and tries later.
 
 ### Commands, `@` and `#`
 

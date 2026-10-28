@@ -2270,6 +2270,81 @@ export class Assistant {
     return true;
   }
 
+  // ---------------------------------------------------------------- one-shot work
+
+  /**
+   * One prompt answered on a task's tier as the person: no chat, no tools. It is for background
+   * work an app runs for someone (a job's fit score, a summary), billed to their payer and capped
+   * like a chat turn, so it shows in their spend and allowance. Throws `AssistantError` with code
+   * `not_connected`, `app_cap` or `own_cap` when nobody can pay, or `upstream` when the model fails.
+   */
+  async complete(
+    caller: Caller,
+    o: { task: string; system: string; prompt: string; maxTokens?: number; signal?: AbortSignal },
+  ): Promise<{ text: string; usd: number; model: string }> {
+    const s = await this.session(caller, await this.mainTier(caller, o.task));
+    const { paying, wait } = await this.state.paying(caller.id, s.model.provider);
+    if (!paying) {
+      const code = wait ?? 'not_connected';
+      throw new AssistantError(waitText(code, s.model.provider, !!this.o.allowance), code, 402);
+    }
+    const clients = this.clients(paying);
+    const max = Math.min(o.maxTokens ?? 1000, 8000);
+    let text = '';
+    try {
+      if (s.model.provider === 'openai' && clients.openai) {
+        const res = await clients.openai.responses.create(
+          {
+            model: s.model.id,
+            instructions: o.system,
+            input: o.prompt,
+            store: false,
+            max_output_tokens: max,
+          },
+          o.signal ? { signal: o.signal } : undefined,
+        );
+        const u = res.usage;
+        if (u)
+          s.meter.add(
+            {
+              input_tokens: u.input_tokens - (u.input_tokens_details?.cached_tokens ?? 0),
+              output_tokens: u.output_tokens,
+              cache_read_input_tokens: u.input_tokens_details?.cached_tokens ?? 0,
+            },
+            !!clients.openaiPlan,
+          );
+        text = res.output_text ?? '';
+      } else if (clients.anthropic) {
+        const msg = await clients.anthropic.messages.create(
+          {
+            model: s.model.id,
+            max_tokens: max,
+            system: o.system,
+            messages: [{ role: 'user', content: o.prompt }],
+            ...effortParams(s.effort),
+          },
+          o.signal ? { signal: o.signal } : undefined,
+        );
+        s.meter.add(msg.usage);
+        text = msg.content
+          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .map((b) => b.text)
+          .join('');
+      } else
+        throw new AssistantError(waitText('not_connected', s.model.provider), 'not_connected', 402);
+    } catch (e) {
+      if (e instanceof AssistantError) throw e;
+      throw new AssistantError(
+        `${s.model.label} did not answer: ${String((e as Error)?.message ?? e).slice(0, 200)}`,
+        'upstream',
+        502,
+      );
+    } finally {
+      await this.state.addSpend(caller.id, paying.payer, [s.meter.part()]);
+    }
+    return { text, usd: s.meter.usd, model: s.model.id };
+  }
+
   /** How the person's cards ended since the last answer, once each. */
   private cardNews(doc: ChatDoc) {
     const told = new Set(doc.told ?? []);
