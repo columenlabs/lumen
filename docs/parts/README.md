@@ -33,5 +33,6 @@ Each page has the same four headings:
 | `hint-text` | `<p className="… text-xs … text-muted-foreground …">`: a grey line under a field or title |
 | `text-action` | a `<Button>` whose text starts with an action (Save, Run, Test, Send, Sync, Refresh, Copy, Edit, Delete, Remove, Retry, Reset) |
 | `raw-overlay` | an import of `@columenlabs/lumen-ui/ui/{sheet,dialog,select,command,combobox}` |
+| `settings-page` | a route, link or nav item (`path`, `to`, `href`) to a page named `settings`: an app's settings are sections of the one Settings dialog |
 
 `lumen-ship check parts --write-baseline <folders>` writes today's counts (only for a first run; lower a count by hand in the change that removes a break).

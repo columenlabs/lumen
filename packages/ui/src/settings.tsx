@@ -27,6 +27,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useAssistantMoves } from './assistant-screen';
+import { InfoTip } from './info-tip';
 import { LumenSelector } from './lumen-selector';
 import {
   FONTS,
@@ -137,9 +138,12 @@ export function SettingRow({
   if (query && !matches(query, label, description)) return null;
   return (
     <div data-slot="setting-row" className="flex items-center gap-4 border-b py-3 last:border-b-0">
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <Label htmlFor={htmlFor}>{label}</Label>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      {/* The row's details sit behind an (i), never in a grey line under it (docs/parts/settings.md). */}
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <Label htmlFor={htmlFor} className="truncate">
+          {label}
+        </Label>
+        {description && <InfoTip label={`About ${label}`}>{description}</InfoTip>}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
