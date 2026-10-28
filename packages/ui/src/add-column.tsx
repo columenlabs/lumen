@@ -3,7 +3,7 @@ import type { YourColumn } from '@columenlabs/lumen-ui-types/frames';
 // in place of Edit view. Formula is the same editor and check as Edit view's; Your data names a
 // column the person types into, kept as their own frame (joins.tsx `useYourData`).
 import type { ViewFormula } from '@columenlabs/lumen-ui-types/views';
-import { HashIcon, TypeIcon } from 'lucide-react';
+import { HashIcon, PlusIcon, TypeIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAssistantName } from './assistant-context';
 import { SaveButton } from './form-issues';
@@ -75,7 +75,7 @@ export function AddFormulaDialog<T>({
           </Button>
           <SaveButton
             label="Add column"
-            icon={null}
+            icon={PlusIcon}
             issues={
               issue
                 ? [

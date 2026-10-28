@@ -5,7 +5,6 @@ import { useIsMobile } from './hooks/use-mobile';
 import { IconButton } from './icon-button';
 import { lazyPart } from './lazy-part';
 import { ResizeEdge, tabState, useDockSlot } from './side-dock';
-import { Button } from './ui/button';
 import { pickerOpen } from './ui/overlay-guard';
 import {
   Sheet,
@@ -31,7 +30,7 @@ export interface LumenDrawerProps {
   description?: ReactNode;
   /** Stacked DrawerSections; the drawer pads and scrolls them. */
   children: ReactNode;
-  /** The footer's actions, right-aligned (a destructive action, Cancel and Save); Close when left out. */
+  /** The footer's actions, right-aligned, icon first (`IconButton`, `SaveButton`); no footer when left out. */
   footer?: ReactNode;
   /** Left side of the footer: a count or status line ("12 releases"). */
   footerStart?: ReactNode;
@@ -92,11 +91,9 @@ export function LumenDrawer({
     </div>
   );
   const body = <div className="flex flex-col px-4 pb-4">{children}</div>;
-  // Every drawer ends on a footer, styled like a dialog's: the body scrolls above it and always
-  // ends on a clear edge. Without actions of its own it offers Close, except on a phone, where the
-  // sheet's X already closes it and a second Close only took room.
-  const plain = !footer && !footerStart;
-  const foot = (
+  // A drawer with actions ends on a footer, styled like a dialog's: the body scrolls above it and
+  // ends on a clear edge. Without actions it has none: the header's × already closes it.
+  const foot = (footer || footerStart) && (
     <footer
       data-slot="drawer-footer"
       className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-4 py-2.5"
@@ -104,13 +101,7 @@ export function LumenDrawer({
       {footerStart && (
         <div className="min-w-0 flex-1 truncate text-muted-foreground text-xs">{footerStart}</div>
       )}
-      <div className="ml-auto flex items-center gap-2">
-        {footer ?? (
-          <Button type="button" size="sm" variant="outline" onClick={onClose}>
-            Close
-          </Button>
-        )}
-      </div>
+      <div className="ml-auto flex items-center gap-2">{footer}</div>
     </footer>
   );
   if (dock && !isMobile && slot)
@@ -137,7 +128,7 @@ export function LumenDrawer({
         <SheetContent side="bottom" className="max-h-[85svh] gap-0 overflow-hidden">
           <SheetHeader className="order-first shrink-0 border-b pt-3">{head}</SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
-          {!plain && foot}
+          {foot}
         </SheetContent>
       ) : (
         <SheetContent

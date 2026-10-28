@@ -17,8 +17,10 @@ An action takes the lightest form a reader still gets right at a glance. Go down
 
 1. **Icon.** The meaning is unmistakable: close ×, search, a chevron that opens a group. It still carries an `aria-label`.
 2. **Icon with a tooltip.** A clear icon whose action is worth naming: rename ✎, copy, refresh, reset. The tooltip is the action's name in two or three words ("Rename", "Reset to original").
-3. **Icon with text.** The icon alone is ambiguous, or it is the screen's main action: "New view", "Save".
-4. **Icon with text and a detail tooltip.** The action's effect needs a sentence before someone clicks it; the sentence goes in the tooltip, not on the screen (as in Details on demand).
+3. **Icon with text.** Only where no icon can carry it, and never for an action that has one: a new-thing button in an empty state ("New view") at most.
+4. **Icon with a detail tooltip.** The action's effect needs a sentence before someone clicks it; the sentence goes in the tooltip, not on the screen (as in Details on demand).
+
+**Save, Run and every footer action are icons** (Bikram, 2026-10-28: "why are you not using icon for save? and run?"). A main action is told apart by its fill (`variant="default"`), not by words: Save is `SaveButton` (✓, tooltip "Save"), Run is ▷, Remove is 🗑, each an `IconButton` with its name as tooltip and `aria-label`. A drawer with no actions has no footer; its × closes it. Words stay only inside a confirm (`LumenConfirm`), where the button answers the question asked.
 
 Where actions sit:
 - **Edit in place first.** A value the person can change is clicked or tapped to edit (`EditInputCell`), not reached through a button or menu. A value changed by hand carries the kit's small ✎ mark, with the original in its tooltip; clearing the box goes back to the original.

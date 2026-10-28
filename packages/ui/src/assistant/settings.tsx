@@ -25,6 +25,7 @@ import {
   Link2Icon,
   LogInIcon,
   ReceiptIcon,
+  SendIcon,
   SparklesIcon,
   WrenchIcon,
 } from 'lucide-react';
@@ -723,7 +724,7 @@ function Allowance({ client }: { client: AssistantAdapter }) {
                   <SaveButton
                     issues={issues}
                     label="Request more"
-                    icon={null}
+                    icon={SendIcon}
                     busy={busy === 'request'}
                     onSave={ask}
                   />
