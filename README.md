@@ -56,8 +56,8 @@ A part becomes a Lumen package only when all four hold:
 |---|---|---|
 | 🪟 | **App shell** | `LumenShell`: sidebar (icons-only collapse, a drawer on phone), header, status bar, Settings, profile menu and ⌘K Find |
 | 🧱 | **Blocks** | `LumenLayout` and `LumenGrid` (a page of cards you can rearrange), `LumenWidget` (a card with its header, link square and controls), sign-in and Security, Settings sections, tabs |
-| 📊 | **Views and charts** | `LumenView` and `LumenTable` (filter, group, pivot, totals), `LumenCard`, `LumenChart`, `LumenEChart`, price and growth charts |
-| 🎛️ | **Pickers and panels** | `LumenSelector`, `LumenDrawer`, `LumenConfirm`, `LumenForm`, `LumenDateInput`, `LumenTabs` |
+| 📊 | **Views and charts** | `LumenView` and `LumenTable` (filter, group, pivot, totals), `LumenCalendar`, `LumenBoard`, `LumenCard`, `LumenChart`, `LumenEChart`, price and growth charts |
+| 🎛️ | **Pickers and panels** | `LumenSelector`, `LumenDrawer`, `LumenConfirm`, `LumenForm`, `LumenDateInput`, `LumenTabs`, `LumenPlayer` |
 | 🧩 | **Primitives** | The shadcn/ui parts under `ui/*` and `theme.css` |
 
 Install and use: [packages/ui/README.md](packages/ui/README.md).

@@ -292,6 +292,25 @@ export {
   useLiveLoad,
 } from './lumen-source';
 export { LumenBoundary } from './lumen-boundary';
+export {
+  type CalendarCategory,
+  type CalendarEvent,
+  type CalendarRange,
+  type CalendarView,
+  LumenCalendar,
+  type LumenCalendarProps,
+} from './lumen-calendar';
+export { type BoardColumn, type BoardItem, LumenBoard, type LumenBoardProps } from './lumen-board';
+export {
+  LumenPlayer,
+  type LumenPlayerProps,
+  type PlayerChapter,
+  type PlayerLine,
+  type PlayerSlide,
+  type PlayerSource,
+  type PlayerTrack,
+  playerClock,
+} from './lumen-player';
 export { LumenPageState } from './lumen-page-state';
 export { type FormIssue, goToIssue, SaveButton } from './form-issues';
 export {
