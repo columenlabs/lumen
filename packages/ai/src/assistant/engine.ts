@@ -260,9 +260,13 @@ const MEMO_CHARS = 8000;
 const ADVICE_MAX = 2;
 const ADVICE_TOKENS = 2048;
 const ADVISOR_BETA = 'advisor-tool-2026-03-01';
-/** What later turns remember of a turn's tool results. */
-const RAN_CHARS = 1500;
-const RAN_TOTAL = 6000;
+/**
+ * What later turns remember of a turn's tool results: each as the model saw it, up to a budget a
+ * turn, so a follow-up ("list them all", "which have no milk") answers from what was read instead
+ * of calling the same tools again. Older turns go when the chat compacts.
+ */
+const RAN_CHARS = RESULT_CHARS;
+const RAN_TOTAL = 40_000;
 const CHATS_LISTED = 200;
 
 const WHY_TEXT: Record<HandOffWhy, string> = {
@@ -337,6 +341,15 @@ interface Fn {
 interface Ran {
   tool: string;
   result: string;
+}
+
+/** JSON with object keys sorted, so the same input written in another order is the same call. */
+function stableJson(v: unknown): string {
+  return JSON.stringify(v, (_k, x) =>
+    x && typeof x === 'object' && !Array.isArray(x)
+      ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : x,
+  );
 }
 
 const NO_USAGE: ChatUsage = { calls: 0, in: 0, read: 0, out: 0, usd: 0, parts: [] };
@@ -1035,7 +1048,14 @@ export class Assistant {
     const tools = await this.openTools(caller, p);
     const runs: Ran[] = [];
     doc.writes ??= {};
-    const counts = { steps: 0, handoffs: 0, advice: 0, end: main.tier, writes: doc.writes };
+    const counts = {
+      steps: 0,
+      handoffs: 0,
+      advice: 0,
+      end: main.tier,
+      writes: doc.writes,
+      seen: new Map<string, Promise<string>>(),
+    };
     let outcome: 'ok' | 'stopped' | 'error' = 'ok';
     try {
       const appSystem =
@@ -1337,7 +1357,13 @@ export class Assistant {
       system: Anthropic.TextBlockParam[];
       tools: Map<string, Fn>;
       runs: Ran[];
-      counts: { steps: number; handoffs: number; advice: number; end: TierDef };
+      counts: {
+        steps: number;
+        handoffs: number;
+        advice: number;
+        end: TierDef;
+        seen: Map<string, Promise<string>>;
+      };
       signal?: AbortSignal;
       over: () => string | null;
     },
@@ -1441,7 +1467,11 @@ export class Assistant {
     sink: ChatItem[],
     emit: Emit,
     runs: Ran[],
-    counts: { steps: number; writes?: NonNullable<ChatDoc['writes']> },
+    counts: {
+      steps: number;
+      writes?: NonNullable<ChatDoc['writes']>;
+      seen: Map<string, Promise<string>>;
+    },
     session: Session,
     handoff: boolean,
     signal?: AbortSignal,
@@ -1473,6 +1503,20 @@ export class Assistant {
         `Drafted: a "${title}" card is on the person's screen. Nothing changed until they press Save.`,
       );
     }
+    // The same read with the same input in one answer gives back what it gave, without running it
+    // again or showing a second step: a model that lost track of a result reads it here, not twice.
+    const key = f.write ? '' : `${use.name}\u0000${stableJson(use.input)}`;
+    const again = key ? counts.seen.get(key) : undefined;
+    if (again)
+      return reply(`(Same call as earlier in this answer; its result again.)\n${await again}`);
+    let settle: (text: string) => void = () => undefined;
+    if (key)
+      counts.seen.set(
+        key,
+        new Promise<string>((done) => {
+          settle = done;
+        }),
+      );
     const id = newId('s');
     emit('step_start', { id, tool: use.name, title });
     const t0 = performance.now();
@@ -1490,7 +1534,10 @@ export class Assistant {
       rows = rowCount(result);
       out = typeof result === 'string' ? result : JSON.stringify(result);
     } catch (err) {
-      if (signal?.aborted) throw err;
+      if (signal?.aborted) {
+        settle('(stopped)');
+        throw err;
+      }
       ok = false;
       error =
         err instanceof ToolError || err instanceof Error ? err.message.slice(0, 300) : 'failed';
@@ -1513,7 +1560,9 @@ export class Assistant {
     sink.push(item);
     emit('step', item);
     counts.steps += 1;
-    runs.push({ tool: use.name, result: out.slice(0, RAN_CHARS) });
+    // A change made at once can make an earlier read stale: reads after it run again.
+    if (f.write) counts.seen.clear();
+    runs.push({ tool: use.name, result: out });
     await Promise.resolve(
       this.o.onStep?.({
         kind: 'tool',
@@ -1527,7 +1576,13 @@ export class Assistant {
       }),
     ).catch(() => undefined);
     const cut =
-      out.length > RESULT_CHARS ? `${out.slice(0, RESULT_CHARS)} …(cut: ask for less)` : out;
+      out.length > RESULT_CHARS
+        ? `${out.slice(0, RESULT_CHARS)} …(cut at ${RESULT_CHARS.toLocaleString('en-US')} of ${out.length.toLocaleString('en-US')} characters: the rest was not read; ask again for less)`
+        : out;
+    if (key) {
+      settle(cut);
+      if (!ok) counts.seen.delete(key);
+    }
     return reply(cut, !ok);
   }
 
@@ -2046,7 +2101,8 @@ export class Assistant {
     const lines: string[] = [];
     for (const r of runs) {
       if (left <= 0) break;
-      const line = `- ${r.tool} → ${r.result.slice(0, Math.min(RAN_CHARS, left))}`;
+      const kept = r.result.slice(0, Math.min(RAN_CHARS, left));
+      const line = `- ${r.tool} → ${kept}${kept.length < r.result.length ? ' …(cut)' : ''}`;
       left -= line.length;
       lines.push(line);
     }

@@ -156,10 +156,14 @@ export function toolName(group: string, name: string) {
   return `${group}__${name}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
 }
 
-/** Rows in a list result: an array, or the first array field of an object. */
+/** Rows in a list result: an array, an object's `count`, or the one array an object holds. */
 export function rowCount(v: unknown): number | undefined {
   if (Array.isArray(v)) return v.length;
-  if (v && typeof v === 'object')
-    for (const x of Object.values(v)) if (Array.isArray(x)) return x.length;
-  return undefined;
+  if (!v || typeof v !== 'object') return undefined;
+  // A list with its total says so; else the one list it holds. A record with several lists (a
+  // recipe's ingredients and steps) is one thing, not rows.
+  const o = v as Record<string, unknown>;
+  if (typeof o.count === 'number' && Number.isFinite(o.count)) return o.count;
+  const lists = Object.values(o).filter(Array.isArray);
+  return lists.length === 1 ? lists[0]?.length : undefined;
 }
