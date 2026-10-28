@@ -20,14 +20,14 @@ The details or the editor of one row, opened from a list, a card or a link. A ri
 │ ▾ ⚙ Section                   │
 │   fields / FactList / table   │  body: the section's own parts
 ├───────────────────────────────┤
-│ 12 runs          🗑  ▶  ✓     │  footerStart · footer: IconButtons, SaveButton last
+│ 12 runs          🗑  ▶  ✓     │  footerStart · actions (data, drawn as icons) · footer: SaveButton
 └───────────────────────────────┘
 ```
 
 - Every body is `DrawerSection`s. No heading, card or divider of the app's own between them.
 - Sections start folded; `defaultOpen` the one the person came for.
 - Label and value pairs are `FactList`. Fields are the kit's inputs with an `InfoTip` where one is truly needed.
-- The footer holds the drawer's actions as icons, right-aligned: destructive first, `SaveButton` last. With no actions there is no footer; the × closes it.
+- The footer holds the drawer's actions, right-aligned: `actions` as data (`{ icon, label, onClick, busy, destructive }`), which the drawer draws as icon buttons in order, destructive first, then `SaveButton` in `footer`. With neither there is no footer; the × closes it.
 
 ## Do / Don't
 
@@ -35,10 +35,11 @@ The details or the editor of one row, opened from a list, a card or a link. A ri
 // ✓ data in the kit's slots; actions are icons
 <LumenDrawer open={open} onClose={close} title={job.name} description={job.when} dock="jobs"
   footerStart={`${runs.length} runs`}
-  footer={<>
-    <IconButton icon={PlayIcon} label="Run now" busy={run.isPending} onClick={() => run.mutate()} />
-    <SaveButton issues={issues} busy={save.isPending} disabled={!dirty} onSave={() => save.mutate()} />
-  </>}>
+  actions={[
+    { icon: TrashIcon, label: 'Delete', destructive: true, onClick: () => remove.mutate() },
+    { icon: PlayIcon, label: 'Run now', busy: run.isPending, onClick: () => run.mutate() },
+  ]}
+  footer={<SaveButton issues={issues} busy={save.isPending} disabled={!dirty} onSave={() => save.mutate()} />}>
   <DrawerSection icon={GlobeIcon} title="Page" summary={job.url} defaultOpen>…</DrawerSection>
   <DrawerSection icon={BellIcon} title="Alerts" count={alerts.length}>…</DrawerSection>
 </LumenDrawer>
