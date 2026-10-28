@@ -18,9 +18,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { fromJson, toJson } from './json';
 
-/** The SQLite of a Durable Object (`ctx.storage.sql`). */
+/** The SQLite of a Durable Object (`ctx.storage.sql`): typed loosely, so `SqlStorage` passes as it is. */
 export interface SqlLike {
-  exec<T = Record<string, unknown>>(query: string, ...bindings: unknown[]): { toArray(): T[] };
+  // biome-ignore lint/suspicious/noExplicitAny: SqlStorage's own row type and bindings must fit here
+  exec<T extends Record<string, any> = Record<string, unknown>>(
+    query: string,
+    // biome-ignore lint/suspicious/noExplicitAny: as above
+    ...bindings: any[]
+  ): { toArray(): T[] };
 }
 
 /** What the store needs of `DurableObjectState`. */
