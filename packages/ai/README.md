@@ -81,7 +81,7 @@ const assistant = createAssistant({
     { id: 'notes', label: 'Notes', about: 'Read and edit notes', tools: (caller) => mcpServerTools(() => notesServer(caller.id)) },
   ],
   web: { fetch: { blockHosts: ['app.example.com'] }, scrapeql: { url: 'https://scrapeql.example.com/mcp' } },
-  store: sqlAssistantStore(doSql(ctx.storage.sql)), // or d1Sql(env.DB)
+  store: sqlAssistantStore(doSql(ctx.storage.sql)), // or d1Sql(env.DB); { table } names another table
   sealer, // the app's own sealing: keys and chats are stored sealed
   // A provider's key when none is set in Settings.
   appKey: async (provider) => (provider === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY),
