@@ -101,7 +101,8 @@ export function LumenAppSwitcher({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               {current.tile ? (
-                <AppMark app={current} className="aspect-square size-8 shrink-0 rounded-lg" />
+                // size-8! beats the menu button's [&_svg]:size-4, which would shrink the tile back to a glyph.
+                <AppMark app={current} className="aspect-square size-8! shrink-0 rounded-lg" />
               ) : (
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                   <AppMark app={current} className="size-4" />
