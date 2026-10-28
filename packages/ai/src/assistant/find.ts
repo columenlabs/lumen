@@ -132,11 +132,11 @@ export function findSql(def: FindDef): { create: string[]; fill: string; drop: s
   };
 }
 
-/** Words as the model sent them: trimmed, deduped, at most `WORDS`. */
+/** Words as the model sent them (a list, or one string as a list of one): trimmed, deduped, at most `WORDS`. */
 function words(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
+  const list = Array.isArray(v) ? v : typeof v === 'string' ? [v] : [];
   const out = new Set<string>();
-  for (const w of v) {
+  for (const w of list) {
     if (typeof w !== 'string') continue;
     const t = w.replace(/\s+/g, ' ').trim().slice(0, 80);
     if (t) out.add(t);
