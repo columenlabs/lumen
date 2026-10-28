@@ -88,8 +88,13 @@ export interface FindQuery {
 }
 
 export interface FindResult {
-  /** Rows that match, all of them, before `limit`. Say this number when asked how many. */
-  count: number;
+  /**
+   * Rows that match, all of them, before `limit`. Say this number when asked how many. Left out
+   * of a search by meaning, whose rows are the nearest few, not every row that fits.
+   */
+  count?: number;
+  /** Set on a search by meaning: the rows are the nearest in meaning, nearest first, to pick from. */
+  nearest?: true;
   /** Rows in this answer (at most `limit`). */
   returned: number;
   rows: Record<string, unknown>[];
@@ -403,8 +408,13 @@ export async function runFind(
     return row;
   });
   const same = sameNames(def, out, built.fields);
+  const byMeaning = !!near?.length;
+  if (byMeaning)
+    notes.push(
+      'These are the nearest in meaning, nearest first, not every row that fits: pick from them and do not say how many match.',
+    );
   return {
-    count,
+    ...(byMeaning ? { nearest: true as const } : { count }),
     returned: out.length,
     rows: out,
     ...(same.length ? { same_name: same } : {}),
@@ -530,7 +540,7 @@ export async function findTool(
     .join(', ');
   return {
     name: `${def.name}_find`,
-    description: `Finds ${def.label}s in one query${def.about ? ` (${def.about})` : ''}: put every condition of the question in one call (filters, words to include or leave out, which fields to look in${meaning ? ', and like for a loose ask' : ''}) and ask only for the fields the answer needs. Fields: ${fields}. Returns the matching ${def.label}s, how many match in all (count) and any that share a name (same_name).`,
+    description: `Finds ${def.label}s in one query${def.about ? ` (${def.about})` : ''}: put every condition of the question in one call (filters, words to include or leave out, which fields to look in${meaning ? ', and like for a loose ask' : ''}) and ask only for the fields the answer needs. Fields: ${fields}. Returns the matching ${def.label}s, how many match in all (count; a like search returns the nearest instead, marked nearest, with no count) and any that share a name (same_name).`,
     inputSchema: schemaOf(def, tags, Boolean(meaning)),
     read: true,
     find: true,
