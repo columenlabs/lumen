@@ -45,7 +45,7 @@ export interface PageHeaderProps {
   layout?: ReactNode;
   /** A short status line beside the breadcrumb (under the title on phone). */
   meta?: ReactNode;
-  /** This page's status bar items (`StatusItem`), shown after the app's own. */
+  /** @deprecated Old JSX items, desktop only; call `useStatus` with data instead. */
   status?: ReactNode;
 }
 

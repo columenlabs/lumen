@@ -367,6 +367,18 @@ export {
 } from './status-messages';
 export { TimeZoneSelect } from './status';
 export {
+  LumenStatusBar,
+  type StatusBarModel,
+  StatusBarProvider,
+  type StatusFact,
+  type StatusPart,
+  type StatusSync,
+  type StatusSyncState,
+  querySync,
+  statusWhen,
+  useStatus,
+} from './status-bar';
+export {
   type AccountFacts,
   type JoinReaders,
   JoinsProvider,
