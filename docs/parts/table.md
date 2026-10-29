@@ -36,7 +36,8 @@ On a phone each row is a one-line card: the name and one value; the rest waits i
 - ✗ `value + unit` text. ✓ `UnitValue`.
 - ✗ Resetting the page on a new `rows` array. ✓ Only a new filter, sort, grouping or page size goes back to page 1.
 - ✗ Another row of tabs to filter. ✓ A `LumenTokenizedFilter` field.
+- ✗ Hiding columns to fit a narrow box (sidebar open, docked drawer). ✓ Every column shows; the table scrolls sideways and the name stays at `--lead-col-max`.
 
 ## Checked by
 
-Review and the app's interaction smoke (AGENTS.md, UI gate 3: lines).
+Review and the app's interaction smoke (AGENTS.md, UI gate 3: lines; Every column always shows: no hidden column at 1024, 1280 or 1440 wide, sidebar open or closed).

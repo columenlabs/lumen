@@ -39,7 +39,8 @@ export function InfoTip({
           type="button"
           aria-label={label}
           className={cn(
-            'inline-flex size-4 shrink-0 items-center justify-center rounded-full align-middle text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+            // A 16px icon with a 24px hit area (WCAG 2.2 target size on a phone).
+            "relative inline-flex size-4 shrink-0 items-center justify-center rounded-full align-middle text-muted-foreground outline-none after:absolute after:-inset-1 after:content-[''] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
             className,
           )}
           onFocus={() => later(true, 0)}

@@ -1006,14 +1006,6 @@ function pathOf<T>(domain: ViewDomain<T>, f: ViewField<T>) {
 const ruleOf = (color: string | null) =>
   color ? { boxShadow: `inset 0 -2px 0 ${color}` } : undefined;
 
-/** The width a table has to fit in: its box, or inside a page's view scroller the view's width. */
-function roomOf(el: HTMLElement) {
-  const view = el.closest<HTMLElement>('[data-slot=view-scroll]');
-  if (!view) return el.clientWidth;
-  const cs = getComputedStyle(view);
-  return view.clientWidth - Number.parseFloat(cs.paddingLeft) - Number.parseFloat(cs.paddingRight);
-}
-
 const alignOf = (format: ViewFormat) => (format === 'text' ? 'text-left' : 'text-right');
 /** A column's cell classes: its alignment, and hidden on phones where the field says so. */
 /** An ISO date, alone or with a time after it: `2026-10-14`, `2026-10-14 16:17`. */
@@ -1218,22 +1210,13 @@ function LumenTableRows<T extends RowData>({
   const onCard = shown.filter((f, i) => i > 0 && !f.hideOnPhone);
   const meta = (onCard.find((f) => f.key === sorting[0]?.id) ?? onCard.find(short) ?? onCard[0])
     ?.key;
-  // Too narrow for every column (a docked drawer beside it, a small window), the table drops its
-  // lowest-`priority` columns, right to left, until it fits, instead of scrolling sideways; never
-  // its name or sorted column. More room brings them back. A phone keeps its own cards.
-  const rank = (f: ViewField<T>) => (f.priority ?? 0) - (f.hideOnPhone ? 1 : 0);
-  const dropOrder = shown
-    .slice(1)
-    .map((f, i) => ({ f, i }))
-    .filter(({ f }) => f.key !== sorting[0]?.id)
-    .sort((a, b) => rank(a.f) - rank(b.f) || b.i - a.i)
-    .map(({ f }) => f.key);
-  const [drop, setDrop] = useState(0);
-  const dropped = new Set(isMobile || fit ? [] : dropOrder.slice(0, drop));
+  // Every column the person chose is always drawn. Too narrow for them all (a docked drawer beside
+  // it, a small window, an open sidebar), the table scrolls sideways; it never drops a column to
+  // fit, and the name column stops at its cap (`--lead-col-max`) so it can't take the room.
   const cardOf = (f: ViewField<T>) =>
     f === shown[0] ? 'lead' : f.key === meta ? 'meta' : short(f) ? 'num' : 'text';
   const col = (f: ViewField<T> | undefined, ...more: (string | false | undefined | null)[]) => ({
-    ...colProps(f, ...more, f && dropped.has(f.key) && 'hidden'),
+    ...colProps(f, ...more),
     'data-card': f ? cardOf(f) : undefined,
     'data-card-unit': f?.cardUnit,
   });
@@ -1874,34 +1857,6 @@ function LumenTableRows<T extends RowData>({
   };
   const box = useRef<HTMLDivElement>(null);
   useFloatingHead(box, !inView);
-  // Before paint: one more column drops while the table is wider than its room: its box, and in a
-  // page's view scroller the view's width (theme.css `--view-w`).
-  useLayoutEffect(() => {
-    const el = box.current;
-    const t = el?.querySelector('table');
-    if (!el || !t || isMobile || fit || drop >= dropOrder.length) return;
-    if (t.offsetWidth > roomOf(el) + 1) setDrop((d) => d + 1);
-  });
-  // Every column comes back to be measured again on a new set of columns or more room.
-  const dropKey = dropOrder.join('\u0000');
-  const lastDropKey = useRef(dropKey);
-  if (lastDropKey.current !== dropKey) {
-    lastDropKey.current = dropKey;
-    if (drop) setDrop(0);
-  }
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const view = el.closest<HTMLElement>('[data-slot=view-scroll]');
-    let room = roomOf(el);
-    const watch = new ResizeObserver(() => {
-      const now = roomOf(el);
-      if (now > room + 1) setDrop(0);
-      room = now;
-    });
-    watch.observe(view ?? el);
-    return () => watch.disconnect();
-  }, []);
   return (
     <div
       ref={box}
