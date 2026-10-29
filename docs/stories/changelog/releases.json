@@ -1,5 +1,254 @@
 [
   {
+    "tag": "v0.1.161",
+    "date": "2026-10-29T00:03:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Calendar part with Month, Week and Agenda views",
+        "body": "From `@columenlabs/lumen-ui`, the new `LumenCalendar` takes plain `events` (`{id, title, start, end?, allDay?, category?, color?}`) and optional `categories`, and you can react with `onSelect` and `onRangeChange`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Kanban-style board part",
+        "body": "From `@columenlabs/lumen-ui`, the new `LumenBoard` takes `columns` and `items` (each item points at a column by `column`), and you can customize cards with `renderCard` and handle `onOpen` and `onMove`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Player part",
+        "body": "`LumenPlayer` is now exported from `@columenlabs/lumen-ui` next to the calendar and board, so you can add it to an app without writing your own."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "No new dependencies",
+        "body": "`LumenCalendar` works out days in the `timeZone` you pass (the browser's by default) using `Intl`, so you don't need a date library."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.160",
+    "date": "2026-10-28T23:37:05Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Filter as a side panel of facets",
+        "body": "From `@columenlabs/lumen-ui`, the new `LumenFilterPanel` draws a filter as a panel of each field's values, ticked in place with counts, beside a list, and `LumenFilterPanelButton` and `useFilterPanel` let you place and control its toggle."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Panel and chips stay in sync",
+        "body": "`LumenFilterPanel` reads and writes the same `useLumenFilter` tokens as `LumenTokenizedFilter`, so ticking a value adds a chip and removing a chip unticks the value, with no second filter state to manage."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Count every row, not just the loaded page",
+        "body": "`useLumenFilter({ facets })` now accepts the server's counts (`FacetCounts`) for paged rows, so both the filter box and the panel can show counts for all rows."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Panel wired into the page layout",
+        "body": "In `LumenLayout`, the new `facets` prop and `filterPanel={{ id, tips, order, title }}` option place the panel beside the page's scroller, with its icon in the filter row."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Shared facet counting",
+        "body": "`useFacetCounts(filter)` is now exported, so your own filter UI can reuse the counting the filter box already did."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.159",
+    "date": "2026-10-28T22:41:18Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Setting help moves into an InfoTip",
+        "body": "In `@columenlabs/lumen-ui`, `SettingRow` now shows its `description` behind an `InfoTip` (i) beside the label instead of as a grey line under the row, so your settings rows are more compact with no code change."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Lint catches a standalone settings page",
+        "body": "`lumen-ship check parts` has a new `settings-page` rule that fails any route, link or nav item (`path`, `to` or `href`) pointing to a page named `settings`, so move that content into sections of the one Settings dialog (`?settings=<section>`)."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Help text stays searchable",
+        "body": "A `SettingRow` `description` is still matched by settings search even though it now sits behind the `InfoTip`, so people can still find a setting by its help text."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.158",
+    "date": "2026-10-28T22:16:09Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Mark assistant tool groups as read-only",
+        "body": "In `@columenlabs/lumen-ai`, set the new `readOnly` option on a `ToolGroup` that has no write tools, and its status reports `drafts` and `writes` as false."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Settings ▸ Tools no longer offers a useless Read + draft choice",
+        "body": "In `AssistantSettings`, a group with `readOnly` set now shows only Off and Read, where it used to show Read + draft even though picking it did nothing."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Saved write levels on read-only groups read as Read",
+        "body": "In `@columenlabs/lumen-ai`, a saved Read + draft or Read + write value on a `readOnly` tool group is now treated as Read, so older saved settings still display correctly."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`drafts` is documented on assistant status groups",
+        "body": "In `@columenlabs/lumen-ui-types`, `AssistantStatus.groups[].drafts` now has documentation, so you can see what it controls when building your own settings UI."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.157",
+    "date": "2026-10-28T19:06:18Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "LumenCodeEditor no longer grows past its container",
+        "body": "In `@columenlabs/lumen-ui`, `LumenCodeEditor` now takes its width from the column, drawer or form it sits in, so a long line scrolls inside the editor instead of pushing the panel past its edge."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.155",
+    "date": "2026-10-28T18:24:14Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Drawer actions as data",
+        "body": "In `@columenlabs/lumen-ui`, `LumenDrawer` now takes an `actions` prop (an array of the newly exported `DrawerAction` type), so you can add footer actions by passing `icon`, `label`, `onClick`, `busy`, `disabled`, `destructive`, `to` or `href` instead of drawing them yourself."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Form field info as an InfoTip",
+        "body": "In `@columenlabs/lumen-ui`, `LumenFormField` has a new `info` prop that shows help text in an `InfoTip` beside the label, and the old `hint` prop is deprecated and now draws the same way, so existing hints stop appearing as grey lines with no code change."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Icon Cancel in forms",
+        "body": "In `@columenlabs/lumen-ui`, the Cancel button in `LumenForm` is now an × `IconButton` labelled \"Cancel\" instead of a text button, so every form picks up the compact look without changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.154",
+    "date": "2026-10-28T18:04:35Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Check an app against the kit's patterns",
+        "body": "`lumen-ship check parts <folders>` now counts three pattern violations per folder (`hint-text`, `text-action`, `raw-overlay`) against a baseline file and fails if any count rises."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A usage page for each part",
+        "body": "The docs now include one page each for the drawer, form, settings, status bar, picker and table, with the same headings on every page: Use it for, Anatomy, Do / Don't, Checked by."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Agents read the rules before the props",
+        "body": "Each part page is served as markdown at `/parts/<name>.md`, listed in `llms.txt`, and placed first in `llms-full.txt`, so a coding agent that reads these files sees the usage rules before the prop reference."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Start the check on an existing app",
+        "body": "Run `lumen-ship check parts <folders> --write-baseline` once to record the current counts, and after that the counts can only go down."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.153",
+    "date": "2026-10-28T17:59:54Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Save is now an icon",
+        "body": "In `@columenlabs/lumen-ui`, `SaveButton` renders as a filled `icon-sm` `IconButton`, and its `label` prop becomes the tooltip and `aria-label` instead of visible text."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Icon fallback and busy spinner",
+        "body": "In `SaveButton`, `icon={null}` now falls back to a ✓, and the button shows a spinner while busy."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Drawers skip empty footers",
+        "body": "`LumenDrawer` no longer renders a footer unless you pass `footer` or `footerStart`, and the text \"Close\" button is gone because the header × already closes the drawer on every layout."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Compact issue chip",
+        "body": "The issue chip now shows `⚠ N`, with \"N to fix\" as its tooltip and `aria-label`, so you can show a validation count without any text in the layout."
+      },
+      {
+        "kinds": [],
+        "title": "Text actions become icons",
+        "body": "Every `SaveButton`-based action loses its visible text, so tests that find it by text should query by accessible label, and any custom text buttons in your `LumenDrawer` `footer` should move to `IconButton`."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.152",
     "date": "2026-10-28T17:06:09Z",
     "takeaways": [

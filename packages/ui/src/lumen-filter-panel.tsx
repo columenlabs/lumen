@@ -212,7 +212,7 @@ function Section<T>({
   tip?: ReactNode;
 }) {
   const { tokens, setTokens } = filter;
-  const shown = countsShown(filter);
+  const shown = countsShown(filter, field.key);
   const mine = tokens.filter((t) => t.key === field.key);
   const not = mine.some((t) => t.not);
   const [more, setMore] = useState(false);

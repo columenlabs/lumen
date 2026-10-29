@@ -447,6 +447,7 @@ export {
   useFilterPanel,
 } from './lumen-filter-panel';
 export { useIsMobile } from './hooks/use-mobile';
+export { useTell } from './hooks/use-tell';
 export { useBackClose } from './hooks/use-back-close';
 export { VIEW_ICONS, iconOf, viewIcon } from './view-icons';
 export { type AppViewState, useAppView } from './app-views';

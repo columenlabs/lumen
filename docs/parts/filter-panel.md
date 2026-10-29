@@ -22,6 +22,8 @@ desktop                                   phone
 ```
 
 - **Counts** come from `useFacetCounts`, the box's own: a field counts the rows the other fields keep, so picking one value never hides its siblings. Over one page of a server's rows, pass the server's counts as `facets` (from the same find query that returns the page). The kit never counts a page as if it were every row.
+- **Uncounted**: when a server cannot count a field without reading every row (a word search over a big set), it sends that field's values with `counted: false`. The panel and the box list the values to tick and show no numbers. Never send a full scan's counts on a request to fill them in.
+- **Callbacks** (`onTokens`, `paging.onSort`, `groups.onGroup`) are heard when the value changes, never because the function is new, so an inline callback cannot loop (`useTell`).
 - **Hide** (⇤) folds the panel to the filter icon in the filter row. Whether it is open is kept per device, per page `id`. A phone starts closed and opens the sheet from that icon.
 - **⊘** on a field leaves its ticked values out instead of keeping them, like Exclude on a chip.
 - A field with more than six values shows the most common first, with "N more" (and a search past ten). "No <field>" sits on top when some rows have no value.
@@ -52,6 +54,7 @@ const [picked, setPicked] = useState<string[]>([]);
 ```
 
 - ✗ Counting a server's page in the browser. ✓ `facets` from the server's find query.
+- ✗ A count over every row on each request. ✓ Kept counts, a bounded read, or `counted: false`.
 - ✗ A grey hint line under a section. ✓ `tips` puts it in an InfoTip.
 - ✗ Text buttons (Clear all, Apply). ✓ Ticks apply at once; Clear and Hide are icons.
 

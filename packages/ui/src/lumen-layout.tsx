@@ -57,6 +57,7 @@ import { ConnectOffer } from './connections';
 import { usePageKey } from './fold';
 import { useGroup } from './group-button';
 import { useIsMobile } from './hooks/use-mobile';
+import { useTell } from './hooks/use-tell';
 import { SourceStatusItems, useJoins } from './joins';
 import { useYourData } from './joins';
 import { lazyPart } from './lazy-part';
@@ -666,7 +667,8 @@ function ViewLayout<T extends RowData>({
     savedFiltersRef.current = savedFilters;
     setTokens(config.filters.default);
   }, [savedFilters, config.filters.default, setTokens]);
-  useEffect(() => onTokens?.(filter.tokens), [onTokens, filter.tokens]);
+  // Told through a ref, so an app's inline callback never loops (useTell).
+  useTell(filter.tokens, onTokens);
   const group = useGroup(domain, config);
   // The sort the person set by a header click, held like the chips and grouping (rule C).
   const [heldSort, setHeldSort] = useState(config.sort);
@@ -678,8 +680,7 @@ function ViewLayout<T extends RowData>({
     setHeldSort(config.sort);
   }, [savedSort, config.sort]);
   // A server's page sorts on the server: it hears each sort held.
-  const onServerSort = paging?.onSort;
-  useEffect(() => onServerSort?.(heldSort ?? null), [onServerSort, heldSort]);
+  useTell(heldSort ?? null, paging?.onSort);
   const [details, setDetails] = useState<T | null>(null);
   const onDetails = onOpen ?? (domain.details?.length ? setDetails : undefined);
   const openKey = onOpen ? (openedKey ?? null) : details === null ? null : domain.rowKey(details);
