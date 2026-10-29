@@ -29,6 +29,7 @@
   --color-info: var(--info);
   --color-proxy: var(--proxy);
   --color-warning: var(--warning);
+  --color-caution: var(--caution);
   --color-rule-yes: var(--rule-yes);
   --color-rule-no: var(--rule-no);
   --color-gap: var(--gap);
@@ -182,6 +183,13 @@
   /* A price taken from a stand-in ETF (≈ SPY). */
   --proxy: #7c3aed;
   --warning: #9a5b06;
+  /* Orange text between amber and red: a meter from 90% of its cap (UnitValue `caution`). */
+  --caution: #b24c08;
+  /* Meter fills (meterLevel): green with room, amber from 75%, orange from 90%, red at the cap. */
+  --meter-ok: #2f9e5a;
+  --meter-watch: #e0a800;
+  --meter-alert: #ea6c17;
+  --meter-over: #d63838;
   /* Playbook rules: yes (fired, the path and the decision) green, no amber. */
   --rule-yes: #15803d;
   --rule-no: #b45309;
@@ -278,6 +286,11 @@
   --info: #6aa9ff;
   --proxy: #b69cff;
   --warning: #e5a73a;
+  --caution: #ffa266;
+  --meter-ok: #44bf78;
+  --meter-watch: #f2c14e;
+  --meter-alert: #ff8a3d;
+  --meter-over: #ff5a5a;
   --rule-yes: #4ade80;
   --rule-no: #fbbf24;
   --gap: #f0883e;

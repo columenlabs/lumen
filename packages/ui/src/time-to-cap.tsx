@@ -60,7 +60,7 @@ export function paceText(
   p: Pace,
   short = false,
 ): { text: string; level: ReturnType<typeof meterLevel> } {
-  if (p.eta === 0) return { text: short ? 'cap' : 'At cap', level: 'alert' };
+  if (p.eta === 0) return { text: short ? 'cap' : 'At cap', level: 'over' };
   const level = meterLevel(p.atReset);
   if (p.hits)
     return { text: short ? durationText(p.eta, true) : `in ${durationText(p.eta)}`, level };

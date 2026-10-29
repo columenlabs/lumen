@@ -169,7 +169,7 @@ export function LumenCard<T>({
     style !== 'number' && target && typeof v === 'number'
       ? Math.max(0, Math.min(100, (v / target) * 100))
       : null;
-  const tone = meterTone(meter, share, bands ?? (meter === 'usage' ? usageBands() : undefined));
+  const tone = meterTone(meter, share, bands ?? (meter ? kitBands(meter) : undefined));
   const of = target ? (
     <ViewValueCell value={target} format={figs.main.format} amount={figs.main.amount} />
   ) : null;
@@ -225,11 +225,11 @@ export function LumenCard<T>({
   );
 }
 
-/** A usage meter's bands from the app's `meterLevels`, in %. */
-const usageBands = () => ({
-  warn: KIT.meterLevels.watch * 100,
-  bad: KIT.meterLevels.alert * 100,
-});
+/** A meter's bands from the app's `meterLevels` or `healthLevels`, in %. */
+const kitBands = (meter: MeterKind) => {
+  const l = meter === 'health' ? KIT.healthLevels : KIT.meterLevels;
+  return { warn: l.watch * 100, bad: l.alert * 100 };
+};
 
 // The ring draws with the charts library, so it loads only when a card shows one.
 const ProgressRing = lazyPart(
@@ -241,6 +241,7 @@ const ProgressRing = lazyPart(
 const TONE_BAR = {
   success: '[&>[data-slot=progress-indicator]]:bg-success',
   warning: '[&>[data-slot=progress-indicator]]:bg-warning',
+  caution: '[&>[data-slot=progress-indicator]]:bg-caution',
   destructive: '[&>[data-slot=progress-indicator]]:bg-destructive',
 } as const;
 

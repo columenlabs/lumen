@@ -28,9 +28,9 @@ export function UnitValue({
   value: ReactNode;
   /** Its unit (`GB`, `M`, `/day`); left out, the slot stays empty so the column still lines up. */
   unit?: ReactNode;
-  /** Near (`warning`) or past (`loss`) a limit: tints the number and shows a dot. */
-  tone?: 'warning' | 'loss';
-  /** Its share of a cap (0 to 1): sets `tone` by `meterLevel` (amber from 75%, red from 90%). */
+  /** Near (`warning`, amber), close to (`caution`, orange) or at (`loss`, red) a limit: tints the number and shows a dot. */
+  tone?: 'warning' | 'caution' | 'loss';
+  /** Its share of a cap (0 to 1): sets `tone` by `meterLevel` (amber from 75%, orange from 90%, red from 100%). */
   share?: number;
   /** This value's own levels; left out, the app's `meterLevels`. */
   levels?: Partial<MeterLevels>;
@@ -56,6 +56,7 @@ export function UnitValue({
         className={cn(
           'num relative text-right',
           tone === 'warning' && 'text-warning',
+          tone === 'caution' && 'text-caution',
           tone === 'loss' && 'text-loss',
         )}
       >
@@ -64,7 +65,7 @@ export function UnitValue({
             aria-hidden="true"
             className={cn(
               '-translate-y-1/2 absolute top-1/2 right-full mr-1 size-1.5 rounded-full',
-              tone === 'warning' ? 'bg-warning' : 'bg-loss',
+              tone === 'warning' ? 'bg-warning' : tone === 'caution' ? 'bg-caution' : 'bg-loss',
             )}
           />
         )}

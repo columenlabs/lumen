@@ -425,39 +425,81 @@ export type TrendBucket = (typeof trendBuckets)[number];
 export const cardStyles = ['number', 'progress_bar', 'progress_circle'] as const;
 export type CardStyle = (typeof cardStyles)[number];
 /**
- * What a number against its target means, which colours its bar or ring:
- * `health` is better high (green at `warn` and over, orange down to `bad`, red below), `usage`
- * better low (green under `warn`, orange from it, red from `bad`). Left out: the one chart colour.
+ * What a number against its target means, which colours its bar or ring: `usage` is better
+ * low (green, then amber, orange and red as it fills, `METER_LEVELS`), `health` better high
+ * (green at 99% and over, amber down to 95%, red below, `HEALTH_LEVELS`). Left out: the one
+ * chart colour.
  */
 export const meterKinds = ['health', 'usage'] as const;
 export type MeterKind = (typeof meterKinds)[number];
 /**
- * Where a share of a cap (0 to 1) starts to need a look (`watch`, amber) and action (`alert`,
- * red). The kit's canonical levels; an app moves them with `configureLumen({ meterLevels })`.
+ * Where a share of a cap (0 to 1) turns amber (`watch`), orange (`alert`) and red (`over`).
+ * The kit's canonical levels; an app moves them with `configureLumen({ meterLevels })`.
  */
 export interface MeterLevels {
   watch: number;
   alert: number;
+  /** Red from here; left out, the cap itself (1). */
+  over?: number;
 }
-export const METER_LEVELS: MeterLevels = { watch: 0.75, alert: 0.9 };
-/** A share's level: `ok` (grey) under `watch`, `watch` (amber) from it, `alert` (red) from `alert`. */
-export type MeterLevel = 'ok' | 'watch' | 'alert';
-/** Each meter's default bands, in % of the target (`usage` follows `METER_LEVELS`). */
+export const METER_LEVELS: Required<MeterLevels> = { watch: 0.75, alert: 0.9, over: 1 };
+/**
+ * Where a health share (uptime, success rate, 0 to 1) drops from green to amber (`watch`, under
+ * it) and to red (`alert`, under it). An app moves them with `configureLumen({ healthLevels })`.
+ */
+export interface HealthLevels {
+  watch: number;
+  alert: number;
+}
+export const HEALTH_LEVELS: HealthLevels = { watch: 0.99, alert: 0.95 };
+/**
+ * A share's level: `ok` green, `watch` amber, `alert` orange, `over` red. A usage meter reads
+ * them in that order as it fills; a health meter is `ok`, `watch` or `over`, never orange.
+ */
+export type MeterLevel = 'ok' | 'watch' | 'alert' | 'over';
+/** A usage share's level on `levels` (0 to 1 of a cap). */
+export function usageLevel(share: number, levels: MeterLevels = METER_LEVELS): MeterLevel {
+  const over = levels.over ?? 1;
+  return share >= over
+    ? 'over'
+    : share >= levels.alert
+      ? 'alert'
+      : share >= levels.watch
+        ? 'watch'
+        : 'ok';
+}
+/** A health share's level on `levels` (0 to 1, higher is better). */
+export function healthLevel(share: number, levels: HealthLevels = HEALTH_LEVELS): MeterLevel {
+  return share >= levels.watch ? 'ok' : share >= levels.alert ? 'watch' : 'over';
+}
+/**
+ * Each meter's default bands, in % of the target: `warn` and `bad` are where `usage` turns
+ * amber and orange (red from 100%), and where `health` drops below green and below amber.
+ */
 export const METER_BANDS: Record<MeterKind, { warn: number; bad: number }> = {
-  health: { warn: 100, bad: 90 },
+  health: { warn: HEALTH_LEVELS.watch * 100, bad: HEALTH_LEVELS.alert * 100 },
   usage: { warn: METER_LEVELS.watch * 100, bad: METER_LEVELS.alert * 100 },
 };
+/** A level's theme tone on a card's bar or ring. */
+export const LEVEL_TONE = {
+  ok: 'success',
+  watch: 'warning',
+  alert: 'caution',
+  over: 'destructive',
+} as const satisfies Record<MeterLevel, string>;
 /** The theme tone a share of the target (%) reads as, or null with no meter. */
 export function meterTone(
   meter: MeterKind | undefined,
   share: number | null,
   bands?: { warn: number; bad: number },
-): 'success' | 'warning' | 'destructive' | null {
+): (typeof LEVEL_TONE)[MeterLevel] | null {
   if (!meter || share === null) return null;
   const { warn, bad } = bands ?? METER_BANDS[meter];
-  if (meter === 'health')
-    return share >= warn ? 'success' : share >= bad ? 'warning' : 'destructive';
-  return share < warn ? 'success' : share < bad ? 'warning' : 'destructive';
+  return LEVEL_TONE[
+    meter === 'health'
+      ? healthLevel(share / 100, { watch: warn / 100, alert: bad / 100 })
+      : usageLevel(share / 100, { watch: warn / 100, alert: bad / 100 })
+  ];
 }
 /** Each kind's styles, the first its default. */
 export const viewCardStyles = {
