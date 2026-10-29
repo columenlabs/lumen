@@ -38,9 +38,9 @@ export const METER_LEVEL_COLOR: Record<MeterLevel, string> = {
 /** Each level's text colour on its own tint (a chip): darker than the fill, so it reads at 4.5:1. */
 export const METER_LEVEL_TEXT: Record<MeterLevel, string> = {
   ok: 'var(--foreground)',
-  watch: 'var(--warning)',
-  alert: 'var(--caution)',
-  over: 'var(--loss)',
+  watch: 'color-mix(in oklab, var(--warning) 85%, var(--foreground))',
+  alert: 'color-mix(in oklab, var(--caution) 85%, var(--foreground))',
+  over: 'color-mix(in oklab, var(--loss) 85%, var(--foreground))',
 };
 
 /** A share's `UnitValue` tone: none while `ok`, so only a number that needs a look is tinted. */
