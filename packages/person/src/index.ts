@@ -5,6 +5,7 @@
  */
 import { OBJECT_MODULE, PersonError, type PersonReply, insideStore } from './object';
 
+export * from './budget';
 export * from './move';
 export * from './object';
 

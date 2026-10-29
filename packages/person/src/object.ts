@@ -16,6 +16,14 @@
  * so a read-modify-write needs no retry loop. Network waits still let other calls in (input gates).
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+  BudgetError,
+  type BudgetHooks,
+  type BudgetLevel,
+  RowBudget,
+  type RowLimits,
+  nextUtcDay,
+} from './budget';
 import { fromJson, toJson } from './json';
 
 /** The SQLite of a Durable Object (`ctx.storage.sql`): typed loosely, so `SqlStorage` passes as it is. */
@@ -25,7 +33,7 @@ export interface SqlLike {
     query: string,
     // biome-ignore lint/suspicious/noExplicitAny: as above
     ...bindings: any[]
-  ): { toArray(): T[] };
+  ): { toArray(): T[]; rowsRead?: number; rowsWritten?: number };
 }
 
 /** What the store needs of `DurableObjectState`. */
@@ -83,6 +91,11 @@ export interface PersonDeps<X = unknown> {
   onClaim?(owner: string): Promise<void>;
   /** How long one module's wake may run (default 30 s). */
   wakeMs?: number;
+  /**
+   * Row budgets for this store (`./budget`): per call, per wake and per UTC day, so no loop can
+   * spend the account's daily Durable Objects limit. Left out, the defaults apply.
+   */
+  budget?: RowLimits & BudgetHooks;
 }
 
 /** A refusal with a status and a message the person can act on. */
@@ -142,25 +155,39 @@ export class PersonObject<X = unknown> {
   private ownerRead = false;
   private readonly ready = new Set<string>();
   private readonly broken = new Map<string, { at: number; error: string }>();
+  private rows?: RowBudget;
+  private metered?: SqlLike;
 
   constructor(
     private readonly state: PersonState,
     private readonly load: PersonDeps<X> | (() => Promise<PersonDeps<X>>),
   ) {}
 
+  /** The SQLite, every statement counted against the row budget once it is set up. */
   private get sql(): SqlLike {
-    return this.state.storage.sql;
+    if (!this.rows) return this.state.storage.sql;
+    this.metered ??= this.rows.sql(this.state.storage.sql);
+    return this.metered;
+  }
+
+  /** The store's row budget (set up with the first call or wake). */
+  private budget(deps: PersonDeps<X>): RowBudget {
+    this.rows ??= new RowBudget(this.state.storage, deps.budget, deps.budget);
+    return this.rows;
   }
 
   private async setup(): Promise<PersonDeps<X>> {
     this.deps ??= (async () => {
       const deps = typeof this.load === 'function' ? await this.load() : this.load;
+      await this.budget(deps).load();
       for (const m of deps.modules)
         if (!NAME.test(m.name)) throw new Error(`person module name ${m.name}`);
-      this.sql.exec(
+      // The store's own two tables, unmetered so the budget can answer even on a spent day.
+      const raw = this.state.storage.sql;
+      raw.exec(
         'CREATE TABLE IF NOT EXISTS _schema (module TEXT PRIMARY KEY, version INTEGER NOT NULL)',
       );
-      this.sql.exec(
+      raw.exec(
         'CREATE TABLE IF NOT EXISTS _wakes (module TEXT PRIMARY KEY, at INTEGER NOT NULL, fails INTEGER NOT NULL DEFAULT 0)',
       );
       return deps;
@@ -264,13 +291,19 @@ export class PersonObject<X = unknown> {
   async call(owner: string, module: string, method: string, args?: unknown): Promise<PersonReply> {
     try {
       const deps = await this.setup();
-      await this.claim(deps, owner);
-      const value = await this.within(deps, owner, () =>
-        this.run(deps, owner, module, method, args ?? null),
-      );
+      const rows = this.budget(deps);
+      // The budget itself answers even when the day is spent: it reads no rows.
+      if (module === OBJECT_MODULE && (method === 'budget' || method === 'brake'))
+        return { ok: true, value: await this.own(deps, method, args ?? null) };
+      if (!rows.callAllowed()) throw new BudgetError(spentMessage());
+      const value = await rows.scope('call', async () => {
+        await this.claim(deps, owner);
+        return this.within(deps, owner, () => this.run(deps, owner, module, method, args ?? null));
+      });
       return { ok: true, value: value ?? null };
     } catch (err) {
       if (err instanceof PersonError) return { ok: false, status: err.status, error: err.message };
+      if (err instanceof BudgetError) return { ok: false, status: 503, error: err.message };
       console.error(
         JSON.stringify({ event: 'person_call_failed', module, method, error: String(err) }),
       );
@@ -400,6 +433,15 @@ export class PersonObject<X = unknown> {
       return this.module(deps, a.module);
     };
     switch (method) {
+      case 'budget':
+        return this.budget(deps).state();
+      case 'brake': {
+        // From the Worker when the whole account nears its cap: `background` stops wakes, `stop` calls too.
+        const b = (args ?? {}) as { level?: BudgetLevel; until?: number };
+        if (b.level !== 'ok' && b.level !== 'background' && b.level !== 'stop')
+          throw new PersonError(400, 'brake takes level ok, background or stop');
+        return this.budget(deps).setBrake(b.level, b.until);
+      }
       case 'dump':
         for (const m of deps.modules) this.migrate(m);
         return {
@@ -485,6 +527,20 @@ export class PersonObject<X = unknown> {
     const deps = await this.setup();
     const owner = await this.currentOwner();
     if (!owner) return;
+    const rows = this.budget(deps);
+    if (!rows.wakeAllowed()) {
+      // Background work waits for the next UTC day (spread over its first half hour), so the
+      // budget left today serves the person's own requests. Unmetered: two small statements.
+      const raw = this.state.storage.sql;
+      const at = nextUtcDay() + Math.floor(Math.random() * 30 * 60_000);
+      try {
+        raw.exec('UPDATE _wakes SET at = ? WHERE at < ?', at, at);
+        await this.state.storage.setAlarm(at);
+      } catch {
+        // Storage refusing too: the alarm is not set again, the next call or wake sets it.
+      }
+      return;
+    }
     const start = Date.now();
     const due = this.sql
       .exec<{ module: string; fails: number }>(
@@ -507,8 +563,10 @@ export class PersonObject<X = unknown> {
       this.sql.exec('DELETE FROM _wakes WHERE module = ?', module);
       const wake = m.wake.bind(m);
       try {
-        await this.within(deps, owner, () =>
-          wake(this.ctx(deps, owner, module, Date.now() + (deps.wakeMs ?? 30_000))),
+        await rows.scope('wake', () =>
+          this.within(deps, owner, () =>
+            wake(this.ctx(deps, owner, module, Date.now() + (deps.wakeMs ?? 30_000))),
+          ),
         );
       } catch (err) {
         const wait = Math.min(RETRY_MS * 2 ** fails, BACKOFF_MAX_MS);
@@ -530,4 +588,8 @@ export class PersonObject<X = unknown> {
     }
     await this.arm();
   }
+}
+
+function spentMessage() {
+  return `today's storage budget is used; it comes back at ${new Date(nextUtcDay()).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
