@@ -67,6 +67,7 @@ import { DrawerSection } from './drawer-section';
 import { useFloatingHead } from './floating-head';
 import { FreshnessMark, freshnessLine, freshnessOf } from './freshness';
 import { useIsMobile } from './hooks/use-mobile';
+import { useTell } from './hooks/use-tell';
 import { IconButton } from './icon-button';
 import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
@@ -658,8 +659,7 @@ export function LumenView<T extends RowData>({
   // server groups it.
   const groupBy = server && !server.groups ? null : pickedGroup;
   const served = server?.groups && groupBy ? server.groups : null;
-  const onGroup = server?.groups?.onGroup;
-  useEffect(() => onGroup?.(groupBy?.key ?? null), [onGroup, groupBy?.key]);
+  useTell(groupBy?.key ?? null, server?.groups?.onGroup);
   const pivot = server ? false : pickedPivot;
   // Live columns on screen keep their source reading while the market trades (#861).
   const load = useLiveLoad(

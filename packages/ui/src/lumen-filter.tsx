@@ -190,8 +190,13 @@ function onePerField(tokens: FilterToken[]) {
 const PER_FIELD = 8;
 
 /** A server's counts per field: each value's rows, and the rows with no value (`none`), over the
- *  rows every other field's tokens keep. */
-export type FacetCounts = Record<string, { values: Record<string, number>; none?: number }>;
+ *  rows every other field's tokens keep. `counted: false` gives a field's values to pick without
+ *  counts, for when the server could not count them without reading every row: the box and the
+ *  panel list the values and show no numbers. */
+export type FacetCounts = Record<
+  string,
+  { values: Record<string, number>; none?: number; counted?: boolean }
+>;
 
 /**
  * Each field's values with their counts, shared by the filter box and the filter panel. A field
@@ -226,9 +231,12 @@ export function useFacetCounts<T>(filter: LumenFilterState<T>) {
   }, [fields, indexed, tokens, facets]);
 }
 
-/** Whether a count means something: over a server's page only when the server counted. */
-export const countsShown = (filter: { partial: boolean; facets: FacetCounts | null }) =>
-  !filter.partial || !!filter.facets;
+/** Whether a count means something: over a server's page only when the server counted (that
+ *  field, when `key` is given). */
+export const countsShown = (
+  filter: { partial: boolean; facets: FacetCounts | null },
+  key?: string,
+) => (filter.facets ? key === undefined || filter.facets[key]?.counted !== false : !filter.partial);
 
 /** Keeps the tokens and text, and filters `rows` by them. */
 export function useLumenFilter<T>(
@@ -579,7 +587,7 @@ export function LumenTokenizedFilter<T>({
 }) {
   const { fields, indexed, tokens, setTokens, text, setText, hasText } = filter;
   // Over one page of a server's rows a count is not the real one: show none, unless the server counted.
-  const tally = (n: number) => (countsShown(filter) ? n : '');
+  const tally = (n: number, key?: string) => (countsShown(filter, key) ? n : '');
   // Text counts are over the rows loaded: none over a server's page.
   const pageTally = (n: number) => (filter.partial ? '' : n);
   // A box its card passes no link takes the card's own (every card carries a square).
@@ -830,7 +838,7 @@ export function LumenTokenizedFilter<T>({
           Only
         </Button>
         <CommandShortcut className={cn('ml-0 w-8 text-right', shortcut)}>
-          {tally(count)}
+          {tally(count, key)}
         </CommandShortcut>
       </CommandItem>
     );
@@ -854,7 +862,7 @@ export function LumenTokenizedFilter<T>({
         />
         <span className="min-w-0 truncate text-muted-foreground italic">{noneOf(f.label)}</span>
         <CommandShortcut className={cn('ml-auto w-8 text-right', shortcut)}>
-          {tally(n)}
+          {tally(n, f.key)}
         </CommandShortcut>
       </CommandItem>
     );
