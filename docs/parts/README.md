@@ -18,6 +18,9 @@ Each page has the same four headings:
 | `LumenSelector` | [selector.md](selector.md) | Every picker |
 | `LumenView`, `LumenLayout` | [table.md](table.md) | Every list of rows |
 | `LumenFilterPanel` | [filter-panel.md](filter-panel.md) | Browsing a big list by its fields' values, beside it |
+| `LumenCalendar` | [calendar.md](calendar.md) | Things on days: month, week and agenda |
+| `LumenBoard` | [board.md](board.md) | Items by stage, in columns |
+| `LumenPlayer` | [player.md](player.md) | A video, an audio file, or slides over audio |
 
 ## Three rules every page shares
 
