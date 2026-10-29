@@ -63,7 +63,7 @@ export function ShareMeter({
       <span
         data-slot="share-meter"
         data-over={over || undefined}
-        className={cn('flex shrink-0 items-center', wide ? 'w-full shrink' : 'w-14')}
+        className={cn('flex shrink-0 items-center', wide ? 'w-full shrink' : 'w-16')}
         style={
           {
             '--meter-color': color ?? METER_LEVEL_COLOR[meterLevel(value, levels, kind)],
@@ -74,7 +74,7 @@ export function ShareMeter({
           value={Math.max(0, Math.min(value, 1)) * 100}
           aria-label={said?.length ? said.join(', ') : undefined}
           className={cn(
-            'h-1.5 w-auto flex-3 [&>[data-slot=progress-indicator]]:bg-(--meter-color)',
+            'h-1.5 w-auto flex-2 [&>[data-slot=progress-indicator]]:bg-(--meter-color)',
             over && 'rounded-r-none',
           )}
         />
@@ -83,11 +83,11 @@ export function ShareMeter({
           {over && (
             <span
               data-slot="share-spill"
-              className="h-full rounded-r-full border-foreground/70 border-l-2"
+              className="h-full min-w-1 rounded-r-full border-foreground/70 border-l-2"
               style={{
                 width: `${spill * 100}%`,
                 background:
-                  'repeating-linear-gradient(135deg, var(--meter-color) 0 3px, transparent 3px 5px)',
+                  'repeating-linear-gradient(135deg, var(--meter-color) 0 2px, transparent 2px 4px)',
               }}
             />
           )}
