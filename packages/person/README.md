@@ -53,6 +53,19 @@ await mine.call('add', { title: 'Buy saw blades' });
 
 The first call names the person and claims the store; a later call for anyone else is refused (403).
 
+## Row budgets: no loop can spend the account's day
+
+Cloudflare's free plan allows an account 5M Durable Objects rows read and 100k rows written a day, across every object. Past either, every SQL call in every object throws until 00:00 UTC. Every store is bounded (`budget` in its deps, `RowBudget` in `./budget` for any other object):
+
+| Bound | Default | Past it |
+|---|---|---|
+| One call | 100k rows read, 20k written | its next statement throws; the call answers 503 |
+| One wake | 200k read, 20k written | the same, for that wake |
+| The store's UTC day | 600k read, 12k written | calls answer 503 until 00:00 UTC |
+| `background` share of the day | 0.6 | wakes wait for the next day (spread over its first half hour); calls keep working |
+
+Counts are the cursors' own `rowsRead` and `rowsWritten`, what Cloudflare bills. `onLimit` hears each level once a day (alert someone there). `_object.budget` reads today's totals and `_object.brake {level: 'background' | 'stop' | 'ok', until?}` sets a brake from outside, for when the whole account nears its cap; both answer on a spent day. A request that needs more than one call's budget (an import, a rebuild) is a background job in small wakes, never one request.
+
 ## Rules it keeps
 
 - **Migrations fail per module.** Each module migrates on its first call or wake, each step in one transaction. A step that throws leaves only that module answering 503 for a minute before it tries again; every other module keeps working. Never edit or reorder a released step: add one.
