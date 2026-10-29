@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { useIsMobile } from './hooks/use-mobile';
 import { cn } from './lib/utils';
 import { LumenSelector } from './lumen-selector';
-import { METER_LEVEL_COLOR, meterLevel } from './meter-level';
+import { METER_LEVEL_COLOR, METER_LEVEL_TEXT, meterLevel } from './meter-level';
 import { PACE_WINDOWS, type Pace, type PaceWindow, durationText, usePaceWindow } from './pace';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 
@@ -103,8 +103,8 @@ export function TimeToCap({
           : level === 'ok'
             ? { background: 'var(--muted)' }
             : {
-                background: `color-mix(in oklab, ${c} 18%, transparent)`,
-                color: `color-mix(in oklab, ${c} 80%, var(--foreground))`,
+                background: `color-mix(in oklab, ${c} 14%, transparent)`,
+                color: METER_LEVEL_TEXT[level],
               }
       }
     >

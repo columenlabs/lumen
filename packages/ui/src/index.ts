@@ -116,7 +116,7 @@ export { LumenSecret } from './lumen-secret';
 export { RankedBars, StackedBars, StackedColumns, TimeLines } from './lumen-widget-charts';
 export { type ShareSegment, ShareMeter } from './share-meter';
 export { type Pool, poolShare } from './pool-share';
-export { METER_LEVEL_COLOR, meterLevel, meterValueTone } from './meter-level';
+export { METER_LEVEL_COLOR, METER_LEVEL_TEXT, meterLevel, meterValueTone } from './meter-level';
 export { contrast, readableInk } from './ink';
 export { UnitValue } from './unit-value';
 export {
