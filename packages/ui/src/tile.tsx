@@ -88,8 +88,9 @@ function TileBody({
         <span className="line-clamp-2 text-xs text-muted-foreground tabular-nums">{caption}</span>
       ) : null}
       {lines?.map((l, i) => (
+        // A line is a phrase like a caption: the text font, its digits still tabular.
         // biome-ignore lint/suspicious/noArrayIndexKey: a card's lines in their saved order
-        <span key={i} className="num line-clamp-2 text-xs text-muted-foreground">
+        <span key={i} className="line-clamp-2 text-xs text-muted-foreground tabular-nums">
           {l}
         </span>
       ))}

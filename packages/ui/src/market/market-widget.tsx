@@ -42,6 +42,10 @@ import { faint } from './price-chart';
 const LINE_TOKENS = ['--chart-1', '--chart-3', '--chart-4', '--chart-6', '--chart-2', '--chart-5'];
 
 const MINUS = '−';
+/** A signed percent on the chart's price axis. */
+const pct = (p: number) => `${p >= 0 ? '+' : MINUS}${Math.abs(p).toFixed(2)}%`;
+/** How near (px) a tick may sit to a line's value tag before it is left blank: one tag's height. */
+const TAG_PX = 16;
 export function fmtValue(s: Pick<MarketSeries, 'prefix' | 'suffix' | 'decimals'>, v: number) {
   return `${s.prefix}${v
     .toLocaleString('en-US', {
@@ -185,7 +189,26 @@ export function MarketLines({ symbols: all }: { symbols: string[] }) {
       },
       localization: {
         timeFormatter: (t: Time) => clock(t as number, timeZone),
-        priceFormatter: (p: number) => `${p >= 0 ? '+' : MINUS}${Math.abs(p).toFixed(2)}%`,
+        priceFormatter: pct,
+        // A tick a line's value tag would cover is left blank, so the two never overlap.
+        tickmarksPriceFormatter: (prices: number[]) => {
+          const ref = [...lines.current.values()][0];
+          const tags = [...lines.current.values(), ...extLines.current.values()]
+            .filter((s) => s.options().lastValueVisible)
+            .map((s) => s.data().at(-1) as { value?: number } | undefined)
+            .flatMap((d) => (d?.value === undefined ? [] : [d.value]));
+          const y = (p: number) => ref?.priceToCoordinate(p) ?? null;
+          return prices.map((p) => {
+            const at = y(p);
+            const covered =
+              at !== null &&
+              tags.some((t) => {
+                const ty = y(t);
+                return ty !== null && Math.abs(ty - at) < TAG_PX;
+              });
+            return covered ? '' : pct(p);
+          });
+        },
       },
       crosshair: { mode: CrosshairMode.Normal },
       handleScale: false,
@@ -283,9 +306,9 @@ export function MarketLines({ symbols: all }: { symbols: string[] }) {
   if (!ready) return <Skeleton aria-busy className="h-72 w-full sm:h-80" />;
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      {/* One line: the name and level drop out as the card narrows, and
-          anything still too wide scrolls sideways instead of wrapping. */}
-      <div className="flex flex-nowrap justify-between gap-x-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] sm:justify-start sm:gap-x-3">
+      {/* The name and level drop out as the card narrows; what still does not fit wraps to a
+          second line, so no symbol is ever cut off. */}
+      <div className="flex flex-wrap justify-between gap-x-1 sm:justify-start sm:gap-x-3">
         {shown.map((s, i) => {
           const ch = hover?.[s.key] ?? changeOf(s);
           const last = s.bars.at(-1)?.c;
@@ -367,11 +390,15 @@ const ProxyChip = ({ text, title }: { text: string; title?: string }) => (
   </Badge>
 );
 
-const DelayedChip = () => (
-  <Badge variant="outline" className={cn(CHIP, 'border-warning/50 bg-warning/10 text-warning')}>
-    Delayed
-  </Badge>
-);
+/** "Delayed", and the time of the value shown when it is known. */
+const DelayedChip = ({ at }: { at?: number }) => {
+  const { timeZone } = usePrefs();
+  return (
+    <Badge variant="outline" className={cn(CHIP, 'border-warning/50 bg-warning/10 text-warning')}>
+      Delayed{at !== undefined ? ` · ${clock(at, timeZone).replace(/ [A-Z]{2,5}$/, '')}` : ''}
+    </Badge>
+  );
+};
 
 /** One widget per symbol: change, sparkline over the prior close, value, and its source chip. */
 export function MarketTiles({ symbols }: { symbols: string[] }) {
@@ -475,7 +502,15 @@ function TileState({
   );
 }
 
+/** How long a widget shows its first bars as on the way before it says there are none. */
+const FIRST_BARS_MS = 90_000;
+
 function Widget({ s, onOpen, live }: { s: MarketSeries; onOpen?: () => void; live: boolean }) {
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setWaited(true), FIRST_BARS_MS);
+    return () => clearTimeout(t);
+  }, []);
   const last = s.bars.at(-1)?.c;
   const ch =
     s.daily?.points && last !== undefined && s.prevClose !== null
@@ -565,17 +600,28 @@ function Widget({ s, onOpen, live }: { s: MarketSeries; onOpen?: () => void; liv
             )}
           </AreaChart>
         </ChartContainer>
-      ) : (
+      ) : s.error ? (
         <span className="grid h-14 place-items-center text-xs text-muted-foreground">
-          {s.error ?? 'No bars yet'}
+          {s.error}
         </span>
+      ) : waited ? (
+        <span className="grid h-14 place-items-center text-xs text-muted-foreground">
+          No bars yet
+        </span>
+      ) : (
+        // Its first bars are on the way (a delayed source is read once a minute).
+        <Skeleton aria-busy className="h-14 w-full" />
       )}
       <span className="flex items-baseline justify-between gap-2">
-        <span className="num text-sm">{last !== undefined ? fmtValue(s, last) : '—'}</span>
+        {last !== undefined ? (
+          <span className="num text-sm">{fmtValue(s, last)}</span>
+        ) : (
+          <Skeleton className="h-5 w-14" />
+        )}
         {s.daily ? (
           <span className="text-[10px] text-muted-foreground">Daily · {day(s.daily.asOf)}</span>
         ) : s.delayed ? (
-          <DelayedChip />
+          last !== undefined && <DelayedChip at={s.bars.at(-1)?.t} />
         ) : s.via ? (
           <span className="text-[10px] text-muted-foreground">via {s.via}</span>
         ) : live ? (
@@ -642,16 +688,21 @@ export function MarketToday({ symbols: all }: { symbols: string[] }) {
                     title={`${s.label} is priced from ${proxy}'s move${today?.label ? ` ${today.label.toLowerCase()}` : ''}.`}
                   />
                 )}
-                {s.delayed && !today?.label && <DelayedChip />}
+                {s.delayed && today && !today.label && <DelayedChip />}
               </span>
-              <span className="flex shrink-0 items-center gap-3">
-                <span className="num text-xs text-muted-foreground">
-                  {today ? fmtValue(s, today.value) : '—'}
+              {today ? (
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="num text-xs text-muted-foreground">
+                    {fmtValue(s, today.value)}
+                  </span>
+                  <span className={cn('num w-16 text-right text-sm font-semibold', tone)}>
+                    {ch === null ? '—' : fmtPct(ch)}
+                  </span>
                 </span>
-                <span className={cn('num w-16 text-right text-sm font-semibold', tone)}>
-                  {ch === null ? '—' : fmtPct(ch)}
-                </span>
-              </span>
+              ) : (
+                // Its first value is on the way: a placeholder, never a row of dashes.
+                <Skeleton className="h-4 w-28 shrink-0" />
+              )}
             </Button>
           );
         })}
