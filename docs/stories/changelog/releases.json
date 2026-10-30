@@ -1,5 +1,79 @@
 [
   {
+    "tag": "v0.1.165",
+    "date": "2026-10-29T17:12:20Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "`MeterLevel` has a new `over` level",
+        "body": "In `@columenlabs/lumen-ui`, `MeterLevel` now includes `over`, so add an `over` key to any `Record<MeterLevel, …>` in your app, and stop relying on `ShareSegment.color`, which is now optional and ignored."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One colour scale for every usage meter",
+        "body": "`meterLevel` and `usageLevel` now return `ok` under 75%, `watch` (amber) from 75%, `alert` (orange) from 90% and `over` (red) from 100%, so all meters in your app agree."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Health meters",
+        "body": "Meters now take `kind=\"health\"` and use the new `healthLevel` helper and `HEALTH_LEVELS` bands (green at 99% and over, amber from 95%, red below 95%), which you can override with `configureLumen({ healthLevels })`."
+      },
+      {
+        "kinds": [
+          "feature",
+          "fix"
+        ],
+        "title": "`ShareMeter` shows usage past the cap",
+        "body": "Past 100% the bar stays full and a hatched stub spills past a tick at the cap (up to +50%), and the bar keeps its level colour instead of the segment label colours that made a 111% bar look green and a 9% bar look red."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Theme tokens for meter colours",
+        "body": "Use the new `--meter-ok`, `--meter-watch`, `--meter-alert` and `--meter-over` tokens (light and dark), plus `--caution` for `UnitValue tone=\"caution\"`, to match your own UI to the meters."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.164",
+    "date": "2026-10-29T01:36:36Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tables never hide columns to fit",
+        "body": "In `@columenlabs/lumen-ui`, `LumenTable` (and so `LumenView` tables) now shows every column at every width, so a table wider than its room scrolls sideways instead of dropping its lowest-priority columns."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The name column keeps a steady width",
+        "body": "In `LumenTable`, the name column now stays at `--lead-col-max` instead of growing into freed space, so the other columns keep their room when the sidebar or a docked drawer is open."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`ViewField.priority` is deprecated",
+        "body": "From `@columenlabs/lumen-ui-types`, `ViewField.priority` is still accepted so your types keep compiling, but it is now ignored, and you can remove it from your view definitions."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "`InfoTip` is easier to tap",
+        "body": "In `@columenlabs/lumen-ui`, the `InfoTip` icon is still drawn at 16px but now has a 24px hit area, so setting help passes phone tap-target checks."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.163",
     "date": "2026-10-29T01:15:32Z",
     "takeaways": [

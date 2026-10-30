@@ -740,11 +740,15 @@ body[data-spotlight="nav"] [data-spotlit] {
 }
 
 /* LumenGrid: react-grid-layout's own rules, in the shell's tokens. */
+/* Cards glide only while a person moves them in Edit layout. On a page that loads they take their
+   measured place at once, so a card that settles never leaves a gap sliding shut behind it. */
 .lumen-grid {
   position: relative;
+}
+.lumen-grid-edit {
   transition: height 200ms ease;
 }
-.lumen-grid > .react-grid-item {
+.lumen-grid-edit > .react-grid-item {
   transition: transform 200ms ease, width 200ms ease, height 200ms ease;
 }
 .lumen-grid > .react-grid-item.resizing,

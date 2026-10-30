@@ -48,7 +48,9 @@ export function figuresOf<T>(
   const f = field(t.field);
   if (!f) return null;
   const count = isCountAgg(t.agg);
-  const value = roll(f, t.agg, filterByTokens(rows, fields, t.filter));
+  const own = filterByTokens(rows, fields, t.filter);
+  // A sum over no rows is nothing yet: $0, never a dash.
+  const value = roll(f, t.agg, own) ?? (t.agg === 'sum' && !own.length ? 0 : null);
   const main = {
     kind: 'value' as const,
     value,
@@ -64,15 +66,19 @@ export function figuresOf<T>(
       const of = roll(lf, l.agg, rows);
       const pct =
         typeof value === 'number' && typeof of === 'number' && of !== 0 ? (value / of) * 100 : null;
+      // A line with nothing to say is left out, never a dash in a sentence.
+      if (pct === null) return [];
       return [
         { kind: 'value', value: pct, format: 'weight', amount: false, suffix: `of ${lf.label}` },
       ];
     }
     const c = isCountAgg(l.agg);
+    const lv = roll(lf, l.agg, filterByTokens(rows, fields, l.filter));
+    if (lv === null) return [];
     return [
       {
         kind: 'value',
-        value: roll(lf, l.agg, filterByTokens(rows, fields, l.filter)),
+        value: lv,
         format: c ? 'rounded' : lf.format,
         amount: !c && !!lf.amount,
         suffix: l.suffix || undefined,
@@ -268,7 +274,7 @@ export function SummaryTiles<T>({
   if (!shown.length) return null;
   // Each card fills its column, as a header's metric cards do (`TileRow fill`), not the fixed tile width.
   const grid =
-    'grid grid-cols-2 gap-(--shell-section-gap) md:auto-cols-fr md:grid-flow-col lg:*:*:w-auto';
+    'grid grid-cols-2 gap-(--shell-section-gap) md:auto-cols-[minmax(0,1fr)] md:grid-flow-col lg:*:*:w-auto';
   if (loading)
     return (
       <div data-slot="view-tiles" aria-busy="true" className={grid}>
