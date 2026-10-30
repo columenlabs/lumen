@@ -187,7 +187,7 @@ export function LumenCard<T>({
           <span className="num truncate text-xl leading-7 font-semibold">
             <FigureText f={figs.main} />
           </span>
-          <span className="num truncate text-xs text-muted-foreground">
+          <span className="truncate text-xs text-muted-foreground tabular-nums">
             {of ? <>of {of}</> : 'Set a target in Edit widget'}
           </span>
         </div>
@@ -210,7 +210,7 @@ export function LumenCard<T>({
             className={cn('h-2', tone && TONE_BAR[tone])}
             aria-label="Progress to target"
           />
-          <span className="num text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {of ? (
               <>
                 {share === null ? '—' : `${share.toFixed(0)}%`} of {of}
@@ -222,8 +222,9 @@ export function LumenCard<T>({
         </div>
       )}
       {figs.lines.map((l, i) => (
+        // A line is a phrase ("$1,004 last month"): the text font, its digits still tabular, as Tile's.
         // biome-ignore lint/suspicious/noArrayIndexKey: a card's lines in their saved order
-        <span key={i} className="num line-clamp-2 text-xs text-muted-foreground">
+        <span key={i} className="line-clamp-2 text-xs text-muted-foreground tabular-nums">
           <FigureText f={l} />
         </span>
       ))}

@@ -1,5 +1,46 @@
 [
   {
+    "tag": "v0.1.166",
+    "date": "2026-10-30T02:22:02Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Price-axis ticks no longer hide under value tags",
+        "body": "In `MarketLines` from @columenlabs/lumen-ui, `tickmarksPriceFormatter` now leaves a price-axis tick blank when a line's value tag would cover it (within 16 px), and a legend that is too wide wraps to a second line instead of scrolling and cutting off the last symbol."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "LumenGrid cards only slide in Edit layout",
+        "body": "In `LumenGrid` from @columenlabs/lumen-ui, the 200 ms card transitions now apply only in Edit layout, so a loading page no longer shows cards sliding into place or leaves a tall empty gap on phones."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tile lines wrap instead of stretching columns",
+        "body": "In `Tile`, the `lines` prop now renders in the text font with tabular figures, like `caption`, and Summary cards columns are `minmax(0,1fr)`, so long sentences wrap and the row is shared evenly."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Summary cards read cleanly with no data",
+        "body": "In @columenlabs/lumen-ui, `figuresOf` now returns 0 for a sum over no rows instead of \"—\", and it leaves out a value line or percent line that has no value, so you no longer see \"— last month\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Market widgets show a skeleton while loading",
+        "body": "`MarketTiles` and `MarketToday` in @columenlabs/lumen-ui now show a skeleton while the first values arrive, instead of \"No bars yet\" and a \"—\" value."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.165",
     "date": "2026-10-29T17:12:20Z",
     "takeaways": [
