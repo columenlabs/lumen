@@ -1652,7 +1652,8 @@ function LumenTableRows<T extends RowData>({
     while (n && !(n instanceof HTMLElement && n.dataset.row !== undefined))
       n = down ? n.nextElementSibling : n.previousElementSibling;
     if (!(n instanceof HTMLElement)) return;
-    n.focus();
+    n.focus({ preventScroll: true });
+    revealRow(n);
     const next =
       openKey === null ? undefined : sorted.find((x) => keyOf(x.original) === n.dataset.row);
     if (next && onDetails) onDetails(next.original);
@@ -1663,7 +1664,7 @@ function LumenTableRows<T extends RowData>({
   useEffect(() => {
     if (openKey === null) return;
     const el = box.current?.querySelector<HTMLElement>(`tr[data-row="${CSS.escape(openKey)}"]`);
-    el?.scrollIntoView({ block: 'nearest' });
+    if (el) revealRow(el);
   }, [openKey, pageKeys, page?.index]);
   // The whole row opens the details drawer.
   const dataRow = (r: (typeof sorted)[number]) => (
@@ -2242,4 +2243,17 @@ function GroupMark<T>({ field, value }: { field: ViewField<T>; value: string }) 
     );
   if (color) return <ColorDot color={color} />;
   return <field.icon />;
+}
+
+/** Scrolls a row into view up and down only: a table wider than its box keeps its sideways scroll,
+ * so the name column never slides out of view when a row opens or the keys step. */
+function revealRow(row: HTMLElement) {
+  const kept: [HTMLElement, number][] = [];
+  for (let e = row.parentElement; e; e = e.parentElement)
+    if (e.scrollLeft) kept.push([e, e.scrollLeft]);
+  row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  for (let e = row.parentElement; e; e = e.parentElement) {
+    const was = kept.find(([k]) => k === e)?.[1] ?? 0;
+    if (e.scrollLeft !== was) e.scrollLeft = was;
+  }
 }

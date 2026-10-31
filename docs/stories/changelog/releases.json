@@ -1,5 +1,32 @@
 [
   {
+    "tag": "v0.1.167",
+    "date": "2026-10-30T16:11:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Card lines read as text, not code",
+        "body": "In `@columenlabs/lumen-ui`, the lines under the main number in `LumenCard` now use the text font, so phrases like \"$1,004 last month\" and \"of $500\" no longer look like code."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Summary row matches Tile",
+        "body": "In `@columenlabs/lumen-ui`, the Summary row used by the summary cards now draws its lines with the text font and `tabular-nums`, the same as `Tile`, so a mix of cards and tiles looks consistent."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Main number keeps its monospace style",
+        "body": "The headline figure in `LumenCard` and the Summary row still uses the `.num` class, so big numbers stay aligned. No props changed, so apps need no code changes."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.166",
     "date": "2026-10-30T02:22:02Z",
     "takeaways": [
