@@ -105,6 +105,34 @@ lumen-ship check parts <folders>       # the kit's part pages: hint-text, text-a
 
 Run each from a package folder in its `lint` script; run `parts` from the repo root with the app folders (`lumen-ship check parts apps/*/web/src`). `magic-numbers` reads the repo's `scripts/magic-numbers.baseline` (or `LUMEN_SHIP_BASELINE`): one `<folder> <count>` a line, lowered in the change that removes one. `parts` reads `scripts/parts.baseline` (or `LUMEN_SHIP_PARTS_BASELINE`): one `<folder> <rule> <count>` a line; `--write-baseline` writes today's counts on a first run. Each rule is explained, with what to write instead, at https://lumen.columenlabs.com/parts/README.md.
 
+## Behavior check
+
+`@columenlabs/lumen-ship/behavior` checks how an app's Durable Objects act over time, without naming any bug. A sanity run drives the app in the local runtime on a simulated clock, records every wake, and holds every store to the same vital signs.
+
+- `simClock()` replaces the global `Date` with a clock the run moves forward. `SimAlarms` keeps each store's alarm instead of the runtime, so nothing fires on real time. The run jumps the clock to the earliest alarm, fires it, and repeats, so a simulated day takes seconds.
+- `judge(wakes, { from, to, stopped }, limits?)` reads the recorded `Wake`s and returns `numbers` (for a diff against main) and `broken` (every vital sign broken, in plain words). Pure: no runtime, no I/O.
+
+| Vital sign | Broken when (defaults in `VITALS`) |
+|---|---|
+| Idle wakes | over 12 wakes in one hour wrote nothing and called nothing |
+| Quick idle | over 5 idle wakes in one hour set the next alarm under 60 s ahead |
+| Wake rate | over 120 wakes in one hour, working or not |
+| Alarm in the past | a wake set an alarm before its own time |
+| Rows per wake | one wake read or wrote over 10k rows |
+| Rows per day | one store read over 800k or wrote over 40k rows in a day |
+| Settles | the last 6 hours still woke over 12 an hour |
+| Errors | a wake threw or logged an error |
+| Runaway | the run stopped at 2,000 wakes before the day ended |
+
+```ts
+import { judge, type Wake } from '@columenlabs/lumen-ship/behavior';
+
+const { numbers, broken } = judge(wakes, { from, to, stopped });
+if (broken.length) console.log(broken.map((b) => `${b.rule}: ${b.detail}`).join('\n'));
+```
+
+Give it varied starting states, not failure cases: a returning user's store, the same store 30 days later, a first visit. A loop, a runaway read or stuck work then breaks a vital sign by itself, whatever caused it.
+
 ## Versions
 
 0.x: any minor may break things until 1.0. Every merge to Lumen's `main` publishes the next patch of every Lumen package; see the [releases](https://github.com/columenlabs/lumen/releases).
