@@ -63,12 +63,14 @@ import {
 } from 'react';
 import type { ComponentType } from 'react';
 import { ColorChip, ColorDot } from './color-dot';
+import { ColumnResizer, useColumnWidths } from './column-widths';
 import { DrawerSection } from './drawer-section';
 import { useFloatingHead } from './floating-head';
 import { FreshnessMark, freshnessLine, freshnessOf } from './freshness';
 import { useIsMobile } from './hooks/use-mobile';
 import { useTell } from './hooks/use-tell';
 import { IconButton } from './icon-button';
+import { KIT } from './kit-config';
 import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { useGridCell } from './lumen-grid';
@@ -506,6 +508,9 @@ export interface LumenViewProps<T> {
   onSort?: (sort: CustomViewConfig['sort']) => void;
   /** Its controls from its card (Edit widget ▸ Controls); missing keys take the Table defaults. */
   shown?: ViewCard['controls'];
+  /** A grip on each header's right edge resizes its column (desktop), kept on the device per
+   *  table (the domain's id and `cardId`); left out: `configureLumen({ resizableColumns })`. */
+  resizable?: boolean;
 }
 
 /** What the header's + offers. */
@@ -647,6 +652,7 @@ export function LumenView<T extends RowData>({
   sort = config.sort,
   onSort,
   shown,
+  resizable,
 }: LumenViewProps<T>) {
   // Its controls (Edit widget ▸ Controls): Pager, Columns and Download here.
   const on = (k: WidgetControl) => controlOn({ kind: 'table', controls: shown }, k);
@@ -828,6 +834,8 @@ export function LumenView<T extends RowData>({
         emptyState={state}
         onClearFilter={filtered ? onClearFilter : undefined}
         total={config.total !== false}
+        resizable={resizable}
+        widthsKey={`${domain.id}:${cardId}`}
         add={
           onAddColumn || onColumns
             ? { ...onAddColumn, field: onColumns && { domain, columns, onColumns } }
@@ -1115,6 +1123,11 @@ export interface LumenTableProps<T> {
   emptyState?: ReactNode;
   /** Takes every filter off: the empty body offers Clear filters. */
   onClearFilter?: () => void;
+  /** A grip on each header's right edge resizes its column (desktop, not a `fit` table); left
+   *  out: `configureLumen({ resizableColumns })`. */
+  resizable?: boolean;
+  /** Where the widths are kept on the device (one key per table); left out: they last the visit. */
+  widthsKey?: string;
 }
 
 /** The table's sort from a view's: none when its column is not shown, or the server cannot sort
@@ -1151,8 +1164,20 @@ function LumenTableRows<T extends RowData>({
   serverGroups = null,
   emptyState,
   onClearFilter,
+  resizable = KIT.resizableColumns,
+  widthsKey,
 }: LumenTableProps<T>) {
   const isMobile = useIsMobile();
+  // Widths a person dragged (desktop only: a phone's rows are cards, and a fit table wraps instead).
+  const resizing = resizable && !isMobile && !fit;
+  const colWidths = useColumnWidths(resizing ? (widthsKey ?? '') || undefined : undefined);
+  const widthOf = (f: ViewField<T> | undefined) =>
+    resizing && f ? colWidths.widths[f.key] : undefined;
+  // A dragged width caps the column's cells in its place (the cell's own padding taken off).
+  const capFor = (f: ViewField<T>, i: number) => {
+    const w = widthOf(f);
+    return w ? `calc(${w}px - 2 * var(--cell-x))` : capOf(f, i);
+  };
   const [sorting, setSorting] = useState<SortingState>(() => sortingOf(sort, columns, serverSorts));
   // A saved sort patched while the table is open (the assistant's card move) applies at once.
   const savedSort = JSON.stringify(sort ?? null);
@@ -1362,8 +1387,8 @@ function LumenTableRows<T extends RowData>({
   // A column's `cell` function is a component type to flexRender, so a new function means every
   // cell remounts (a cell being typed into loses its box). The defs change
   // only when the columns do; each cell reads the latest renderers through `latest`.
-  const latest = useRef({ shown, cellOf, inline, chips, computed });
-  latest.current = { shown, cellOf, inline, chips, computed };
+  const latest = useRef({ shown, cellOf, inline, chips, computed, capFor });
+  latest.current = { shown, cellOf, inline, chips, computed, capFor };
   const shownKeys = shown.map((f) => f.key).join(',');
   const inlineOn = inline.length > 0;
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the columns shown; the rest comes through `latest`
@@ -1379,13 +1404,13 @@ function LumenTableRows<T extends RowData>({
         enableSorting: !serverSorts || serverSorts.includes(f.key),
         header: i === 0 && flat && subgroup ? subgroup.label : f.label,
         cell: ({ row }) => {
-          const { shown: now, cellOf, inline, chips, computed } = latest.current;
+          const { shown: now, cellOf, inline, chips, computed, capFor } = latest.current;
           const field = now[i] ?? f;
           const chip = chips.some((c) => c.key === field.key);
           const v = computed.value(field, row.original);
           return (
             <CappedCell
-              max={capOf(field, i)}
+              max={capFor(field, i)}
               title={!field.render && typeof v === 'string' ? v : undefined}
             >
               {i === 0 && inline.length ? (
@@ -1623,7 +1648,7 @@ function LumenTableRows<T extends RowData>({
             <span className="flex items-center gap-2">
               <CornerDownRightIcon className="size-3.5 shrink-0" />
               {/* A field sub-group names no part: its rows show their own first column. */}
-              <CappedCell max={capOf(f, 0)}>
+              <CappedCell max={capFor(f, 0)}>
                 {name
                   ? name(p)
                   : cellOf(
@@ -1885,7 +1910,14 @@ function LumenTableRows<T extends RowData>({
                   <TableHead
                     key={h.id}
                     {...col(shown[i], PINNED_HEAD)}
-                    style={ruleOf(colorOf(domain, shown[i]))}
+                    style={{
+                      ...ruleOf(colorOf(domain, shown[i])),
+                      ...(widthOf(shown[i]) && {
+                        width: widthOf(shown[i]),
+                        minWidth: widthOf(shown[i]),
+                        maxWidth: widthOf(shown[i]),
+                      }),
+                    }}
                     onPointerDown={pressStart}
                     onPointerUp={pressEnd}
                     onPointerLeave={pressEnd}
@@ -1976,6 +2008,15 @@ function LumenTableRows<T extends RowData>({
                         </TooltipContent>
                       ) : null}
                     </Tooltip>
+                    {resizing && shown[i] && (
+                      <ColumnResizer
+                        label={shown[i].label}
+                        width={widthOf(shown[i])}
+                        onWidth={(w) => colWidths.set(h.id, w)}
+                        onDone={(w) => colWidths.save(h.id, w)}
+                        onReset={() => colWidths.reset(h.id)}
+                      />
+                    )}
                   </TableHead>
                 ))}
                 {add && (

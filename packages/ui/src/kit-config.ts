@@ -22,6 +22,9 @@ export interface KitConfig {
   meterLevels: MeterLevels;
   /** Where every health meter drops below green (`watch`) and below amber (`alert`), 0 to 1. */
   healthLevels: HealthLevels;
+  /** Every table's columns resize by a grip on their header's right edge (desktop), the widths
+   *  kept on the device per table; one table overrides with its `resizable` prop. */
+  resizableColumns: boolean;
 }
 
 export const KIT: KitConfig = {
@@ -29,6 +32,7 @@ export const KIT: KitConfig = {
   marketOff: 'Live market data is not on this app.',
   meterLevels: METER_LEVELS,
   healthLevels: HEALTH_LEVELS,
+  resizableColumns: false,
 };
 
 const changed = new Set<() => void>();

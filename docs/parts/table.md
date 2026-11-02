@@ -21,6 +21,15 @@ Total                                $9,882    Total via cardAgg / rollRender
 
 On a phone each row is a one-line card: the name and one value; the rest waits in the row's drawer.
 
+## Resizable columns
+
+Off by default. `configureLumen({ resizableColumns: true })` turns it on for every table in the app; one `LumenView` (or `LumenTable`) overrides with `resizable`. Each header gets a grip on its right edge (desktop only; a phone's rows are cards and a `fit` table wraps instead):
+
+- Drag sets the column's width; a dragged width caps its cells, so a long name ends in an ellipsis with the full text on hover.
+- ← and → on the focused grip move it 16px; double-click, Enter or Delete gives the column back its own width.
+- Widths are kept on the device per table (`localStorage`, key `lumen:col-widths:<domain id>:<cardId>`); storage off, they last the visit.
+- Every column still shows: a wider column makes the table scroll sideways, never drops another.
+
 ## Do / Don't
 
 ```tsx
@@ -37,6 +46,7 @@ On a phone each row is a one-line card: the name and one value; the rest waits i
 - ✗ Resetting the page on a new `rows` array. ✓ Only a new filter, sort, grouping or page size goes back to page 1.
 - ✗ Another row of tabs to filter. ✓ A `LumenTokenizedFilter` field.
 - ✗ Hiding columns to fit a narrow box (sidebar open, docked drawer). ✓ Every column shows; the table scrolls sideways and the name stays at `--lead-col-max`.
+- ✗ An app's own column-drag code or saved widths. ✓ `configureLumen({ resizableColumns: true })` (every table) or `resizable` on one `LumenView`.
 
 ## Checked by
 
