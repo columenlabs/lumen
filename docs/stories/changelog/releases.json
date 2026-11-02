@@ -1,5 +1,100 @@
 [
   {
+    "tag": "v0.1.170",
+    "date": "2026-11-02T19:20:47Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Resizable table columns",
+        "body": "In `@columenlabs/lumen-ui`, `configureLumen({ resizableColumns: true })` lets users resize columns on every table in an app, and the `resizable` prop on a single `LumenView` or `LumenTable` overrides that setting for one table (off by default)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Column widths kept per table",
+        "body": "Widths a user drags are now saved on their device for each table, so a resized table keeps its layout after a reload."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Keyboard-friendly column grips",
+        "body": "The new `ColumnResizer` grip (`role=\"separator\"`) on each header's right edge resizes by drag or with ← → in 16px steps, and double-click, Enter or Delete resets the column."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Dragged widths can narrow long columns",
+        "body": "With `resizable` on, a dragged width caps that column's cells, so a long name column can be made narrower, with an ellipsis and the full text on hover."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.169",
+    "date": "2026-11-01T23:44:32Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Simulated day for sanity runs",
+        "body": "From `@columenlabs/lumen-ship/behavior`, `simClock()` installs a global `Date` that your sanity run moves forward, so you can replay a full day of an app's activity in seconds instead of real time."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Alarms kept by the run",
+        "body": "From `@columenlabs/lumen-ship/behavior`, `SimAlarms` holds each store's alarm in the run instead of the runtime, so a simulated day schedules and fires wakes without waiting on real timers."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One set of vital signs for every store",
+        "body": "`judge(wakes, { from, to, stopped }, limits?)` from `@columenlabs/lumen-ship/behavior` checks every store against the same vital signs and returns `numbers` and `broken`, so a wake loop, a runaway read or stuck work fails the check without a test written for that bug."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Tunable defaults",
+        "body": "The `VITALS` export from `@columenlabs/lumen-ship/behavior` holds the default limits, tuned for a small personal system, and you can pass your own `limits` as the third argument to `judge` when your app needs different ones."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.168",
+    "date": "2026-10-31T18:20:05Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Clicking a row no longer shifts a wide table sideways",
+        "body": "In `LumenView` from @columenlabs/lumen-ui, setting `openKey` and clicking a row now scrolls the table only up or down as needed, so the first column stays in view beside a docked drawer."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Up/down keys keep the horizontal scroll position",
+        "body": "When you move the open row with the arrow keys in a `LumenView` that uses `openKey`, the focus call now passes `preventScroll`, so the table no longer slides sideways on each keypress."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Paging to the open row keeps the sideways scroll",
+        "body": "In `LumenView`, when `openKey` points at a row on a page you navigate to, the row is revealed vertically only, and any horizontal scroll you set stays where it was."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.167",
     "date": "2026-10-30T16:11:26Z",
     "takeaways": [
