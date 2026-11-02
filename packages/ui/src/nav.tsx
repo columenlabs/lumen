@@ -4,7 +4,7 @@
 // A section header folds its items: it lights up on hover with a chevron after
 // the name, a click folds it, the fold is remembered in the browser, and `+` never folds.
 import { Link, useRouterState } from '@tanstack/react-router';
-import { ChevronRightIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { ChevronRightIcon, MenuIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
 import { type AssistantPageType, useAssistantPages } from './assistant-screen';
 import { LumenConfirm } from './confirm';
@@ -440,5 +440,55 @@ export function SidebarSection({
         {children && <div className="group-data-[collapsible=icon]:hidden">{children}</div>}
       </SidebarGroupContent>
     </FoldGroup>
+  );
+}
+
+/**
+ * The phone's bottom tab bar (`LumenShell tabs`): up to four of the app's pages, then More, which
+ * opens the sidebar with every page. Phone only; the desktop keeps the sidebar.
+ */
+export function LumenTabBar({ items }: { items: NavItem[] }) {
+  const { isMobile, openMobile, setOpenMobile } = useSidebar();
+  const match = useMatch();
+  if (!isMobile || !items.length) return null;
+  const tabs = items.slice(0, 4);
+  const scores = tabs.map((t) => match(t));
+  const best = Math.max(...scores);
+  return (
+    <nav
+      data-slot="shell-tabbar"
+      aria-label="Main"
+      className="sticky bottom-0 z-20 grid h-[calc(var(--shell-tabbar-height)+env(safe-area-inset-bottom))] shrink-0 grid-cols-5 border-t bg-background pb-[env(safe-area-inset-bottom)]"
+    >
+      {tabs.map((t, i) => {
+        const on = best >= 0 && scores[i] === best;
+        return (
+          <Link
+            key={t.to}
+            to={t.to}
+            aria-current={on ? 'page' : undefined}
+            className={cn(
+              'flex min-w-0 flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+              on && 'font-semibold text-primary',
+            )}
+          >
+            <t.icon className="size-5" />
+            <span className="max-w-full truncate px-1">{t.title}</span>
+          </Link>
+        );
+      })}
+      <button
+        type="button"
+        aria-expanded={openMobile}
+        onClick={() => setOpenMobile(true)}
+        className={cn(
+          'flex min-w-0 flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          best < 0 && 'font-semibold text-primary',
+        )}
+      >
+        <MenuIcon className="size-5" />
+        <span>More</span>
+      </button>
+    </nav>
   );
 }

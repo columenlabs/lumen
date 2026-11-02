@@ -387,7 +387,7 @@ export function LumenStatusBar({
     <footer
       data-slot="shell-status"
       aria-label="Status"
-      className="sticky bottom-0 z-10 flex h-(--shell-status-height) shrink-0 items-center gap-3 overflow-hidden border-t bg-background px-(--shell-gutter) text-xs whitespace-nowrap text-muted-foreground"
+      className="sticky bottom-(--shell-tabbar-offset) z-10 flex h-(--shell-status-height) shrink-0 items-center gap-3 overflow-hidden border-t bg-background px-(--shell-gutter) text-xs whitespace-nowrap text-muted-foreground"
     >
       {mobile ? (
         <>

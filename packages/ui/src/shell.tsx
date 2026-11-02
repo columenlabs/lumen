@@ -24,6 +24,7 @@ import type { ComponentType } from 'react';
 import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenFinder, type LumenFinderConfig } from './lumen-finder';
+import { LumenTabBar, type NavItem } from './nav';
 import { usePrefs } from './prefs';
 import { withRefreshToken } from './refresh';
 import {
@@ -253,6 +254,8 @@ export interface LumenShellProps {
   brand: ReactNode;
   /** The app's sidebar content: `NavGroup`s and `SidebarSection`s. */
   nav: ReactNode;
+  /** The phone's bottom tab bar: up to four main pages, then More (the sidebar). None by default. */
+  tabs?: NavItem[];
   /** The app's status bar (DESIGN.md, Status bar): its sync and messages as data; pages add theirs
    *  with `useStatus`. Running Tasks of this app show by themselves. */
   bar?: StatusBarModel;
@@ -319,6 +322,7 @@ export function LumenShell({
   appLabel,
   brand,
   nav,
+  tabs,
   bar,
   status,
   health,
@@ -442,6 +446,7 @@ export function LumenShell({
                           </>
                         }
                       />
+                      {tabs && <LumenTabBar items={tabs} />}
                     </SidebarInset>
                     {/* A docked LumenDrawer: beside the page, left of the assistant. */}
                     <div ref={setDockSlot} data-slot="shell-dock" className="contents" />
