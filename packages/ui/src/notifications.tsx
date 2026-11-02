@@ -600,8 +600,12 @@ function Events({ status, api }: { status: NotificationsStatus; api: Api }) {
                     className="flex min-w-0 items-baseline gap-2 border-t py-2 pr-3"
                     title={`${e.label}: ${e.detail}`}
                   >
-                    <span className="truncate text-sm whitespace-nowrap sm:shrink-0">{e.label}</span>
-                    <span className="hidden truncate text-xs text-muted-foreground sm:inline">{e.detail}</span>
+                    <span className="truncate text-sm whitespace-nowrap sm:shrink-0">
+                      {e.label}
+                    </span>
+                    <span className="hidden truncate text-xs text-muted-foreground sm:inline">
+                      {e.detail}
+                    </span>
                   </span>
                   {targets.map((t) => (
                     <span key={t.id} className="self-stretch border-t py-2">
