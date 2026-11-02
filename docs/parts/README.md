@@ -21,6 +21,7 @@ Each page has the same four headings:
 | `LumenCalendar` | [calendar.md](calendar.md) | Things on days: month, week and agenda |
 | `LumenBoard` | [board.md](board.md) | Items by stage, in columns |
 | `LumenPlayer` | [player.md](player.md) | A video, an audio file, or slides over audio |
+| `LumenShell tabs` | [tab-bar.md](tab-bar.md) | The main pages at the bottom of a phone screen |
 
 ## Three rules every page shares
 

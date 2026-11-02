@@ -1,5 +1,39 @@
 [
   {
+    "tag": "v0.1.171",
+    "date": "2026-11-02T21:41:43Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Split notification settings in two",
+        "body": "In `@columenlabs/lumen-ui`, the new `parts` prop on `NotificationsSettings` takes `'all'` (default), `'channels'` (email, ntfy and webhooks only) or `'events'` (only the events × channels grid), so an app can show what is sent and where it goes in separate Settings sections."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Group notification events under a label",
+        "body": "Set the new `group` field on a `NotifyEvent` passed to `NotificationsSettings`, and events sharing a group are listed under that group's label, such as \"Limits\" or \"Watchdog\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One line per event row",
+        "body": "In `NotificationsSettings`, each event row now shows its label followed by the detail cut off with an ellipsis, and hovering shows the full text, so long lists are easier to scan."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Checkbox columns stay visible on phones",
+        "body": "On small screens, the detail text in `NotificationsSettings` event rows moves into the hover, so the channel checkbox columns stay in view."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.170",
     "date": "2026-11-02T19:20:47Z",
     "takeaways": [

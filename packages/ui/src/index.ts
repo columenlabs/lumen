@@ -195,6 +195,7 @@ export {
 } from './growth-chart';
 export {
   FoldGroup,
+  LumenTabBar,
   NavGroup,
   type NavItem,
   type SectionItem,
