@@ -7,6 +7,7 @@ An app's Settings page: one dialog on every host, General first, then a group pe
 - A list of things in a section (providers, channels, accounts, phones): `LumenExpandList` of `LumenExpandRow`s.
 - A few fields that save together: a `LumenForm` (see [form.md](form.md)) in the section's `content`, its Save in `footer`.
 - Shared sections the kit already has: `SchedulesSection`, `NotificationsSettings`, `McpSettings`, `IntegrationRow`, `TimeZoneSelect`. Use them; never rebuild one.
+- Alerts split from delivery: `NotificationsSettings parts="channels"` in one section (where messages go: email, ntfy, webhooks, set up once) and `parts="events"` in another (what goes where: one line per event, a column per channel). Events with a `group` sit under its label ("Limits", "Watchdog").
 
 ## Anatomy
 

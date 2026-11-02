@@ -68,6 +68,8 @@ interface NotifyEvent {
   label: string;
   detail: string;
   off: string[];
+  /** Events with the same group sit together under its label, in the order the groups first appear. */
+  group?: string;
 }
 interface NotificationsStatus {
   email: EmailStatus;
@@ -551,10 +553,18 @@ function Events({ status, api }: { status: NotificationsStatus; api: Api }) {
   if (!targets.length)
     return (
       <p className="text-sm text-muted-foreground">
-        Nothing to send to yet: turn on email or ntfy, or add a webhook, above.
+        Nothing to send to yet: turn on email or ntfy, or add a webhook, first.
       </p>
     );
-  const grid = { gridTemplateColumns: `minmax(12rem, 2.4fr) repeat(${targets.length}, 5.5rem)` };
+  // The event column gives way first, so a phone shows the checkboxes; its detail waits in the hover.
+  const grid = { gridTemplateColumns: `minmax(7rem, 1fr) repeat(${targets.length}, 5.5rem)` };
+  // Groups in the order they first appear; events without one come first, unlabelled.
+  const groups: { label?: string; events: NotifyEvent[] }[] = [];
+  for (const e of status.events) {
+    const g = groups.find((x) => x.label === e.group);
+    if (g) g.events.push(e);
+    else groups.push({ label: e.group, events: [e] });
+  }
   return (
     <div className="grid grid-cols-1 gap-2">
       <div className="overflow-x-auto">
@@ -573,18 +583,34 @@ function Events({ status, api }: { status: NotificationsStatus; api: Api }) {
               </span>
             ))}
           </div>
-          {status.events.map((e) => (
-            <div key={e.key} className="contents">
-              <span className="grid gap-0.5 border-t py-2 pr-3">
-                <span className="text-sm">{e.label}</span>
-                <span className="text-xs text-muted-foreground">{e.detail}</span>
-              </span>
-              {targets.map((t) => (
-                <span key={t.id} className="self-stretch border-t py-2">
-                  <span className="flex h-full items-center justify-center">
-                    <EventCell event={e} target={t.id} name={t.name} api={api} />
-                  </span>
+          {groups.map((g) => (
+            <div key={g.label ?? ''} className="contents">
+              {g.label ? (
+                <span
+                  className="border-t pt-3 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                  style={{ gridColumn: '1 / -1' }}
+                >
+                  {g.label}
                 </span>
+              ) : null}
+              {g.events.map((e) => (
+                <div key={e.key} className="contents">
+                  {/* One line: the label, then its detail cut with an ellipsis, all of it on hover. */}
+                  <span
+                    className="flex min-w-0 items-baseline gap-2 border-t py-2 pr-3"
+                    title={`${e.label}: ${e.detail}`}
+                  >
+                    <span className="truncate text-sm whitespace-nowrap sm:shrink-0">{e.label}</span>
+                    <span className="hidden truncate text-xs text-muted-foreground sm:inline">{e.detail}</span>
+                  </span>
+                  {targets.map((t) => (
+                    <span key={t.id} className="self-stretch border-t py-2">
+                      <span className="flex h-full items-center justify-center">
+                        <EventCell event={e} target={t.id} name={t.name} api={api} />
+                      </span>
+                    </span>
+                  ))}
+                </div>
               ))}
             </div>
           ))}
@@ -600,6 +626,7 @@ export function NotificationsSettings({
   api: base,
   product,
   sender,
+  parts = 'all',
 }: {
   /** The app's Notifications API base, e.g. `/api/notifications`. */
   api: string;
@@ -607,6 +634,11 @@ export function NotificationsSettings({
   product: string;
   /** The address email comes from. */
   sender: string;
+  /**
+   * What to draw: the channels and the events grid (default), only the channels (where messages
+   * go) or only the events grid (what goes where), so an app can set them in two sections.
+   */
+  parts?: 'all' | 'channels' | 'events';
 }) {
   const api = useNotifications(base, product, sender);
   const [open, setOpen] = useState<string | null>(null);
@@ -614,6 +646,7 @@ export function NotificationsSettings({
   if (api.q.isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (api.q.isError) return <ErrorLine error={api.q.error} />;
   const s = api.q.data;
+  if (parts === 'events') return <Events status={s} api={api} />;
   return (
     <div className="grid grid-cols-1 gap-6">
       <div className="grid grid-cols-1">
@@ -676,10 +709,12 @@ export function NotificationsSettings({
           <Webhooks hooks={s.webhooks} api={api} />
         </IntegrationRow>
       </div>
-      <section className="grid grid-cols-1 gap-2">
-        <h4 className="font-medium">Events</h4>
-        <Events status={s} api={api} />
-      </section>
+      {parts === 'all' ? (
+        <section className="grid grid-cols-1 gap-2">
+          <h4 className="font-medium">Events</h4>
+          <Events status={s} api={api} />
+        </section>
+      ) : null}
     </div>
   );
 }
