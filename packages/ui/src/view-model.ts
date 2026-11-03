@@ -38,6 +38,13 @@ export interface ViewField<T> {
   topic?: string;
   /** Every value a row has for filtering, when it has several (a symbol in Holdings and Watchlist). */
   values?: (row: T) => string[];
+  /**
+   * The values are tags (a row's several free-form labels): the cell draws each of `values` as a
+   * chip in its colour with its icon (`TagChips`), never a comma list. The colour and icon come
+   * from the tag's name unless `color` or `iconOf` gives them. Without `values` the text value is
+   * split on commas.
+   */
+  tags?: boolean;
   format: ViewFormat;
   /** How the value is made, shown under the field in the Edit dialog. */
   formula?: string;

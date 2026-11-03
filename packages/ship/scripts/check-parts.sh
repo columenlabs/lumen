@@ -9,6 +9,8 @@
 #   raw-overlay  an import of the kit's raw ui/sheet, ui/dialog, ui/select, ui/command or ui/combobox
 #   settings-page a route, link or nav item to a page of its own named settings: settings are sections
 #                of the one Settings dialog (LumenShell settings, opened at ?settings=<section>)
+#   tags-text    tags or labels joined into comma text (`r.tags.join(', ')`) on a line with no `tags: true`:
+#                a ViewField with `tags: true` (its value may stay the joined text, for sorting) or TagChips
 set -euo pipefail
 write=0
 if [ "${1:-}" = "--write-baseline" ]; then
@@ -20,7 +22,7 @@ if [ $# -eq 0 ]; then
   exit 1
 fi
 baseline=${LUMEN_SHIP_PARTS_BASELINE:-$(git rev-parse --show-toplevel)/scripts/parts.baseline}
-rules="hint-text text-action raw-overlay settings-page"
+rules="hint-text text-action raw-overlay settings-page tags-text"
 
 # Prints `file:line` for each break of one rule in one folder.
 hits() {
@@ -33,6 +35,8 @@ hits() {
         $re = qr/<p\s[^>]*className="(?=[^"]*\btext-xs\b)(?=[^"]*\btext-muted-foreground\b)[^"]*"/;
       } elsif ($rule eq "text-action") {
         $re = qr/<Button\b[^>]*>\s*(?:<[A-Z]\w*[^>]*\/>\s*)?(?:\{[^}]*\?\s*)?\x27?(?:Save|Run|Test|Send|Sync|Refresh|Copy|Edit|Delete|Remove|Retry|Reset)\b/;
+      } elsif ($rule eq "tags-text") {
+        $re = qr/^(?![^\n]*\btags:\s*true)[^\n]*?\b(?:tags|labels)\b(?:\s*\?\?\s*\[\])?\)?\s*\??\.join\(\s*[\x27"`],/m;
       } elsif ($rule eq "settings-page") {
         $re = qr/\b(?:path|to|href)\s*[:=]\s*\{?\s*[\x27"`](?:[^\x27"`]*\/)?settings(?=[\/?#\x27"`])/i;
       } else {
