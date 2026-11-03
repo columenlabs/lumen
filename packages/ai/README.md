@@ -230,6 +230,10 @@ An app with an `Assistant` gets the whole plan from it: `assistant.agentTurn(cal
 
 Drafts and writes are cards in the chat's own storage (`lumen_cards` in the agent's SQLite). A write the person's access only drafts makes an open card and changes nothing. `saveCard(id)` runs it through the app's `applyDraft`, and `dismissCard(id)` drops it. A write made at once is kept for `undoCard(id)` through the app's `undoWrite`. `cards()` lists the cards. The next answer is told how each card ended and what was undone. With an `Assistant`, `applyDraft` is `assistant.runDraft(caller, card)` and `undoWrite` is `assistant.undoChange(caller, card)`. Think compacts the chat past `COMPACT_AT` (150k tokens) on the last answer's model and key, and that spend is added to the next answer.
 
+**Connectors.** A person adds an MCP server to their chat with `addConnector(name, url)`. The address must be https. The server signs in with its own OAuth through Think's MCP client, and the answer carries `authUrl` while it asks. `connectors()` lists them and `removeConnector(id)` drops one. Think never merges their tools on its own (`includeMcpTools` is false). A turn opens the ones `plan.connectors` lists, at the access the app gives each, as group `mcp_<id>`. Read keeps the tools the server marks read-only. Read + draft makes the rest cards, which `saveCard` runs on the server itself. Read + write runs them at once with no Undo. A connector's text is untrusted data.
+
+**Lazy tools.** Past `LAZY_AT` (30) tools, a turn sends the model its core tools and `tool_search`, with one catalog line per group in the instructions. By default the core tools are the apps' finds, the hand off and the advisor. `plan.lazy` sets `{ at, core }`. A search matches the words in a tool's name and description and turns on up to 8 tools from the next step on.
+
 ```ts
 class Chat extends LumenAgent<Env> {
   #settle?: (end: AgentTurnEnd) => Promise<void>;
