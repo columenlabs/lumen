@@ -1,9 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangleIcon,
   BellIcon,
   CheckIcon,
-  CopyIcon,
   MailIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -17,21 +15,22 @@ import { type ReactNode, useState } from 'react';
 // own paid ntfy.sh token) and webhooks, then which event goes to which target. The app passes its
 // API base (`/api/notifications`), its product's name and the address email comes from.
 import { LumenConfirm } from './confirm';
+import { LumenExpandRow } from './expand-list';
 import { fetchWithin } from './fetch-within';
-import {
-  ErrorLine,
-  IntegrationRow,
-  KeyTestLine,
-  type KeyTestResult,
-  TestBadge,
-} from './integrations';
+import { ErrorLine, type KeyTestResult } from './integrations';
 import { IconButton } from './page';
+import {
+  SettingActions,
+  SettingField,
+  SettingStatus,
+  SettingValue,
+  settingHealth,
+} from './setting-parts';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group';
-import { Label } from './ui/label';
 
 type EmailStatus =
   | { available: boolean; connected: false }
@@ -109,113 +108,58 @@ function useNotifications(api: string, product: string, sender: string) {
 }
 type Api = ReturnType<typeof useNotifications>;
 
-function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
-  return (
-    <div className="grid grid-cols-1 gap-1.5">
-      <Label htmlFor={id} className="text-xs text-muted-foreground">
-        {label}
-      </Label>
-      {children}
-    </div>
-  );
-}
+const ago = (t: KeyTestResult | null) =>
+  t ? `${t.ok ? 'Worked' : 'Failed'} ${new Date(t.at).toLocaleString()}` : undefined;
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="grid grid-cols-1 gap-2">
-      <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {title}
-      </h4>
-      {children}
-    </section>
-  );
-}
-
-function CopyField({ id, value }: { id: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <InputGroup>
-      <InputGroupInput
-        id={id}
-        readOnly
-        className="num"
-        value={value}
-        onFocus={(e) => e.currentTarget.select()}
-      />
-      <InputGroupAddon align="inline-end">
-        <InputGroupButton
-          size="xs"
-          aria-label="Copy topic"
-          onClick={() => {
-            void navigator.clipboard.writeText(value);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          }}
-        >
-          {copied ? <CheckIcon /> : <CopyIcon />}
-          {copied ? 'Copied' : 'Copy'}
-        </InputGroupButton>
-      </InputGroupAddon>
-    </InputGroup>
-  );
-}
-
-/** A test that answers refreshes the section. */
-function TestLine({ test, run, api }: { test: KeyTestResult | null; run: string; api: Api }) {
-  return <KeyTestLine test={test} run={() => api.send('POST', run).then(api.set)} />;
+function useTest(run: string, api: Api) {
+  return () => api.send('POST', run).then(api.set);
 }
 
 // ── Email ──
 
-function Email({ status, api }: { status: EmailStatus; api: Api }) {
+function useEmail(status: EmailStatus, api: Api) {
   const create = useMutation({ mutationFn: () => api.send('POST', '/email'), onSuccess: api.set });
   const remove = useMutation({
     mutationFn: () => api.send('DELETE', '/email'),
     onSuccess: () => void api.reload(),
   });
+  return {
+    create,
+    remove,
+    toggle: {
+      checked: status.connected,
+      disabled: (!status.available && !status.connected) || create.isPending || remove.isPending,
+      label: 'Email on',
+      onCheckedChange: (on: boolean) => (on ? create.mutate() : remove.mutate()),
+    },
+  };
+}
+
+function EmailBody({ status, api, errors }: { status: EmailStatus; api: Api; errors: unknown[] }) {
   if (!status.connected)
-    return status.available ? (
-      <div className="grid grid-cols-1 gap-3">
-        <p className="text-sm">
-          Get {api.product} alerts by email at the address you sign in with. Nothing to set up.
-        </p>
-        <ErrorLine error={create.error} />
-        <IconButton
-          icon={create.isPending ? RefreshCwIcon : MailIcon}
-          label="Turn on email"
-          variant="outline"
-          className="justify-self-start"
-          disabled={create.isPending}
-          busy={create.isPending}
-          onClick={() => create.mutate()}
-        />
-      </div>
-    ) : (
-      <p className="text-sm">Email is not set up on this server.</p>
+    return (
+      <>
+        <SettingField label="Sends to">
+          <span className="truncate text-sm text-muted-foreground">
+            {status.available ? 'Your sign-in address, once on' : 'Not set up on this server'}
+          </span>
+        </SettingField>
+        {errors.map((e, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: two fixed error slots
+          <ErrorLine key={i} error={e} />
+        ))}
+      </>
     );
   return (
-    <div className="grid grid-cols-1 gap-5">
-      <Section title="Sends to">
-        <p className="text-sm">
-          {status.address}, from {api.sender}
-        </p>
-      </Section>
-      <Section title="Test">
-        <TestLine test={status.last_test} run="/email/test" api={api} />
-      </Section>
-      <div className="flex flex-wrap items-center gap-2">
-        <ErrorLine error={remove.error} />
-        <span className="flex-1" />
-        <LumenConfirm
-          title="Turn off email notifications?"
-          description={`${api.product} stops emailing you. You can turn it on again any time.`}
-          action="Turn off"
-          onConfirm={() => remove.mutate()}
-        >
-          <IconButton icon={Trash2Icon} label="Turn off" variant="destructive" />
-        </LumenConfirm>
-      </div>
-    </div>
+    <>
+      <SettingField label="Sends to" info={`From ${api.sender}.`}>
+        <SettingValue label="Address" value={status.address} />
+      </SettingField>
+      {errors.map((e, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: two fixed error slots
+        <ErrorLine key={i} error={e} />
+      ))}
+    </>
   );
 }
 
@@ -226,40 +170,43 @@ function Email({ status, api }: { status: EmailStatus; api: Api }) {
  * address, and the product sends from Cloudflare's shared ones, so sends go out under their paid account.
  */
 function NtfyToken({ token, api }: { token: string | null; api: Api }) {
+  const [editing, setEditing] = useState(!token);
   const [value, setValue] = useState('');
   const save = useMutation({
     mutationFn: () => api.send('PUT', '/ntfy/token', { token: value.trim() }),
     onSuccess: (data) => {
       api.set(data);
       setValue('');
+      setEditing(false);
     },
   });
   return (
-    <Section title="Access token">
-      <p className="text-sm">
-        This needs a paid account at{' '}
-        <a className="underline" href="https://ntfy.sh/account" target="_blank" rel="noreferrer">
-          ntfy.sh
-        </a>{' '}
-        (Supporter or above): ntfy.sh limits free accounts by sending address, and {api.product}{' '}
-        sends from Cloudflare's shared addresses. Open Account ▸ Access tokens, create one and paste
-        it here.
-      </p>
-      {token ? (
-        <p className="text-sm">
-          Saved <span className="num">{token}</span>
-        </p>
-      ) : null}
-      <form
-        className="flex flex-wrap items-end gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (value.trim()) save.mutate();
-        }}
-      >
-        <div className="min-w-0 flex-1">
-          <Field id="ntfy-token" label={token ? 'Replace token' : 'Access token'}>
-            <Input
+    <SettingField
+      label="Token"
+      htmlFor="ntfy-token"
+      info={
+        <>
+          Needs a paid ntfy.sh account (Supporter or above): ntfy.sh limits free accounts by sending
+          address, and {api.product} sends from Cloudflare's shared addresses. Create one at{' '}
+          <a className="underline" href="https://ntfy.sh/account" target="_blank" rel="noreferrer">
+            ntfy.sh
+          </a>{' '}
+          under Account ▸ Access tokens.
+        </>
+      }
+    >
+      {token && !editing ? (
+        <SettingValue label="Access token" value={token} mono onReplace={() => setEditing(true)} />
+      ) : (
+        <form
+          className="min-w-0 flex-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (value.trim()) save.mutate();
+          }}
+        >
+          <InputGroup className="h-8">
+            <InputGroupInput
               id="ntfy-token"
               type="password"
               className="num"
@@ -268,50 +215,92 @@ function NtfyToken({ token, api }: { token: string | null; api: Api }) {
               value={value}
               onChange={(e) => setValue(e.target.value)}
             />
-          </Field>
-        </div>
-        <Button type="submit" size="sm" disabled={!value.trim() || save.isPending}>
-          {save.isPending ? <RefreshCwIcon className="animate-spin" /> : <CheckIcon />}
-          Save
-        </Button>
-      </form>
-      <ErrorLine error={save.error} />
-    </Section>
+            <InputGroupAddon align="inline-end">
+              {token ? (
+                <InputGroupButton
+                  type="button"
+                  size="icon-xs"
+                  aria-label="Cancel"
+                  title="Cancel"
+                  onClick={() => {
+                    setValue('');
+                    setEditing(false);
+                  }}
+                >
+                  <XIcon />
+                </InputGroupButton>
+              ) : null}
+              <InputGroupButton
+                type="submit"
+                size="icon-xs"
+                aria-label="Save token"
+                title="Save token"
+                disabled={!value.trim() || save.isPending}
+              >
+                {save.isPending ? <RefreshCwIcon className="animate-spin" /> : <CheckIcon />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          <ErrorLine error={save.error} />
+        </form>
+      )}
+    </SettingField>
   );
 }
 
-function Ntfy({ status, api }: { status: NtfyStatus; api: Api }) {
+function useNtfy(status: NtfyStatus, api: Api) {
+  const [confirm, setConfirm] = useState(false);
   const create = useMutation({ mutationFn: () => api.send('POST', '/ntfy'), onSuccess: api.set });
   const remove = useMutation({
     mutationFn: () => api.send('DELETE', '/ntfy'),
     onSuccess: () => void api.reload(),
   });
+  return {
+    create,
+    remove,
+    confirm: (
+      <LumenConfirm
+        open={confirm}
+        onOpenChange={setConfirm}
+        title="Turn off ntfy?"
+        description={`${api.product} stops sending and forgets your topic. Turning on again makes a new topic, which your phone must subscribe to again.`}
+        action="Turn off"
+        onConfirm={() => remove.mutateAsync()}
+      />
+    ),
+    toggle: {
+      checked: status.connected,
+      disabled: create.isPending || remove.isPending,
+      label: 'ntfy on',
+      onCheckedChange: (on: boolean) => (on ? create.mutate() : setConfirm(true)),
+    },
+  };
+}
+
+function NtfyBody({ status, api, errors }: { status: NtfyStatus; api: Api; errors: unknown[] }) {
   if (!status.connected)
     return (
-      <div className="grid grid-cols-1 gap-3">
-        <p className="text-sm">
-          Get {api.product} alerts on your phone through the free ntfy app. {api.product} makes you
-          a private topic (a random name only you know) and sends to it with the access token of
-          your own paid ntfy.sh account.
-        </p>
-        <ErrorLine error={create.error} />
-        <IconButton
-          icon={create.isPending ? RefreshCwIcon : BellIcon}
-          label="Turn on ntfy"
-          variant="outline"
-          className="justify-self-start"
-          disabled={create.isPending}
-          busy={create.isPending}
-          onClick={() => create.mutate()}
-        />
-      </div>
+      <>
+        <SettingField
+          label="Topic"
+          info={`${api.product} makes you a private topic (a random name only you know) and sends to it with the access token of your own paid ntfy.sh account.`}
+        >
+          <span className="truncate text-sm text-muted-foreground">Made when you turn it on</span>
+        </SettingField>
+        {errors.map((e, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: two fixed error slots
+          <ErrorLine key={i} error={e} />
+        ))}
+      </>
     );
   return (
-    <div className="grid grid-cols-1 gap-5">
-      <Section title="Set up your phone">
-        <ol className="grid list-decimal grid-cols-1 gap-2 pl-5 text-sm">
-          <li>
-            Install ntfy:{' '}
+    <>
+      <SettingField
+        label="Topic"
+        stack
+        info={
+          <>
+            Install ntfy (
             <a className="underline" href={NTFY_IOS} target="_blank" rel="noreferrer">
               iPhone
             </a>{' '}
@@ -319,85 +308,88 @@ function Ntfy({ status, api }: { status: NtfyStatus; api: Api }) {
             <a className="underline" href={NTFY_ANDROID} target="_blank" rel="noreferrer">
               Android
             </a>
-            .
-          </li>
-          <li>
-            Open it, tap + (Subscribe to topic) and paste your topic. Keep the server as ntfy.sh.
-          </li>
-          <li>
-            Allow notifications when your phone asks, add your access token below, then tap Test.
-          </li>
-        </ol>
-        <Field id="ntfy-topic" label="Your topic (keep it private: anyone with it can read it)">
-          <CopyField id="ntfy-topic" value={status.topic} />
-        </Field>
-      </Section>
+            ), tap + and paste this topic, keeping the server as ntfy.sh. Keep it private: anyone
+            with it can read it.
+          </>
+        }
+      >
+        <SettingValue label="Topic" value={status.topic} mono copy />
+      </SettingField>
       <NtfyToken token={status.token} api={api} />
-      <Section title="Test">
-        <TestLine test={status.last_test} run="/ntfy/test" api={api} />
-      </Section>
-      <div className="flex flex-wrap items-center gap-2">
-        <ErrorLine error={remove.error} />
-        <span className="flex-1" />
-        <LumenConfirm
-          title="Turn off ntfy?"
-          description={`${api.product} stops sending and forgets your topic. Turning on again makes a new topic, which your phone must subscribe to again.`}
-          action="Turn off"
-          onConfirm={() => remove.mutate()}
-        >
-          <IconButton icon={Trash2Icon} label="Turn off" variant="destructive" />
-        </LumenConfirm>
-      </div>
-    </div>
+      {errors.map((e, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: two fixed error slots
+        <ErrorLine key={i} error={e} />
+      ))}
+    </>
   );
 }
 
 // ── Webhooks ──
 
 function WebhookRow({ hook, api }: { hook: WebhookTarget; api: Api }) {
+  const [busy, setBusy] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.send('DELETE', `/webhooks/${encodeURIComponent(hook.id)}`),
     onSuccess: () => void api.reload(),
   });
+  const test = useTest(`/webhooks/${encodeURIComponent(hook.id)}/test`, api);
+  const headers = hook.headers.map((h) => `${h.name}: ${h.value}`).join(' · ');
   return (
-    <div className="grid grid-cols-1 gap-2 border-b pb-3 last:border-b-0">
-      <div className="flex min-w-0 items-center gap-2">
-        <WebhookIcon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="font-medium">{hook.name}</span>
-        <span className="num min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {hook.url}
+    <SettingField
+      label={hook.name}
+      info={headers ? `Headers: ${headers}` : undefined}
+      end={
+        <span className="flex items-center gap-1">
+          <SettingStatus
+            health={settingHealth(true, hook.last_test)}
+            title={hook.last_test?.error ?? ago(hook.last_test)}
+          />
+          <IconButton
+            icon={RefreshCwIcon}
+            size="icon-xs"
+            label={`Test ${hook.name}`}
+            busy={busy}
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void test().finally(() => setBusy(false));
+            }}
+          />
+          <LumenConfirm
+            title={`Remove ${hook.name}?`}
+            description={`${api.product} stops sending events to this address.`}
+            action="Remove"
+            onConfirm={() => remove.mutateAsync()}
+          >
+            <IconButton
+              icon={Trash2Icon}
+              size="icon-xs"
+              label={`Remove ${hook.name}`}
+              className="text-loss"
+            />
+          </LumenConfirm>
         </span>
-        <LumenConfirm
-          title={`Remove ${hook.name}?`}
-          description={`${api.product} stops sending events to this address.`}
-          action="Remove"
-          onConfirm={() => remove.mutate()}
-        >
-          <IconButton icon={Trash2Icon} label={`Remove ${hook.name}`} variant="destructive" />
-        </LumenConfirm>
-      </div>
-      {hook.headers.length ? (
-        <p className="num text-xs text-muted-foreground">
-          {hook.headers.map((h) => `${h.name}: ${h.value}`).join(' · ')}
-        </p>
-      ) : null}
-      <TestLine
-        test={hook.last_test}
-        run={`/webhooks/${encodeURIComponent(hook.id)}/test`}
-        api={api}
-      />
-      <ErrorLine error={remove.error} />
-    </div>
+      }
+    >
+      <SettingValue label="Address" value={hook.url} mono />
+    </SettingField>
   );
 }
 
-function Webhooks({ hooks, api }: { hooks: WebhookTarget[]; api: Api }) {
+function AddWebhook({ api }: { api: Api }) {
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [headers, setHeaders] = useState<{ name: string; value: string }[]>([]);
   const setHeader = (i: number, part: 'name' | 'value', v: string) =>
     setHeaders((hs) => hs.map((h, j) => (j === i ? { ...h, [part]: v } : h)));
   const filled = headers.filter((h) => h.name.trim() || h.value.trim());
+  const reset = () => {
+    setName('');
+    setUrl('');
+    setHeaders([]);
+    setOpen(false);
+  };
   const add = useMutation({
     mutationFn: () =>
       api.send('POST', '/webhooks', {
@@ -407,110 +399,125 @@ function Webhooks({ hooks, api }: { hooks: WebhookTarget[]; api: Api }) {
       }),
     onSuccess: (data) => {
       api.set(data);
-      setName('');
-      setUrl('');
-      setHeaders([]);
+      reset();
     },
   });
+  if (!open)
+    return (
+      <button
+        type="button"
+        className="flex min-h-10 items-center gap-2 text-sm font-medium text-primary"
+        onClick={() => setOpen(true)}
+      >
+        <PlusIcon className="size-4" />
+        Add webhook
+      </button>
+    );
   return (
-    <div className="grid grid-cols-1 gap-5">
-      <p className="text-sm">
-        {api.product} posts each event as JSON to your own addresses: Slack, Discord, Home
-        Assistant, n8n or anything that takes a webhook.
-      </p>
-      {hooks.length ? (
-        <Section title="Your webhooks">
-          {hooks.map((h) => (
-            <WebhookRow key={h.id} hook={h} api={api} />
-          ))}
-        </Section>
-      ) : null}
-      <Section title="Add a webhook">
-        <form
-          className="grid grid-cols-1 gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (name.trim() && url.trim()) add.mutate();
-          }}
+    <form
+      className="grid grid-cols-1"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (name.trim() && url.trim()) add.mutate();
+      }}
+    >
+      <SettingField label="Name" htmlFor="wh-name">
+        <Input
+          id="wh-name"
+          className="h-8"
+          placeholder="Discord"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </SettingField>
+      <SettingField
+        label="Address"
+        htmlFor="wh-url"
+        info={`${api.product} posts each event as JSON ({ event, title, message, click, at }) to this https address: Slack, Discord, Home Assistant, n8n or anything that takes a webhook. Messages name no account, holding or amount.`}
+      >
+        <Input
+          id="wh-url"
+          className="num h-8"
+          autoComplete="off"
+          placeholder="https://"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+      </SettingField>
+      {headers.map((h, i) => (
+        <SettingField
+          // biome-ignore lint/suspicious/noArrayIndexKey: rows have no id until saved
+          key={i}
+          label={`Header ${i + 1}`}
+          htmlFor={`wh-header-${i}`}
+          info={
+            i === 0
+              ? 'Sent with each post and hidden once saved. For a Cloudflare Access service token, add CF-Access-Client-Id and CF-Access-Client-Secret.'
+              : undefined
+          }
+          end={
+            <IconButton
+              type="button"
+              icon={XIcon}
+              size="icon-xs"
+              label="Remove header"
+              onClick={() => setHeaders((hs) => hs.filter((_, j) => j !== i))}
+            />
+          }
         >
-          <Field id="wh-name" label="Name">
-            <Input
-              id="wh-name"
-              placeholder="Discord"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Field>
-          <Field id="wh-url" label="Address (https)">
-            <Input
-              id="wh-url"
-              className="num"
-              autoComplete="off"
-              placeholder="https://"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-            />
-          </Field>
-          {headers.length ? (
-            <Field id="wh-header-0" label="Headers (sent with each post; hidden once saved)">
-              <div className="grid grid-cols-1 gap-2">
-                {headers.map((h, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: rows have no id until saved
-                  <div key={i} className="flex items-center gap-2">
-                    <Input
-                      id={`wh-header-${i}`}
-                      className="num w-2/5"
-                      autoComplete="off"
-                      placeholder="Authorization"
-                      aria-label="Header name"
-                      value={h.name}
-                      onChange={(e) => setHeader(i, 'name', e.target.value)}
-                    />
-                    <Input
-                      className="num min-w-0 flex-1"
-                      type="password"
-                      autoComplete="off"
-                      placeholder="Value"
-                      aria-label="Header value"
-                      value={h.value}
-                      onChange={(e) => setHeader(i, 'value', e.target.value)}
-                    />
-                    <IconButton
-                      type="button"
-                      icon={XIcon}
-                      label="Remove header"
-                      onClick={() => setHeaders((hs) => hs.filter((_, j) => j !== i))}
-                    />
-                  </div>
-                ))}
-              </div>
-            </Field>
-          ) : null}
+          <Input
+            id={`wh-header-${i}`}
+            className="num h-8 w-2/5"
+            autoComplete="off"
+            placeholder="Authorization"
+            aria-label="Header name"
+            value={h.name}
+            onChange={(e) => setHeader(i, 'name', e.target.value)}
+          />
+          <Input
+            className="num h-8 min-w-0 flex-1"
+            type="password"
+            autoComplete="off"
+            placeholder="Value"
+            aria-label="Header value"
+            value={h.value}
+            onChange={(e) => setHeader(i, 'value', e.target.value)}
+          />
+        </SettingField>
+      ))}
+      <div className="mt-1 flex min-h-10 items-center gap-2 border-t pt-2">
+        <span className="min-w-0 flex-1">
           <ErrorLine error={add.error} />
-          <div className="flex flex-wrap items-center gap-2">
-            {headers.length < 5 ? (
-              <IconButton
-                type="button"
-                icon={PlusIcon}
-                label="Add header"
-                variant="outline"
-                onClick={() => setHeaders((hs) => [...hs, { name: '', value: '' }])}
-              />
-            ) : null}
-            <span className="flex-1" />
-            <Button type="submit" size="sm" disabled={!name.trim() || !url.trim() || add.isPending}>
-              {add.isPending ? <RefreshCwIcon className="animate-spin" /> : <PlusIcon />}
-              Add
-            </Button>
-          </div>
-        </form>
-      </Section>
-      <p className="text-xs text-muted-foreground">
-        Each post is <span className="num">{'{ event, title, message, click, at }'}</span>. Messages
-        name no account, holding or amount. For a Cloudflare Access service token, add the headers
-        CF-Access-Client-Id and CF-Access-Client-Secret.
-      </p>
-    </div>
+        </span>
+        {headers.length < 5 ? (
+          <IconButton
+            type="button"
+            icon={PlusIcon}
+            label="Add header"
+            variant="outline"
+            onClick={() => setHeaders((hs) => [...hs, { name: '', value: '' }])}
+          />
+        ) : null}
+        <Button type="button" size="sm" variant="ghost" onClick={reset}>
+          Cancel
+        </Button>
+        <Button type="submit" size="sm" disabled={!name.trim() || !url.trim() || add.isPending}>
+          {add.isPending ? <RefreshCwIcon className="animate-spin" /> : <CheckIcon />}
+          Add
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function Webhooks({ hooks, api }: { hooks: WebhookTarget[]; api: Api }) {
+  return (
+    <>
+      {hooks.map((h) => (
+        <WebhookRow key={h.id} hook={h} api={api} />
+      ))}
+      <AddWebhook api={api} />
+    </>
   );
 }
 
@@ -625,6 +632,93 @@ function Events({ status, api }: { status: NotificationsStatus; api: Api }) {
   );
 }
 
+function Channels({
+  s,
+  api,
+  open,
+  toggle,
+}: {
+  s: NotificationsStatus;
+  api: Api;
+  open: string | null;
+  toggle: (id: string) => (o: boolean) => void;
+}) {
+  const email = useEmail(s.email, api);
+  const ntfy = useNtfy(s.ntfy, api);
+  const testEmail = useTest('/email/test', api);
+  const testNtfy = useTest('/ntfy/test', api);
+  const emailTest = s.email.connected ? s.email.last_test : null;
+  const ntfyTest = s.ntfy.connected ? s.ntfy.last_test : null;
+  const hooksFailed = s.webhooks.filter((h) => h.last_test?.ok === false);
+  return (
+    <div className="grid grid-cols-1">
+      {ntfy.confirm}
+      <LumenExpandRow
+        icon={<MailIcon className="size-4 shrink-0 text-muted-foreground" />}
+        name="Email"
+        meta={s.email.connected ? s.email.address : 'To your sign-in address'}
+        open={open === 'email'}
+        onOpenChange={toggle('email')}
+        status={
+          <SettingStatus
+            health={settingHealth(s.email.connected, emailTest)}
+            title={emailTest?.error ?? ago(emailTest)}
+          />
+        }
+        toggle={email.toggle}
+        actions={
+          s.email.connected ? <SettingActions test={emailTest} onTest={testEmail} /> : undefined
+        }
+      >
+        <EmailBody status={s.email} api={api} errors={[email.create.error, email.remove.error]} />
+      </LumenExpandRow>
+      <LumenExpandRow
+        icon={<BellIcon className="size-4 shrink-0 text-muted-foreground" />}
+        name="ntfy"
+        meta="Phone push through the ntfy app"
+        open={open === 'ntfy'}
+        onOpenChange={toggle('ntfy')}
+        status={
+          <SettingStatus
+            health={settingHealth(s.ntfy.connected, ntfyTest)}
+            title={ntfyTest?.error ?? ago(ntfyTest)}
+          />
+        }
+        toggle={ntfy.toggle}
+        actions={
+          s.ntfy.connected ? <SettingActions test={ntfyTest} onTest={testNtfy} /> : undefined
+        }
+      >
+        <NtfyBody status={s.ntfy} api={api} errors={[ntfy.create.error, ntfy.remove.error]} />
+      </LumenExpandRow>
+      <LumenExpandRow
+        icon={<WebhookIcon className="size-4 shrink-0 text-muted-foreground" />}
+        name="Webhooks"
+        meta={
+          s.webhooks.length
+            ? s.webhooks.map((h) => h.name).join(' · ')
+            : 'Events posted to your own addresses'
+        }
+        open={open === 'webhooks'}
+        onOpenChange={toggle('webhooks')}
+        status={
+          hooksFailed.length ? (
+            <SettingStatus health="failed" title={hooksFailed.map((h) => h.name).join(', ')} />
+          ) : s.webhooks.length ? (
+            <SettingStatus
+              count={`${s.webhooks.length} webhook${s.webhooks.length === 1 ? '' : 's'}`}
+            />
+          ) : (
+            <SettingStatus health="off" />
+          )
+        }
+      >
+        <Webhooks hooks={s.webhooks} api={api} />
+      </LumenExpandRow>
+    </div>
+  );
+}
+
 /** The Settings ▸ Notifications section's body. */
 export function NotificationsSettings({
   api: base,
@@ -653,66 +747,7 @@ export function NotificationsSettings({
   if (parts === 'events') return <Events status={s} api={api} />;
   return (
     <div className="grid grid-cols-1 gap-6">
-      <div className="grid grid-cols-1">
-        <IntegrationRow
-          name="Email"
-          meta="To your sign-in address"
-          open={open === 'email'}
-          onOpenChange={toggle('email')}
-          badge={
-            s.email.connected ? (
-              <TestBadge test={s.email.last_test} />
-            ) : (
-              <Badge variant="outline">Off</Badge>
-            )
-          }
-        >
-          <Email status={s.email} api={api} />
-        </IntegrationRow>
-        <IntegrationRow
-          name="ntfy"
-          meta="Phone notifications through the ntfy app"
-          open={open === 'ntfy'}
-          onOpenChange={toggle('ntfy')}
-          badge={
-            s.ntfy.connected ? (
-              <TestBadge test={s.ntfy.last_test} />
-            ) : (
-              <Badge variant="outline">Off</Badge>
-            )
-          }
-        >
-          <Ntfy status={s.ntfy} api={api} />
-        </IntegrationRow>
-        <IntegrationRow
-          name="Webhooks"
-          meta={
-            s.webhooks.length
-              ? s.webhooks.map((h) => h.name).join(' · ')
-              : 'Events posted to your own addresses'
-          }
-          open={open === 'webhooks'}
-          onOpenChange={toggle('webhooks')}
-          badge={
-            s.webhooks.length ? (
-              s.webhooks.some((h) => h.last_test?.ok === false) ? (
-                <Badge variant="outline" className="text-loss">
-                  <AlertTriangleIcon />
-                  Failed
-                </Badge>
-              ) : (
-                <Badge variant="outline">
-                  {s.webhooks.length} webhook{s.webhooks.length === 1 ? '' : 's'}
-                </Badge>
-              )
-            ) : (
-              <Badge variant="outline">None</Badge>
-            )
-          }
-        >
-          <Webhooks hooks={s.webhooks} api={api} />
-        </IntegrationRow>
-      </div>
+      <Channels s={s} api={api} open={open} toggle={toggle} />
       {parts === 'all' ? (
         <section className="grid grid-cols-1 gap-2">
           <h4 className="font-medium">Events</h4>

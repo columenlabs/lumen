@@ -9,6 +9,44 @@ An app's Settings page: one dialog on every host, General first, then a group pe
 - Shared sections the kit already has: `SchedulesSection`, `NotificationsSettings`, `McpSettings`, `IntegrationRow`, `TimeZoneSelect`. Use them; never rebuild one.
 - Alerts split from delivery: `NotificationsSettings parts="channels"` in one section (where messages go: email, ntfy, webhooks, set up once) and `parts="events"` in another (what goes where: one line per event, a column per channel). Events with a `group` sit under its label ("Limits", "Watchdog").
 
+## Three slots (every thing in a section)
+
+A thing you connect or turn on (a provider, a channel, a key, an account) is one `LumenExpandRow` with three slots, built on shadcn's `Field` and `InputGroup`:
+
+```
+[icon] Plaid  Production · keys ••91        ● Works  [on]  ›     header: status pill, on/off for the whole thing
+       Environment   [Production|Sandbox]                          SettingField rows: one setting each
+       Keys          [••••91            ✎]                          a value's own buttons sit inside it
+       Webhook       [https://money…    ⧉]                [on]      a switch for one setting at the row's end
+       ✓ Tested 8:41 AM                          ↻ Test  🗑          SettingActions: last result, Test, Remove
+```
+
+```tsx
+<LumenExpandRow
+  id="plaid" icon={<LinkIcon />} name="Plaid" meta="Production · keys ••91"
+  status={<SettingStatus health={settingHealth(on, test)} title={`Tested ${when}`} />}
+  toggle={{ checked: on, onCheckedChange: setOn, label: 'Plaid on' }}
+  actions={<SettingActions test={test} onTest={runTest} remove={{ label: 'Remove keys', run: removeKeys }} />}
+>
+  <SettingField label="Environment"><ToggleGroup … /></SettingField>
+  <SettingField label="Keys"><SettingValue label="Keys" value="••••91" mono onReplace={edit} /></SettingField>
+  <SettingField label="Webhook" stack end={<Switch aria-label="Live updates" … />}>
+    <SettingValue label="Webhook URL" value={url} mono copy />
+  </SettingField>
+</LumenExpandRow>
+```
+
+Rules:
+
+1. **A row is a setting.** Never a lone button with a label in front ("Last test", "Remove Plaid keys").
+2. **A label names the setting, not the thing**: "Keys" inside Plaid, never "Plaid keys".
+3. **On/off for the whole thing is `toggle`** in the header; on/off for one setting is that row's `end`. Never a "Turn on" button or a trash icon for "off".
+4. **Actions on the whole thing are in `SettingActions`**: Test, then Remove (trash, confirms) at the far right; anything else (Sync now, Sign in again) as an icon before them. Actions on one value sit inside its `SettingValue` (Copy, Replace).
+5. **Status is the header pill only** (`SettingStatus`: Works, Failed, Not tested, Off, or a count). The action bar adds just the time or the error.
+6. **Several controls on one row are one group** and never wrap. A long value takes `stack`: on a phone its label goes above it.
+7. **A section's pill** is `health` on its `SettingsSectionDef`: `sectionHealth(items)`, the worst thing wins. The Settings list shows it as a dot.
+8. **A form that saves together** keeps label beside field (`SettingField`), and its Test result sits in its footer, not a row of its own.
+
 ## Anatomy
 
 ```
@@ -21,7 +59,7 @@ An app's Settings page: one dialog on every host, General first, then a group pe
 ```
 
 - `description` is one plain line of 64 characters or less; nothing else under the title.
-- Every row starts collapsed and shows its name, one line (`meta`) and a badge. Opening one closes the others.
+- Every row starts collapsed and shows its name, its one-line `meta` beside it, and its `status`. Opening one closes the others.
 - The footer's status is a word or two ("Passed", "Test to save"). Actions are icons.
 
 ## Do / Don't

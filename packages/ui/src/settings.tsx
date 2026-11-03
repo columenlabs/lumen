@@ -38,6 +38,7 @@ import {
   setPref,
   usePrefs,
 } from './prefs';
+import { type SettingHealth, SettingStatus } from './setting-parts';
 import { TimeZoneSelect } from './status';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group';
@@ -73,6 +74,10 @@ export interface SettingsSectionDef {
   /** What the section's footer holds (a status line, Revert and Save). The footer is pinned under
    *  every section, empty when it has nothing; `SettingsFooter` fills it too. */
   footer?: ReactNode;
+  /** The section's state from its things (`sectionHealth`): a pill by the title, a dot in the list. */
+  health?: SettingHealth | null;
+  /** What hovering the section's pill says (which thing failed). */
+  healthTitle?: string;
 }
 
 /** A labelled group of sections in Settings: one per app when a product shows several apps' settings together. */
@@ -434,6 +439,7 @@ export function LumenSettings({
         >
           <s.icon className="size-4 text-muted-foreground" />
           {s.title}
+          {s.health && <SettingStatus health={s.health} title={s.healthTitle} />}
         </h3>
         {/* One line, never wrapped; scripts/check-settings-copy.sh keeps it short. */}
         {s.description && (
@@ -499,6 +505,9 @@ export function LumenSettings({
                         >
                           <s.icon />
                           <span>{s.title}</span>
+                          {s.health && s.health !== 'off' && (
+                            <SettingStatus health={s.health} title={s.healthTitle} dot />
+                          )}
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
