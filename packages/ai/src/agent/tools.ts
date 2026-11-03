@@ -18,6 +18,8 @@ export interface SourceAt {
 
 /** A write the model asked for while its group drafts: the card's content. */
 export interface DraftCall {
+  /** The model's tool call id: a card keeps it as its own. */
+  call?: string;
   group: string;
   tool: string;
   args: unknown;
@@ -96,8 +98,9 @@ export async function openAiTools(
       tools[name] = tool({
         description: describe(def, kind),
         inputSchema: jsonSchema(withoutMeta(def.inputSchema) as JSONSchema7),
-        execute: async (args: unknown) => {
-          if (kind === 'draft') return o.draft?.({ group: s.group, tool: def.name, args });
+        execute: async (args: unknown, { toolCallId }) => {
+          const call = toolCallId;
+          if (kind === 'draft') return o.draft?.({ call, group: s.group, tool: def.name, args });
           const t0 = Date.now();
           try {
             const out = await open.call(def.name, args);
@@ -105,7 +108,13 @@ export async function openAiTools(
             const text = typeof out === 'string' ? out : JSON.stringify(out);
             const shown = text.length > max ? `${text.slice(0, max)} …(cut)` : out;
             if (kind === 'write' && o.wrote) {
-              const change = await o.wrote({ group: s.group, tool: def.name, args, result: out });
+              const change = await o.wrote({
+                call,
+                group: s.group,
+                tool: def.name,
+                args,
+                result: out,
+              });
               if (change !== undefined) return { result: shown, change };
             }
             return shown;

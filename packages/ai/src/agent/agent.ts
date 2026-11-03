@@ -24,7 +24,14 @@ import {
   type TurnConfig,
   type TurnContext,
 } from '@cloudflare/think';
-import type { AssistantEffort, UsagePart } from '@columenlabs/lumen-ui-types/assistant';
+import type {
+  AssistantChat,
+  AssistantEffort,
+  AssistantEvent,
+  AssistantRefNote,
+  ChatUsage,
+  UsagePart,
+} from '@columenlabs/lumen-ui-types/assistant';
 import { createCompactFunction } from 'agents/sessions';
 import { type ModelMessage, type ToolSet, generateText } from 'ai';
 import type { ModelDef } from '../assistant/models';
@@ -40,6 +47,7 @@ import {
 } from './connectors';
 import { type ModelKey, aiModel, turnSettings } from './models';
 import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools } from './search';
+import { type AskMeta, chunkEvents, itemsOf } from './stream';
 import {
   type AiToolsOptions,
   type DraftCall,
@@ -187,6 +195,52 @@ export function withLead(messages: ModelMessage[], lead: string | undefined): Mo
   return [...messages.slice(0, i), { ...m, content }, ...messages.slice(i + 1)];
 }
 
+/** One message the person sent, with the page, refs and tier the composer added. */
+export interface AskInput {
+  message: string;
+  context?: { label: string; note?: unknown };
+  refs?: AssistantRefNote[];
+  tier?: string;
+  time_zone?: string;
+}
+
+/** Where an answer's events go: the app's route, over RPC. */
+export interface AskSink {
+  event(e: AssistantEvent): void | Promise<void>;
+}
+
+/** Usage parts added up: same label, one part. */
+export function chatUsage(parts: UsagePart[], context?: number): ChatUsage {
+  const by = new Map<string, UsagePart>();
+  for (const p of parts) {
+    const was = by.get(p.label);
+    by.set(
+      p.label,
+      was
+        ? {
+            label: p.label,
+            calls: was.calls + p.calls,
+            in: was.in + p.in,
+            read: was.read + p.read,
+            out: was.out + p.out,
+            usd: was.usd + p.usd,
+          }
+        : { ...p },
+    );
+  }
+  const all = [...by.values()];
+  const sum = (k: 'calls' | 'in' | 'read' | 'out' | 'usd') => all.reduce((a, p) => a + p[k], 0);
+  return {
+    calls: sum('calls'),
+    in: sum('in'),
+    read: sum('read'),
+    out: sum('out'),
+    usd: sum('usd'),
+    parts: all,
+    ...(context ? { context } : {}),
+  };
+}
+
 interface AdvisorIteration {
   type?: string;
   inputTokens?: number;
@@ -228,6 +282,120 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   override includeMcpTools = false;
 
   #turn: Running | null = null;
+  #input: AskInput | null = null;
+  #metaTabled = false;
+
+  /** What the person sent with the message this turn answers (page, refs, tier, zone). */
+  protected get input(): AskInput | null {
+    return this.#input;
+  }
+
+  #meta() {
+    if (!this.#metaTabled) {
+      this.sql`CREATE TABLE IF NOT EXISTS lumen_chat (k TEXT PRIMARY KEY, v TEXT NOT NULL)`;
+      this.#metaTabled = true;
+    }
+  }
+
+  #get<T>(k: string): T | null {
+    this.#meta();
+    const [r] = this.sql<{ v: string }>`SELECT v FROM lumen_chat WHERE k = ${k} LIMIT 1`;
+    return r ? (JSON.parse(r.v) as T) : null;
+  }
+
+  #put(k: string, v: unknown) {
+    this.#meta();
+    this.sql`INSERT OR REPLACE INTO lumen_chat (k, v) VALUES (${k}, ${JSON.stringify(v)})`;
+  }
+
+  /** The chat's running use: every answer's parts added up, and the last context size. */
+  usage(): ChatUsage {
+    return this.#get<ChatUsage>('usage') ?? chatUsage([]);
+  }
+
+  /** The chat as the panel reads it: title, last message, items and use. */
+  async view(id = this.name): Promise<AssistantChat> {
+    return {
+      id,
+      title: this.#get<string>('title') ?? '',
+      at: this.#get<number>('at') ?? 0,
+      items: itemsOf(await this.getMessages(), this.cards()),
+      usage: this.usage(),
+    };
+  }
+
+  /** Stops the answer running now; what was said so far is kept. */
+  stop(): void {
+    this.cancelAllChats();
+  }
+
+  /**
+   * One answer to `input`, its events sent to `sink` in the panel's words: the chat's title, the
+   * text, each tool line and card, then its use. The app's route calls it over RPC.
+   */
+  async ask(input: AskInput, sink: AskSink): Promise<void> {
+    const at = Date.now();
+    this.#capped = false;
+    let title = this.#get<string>('title');
+    if (!title) {
+      title = input.message.replace(/\s+/g, ' ').trim().slice(0, 60);
+      this.#put('title', title);
+    }
+    this.#put('at', at);
+    await sink.event({ event: 'chat', data: { id: this.name, title } });
+    const meta: AskMeta = {
+      at,
+      ...(input.context ? { context: { label: input.context.label } } : {}),
+      ...(input.refs?.length ? { refs: input.refs } : {}),
+      ...(input.tier ? { tier: input.tier } : {}),
+    };
+    const map = chunkEvents({
+      ...(this.#last?.plan.advisor ? { advisor: this.#last.plan.advisor.label } : {}),
+      cards: () => new Map(this.cards().map((c) => [c.id, c])),
+      kindOf: (n) => this.#turn?.tools.info.find((i) => i.name === n)?.kind,
+    });
+    this.#input = input;
+    let failed = false;
+    try {
+      await this.chat(
+        {
+          id: `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
+          role: 'user',
+          parts: [{ type: 'text', text: input.message }],
+          metadata: meta,
+        },
+        {
+          onStart: () => undefined,
+          onEvent: async (json) => {
+            let chunk: { type: string; [k: string]: unknown };
+            try {
+              chunk = JSON.parse(json);
+            } catch {
+              return;
+            }
+            for (const e of map(chunk)) await sink.event(e);
+          },
+          onDone: () => undefined,
+          onError: async (message) => {
+            failed = true;
+            await sink.event({ event: 'error', data: { message: message.slice(0, 500) } });
+          },
+        },
+      );
+    } catch (err) {
+      if (!failed)
+        await sink.event({
+          event: 'error',
+          data: { message: String((err as Error)?.message ?? err).slice(0, 500) },
+        });
+    } finally {
+      this.#input = null;
+    }
+    if (this.#capped) await sink.event({ event: 'stopped', data: { reason: 'cap' } });
+    await sink.event({ event: 'done', data: { id: this.name, usage: this.usage() } });
+  }
+
+  #capped = false;
   /** The last turn's model and key, for compaction between turns. */
   #last: { plan: AgentTurnPlan } | null = null;
   /** Usage spent between turns (compaction), settled with the next turn. */
@@ -244,9 +412,9 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
 
   #addCard(kind: AgentCard['kind'], d: DraftCall, result?: unknown) {
     this.#cards();
-    const id = `card_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+    const id = d.call ?? `card_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
     this
-      .sql`INSERT INTO lumen_cards (id, kind, grp, tool, args, result, status, at) VALUES (${id}, ${kind}, ${d.group}, ${d.tool}, ${JSON.stringify(d.args ?? null)}, ${result === undefined ? null : JSON.stringify(result).slice(0, 20_000)}, ${kind === 'draft' ? 'open' : 'done'}, ${Date.now()})`;
+      .sql`INSERT OR REPLACE INTO lumen_cards (id, kind, grp, tool, args, result, status, at) VALUES (${id}, ${kind}, ${d.group}, ${d.tool}, ${JSON.stringify(d.args ?? null)}, ${result === undefined ? null : JSON.stringify(result).slice(0, 20_000)}, ${kind === 'draft' ? 'open' : 'done'}, ${Date.now()})`;
     return id;
   }
 
@@ -541,10 +709,13 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     if (!t) return;
     this.#turn = null;
     await t.tools.close();
+    const parts = t.meters.map((m) => m.part()).filter((p) => p.calls);
+    this.#capped = t.capped;
+    this.#put('usage', chatUsage([...this.usage().parts, ...parts], t.context));
     try {
       await this.settle({
         outcome,
-        parts: t.meters.map((m) => m.part()).filter((p) => p.calls),
+        parts,
         ...(t.context ? { context: t.context } : {}),
         steps: t.steps,
         ms: Date.now() - t.t0,

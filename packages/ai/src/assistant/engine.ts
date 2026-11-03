@@ -984,7 +984,11 @@ export class Assistant {
               plan: !!key.plan,
             }),
           });
-          return { memo: `Memo from ${sub.meter.label}:\n${r.text.slice(0, MEMO_CHARS)}` };
+          return {
+            memo: `Memo from ${sub.meter.label}:\n${r.text.slice(0, MEMO_CHARS)}`,
+            // For the chat's hand-off section; the model reads the memo.
+            handoff: { tier: tier.id, label: sub.meter.label, why: shown, usage: meter.part() },
+          };
         } catch (err) {
           if (abortSignal?.aborted) throw err;
           return { error: `${sub.meter.label} failed: ${shownError(err).message}` };

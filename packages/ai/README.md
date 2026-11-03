@@ -234,11 +234,14 @@ Drafts and writes are cards in the chat's own storage (`lumen_cards` in the agen
 
 **Lazy tools.** Past `LAZY_AT` (30) tools, a turn sends the model its core tools and `tool_search`, with one catalog line per group in the instructions. By default the core tools are the apps' finds, the hand off and the advisor. `plan.lazy` sets `{ at, core }`. A search matches the words in a tool's name and description and turns on up to 8 tools from the next step on.
 
+**The panel.** `LumenAssistant` reads a Think chat with no change. `ask(input, sink)` runs one answer and sends the panel's own events (`AssistantEvent`: the chat, the text, each tool line, cards, hand-off sections, advice, the use) to `sink`. The app's `POST /chat` returns `askResponse((sink) => chat.ask(input, sink), { signal, stop: () => chat.stop() })`, the same server-sent events `assistantRoutes` sends. `view()` gives a stored chat as the panel's items, and `usage()` gives the chat's use so far. A card's id is its tool call's, so the panel's Save, Dismiss and Undo go to `saveCard`, `dismissCard` and `undoCard`. The app keeps the list of chats, and each chat is its own agent, such as a facet of the person's store. `chunkEvents` and `itemsOf` are the mapping, for an app that streams some other way.
+
 ```ts
 class Chat extends LumenAgent<Env> {
   #settle?: (end: AgentTurnEnd) => Promise<void>;
   async plan(turn: TurnContext) {
-    const { plan, settle } = await assistant.agentTurn(caller, { message: lastText(turn), ...turn.body });
+    // this.input: what the person sent (message, page, refs, tier, time zone).
+    const { plan, settle } = await assistant.agentTurn(caller, this.input ?? { message: '' });
     this.#settle = settle;
     return plan;
   }
