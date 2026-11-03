@@ -58,14 +58,23 @@ export function ColorChip({
   color,
   icon: Icon,
   children,
+  className,
+  title,
 }: {
   color?: string;
   icon?: ComponentType<{ className?: string }>;
   children: ReactNode;
+  className?: string;
+  /** The full text on hover, for a chip that may end in an ellipsis. */
+  title?: string;
 }) {
   return (
     <span
-      className="inline-flex h-5 shrink-0 items-center gap-1 rounded-sm bg-secondary px-1.5 text-xs font-medium whitespace-nowrap text-secondary-foreground"
+      title={title}
+      className={cn(
+        'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm bg-secondary px-1.5 text-xs font-medium whitespace-nowrap text-secondary-foreground',
+        className,
+      )}
       style={
         color
           ? {
@@ -77,7 +86,7 @@ export function ColorChip({
       }
     >
       {Icon && <Icon className="size-3 shrink-0" />}
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }
