@@ -16,6 +16,7 @@ import { anthropic } from '@ai-sdk/anthropic';
 import {
   type ChatResponseResult,
   type PrepareStepContext,
+  type Session,
   type StepConfig,
   type StepContext,
   Think,
@@ -24,10 +25,17 @@ import {
   type TurnContext,
 } from '@cloudflare/think';
 import type { AssistantEffort, UsagePart } from '@columenlabs/lumen-ui-types/assistant';
-import type { ModelMessage, ToolSet } from 'ai';
+import { createCompactFunction } from 'agents/sessions';
+import { type ModelMessage, type ToolSet, generateText } from 'ai';
 import type { ModelDef } from '../assistant/models';
 import { type ModelKey, aiModel, turnSettings } from './models';
-import { type AiToolsOptions, type OpenedTools, type SourceAt, openAiTools } from './tools';
+import {
+  type AiToolsOptions,
+  type DraftCall,
+  type OpenedTools,
+  type SourceAt,
+  openAiTools,
+} from './tools';
 import { UsageMeter } from './usage';
 
 /** What a plan's extra tools get: the open tools, a meter of their own and the cap. */
@@ -87,6 +95,69 @@ export interface AgentTurnEnd {
 export const CAP_NOTE =
   'The spend cap for this month is reached: answer now from what you have, in a sentence or two. You can call no more tools.';
 
+/** A card in the chat: a draft the person saves or dismisses, or a write made at once (Undo). */
+export interface AgentCard {
+  id: string;
+  kind: 'draft' | 'write';
+  group: string;
+  /** The tool's own name, not the `group__tool` the model calls. */
+  tool: string;
+  args: unknown;
+  result?: unknown;
+  status: 'open' | 'saved' | 'dismissed' | 'failed' | 'done' | 'undone';
+  error?: string;
+  at: number;
+}
+
+/** Past this many tokens in the chat Think summarizes its older part. */
+export const COMPACT_AT = 150_000;
+
+const CARD_NOTE =
+  "A card is on the person's screen; nothing has changed yet. Say what it will do when they save it. The next message tells you how it ended.";
+
+/** What the model is told of cards settled and changes undone since its last answer. */
+export function cardNews(cards: AgentCard[]): string {
+  const undone = cards.filter((c) => c.kind === 'write' && c.status === 'undone');
+  const ended = cards.filter((c) => c.kind === 'draft' && c.status !== 'open');
+  const line = (c: AgentCard) =>
+    `${c.group}/${c.tool} ${JSON.stringify(c.args ?? {}).slice(0, 300)}`;
+  const back = undone.length
+    ? `The person undid these changes you made: ${undone.map(line).join('; ')}. Do not make them again unless asked.\n\n`
+    : '';
+  if (!ended.length) return back;
+  return `${back}Cards since your last answer:\n${ended
+    .map(
+      (c) =>
+        `- ${line(c)}: ${c.status}${c.error ? ` (${c.error})` : ''}${c.result !== undefined ? ` → ${JSON.stringify(c.result).slice(0, 300)}` : ''}`,
+    )
+    .join('\n')}\n\n`;
+}
+
+interface CardRow {
+  id: string;
+  kind: string;
+  grp: string;
+  tool: string;
+  args: string;
+  result: string | null;
+  status: string;
+  error: string | null;
+  told: number;
+  at: number;
+}
+
+const cardOf = (r: CardRow): AgentCard => ({
+  id: r.id,
+  kind: r.kind as AgentCard['kind'],
+  group: r.grp,
+  tool: r.tool,
+  args: JSON.parse(r.args),
+  ...(r.result === null ? {} : { result: JSON.parse(r.result) }),
+  status: r.status as AgentCard['status'],
+  ...(r.error ? { error: r.error } : {}),
+  at: r.at,
+});
+
 /** The messages with `lead` put before the newest message the person wrote. */
 export function withLead(messages: ModelMessage[], lead: string | undefined): ModelMessage[] {
   if (!lead) return messages;
@@ -128,7 +199,123 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   /** A turn ended: record its spend and how it went. Errors here are logged, never shown. */
   abstract settle(end: AgentTurnEnd): Promise<void>;
 
+  /** Saves a draft: runs its write as the person. The result is shown and told to the model. */
+  protected applyDraft(_card: AgentCard): Promise<unknown> {
+    return Promise.reject(new Error('Saving a card is not set up here.'));
+  }
+  /** Takes back a write made at once (Undo). */
+  protected undoWrite(_card: AgentCard): Promise<void> {
+    return Promise.reject(new Error('This change cannot be undone here.'));
+  }
+
   #turn: Running | null = null;
+  /** The last turn's model and key, for compaction between turns. */
+  #last: { plan: AgentTurnPlan } | null = null;
+  /** Usage spent between turns (compaction), settled with the next turn. */
+  #owed: UsageMeter[] = [];
+  #tabled = false;
+
+  #cards() {
+    if (!this.#tabled) {
+      this
+        .sql`CREATE TABLE IF NOT EXISTS lumen_cards (id TEXT PRIMARY KEY, kind TEXT NOT NULL, grp TEXT NOT NULL, tool TEXT NOT NULL, args TEXT NOT NULL, result TEXT, status TEXT NOT NULL, error TEXT, told INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL)`;
+      this.#tabled = true;
+    }
+  }
+
+  #addCard(kind: AgentCard['kind'], d: DraftCall, result?: unknown) {
+    this.#cards();
+    const id = `card_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+    this
+      .sql`INSERT INTO lumen_cards (id, kind, grp, tool, args, result, status, at) VALUES (${id}, ${kind}, ${d.group}, ${d.tool}, ${JSON.stringify(d.args ?? null)}, ${result === undefined ? null : JSON.stringify(result).slice(0, 20_000)}, ${kind === 'draft' ? 'open' : 'done'}, ${Date.now()})`;
+    return id;
+  }
+
+  #card(id: string): AgentCard | null {
+    this.#cards();
+    const [r] = this.sql<CardRow>`SELECT * FROM lumen_cards WHERE id = ${id} LIMIT 1`;
+    return r ? cardOf(r) : null;
+  }
+
+  #setCard(id: string, status: AgentCard['status'], o: { result?: unknown; error?: string } = {}) {
+    this
+      .sql`UPDATE lumen_cards SET status = ${status}, result = COALESCE(${o.result === undefined ? null : JSON.stringify(o.result).slice(0, 20_000)}, result), error = ${o.error ?? null}, told = 0 WHERE id = ${id}`;
+  }
+
+  /** The chat's cards, newest last: drafts and writes made at once (at most 200). */
+  cards(): AgentCard[] {
+    this.#cards();
+    return this.sql<CardRow>`SELECT * FROM lumen_cards ORDER BY at DESC LIMIT 200`
+      .map(cardOf)
+      .reverse();
+  }
+
+  /** The person saved a draft: its write runs now. */
+  async saveCard(id: string): Promise<AgentCard> {
+    const c = this.#card(id);
+    if (!c || c.kind !== 'draft') throw new Error('That card is gone.');
+    if (c.status !== 'open') throw new Error(`That card is already ${c.status}.`);
+    try {
+      this.#setCard(id, 'saved', { result: await this.applyDraft(c) });
+    } catch (err) {
+      this.#setCard(id, 'failed', { error: String((err as Error)?.message ?? err).slice(0, 300) });
+    }
+    return this.#card(id) as AgentCard;
+  }
+
+  /** The person dismissed a draft: nothing changes. */
+  dismissCard(id: string): AgentCard {
+    const c = this.#card(id);
+    if (!c || c.kind !== 'draft') throw new Error('That card is gone.');
+    if (c.status !== 'open') throw new Error(`That card is already ${c.status}.`);
+    this.#setCard(id, 'dismissed');
+    return this.#card(id) as AgentCard;
+  }
+
+  /** The person undid a write made at once. */
+  async undoCard(id: string): Promise<AgentCard> {
+    const c = this.#card(id);
+    if (!c || c.kind !== 'write') throw new Error('That change is gone.');
+    if (c.status === 'undone') throw new Error('That change is already undone.');
+    await this.undoWrite(c);
+    this.#setCard(id, 'undone');
+    return this.#card(id) as AgentCard;
+  }
+
+  /** Cards settled since the model last heard, as its note; marks them told. */
+  #news(): string {
+    this.#cards();
+    const rows = this
+      .sql<CardRow>`SELECT * FROM lumen_cards WHERE told = 0 AND status IN ('saved', 'dismissed', 'failed', 'undone') ORDER BY at LIMIT 50`;
+    if (!rows.length) return '';
+    for (const r of rows) this.sql`UPDATE lumen_cards SET told = 1 WHERE id = ${r.id}`;
+    return cardNews(rows.map(cardOf));
+  }
+
+  /** Think compacts the chat past `COMPACT_AT` tokens, on the last turn's model and key. */
+  override configureSession(session: Session) {
+    return session
+      .onCompaction(createCompactFunction({ summarize: (prompt) => this.#summarize(prompt) }))
+      .compactAfter(COMPACT_AT);
+  }
+
+  async #summarize(prompt: string): Promise<string> {
+    const last = this.#last;
+    if (!last) throw new Error('No model to compact with until the next answer.');
+    const { plan } = last;
+    const meter = new UsageMeter(plan.model, `${plan.label} · compact`, !!plan.key.plan);
+    this.#owed.push(meter);
+    const r = await generateText({
+      model: aiModel(plan.model, plan.key, {
+        ...(plan.fetch ? { fetch: plan.fetch } : {}),
+        name: this.constructor.name,
+      }),
+      prompt,
+      ...turnSettings(plan.model, { effort: 'default', out: 4000, plan: !!plan.key.plan }),
+    });
+    meter.add(r.usage);
+    return r.text;
+  }
 
   /** Never read: `beforeTurn` gives every turn its own model. */
   override getModel(): ThinkModel {
@@ -138,10 +325,16 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   override async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
     await this.#close();
     const plan = await this.plan(ctx);
-    const opened = await openAiTools(plan.sources, plan.tools ?? {});
+    this.#last = { plan };
+    const opened = await openAiTools(plan.sources, {
+      draft: async (d) => ({ card: this.#addCard('draft', d), note: CARD_NOTE }),
+      wrote: async (w) => this.#addCard('write', w, w.result),
+      ...plan.tools,
+    });
     const free = !!plan.key.plan;
     const main = new UsageMeter(plan.model, plan.label, free);
-    const meters = [main];
+    const meters = [main, ...this.#owed];
+    this.#owed = [];
     const advice = plan.advisor
       ? new UsageMeter(plan.advisor.model, plan.advisor.label, free)
       : undefined;
@@ -180,7 +373,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         name: this.constructor.name,
       }),
       instructions: system,
-      messages: withLead(ctx.messages, plan.lead),
+      messages: withLead(ctx.messages, `${this.#news()}${plan.lead ?? ''}`),
       tools: { ...opened.tools, ...more, ...advisor },
       ...(plan.first ? { toolChoice: { type: 'tool', toolName: plan.first } } : {}),
       maxSteps: plan.maxSteps ?? 8,

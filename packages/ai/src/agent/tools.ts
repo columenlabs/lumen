@@ -26,6 +26,8 @@ export interface DraftCall {
 export interface AiToolsOptions {
   /** A draft's card was made: return what the model is told (its id, "a card is on screen"). */
   draft?: (d: DraftCall) => Promise<unknown>;
+  /** A write ran at once: what it did, for Undo. Its answer is added to the model's result. */
+  wrote?: (w: DraftCall & { result: unknown }) => Promise<unknown>;
   /** Every call's outcome, for the app's meter: shapes only. */
   called?: (c: { group: string; tool: string; ok: boolean; ms: number }) => void;
   /** A result handed to the model is cut past this many characters. */
@@ -101,7 +103,12 @@ export async function openAiTools(
             const out = await open.call(def.name, args);
             o.called?.({ group: s.group, tool: def.name, ok: true, ms: Date.now() - t0 });
             const text = typeof out === 'string' ? out : JSON.stringify(out);
-            return text.length > max ? `${text.slice(0, max)} …(cut)` : out;
+            const shown = text.length > max ? `${text.slice(0, max)} …(cut)` : out;
+            if (kind === 'write' && o.wrote) {
+              const change = await o.wrote({ group: s.group, tool: def.name, args, result: out });
+              if (change !== undefined) return { result: shown, change };
+            }
+            return shown;
           } catch (err) {
             o.called?.({ group: s.group, tool: def.name, ok: false, ms: Date.now() - t0 });
             return { error: String((err as Error)?.message ?? err).slice(0, 500) };
