@@ -386,11 +386,25 @@ export {
   StatusMessages,
   groupStatusMessages,
 } from './status-messages';
+export {
+  SIGNAL_LEVELS,
+  type Signal,
+  type SignalLevel,
+  type SignalMute,
+  type SignalsOptions,
+  SignalBanners,
+  SignalsChip,
+  groupSignals,
+  signalAge,
+  signalShort,
+  useSignals,
+} from './signals';
 export { TimeZoneSelect } from './status';
 export {
   LumenStatusBar,
   type StatusBarModel,
   StatusBarProvider,
+  StatusSignals,
   type StatusFact,
   type StatusPart,
   type StatusSync,

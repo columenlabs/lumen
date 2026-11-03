@@ -38,6 +38,22 @@ Every sheet, drawer, dialog, picker and menu can be closed the obvious way, on a
 - **Safe areas.** Bottom sheets pad the home indicator, side sheets and full-screen dialogs the notch.
 - **Titles stop short of the ×.** A header's title truncates on one line before the close button (`SheetHeader`, `DialogHeader` reserve its room); a header's own actions sit left of it, never under it.
 
+## Signals: warnings and errors as data
+
+Every warning and error an app raises is a `Signal` (`LumenShell bar={{ signals }}`, `useStatus({ signals })` in a page), never a sentence in the bar. A signal is fields: kind · what · where, then numbers: pace (a share of the limit in a window, `11% in 15m`), limit used → at reset (`34% → out 2h`), age.
+
+| Level | When | Sent |
+|---|---|---|
+| Needs action | Something is broken or a limit burns fast: can't read, over a limit, X% of a limit in Y, a rule fired | At once, on the app's channels |
+| Worth a look | Climbing toward a limit: lands at 75–100% by reset | Digest, if at all |
+| Harmless | Unusual but lands low: spikes, new movers, meters with no limit | Never |
+
+- The bar shows one chip: counts by level and the top signal in short form. A tap opens the Signals panel (docked on desktop, a sheet on a phone).
+- The panel lists every open signal, grouped by level (or by `group`), one line a row, the detail in the row's hover (a phone taps into it). Open, Mute (1 hour, until reset, always when the app keeps mutes) and Dismiss (Undo in a toast).
+- One row per `key`: a repeat adds to its ×N. A dismissed signal comes back only when a newer one (later `at`) arrives.
+- `banner: true` (Needs action only: blind, over a limit) also shows a one-line banner above the page with its `fix` button; × hides it for an hour.
+- Never colour a ratio alone: a 16× spike that lands at 2% of its limit is Harmless.
+
 ## Status bar: the dashboard
 
 The status bar says what is true right now, at a glance, that nobody has to act on. Pick the surface by what the reader must do:
@@ -48,13 +64,14 @@ The status bar says what is true right now, at a glance, that nobody has to act 
 | Toast | Someone just did something: confirm it, offer Undo, fade. | Saved 3 rows · Undo |
 | Badge | The state of one row, card or nav item. | Failing · 12 |
 | Status bar | The app's ambient state: fresh, busy, degraded. | Updated 3m ago · Syncing 40 of 112 |
+| Signal | A warning or error, as data (Signals, above). | Burning fast · KV reads · worker-a |
 | Header line (`meta`) | What this page is, in static words. | Pages you watch |
 
 Five slots, in this order, drawn by the kit from data (`LumenShell bar`, `useStatus` in a page):
 
 1. **Sync.** How fresh the page's data is: Updated 3m ago, Syncing (with its count), Saved copy, Offline, Did not update. `querySync(query)` reads it from the page's main TanStack query; a page's sync wins over the app's.
 2. **Work.** This app's running task from the Tasks list, with its percent. It comes by itself where Tasks is mounted.
-3. **Message.** A warning or error that blocks nothing (Job boards offline). Latest only, `×N` for repeats, `+N` for earlier ones.
+3. **Message.** Signals' chip (counts by level and the top signal; opens the Signals panel), then any free-text note. Latest only, `×N` for repeats, `+N` for earlier ones.
 4. **Page facts.** At most two facts this page has nowhere else to show (Next run in 12m). Never a row count the pager shows or a number a tile shows.
 5. **End.** Health (admins), What's new, time zone. Fixed.
 
