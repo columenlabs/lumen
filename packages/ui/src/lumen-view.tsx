@@ -1010,7 +1010,7 @@ export function LumenView<T extends RowData>({
             {tools}
             {compare}
             {pager}
-            {onColumns && !onAddColumn && on('columns') && (
+            {onColumns && on('columns') && (
               <ColumnPicker domain={domain} columns={columns} onColumns={onColumns} />
             )}
             {exporter && !isMobile && exporter.button}
