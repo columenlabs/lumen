@@ -58,7 +58,8 @@ export function InfoTip({
         onCloseAutoFocus={(e) => e.preventDefault()}
         {...hover}
       >
-        {children}
+        {/* One block, so text and links in it flow as one paragraph (the content is a flex column). */}
+        <div>{children}</div>
       </PopoverContent>
     </Popover>
   );

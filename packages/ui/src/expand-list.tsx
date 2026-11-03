@@ -124,7 +124,7 @@ export function LumenExpandRow({
             <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="py-3"
+                className="-mr-1 flex min-h-10 min-w-8 items-center justify-center"
                 aria-label={`${open ? 'Collapse' : 'Expand'}${label ? ` ${label}` : ''}`}
               >
                 {chevron}
