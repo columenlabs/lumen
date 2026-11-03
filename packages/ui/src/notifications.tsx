@@ -406,7 +406,7 @@ function AddWebhook({ api }: { api: Api }) {
     return (
       <button
         type="button"
-        className="flex min-h-10 items-center gap-2 text-sm font-medium text-primary"
+        className="flex min-h-10 items-center gap-2 text-sm font-medium"
         onClick={() => setOpen(true)}
       >
         <PlusIcon className="size-4" />
