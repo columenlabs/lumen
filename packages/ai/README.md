@@ -225,3 +225,17 @@ ctx.waitUntil(meaningStep({ def: notesFind, sql: d1Sql(env.DB), embed, index: en
 | `UsageMeter`, `tokenUsage(u)` | Prices each step's tokens (cache reads and writes, reasoning) into one usage part |
 
 A ChatGPT plan sign-in is free to the app (`priced` with `free`). Nothing here holds a key or a token: the app passes them per turn.
+
+An app with an `Assistant` gets the whole plan from it: `assistant.agentTurn(caller, { message, tier?, context?, refs?, time_zone? })` returns `{ plan, settle }` with the person's tier and model on whoever pays, the tool groups at their access, the kit's rules, the bearings and the page before the message, `escalate` to a higher tier (its own usage part, inside the same cap) and Claude's advisor. `settle` adds the spend to the payer's month and reports the turn through `onStep`. It throws `AssistantError` when nobody can pay. Drafts, Undo and compaction still run only in `turn`.
+
+```ts
+class Chat extends LumenAgent<Env> {
+  #settle?: (end: AgentTurnEnd) => Promise<void>;
+  async plan(turn: TurnContext) {
+    const { plan, settle } = await assistant.agentTurn(caller, { message: lastText(turn), ...turn.body });
+    this.#settle = settle;
+    return plan;
+  }
+  settle(end: AgentTurnEnd) { return this.#settle?.(end) ?? Promise.resolve(); }
+}
+```
