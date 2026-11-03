@@ -44,6 +44,12 @@ Off by default. `configureLumen({ resizableColumns: true })` turns it on for eve
 - Widths are kept on the device per table (`localStorage`, key `lumen:col-widths:<domain id>:<cardId>`); storage off, they last the visit.
 - Every column still shows: a wider column makes the table scroll sideways, never drops another.
 
+## Export
+
+The header's Export (`download` control) downloads or copies the table as CSV: the rows shown, or with a filter on, Filtered or All. A table a server pages (`paging`) shows one page, so give `paging.all`, which fetches every row for the filter (the server may cap it), and Export saves those instead of the page.
+
+- ✗ An app's own Download button beside a paged table. ✓ `paging.all`.
+
 ## Do / Don't
 
 ```tsx
