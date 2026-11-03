@@ -1,7 +1,7 @@
 /** An AI SDK step's usage as the kit's tokens and list-price cost. */
 import type { UsagePart } from '@columenlabs/lumen-ui-types/assistant';
 import type { LanguageModelUsage } from 'ai';
-import { type ModelDef, priced } from '../assistant/models';
+import { type ModelDef, type TokenUsage, priced } from '../assistant/models';
 
 /**
  * One call's usage in the kit's terms. Input splits into plain, cache writes and cache reads where
@@ -32,7 +32,11 @@ export class UsageMeter {
     this.p = { label, calls: 0, in: 0, read: 0, out: 0, usd: 0 };
   }
   add(u: LanguageModelUsage) {
-    const t = priced(this.model, tokenUsage(u));
+    return this.addTokens(tokenUsage(u));
+  }
+  /** Tokens a provider reports apart from the step's usage (Claude's advisor calls). */
+  addTokens(u: TokenUsage) {
+    const t = priced(this.model, u);
     this.p.calls += 1;
     this.p.in += t.in;
     this.p.read += t.read;

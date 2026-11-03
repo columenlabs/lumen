@@ -40,7 +40,11 @@ import type {
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
+import { type ToolSet, generateText, jsonSchema, stepCountIs, tool } from 'ai';
 import OpenAI from 'openai';
+import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
+import { type ModelKey, aiModel, turnSettings } from '../agent/models';
+import type { OpenedTools, SourceAt } from '../agent/tools';
 import { type BearingsExtra, type BearingsNow, bearings } from './bearings';
 import {
   CHATGPT_REDIRECT,
@@ -543,6 +547,53 @@ const shows = (output: OpenAI.Responses.ResponseOutputItem[]) =>
 const isApiError = (err: unknown) =>
   err instanceof Anthropic.APIError || err instanceof OpenAI.APIError;
 
+/** What the instructions say about the tools offered: which kinds are there. */
+interface ToolsSummary {
+  size: number;
+  find: boolean;
+  reads: boolean;
+  batch: boolean;
+  web: boolean;
+}
+
+/** What a Think turn calls this turn: what one turn asks besides the message itself. */
+export interface AgentTurnInput {
+  message: string;
+  context?: AssistantMessage['context'];
+  refs?: AssistantMessage['refs'];
+  /** The tier the person picked for this message (`@`). */
+  tier?: string;
+  /** The browser's IANA zone, for the bearings. */
+  time_zone?: string;
+  /** When the chat's last message was, for "since you last asked". */
+  last_at?: number;
+}
+
+/**
+ * The tools of a Think turn as the rules describe them. Think calls several tools in one step on
+ * its own, so the kit's batch tool is not offered and its line is left out (`batch`).
+ */
+function openedSummary(t: OpenedTools): ToolsSummary {
+  return {
+    size: t.info.length,
+    find: t.info.some((i) => i.find),
+    reads: t.reads.length > 0,
+    batch: true,
+    web: t.info.some((i) => i.group === 'web'),
+  };
+}
+
+function summarize(fns: Map<string, Fn>): ToolsSummary {
+  const all = [...fns.values()];
+  return {
+    size: fns.size,
+    find: all.some((f) => f.def.find),
+    reads: all.some((f) => !f.draft && !f.write),
+    batch: fns.has(BATCH),
+    web: all.some((f) => f.group === 'web'),
+  };
+}
+
 export class Assistant {
   readonly name: string;
   readonly tiers: TierDef[];
@@ -660,6 +711,243 @@ export class Assistant {
 
   private groupById(id: string) {
     return this.groups.find((g) => g.id === id);
+  }
+
+  // ---------------------------------------------------------------- a turn on Think
+
+  /**
+   * One turn as a Think agent's plan (`LumenAgent` in `@columenlabs/lumen-ai/agent`): the person's
+   * tier and its model on whoever pays, the tool groups at their access, the kit's rules, the
+   * bearings and the page, hand off to a higher tier and Claude's advisor. `settle` records the
+   * spend and the turn. Throws `AssistantError` when nobody can pay (its text says what to do).
+   * Drafts, Undo and compaction stay with `turn` for now.
+   */
+  async agentTurn(
+    caller: Caller,
+    input: AgentTurnInput,
+  ): Promise<{ plan: AgentTurnPlan; settle: (end: AgentTurnEnd) => Promise<void> }> {
+    const message = input.message.trim();
+    const picked = await this.mainTier(caller);
+    const lower =
+      input.tier && !this.above(picked).some((t) => t.id === input.tier)
+        ? this.tierById(input.tier)
+        : undefined;
+    const main = await this.session(caller, lower ?? picked);
+    const { paying, wait } = await this.state.paying(caller.id, main.model.provider);
+    if (!paying) {
+      const code = wait ?? 'not_connected';
+      throw new AssistantError(waitText(code, main.model.provider, !!this.o.allowance), code, 402);
+    }
+    const keyOf = (provider: AssistantProvider): ModelKey | null => {
+      const apiKey = paying.keys[provider];
+      return apiKey ? { apiKey, ...(paying.plans[provider] ? { plan: true } : {}) } : null;
+    };
+    const key = keyOf(main.model.provider) ?? { apiKey: paying.apiKey };
+    const p = await this.state.person(caller.id);
+    const policy: HandOffPolicy = p.hand_off ?? 'next';
+    const advisor = await this.advisorFor(caller, p.advice, main);
+    const handTo = input.tier ? this.above(main.tier).find((t) => t.id === input.tier) : undefined;
+    const appSystem =
+      typeof this.o.system === 'string' ? this.o.system : await this.o.system(caller);
+    const asked = await this.expand(caller, message);
+    const told = await bearings({
+      timeZone: input.time_zone,
+      fallbackZone: this.o.timeZone,
+      lastAt: input.last_at,
+      app: this.o.app,
+      ...(this.o.bearings ? { extras: (b: BearingsNow) => this.o.bearings?.(b, caller) } : {}),
+    });
+    const page =
+      told +
+      (input.refs?.length
+        ? `The person points at these parts: they are what "this" means, and when the person asks for a change they are the only parts to change. Read anything else you need (the rest of the page, other records, your tools) for context, but leave it as it is unless they ask.\n${JSON.stringify(input.refs).slice(0, 16000)}\n\n`
+        : '') +
+      (input.context
+        ? `Page: ${input.context.label}${input.context.note === undefined ? '' : `\n${JSON.stringify(input.context.note).slice(0, 4000)}`}\n\n`
+        : '');
+    const command =
+      asked === message ? '' : `The person typed ${message.split(/\s/)[0]}: ${asked}\n\n`;
+    const reach = this.above(main.tier);
+    const counts = { handoffs: 0, end: main.tier };
+    const rulesFor = (s: Session | null, t: OpenedTools) =>
+      `${appSystem}\n\n${this.rules(s, policy, s ? advisor : null, openedSummary(t), t.failed)}`;
+    const plan: AgentTurnPlan = {
+      model: main.model,
+      key,
+      effort: main.effort,
+      out: main.tier.out ?? DEFAULT_OUT,
+      label: main.meter.label,
+      system: (t) => rulesFor(main, t),
+      lead: `${page}${
+        handTo && reach.length
+          ? `The person handed this message to ${handTo.label}: call escalate {tier: "${handTo.id}", why: "asked"} now, its task the message with every fact from this chat it needs, then answer from its memo.\n\n`
+          : ''
+      }${command}`,
+      sources: await this.sourcesOf(caller, p),
+      left: paying.left,
+      maxSteps: MAX_ROUNDS,
+      ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
+      ...(handTo && reach.length ? { first: 'escalate' } : {}),
+      ...(advisor
+        ? {
+            advisor: {
+              model: advisor.session.model,
+              label: advisor.session.meter.label,
+              maxUses: ADVICE_MAX,
+              maxTokens: ADVICE_TOKENS,
+            },
+          }
+        : {}),
+      tools: {
+        called: (c) =>
+          void Promise.resolve(
+            this.o.onStep?.({
+              kind: 'tool',
+              tool: toolName(c.group, c.tool),
+              ok: c.ok,
+              ms: c.ms,
+              tier: main.tier.id,
+              handoff: false,
+            }),
+          ).catch(() => undefined),
+      },
+      more: (tt): ToolSet =>
+        reach.length
+          ? {
+              escalate: this.agentEscalate(tt, {
+                caller,
+                message: `${page}${asked}`,
+                asked: this.askedFor(message, main.tier),
+                handTo,
+                policy,
+                main,
+                keyOf,
+                counts,
+                system: (t) => rulesFor(null, t),
+              }),
+            }
+          : {},
+    };
+    const settle = async (end: AgentTurnEnd) => {
+      await this.state.addSpend(caller.id, paying.payer, end.parts).catch(() => undefined);
+      const total = end.parts.reduce(
+        (a, m) => ({
+          calls: a.calls + m.calls,
+          in: a.in + m.in,
+          out: a.out + m.out,
+          usd: a.usd + m.usd,
+        }),
+        { calls: 0, in: 0, out: 0, usd: 0 },
+      );
+      await Promise.resolve(
+        this.o.onStep?.({
+          kind: 'turn',
+          outcome: end.outcome,
+          ms: end.ms,
+          tier: main.tier.id,
+          end_tier: counts.end.id,
+          handoffs: counts.handoffs,
+          advice: advisor
+            ? (end.parts.find((x) => x.label === advisor.session.meter.label)?.calls ?? 0)
+            : 0,
+          steps: end.steps,
+          ...total,
+        }),
+      ).catch(() => undefined);
+    };
+    return { plan, settle };
+  }
+
+  /** The escalate tool of a Think turn: one task to a higher tier, its memo back. */
+  private agentEscalate(
+    tt: TurnTools,
+    c: {
+      caller: Caller;
+      message: string;
+      asked: Set<string>;
+      handTo?: TierDef;
+      policy: HandOffPolicy;
+      main: Session;
+      keyOf: (provider: AssistantProvider) => ModelKey | null;
+      counts: { handoffs: number; end: TierDef };
+      system: (t: OpenedTools) => string;
+    },
+  ): ToolSet[string] {
+    const reach = this.above(c.main.tier);
+    return tool({
+      description:
+        'Hands one task to a higher tier with the same tools. It works on its own and returns a memo of at most 200 words.',
+      inputSchema: jsonSchema<{ tier: string; why: string; task: string }>({
+        type: 'object',
+        properties: {
+          tier: { type: 'string', enum: reach.map((t) => t.id) },
+          why: { type: 'string', enum: [...HAND_OFF_WHYS] },
+          task: {
+            type: 'string',
+            description: 'The task, with every fact from the chat it needs.',
+          },
+        },
+        required: ['tier', 'why', 'task'],
+      }),
+      execute: async (input, { abortSignal }) => {
+        const tier = reach.find((t) => t.id === input.tier);
+        const why = HAND_OFF_WHYS.find((w) => w === input.why);
+        const task = typeof input.task === 'string' ? input.task.trim() : '';
+        if (!tier || !why || !task)
+          return {
+            error: `Give {tier: ${reach.map((t) => `"${t.id}"`).join(' | ')}, why: ${HAND_OFF_WHYS.map((w) => `"${w}"`).join(' | ')}, task}.`,
+          };
+        const asked = new Set(c.asked);
+        if (c.handTo) asked.add(c.handTo.id);
+        const own = c.policy === 'any' ? reach : c.policy === 'next' ? reach.slice(0, 1) : [];
+        const may = new Set([...own.map((t) => t.id), ...asked]);
+        if (!may.has(tier.id))
+          return {
+            error: may.size
+              ? `Not ${tier.id} now: you may call ${[...may].join(' or ')}.`
+              : 'The person has not asked for a higher tier: answer yourself.',
+          };
+        if (tt.over())
+          return { error: 'No money left for a higher tier this answer: answer yourself.' };
+        const sub = await this.session(c.caller, tier);
+        const key = c.keyOf(sub.model.provider);
+        const provider = PROVIDERS[sub.model.provider].label;
+        if (!key)
+          return {
+            error: `${tier.label} runs on ${provider} and no ${provider} key is set for whoever pays this answer: answer yourself.`,
+          };
+        const meter = tt.meter(sub.model, sub.meter.label, !!key.plan);
+        c.counts.handoffs += 1;
+        if (this.tiers.indexOf(tier) > this.tiers.indexOf(c.counts.end)) c.counts.end = tier;
+        const shown = asked.has(tier.id) ? 'asked' : why;
+        try {
+          const r = await generateText({
+            model: aiModel(sub.model, key, {
+              ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
+              name: this.name,
+            }),
+            instructions: c.system(tt.opened),
+            prompt: `${c.message}\n\n${this.name} handed you this task (${WHY_TEXT[shown]}): ${task}\n\nWork it out with the tools, then end with a memo for ${this.name} of at most 200 words: the answer and the facts it rests on. ${this.name} answers the person.`,
+            tools: tt.opened.tools,
+            stopWhen: stepCountIs(MAX_ROUNDS),
+            prepareStep: () => (tt.over() ? { activeTools: [] } : undefined),
+            onStepFinish: (s) => {
+              meter.add(s.usage);
+            },
+            ...(abortSignal ? { abortSignal } : {}),
+            ...turnSettings(sub.model, {
+              effort: sub.effort,
+              out: tier.out ?? DEFAULT_OUT,
+              plan: !!key.plan,
+            }),
+          });
+          return { memo: `Memo from ${sub.meter.label}:\n${r.text.slice(0, MEMO_CHARS)}` };
+        } catch (err) {
+          if (abortSignal?.aborted) throw err;
+          return { error: `${sub.meter.label} failed: ${shownError(err).message}` };
+        }
+      },
+    });
   }
 
   // ---------------------------------------------------------------- status and settings
@@ -936,18 +1224,18 @@ export class Assistant {
   // ---------------------------------------------------------------- tools
 
   /** Opens the tools the person allows: each group's, then the web's. */
-  private async openTools(
+  /** The tool groups (and the web) at the person's access, not opened yet. */
+  private async sourcesOf(
     caller: Caller,
     p: { access?: Record<string, AssistantAccess>; web?: boolean },
-  ) {
-    const opened: { group: string; access: AssistantAccess; open: OpenTools }[] = [];
-    const sources: { group: string; access: AssistantAccess; source: ToolSource }[] = [];
+  ): Promise<SourceAt[]> {
+    const sources: SourceAt[] = [];
     for (const g of this.groups) {
       const access = this.access(p, g);
       if (access === 'off') continue;
       const s = g.tools(caller);
       for (const source of Array.isArray(s) ? s : [s])
-        sources.push({ group: g.id, access, source });
+        sources.push({ group: g.id, access, source, ...(g.writes ? { writes: true } : {}) });
     }
     if (p.web ?? true) {
       if (this.o.web?.fetch !== false)
@@ -965,6 +1253,15 @@ export class Assistant {
           source: scrapeqlTools(sq.url, token, sq.fetch ?? this.o.fetch),
         });
     }
+    return sources;
+  }
+
+  private async openTools(
+    caller: Caller,
+    p: { access?: Record<string, AssistantAccess>; web?: boolean },
+  ) {
+    const opened: { group: string; access: AssistantAccess; open: OpenTools }[] = [];
+    const sources = await this.sourcesOf(caller, p);
     const results = await Promise.allSettled(sources.map((s) => s.source()));
     results.forEach((r, i) => {
       const s = sources[i];
@@ -1162,7 +1459,7 @@ export class Assistant {
     try {
       const appSystem =
         typeof this.o.system === 'string' ? this.o.system : await this.o.system(caller);
-      const kitRules = this.rules(main, policy, advisor, tools.fns, tools.failed);
+      const kitRules = this.rules(main, policy, advisor, summarize(tools.fns), tools.failed);
       const system: Anthropic.TextBlockParam[] = [
         { type: 'text', text: appSystem },
         { type: 'text', text: kitRules, cache_control: { type: 'ephemeral' } },
@@ -1171,7 +1468,7 @@ export class Assistant {
         { type: 'text', text: appSystem },
         {
           type: 'text',
-          text: this.rules(null, policy, null, tools.fns, tools.failed),
+          text: this.rules(null, policy, null, summarize(tools.fns), tools.failed),
           cache_control: { type: 'ephemeral' },
         },
       ];
@@ -1341,18 +1638,18 @@ export class Assistant {
     main: Session | null,
     policy: HandOffPolicy,
     advisor: { session: Session } | null,
-    fns: Map<string, Fn>,
+    fns: ToolsSummary,
     failed: number,
   ) {
     const lines = [
       `You are ${this.name}. Each message starts with <bearings>: the time now in the person's zone and where they are. Take today, now and how long ago from it; never guess the date. It is for you only: never quote it or start an answer with it.`,
       'Answer in short plain sentences. Use the tools for facts; never guess a number a tool can give you. Call several tools at once when they do not depend on each other.',
-      ...([...fns.values()].some((f) => f.def.find)
+      ...(fns.find
         ? [
             'Questions about an app\'s records go through its find tool (the tool named <app>_find): put every condition of the question in one call (filters, words to include or leave out, which fields to look in), ask only for the fields the answer needs, then judge the rest yourself from what it returns. Never list or open records one by one to filter them. A loose ask (a mood, an occasion, "something light", "good for a party") goes in its like field when the tool has one; then pick from what it returns yourself. How many match is the result\'s count: say that number (a like search has no count, only the nearest rows: never give a number of matches for it), and name each row in same_name, which are different records that share a name. Rows a find already returned you use again only when they answer the whole new question; a new condition (another ingredient, a kind of dish, how quick) is a new find call.',
           ]
         : []),
-      ...([...fns.values()].some((f) => !f.draft && !f.write) && !fns.has(BATCH)
+      ...(fns.reads && !fns.batch
         ? [
             `To read several records, or one tool with several inputs, put the reads in one ${BATCH} call: one step for all of them, never one call at a time. Results you already have from earlier in the chat you use, without reading them again.`,
           ]
@@ -1368,7 +1665,7 @@ export class Assistant {
       lines.push('No tools are on now: the person can turn them on in Settings ▸ Tools.');
     if (failed)
       lines.push(`${failed} tool source${failed === 1 ? '' : 's'} could not be reached this turn.`);
-    if ([...fns.values()].some((f) => f.group === 'web'))
+    if (fns.web)
       lines.push(
         'Web: use web__fetch first for APIs and plain pages; the browser tools only for pages that need JavaScript or after a fetch fails.',
       );

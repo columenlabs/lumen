@@ -32,11 +32,21 @@ export interface AiToolsOptions {
   maxChars?: number;
 }
 
+/** One tool offered this answer, as the instructions describe the set. */
+export interface ToolInfo {
+  name: string;
+  group: string;
+  kind: 'read' | 'draft' | 'write';
+  find: boolean;
+}
+
 /** Tools open for one answer, as the AI SDK's set, and how to let them go. */
 export interface OpenedTools {
   tools: ToolSet;
   /** Names of the reads, for a lazy loader's catalog or `activeTools`. */
   reads: string[];
+  /** Each tool offered: its name, group, kind and whether it is an app's find. */
+  info: ToolInfo[];
   failed: number;
   close(): Promise<void>;
 }
@@ -71,6 +81,7 @@ export async function openAiTools(
   const max = o.maxChars ?? 16_000;
   const tools: ToolSet = {};
   const reads: string[] = [];
+  const info: ToolInfo[] = [];
   for (const { s, open } of opened)
     for (const def of open.tools) {
       const canWrite = s.access === 'draft' || s.access === 'write';
@@ -79,6 +90,7 @@ export async function openAiTools(
       if (kind === 'draft' && !o.draft) continue;
       const name = toolName(s.group, def.name);
       if (kind === 'read') reads.push(name);
+      info.push({ name, group: s.group, kind, find: !!def.find });
       tools[name] = tool({
         description: describe(def, kind),
         inputSchema: jsonSchema(withoutMeta(def.inputSchema) as JSONSchema7),
@@ -100,6 +112,7 @@ export async function openAiTools(
   return {
     tools,
     reads,
+    info,
     failed: results.filter((r) => r.status === 'rejected').length,
     close: async () => {
       await Promise.all(opened.map((x) => x.open.close().catch(() => undefined)));

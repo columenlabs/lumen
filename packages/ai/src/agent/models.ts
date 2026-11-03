@@ -6,7 +6,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { AssistantEffort } from '@columenlabs/lumen-ui-types/assistant';
-import type { LanguageModel } from 'ai';
+import type { JSONValue, LanguageModel } from 'ai';
 import type { ModelDef } from '../assistant/models';
 
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
@@ -65,7 +65,7 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
 export function turnSettings(
   model: ModelDef,
   o: { effort: AssistantEffort; out?: number; plan?: boolean },
-): { maxOutputTokens?: number; providerOptions?: Record<string, Record<string, unknown>> } {
+): { maxOutputTokens?: number; providerOptions?: Record<string, Record<string, JSONValue>> } {
   const out = o.plan || !o.out ? {} : { maxOutputTokens: o.out };
   if (o.effort === 'default') return out;
   return model.provider === 'anthropic'
