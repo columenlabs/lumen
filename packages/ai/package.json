@@ -11,12 +11,19 @@
   "exports": {
     ".": "./src/index.ts",
     "./mcp": "./src/mcp.ts",
-    "./assistant": "./src/assistant/index.ts"
+    "./assistant": "./src/assistant/index.ts",
+    "./agent": "./src/agent/index.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.96",
+    "@ai-sdk/openai": "4.0.108",
     "@anthropic-ai/sdk": "0.133.0",
+    "@cloudflare/think": "0.23.0",
     "@columenlabs/lumen-ops": "workspace:*",
     "@columenlabs/lumen-ui-types": "workspace:*",
+    "agents": "0.32.0",
+    "ai": "7.0.162",
+    "just-bash": "3.6.0",
     "openai": "7.32.0",
     "zod": "^4.3.6"
   },
