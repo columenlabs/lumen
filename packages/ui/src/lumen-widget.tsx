@@ -411,8 +411,11 @@ export function LumenWidget({
   foot,
   shown,
   style,
+  menu,
 }: {
   id: string;
+  /** Entries of its own at the top of the ⋯ menu (a table's Export on a phone). */
+  menu?: ReactNode;
   /** Its controls (Edit widget ▸ Controls): Ask the assistant, Refresh, Filter box and
    *  Footer show or hide here; missing keys take the type's default. */
   shown?: ViewCard['controls'];
@@ -639,12 +642,12 @@ export function LumenWidget({
               {!layout && load && on('refresh') && (
                 <LumenRefresh load={load} label={`Refresh ${title}`} />
               )}
-              {(controls?.editable || (!layout && (ask || load?.editScript))) && (
+              {(controls?.editable || (!layout && (ask || load?.editScript || menu))) && (
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
                     <IconButton icon={MoreHorizontalIcon} label={`${title} menu`} />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuContent align="end" className="w-52">
                     {ask && !layout && (
                       <DropdownMenuItem onSelect={ask}>
                         <SparklesIcon /> Ask {assistantName}
@@ -655,7 +658,13 @@ export function LumenWidget({
                         <CodeIcon /> Script
                       </DropdownMenuItem>
                     )}
-                    {(ask || load?.editScript) && !layout && controls?.editable && (
+                    {menu && !layout && (
+                      <>
+                        {(ask || load?.editScript) && <DropdownMenuSeparator />}
+                        {menu}
+                      </>
+                    )}
+                    {(ask || load?.editScript || menu) && !layout && controls?.editable && (
                       <DropdownMenuSeparator />
                     )}
                     {controls?.editable && (
