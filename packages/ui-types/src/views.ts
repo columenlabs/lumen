@@ -360,8 +360,8 @@ export const domainTiles = (...keys: string[]): ViewTile[] => keys.map((key) => 
  * Where a chip field shows: `column` in its own column, `inline` on the view's
  * first column (holdings: next to the Symbol), so tags read with the row's name.
  */
-/** Page sizes a view's table offers. */
-export const viewPageSizes = [25, 50, 100, 250] as const;
+/** Page sizes a view's table offers (10 for a short card, such as a list of recent orders). */
+export const viewPageSizes = [10, 25, 50, 100, 250] as const;
 export type ViewPageSize = (typeof viewPageSizes)[number];
 /** A view's pagination: on by default, 25 rows a page; `footer` adds the page footer under the
  *  table (first, last, numbered pages, Go to), off by default. */

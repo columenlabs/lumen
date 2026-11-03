@@ -57,6 +57,7 @@ Off by default. `configureLumen({ resizableColumns: true })` turns it on for eve
 
 - ✗ A second line in a cell. ✓ One value; more in a hover tooltip or the drawer.
 - ✗ `value + unit` text. ✓ `UnitValue`.
+- ✗ An app's own pager beside a table. ✓ The view's `pagination` (`size` 10, 25, 50, 100 or 250; 25 by default), drawn by `LumenView`.
 - ✗ Resetting the page on a new `rows` array. ✓ Only a new filter, sort, grouping or page size goes back to page 1.
 - ✗ Another row of tabs to filter. ✓ A `LumenTokenizedFilter` field.
 - ✗ Hiding columns to fit a narrow box (sidebar open, docked drawer). ✓ Every column shows; the table scrolls sideways and the name stays at `--lead-col-max`.
