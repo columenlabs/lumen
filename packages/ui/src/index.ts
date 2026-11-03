@@ -46,6 +46,7 @@ export {
   SelectorRowContent,
 } from './lumen-selector';
 export { ColorChip, ColorDot, colorIcon } from './color-dot';
+export { TagChips, tagColor, tagIcon } from './tag-chips';
 export { EditCell, EditInputCell } from './view-edit-cell';
 export {
   type CardOnScreen,

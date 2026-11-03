@@ -21,6 +21,20 @@ Total                                $9,882    Total via cardAgg / rollRender
 
 On a phone each row is a one-line card: the name and one value; the rest waits in the row's drawer.
 
+## Tags
+
+A field whose rows carry several free-form labels (a company's `ai`, `cybersecurity`, `favorite`) sets `tags: true` with `values`: each cell draws `TagChips`, every tag a chip in its colour with an icon first, on one line (past three, a `+N` chip whose hover names them all).
+
+- The colour comes from the tag's name (`tagColor`, the chart palette), so a tag is the same colour on every row, page and app with nothing stored. The icon comes from the tag's words (`tagIcon`: `security` a shield, `ai` sparkles, `data` a database, `favorite` a star); no icon where no word fits.
+- `color` and `iconOf` on the field override both (labels the person coloured).
+- With `edit.many` the cell is the same chips plus the ✎ picker; the picker's rows carry the same colours and icons.
+- Grouped by the field, a single tag's heading takes its colour and icon.
+- Outside a table (a drawer, a card) draw the same `TagChips tags={…}`, never `Badge`s or comma text.
+
+```tsx
+{ key: 'tags', label: 'Tags', icon: Tags, value: (r) => r.tags.join(', ') || null, values: (r) => r.tags, tags: true, format: 'text', filterable: true }
+```
+
 ## Resizable columns
 
 Off by default. `configureLumen({ resizableColumns: true })` turns it on for every table in the app; one `LumenView` (or `LumenTable`) overrides with `resizable`. Each header gets a grip on its right edge (desktop only; a phone's rows are cards and a `fit` table wraps instead):
@@ -46,8 +60,9 @@ Off by default. `configureLumen({ resizableColumns: true })` turns it on for eve
 - ✗ Resetting the page on a new `rows` array. ✓ Only a new filter, sort, grouping or page size goes back to page 1.
 - ✗ Another row of tabs to filter. ✓ A `LumenTokenizedFilter` field.
 - ✗ Hiding columns to fit a narrow box (sidebar open, docked drawer). ✓ Every column shows; the table scrolls sideways and the name stays at `--lead-col-max`.
+- ✗ Tags as comma text (`r.tags.join(', ')`) or a row of `Badge`s. ✓ `tags: true` on the field, `TagChips` elsewhere.
 - ✗ An app's own column-drag code or saved widths. ✓ `configureLumen({ resizableColumns: true })` (every table) or `resizable` on one `LumenView`.
 
 ## Checked by
 
-Review and the app's interaction smoke (AGENTS.md, UI gate 3: lines; Every column always shows: no hidden column at 1024, 1280 or 1440 wide, sidebar open or closed).
+`lumen-ship check parts` rule `tags-text` (tags joined into comma text on a line with no `tags: true`). Review and the app's interaction smoke (AGENTS.md, UI gate 3: lines; Every column always shows: no hidden column at 1024, 1280 or 1440 wide, sidebar open or closed).

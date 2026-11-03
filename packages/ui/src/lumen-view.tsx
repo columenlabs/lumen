@@ -81,6 +81,7 @@ import { MAX_COMPARE, useSymbolChart } from './market/lumen-chart';
 import { LumenPageFooter, LumenPager } from './pager';
 import { maskAmount, useAmountsHidden } from './shell';
 import { useSymbolSheet } from './symbol-sheet-context';
+import { TagChips, tagColor, tagIcon } from './tag-chips';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
@@ -161,6 +162,17 @@ export type { CustomViewConfig };
 const MINUS = '−';
 /** Text cells longer than this many characters are cut to one line with a tooltip. */
 const LONG_TEXT = 48;
+
+/** A tags field's tags for a row: its `values`, else its text split on commas. */
+function tagsOf<T>(f: ViewField<T>, row: T, v: ViewCellValue): string[] {
+  if (f.values) return f.values(row);
+  return typeof v === 'string'
+    ? v
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [];
+}
 /** Rows of a view the assistant sees with each message. */
 const ASSISTANT_ROWS = 10;
 
@@ -1327,6 +1339,10 @@ function LumenTableRows<T extends RowData>({
     v: ReturnType<typeof computed.value>,
   ) => {
     if (f.render) return f.render(row);
+    if (f.tags && !f.edit?.many)
+      return (
+        <TagChips tags={tagsOf(f, row, v)} colorOf={f.color} iconOf={f.iconOf} empty={f.empty} />
+      );
     if (!f.edit)
       return (
         <ViewValueCell
@@ -1346,12 +1362,16 @@ function LumenTableRows<T extends RowData>({
       return (
         <EditManyCell
           label={f.label}
-          values={f.values?.(row) ?? (typeof v === 'string' && v !== '' ? [v] : [])}
+          values={
+            f.tags
+              ? tagsOf(f, row, v)
+              : (f.values?.(row) ?? (typeof v === 'string' && v !== '' ? [v] : []))
+          }
           options={options.get(f.key)?.inUse ?? []}
           unused={options.get(f.key)?.unused}
           note={edit.note?.(row)}
-          colorOf={f.color}
-          iconOf={f.iconOf}
+          colorOf={f.tags ? (t) => f.color?.(t) ?? tagColor(t) : f.color}
+          iconOf={f.tags ? (t) => f.iconOf?.(t) ?? tagIcon(t) : f.iconOf}
           onSave={(values) => many(row, values)}
         />
       );
@@ -2274,8 +2294,10 @@ function PivotTable<T>({
 /** A group heading's mark: its value's icon in its colour, else its colour's dot, else the
  *  field's icon. */
 function GroupMark<T>({ field, value }: { field: ViewField<T>; value: string }) {
-  const color = field.color?.(value);
-  const Icon = field.iconOf?.(value);
+  // A tags field's one tag takes its own colour and icon, as its chips do.
+  const tag = field.tags && !value.includes(',');
+  const color = field.color?.(value) ?? (tag ? tagColor(value) : undefined);
+  const Icon = field.iconOf?.(value) ?? (tag ? tagIcon(value) : undefined);
   if (Icon)
     return (
       <span className="inline-flex" style={color ? { color } : undefined}>

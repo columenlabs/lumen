@@ -48,6 +48,7 @@ One repo for the Lumen family: each package is a folder `packages/<name>` publis
 - Numbers use tabular figures and a true minus `−`. A gain or loss always shows a sign or arrow.
 - No unit or e2e tests. Verify with lint, type-check and build. A visual change carries phone (390×844) and desktop (1440×900) screenshots in the PR, taken in an app that uses the change.
 - Esc closes the topmost thing only: a picker open inside a Sheet, Dialog or AlertDialog takes the Esc and the overlay stays (`ui/overlay-guard.ts`, wired into all three). A new overlay or a new kind of picker joins that guard.
+- Tags are chips, never comma text: a field of several free-form labels sets `tags: true` (with `values`), and anywhere else draws `TagChips`. Each tag keeps one colour everywhere (`tagColor`, from its name) and an icon first where its words suggest one (`tagIcon`); `lumen-ship check parts` rule `tags-text` fails a joined list ([docs/parts/table.md](docs/parts/table.md), Tags).
 - Coloured chips (`ColorChip`) draw their text in the colour pulled toward the foreground, so any hue reads at 4.5:1 in light and dark. Never put a raw app colour on its own tint as text.
 - Hover-card and tooltip triggers a person can Tab to show the focus ring (`HoverCardTrigger` carries it); never `outline-none` a focusable thing without a `focus-visible` ring.
 - Breaking changes are allowed while the version is 0.x, but say so in the PR, and land the app-side fix in the same release cycle.
