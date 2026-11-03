@@ -46,7 +46,7 @@ export const PageFooter: Story = {
   },
 };
 
-/** Export (the download icon): Download CSV and Copy CSV. A filter hides rows here, so `allRows`
+/** Export (the download icon): Download CSV and Copy to clipboard (CSV). A filter hides rows here, so `allRows`
  *  adds the Filtered / All switch at the top of its menu. */
 export const Export: Story = {
   args: {

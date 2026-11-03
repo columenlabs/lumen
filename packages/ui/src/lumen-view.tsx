@@ -692,7 +692,7 @@ function useExport<T>({
     try {
       const csv = await text();
       await navigator.clipboard.writeText(csv);
-      toast.success(`Copied ${counted} as CSV`);
+      toast.success(`Copied ${counted} to the clipboard`);
     } catch {
       toast.error('The browser blocked the copy', {
         action: { label: 'Download', onClick: () => void download() },
@@ -731,7 +731,7 @@ function useExport<T>({
         <DownloadIcon /> Download CSV
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={() => void copy()}>
-        <CopyIcon /> Copy CSV
+        <CopyIcon /> Copy to clipboard
       </DropdownMenuItem>
     </>
   );
