@@ -210,3 +210,18 @@ ctx.waitUntil(meaningStep({ def: notesFind, sql: d1Sql(env.DB), embed, index: en
 - `meaningStep` embeds only the rows whose `changed` column moved past its bookmark (`mark`: get and put, kept by the app), at most 50 a step in one embedding call and one upsert, and takes rows the find hides (its `where`) out of the index. It resumes where it stopped and runs safely twice at once; `done` is false while rows are left.
 - A person's own rows get a `namespace` each (`vectorMeaning` and `meaningStep` take one), so one index serves one app.
 - When the index cannot answer in 3 s, `like` is left out, the rest of the find runs and the result says so.
+
+## An agent on Cloudflare Think
+
+`@columenlabs/lumen-ai/agent` runs one chat as a Cloudflare Think agent (`@cloudflare/think`, experimental) on the app's tiers, keys and tool groups. Think keeps the loop, the messages, streaming, resume and compaction; the kit adds the model on the payer's key, the tools at the person's access, the spend cap and the usage. It will replace `./assistant`'s own loop.
+
+| Export | What it does |
+|---|---|
+| `LumenAgent` | An abstract Think agent. The app answers `plan(turn)` (model, key, effort, instructions, tool sources, money left) and hears `settle(end)` (outcome, usage parts, context size, time) when the turn ends |
+| `aiModel(model, key, opts?)` | The AI SDK model for a tier on an API key, or on a ChatGPT plan sign-in (`key.plan`, through `planFetch`) |
+| `planFetch(fetch?, name?)` | Rewrites Responses calls to a plan sign-in's rules: tools in one namespace, no output cap, a forced call as the only tool |
+| `turnSettings(model, opts)` | Output cap and effort as the provider takes them |
+| `openAiTools(sources, opts)` | The app's tool groups as AI SDK tools: reads always, drafts and writes by access, results cut at 16k characters |
+| `UsageMeter`, `tokenUsage(u)` | Prices each step's tokens (cache reads and writes, reasoning) into one usage part |
+
+A ChatGPT plan sign-in is free to the app (`priced` with `free`). Nothing here holds a key or a token: the app passes them per turn.
