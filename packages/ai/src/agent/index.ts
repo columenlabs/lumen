@@ -4,6 +4,8 @@
  * payer rules; Think keeps the loop, the messages, streaming, resume and compaction.
  */
 export * from './agent';
+export * from './connectors';
 export * from './models';
+export * from './search';
 export * from './tools';
 export * from './usage';

@@ -28,7 +28,18 @@ import type { AssistantEffort, UsagePart } from '@columenlabs/lumen-ui-types/ass
 import { createCompactFunction } from 'agents/sessions';
 import { type ModelMessage, type ToolSet, generateText } from 'ai';
 import type { ModelDef } from '../assistant/models';
+import {
+  type AgentConnector,
+  CONNECTOR_GROUP,
+  type ConnectorAt,
+  type ConnectorClient,
+  checkConnectorUrl,
+  connectorGroup,
+  connectorId,
+  connectorSource,
+} from './connectors';
 import { type ModelKey, aiModel, turnSettings } from './models';
+import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools } from './search';
 import {
   type AiToolsOptions,
   type DraftCall,
@@ -67,6 +78,10 @@ export interface AgentTurnPlan {
   more?: (t: TurnTools) => ToolSet;
   /** Call this tool first (a message handed to a higher tier). */
   first?: string;
+  /** The person's connectors to open, at the access they gave each. */
+  connectors?: ConnectorAt[];
+  /** Past `at` tools (`LAZY_AT`) the model starts with `core` and `tool_search` only. */
+  lazy?: { at?: number; core?: string[] };
   /** Claude's advisor: a bigger Claude reads the chat and sends a plan. */
   advisor?: { model: ModelDef; label: string; maxUses: number; maxTokens: number };
   /** Dollars the payer has left; at or past it the model gets no more tools. */
@@ -190,6 +205,7 @@ interface Running {
   context?: number;
   steps: number;
   capped: boolean;
+  lazy?: LazyTools;
   t0: number;
 }
 
@@ -207,6 +223,9 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   protected undoWrite(_card: AgentCard): Promise<void> {
     return Promise.reject(new Error('This change cannot be undone here.'));
   }
+
+  /** Connectors' tools join a turn through `plan.connectors`, at the person's access. */
+  override includeMcpTools = false;
 
   #turn: Running | null = null;
   /** The last turn's model and key, for compaction between turns. */
@@ -242,6 +261,50 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       .sql`UPDATE lumen_cards SET status = ${status}, result = COALESCE(${o.result === undefined ? null : JSON.stringify(o.result).slice(0, 20_000)}, result), error = ${o.error ?? null}, told = 0 WHERE id = ${id}`;
   }
 
+  #connectorClient(): ConnectorClient {
+    return {
+      listTools: () => this.getMcpServers().tools as ReturnType<ConnectorClient['listTools']>,
+      callTool: (p) => this.mcp.callTool(p) as ReturnType<ConnectorClient['callTool']>,
+    };
+  }
+
+  /** The person's connectors, with their state and tool counts. */
+  connectors(): AgentConnector[] {
+    const { servers, tools } = this.getMcpServers();
+    return Object.entries(servers).map(([id, s]) => {
+      const own = tools.filter((t) => t.serverId === id);
+      return {
+        id,
+        name: s.name,
+        url: s.server_url,
+        state: s.state,
+        ...(s.auth_url ? { authUrl: s.auth_url } : {}),
+        ...(s.error ? { error: s.error.slice(0, 300) } : {}),
+        tools: own.length,
+        reads: own.filter((t) => t.annotations?.readOnlyHint === true).length,
+      };
+    });
+  }
+
+  /** Adds a connector by its https address; the answer says where to sign in when it asks. */
+  async addConnector(
+    name: string,
+    url: string,
+    o: { callbackHost?: string; callbackPath?: string } = {},
+  ): Promise<AgentConnector> {
+    const u = checkConnectorUrl(url);
+    const id = connectorId(name);
+    await this.addMcpServer(name.slice(0, 60), u.href, { id, ...o });
+    const c = this.connectors().find((x) => x.id === id);
+    if (!c) throw new Error('The connector did not stay.');
+    return c;
+  }
+
+  /** Removes a connector and its sign-in. */
+  async removeConnector(id: string): Promise<void> {
+    await this.removeMcpServer(id);
+  }
+
   /** The chat's cards, newest last: drafts and writes made at once (at most 200). */
   cards(): AgentCard[] {
     this.#cards();
@@ -256,7 +319,13 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     if (!c || c.kind !== 'draft') throw new Error('That card is gone.');
     if (c.status !== 'open') throw new Error(`That card is already ${c.status}.`);
     try {
-      this.#setCard(id, 'saved', { result: await this.applyDraft(c) });
+      const server = c.group.startsWith(CONNECTOR_GROUP)
+        ? c.group.slice(CONNECTOR_GROUP.length)
+        : null;
+      const result = server
+        ? await (await connectorSource(this.#connectorClient(), server)()).call(c.tool, c.args)
+        : await this.applyDraft(c);
+      this.#setCard(id, 'saved', { result });
     } catch (err) {
       this.#setCard(id, 'failed', { error: String((err as Error)?.message ?? err).slice(0, 300) });
     }
@@ -326,9 +395,23 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     await this.#close();
     const plan = await this.plan(ctx);
     this.#last = { plan };
-    const opened = await openAiTools(plan.sources, {
+    const linked = (plan.connectors ?? []).filter((c) => c.access !== 'off');
+    if (linked.length) await this.mcp.waitForConnections({ timeout: 1500 }).catch(() => undefined);
+    const client = this.#connectorClient();
+    const sources = [
+      ...plan.sources,
+      ...linked.map((c) => ({
+        group: connectorGroup(c.id),
+        access: c.access,
+        source: connectorSource(client, c.id),
+        writes: true,
+      })),
+    ];
+    const opened = await openAiTools(sources, {
       draft: async (d) => ({ card: this.#addCard('draft', d), note: CARD_NOTE }),
-      wrote: async (w) => this.#addCard('write', w, w.result),
+      // A connector's change cannot be taken back, so it gets no Undo card.
+      wrote: async (w) =>
+        w.group.startsWith(CONNECTOR_GROUP) ? undefined : this.#addCard('write', w, w.result),
       ...plan.tools,
     });
     const free = !!plan.key.plan;
@@ -339,7 +422,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       ? new UsageMeter(plan.advisor.model, plan.advisor.label, free)
       : undefined;
     if (advice) meters.push(advice);
-    const system = typeof plan.system === 'string' ? plan.system : plan.system(opened);
+    let system = typeof plan.system === 'string' ? plan.system : plan.system(opened);
     this.#turn = {
       plan,
       system,
@@ -367,6 +450,22 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         maxUses: plan.advisor.maxUses,
         maxTokens: plan.advisor.maxTokens,
       });
+    const tools: ToolSet = { ...opened.tools, ...more, ...advisor };
+    let lazy: LazyTools | undefined;
+    if (Object.keys(tools).length > (plan.lazy?.at ?? LAZY_AT)) {
+      const groups = new Map(opened.info.map((i) => [i.name, i.group]));
+      const core = plan.lazy?.core ?? [
+        ...opened.info.filter((i) => i.find).map((i) => i.name),
+        ...Object.keys(more ?? {}),
+        ...Object.keys(advisor),
+      ];
+      if (plan.first && !core.includes(plan.first)) core.push(plan.first);
+      lazy = lazyTools(tools, core, (n) => groups.get(n) ?? 'other');
+      tools[TOOL_SEARCH] = lazy.search;
+      system = `${system}\n\n${lazy.catalog}`;
+      this.#turn.system = system;
+      this.#turn.lazy = lazy;
+    }
     return {
       model: aiModel(plan.model, plan.key, {
         ...(plan.fetch ? { fetch: plan.fetch } : {}),
@@ -374,7 +473,8 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       }),
       instructions: system,
       messages: withLead(ctx.messages, `${this.#news()}${plan.lead ?? ''}`),
-      tools: { ...opened.tools, ...more, ...advisor },
+      tools,
+      ...(lazy ? { activeTools: lazy.active() } : {}),
       ...(plan.first ? { toolChoice: { type: 'tool', toolName: plan.first } } : {}),
       maxSteps: plan.maxSteps ?? 8,
       ...turnSettings(plan.model, {
@@ -393,9 +493,13 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       t.capped = true;
       return { activeTools: [], instructions: `${t.system}\n\n${CAP_NOTE}` } as StepConfig;
     }
-    // A forced first call is for the first step only.
-    if (t.plan.first && ctx.stepNumber > 0) return { toolChoice: 'auto' } as StepConfig;
-    return undefined;
+    // A forced first call is for the first step only; tools a search found join each step.
+    const auto = t.plan.first && ctx.stepNumber > 0;
+    if (!auto && !t.lazy) return undefined;
+    return {
+      ...(auto ? { toolChoice: 'auto' } : {}),
+      ...(t.lazy ? { activeTools: t.lazy.active() } : {}),
+    } as StepConfig;
   }
 
   override onStepFinish(ctx: StepContext): void {
