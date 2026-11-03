@@ -18,18 +18,23 @@ import {
   DollarSign,
   Dumbbell,
   Factory,
+  FileText,
   Film,
   Flag,
   Flame,
   Gamepad2,
   Globe,
   GraduationCap,
+  Handshake,
   Heart,
   HeartPulse,
   Hourglass,
   House,
   Landmark,
+  LayoutTemplate,
   Leaf,
+  Lightbulb,
+  Link,
   Lock,
   MapPin,
   Megaphone,
@@ -99,7 +104,12 @@ const TAG_ICONS: [RegExp, Icon][] = [
   [/^(team|people|social|community|hr)$/, Users],
   [/^(jobs?|work|career|hiring)$/, Briefcase],
   [/^(edu|education|learning|school|course|courses|training)$/, GraduationCap],
-  [/^(books?|reading|docs|research)$/, BookOpen],
+  [/^(docs?|documents?|guides?|pdf|files?)$/, FileText],
+  [/^(templates?|layouts?)$/, LayoutTemplate],
+  [/^(how|howto|tips?|ideas?)$/, Lightbulb],
+  [/^(partners?|partnership|vendors?)$/, Handshake],
+  [/^(links?|urls?|bookmarks?)$/, Link],
+  [/^(books?|reading|research)$/, BookOpen],
   [/^(games?|gaming)$/, Gamepad2],
   [/^(music|audio)$/, Music],
   [/^(film|video|movies?|media|streaming)$/, Film],
@@ -160,7 +170,13 @@ export function TagChips({
   const chips = (
     <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden">
       {shown.map((t) => (
-        <ColorChip key={t} color={colorOf?.(t) ?? tagColor(t)} icon={iconOf?.(t) ?? tagIcon(t)}>
+        <ColorChip
+          key={t}
+          color={colorOf?.(t) ?? tagColor(t)}
+          icon={iconOf?.(t) ?? tagIcon(t)}
+          title={t}
+          className="max-w-full min-w-9 shrink"
+        >
           {t}
         </ColorChip>
       ))}
