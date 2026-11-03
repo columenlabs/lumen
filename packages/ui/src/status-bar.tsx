@@ -19,6 +19,15 @@ import {
 import { useIsMobile } from './hooks/use-mobile';
 import { cn } from './lib/utils';
 import {
+  SIGNAL_LEVELS,
+  type Signal,
+  SignalsChip,
+  type SignalsOptions,
+  SignalsProvider,
+  signalShort,
+  useSignals,
+} from './signals';
+import {
   STATUS_TRIGGER,
   type StatusMessage,
   StatusMessages,
@@ -66,13 +75,20 @@ export interface StatusPart {
   sync?: StatusSync | null;
   /** Newest first. */
   messages?: StatusMessage[];
+  /** This page's signals (warnings and errors as data); they join the app's in the Signals panel. */
+  signals?: Signal[];
   facts?: StatusFact[];
 }
 
 /** The app's own bar on `LumenShell` (`bar`): its sync and messages, and whether running Tasks show. */
 export interface StatusBarModel {
   sync?: StatusSync | null;
+  /** Free-text notes. Warnings and errors go in `signals` instead. */
   messages?: StatusMessage[];
+  /** Warnings and errors as data: counts and the top one in the bar, every one in the Signals panel. */
+  signals?: Signal[];
+  /** Mute that the app keeps, the panel's settings gear, the name of a signal's `group`. */
+  signalOptions?: SignalsOptions;
   /** App-wide facts (`Next run in 12m`); a page's own come first, two show in all. */
   facts?: StatusFact[];
   /** Shows this app's running task from the Tasks list (default true where Tasks is mounted). */
@@ -120,6 +136,35 @@ export function useStatus(part: StatusPart) {
     registry.set(id, JSON.parse(key) as StatusPart);
     return () => registry.set(id, null);
   }, [registry, id, key]);
+}
+
+/** Collects the app's and the pages' signals for the bar, the panel and the banners. The shell mounts it. */
+export function StatusSignals({
+  app,
+  model,
+  openSettings,
+  children,
+}: {
+  app: string;
+  model?: StatusBarModel;
+  openSettings?: (section?: string) => void;
+  children: ReactNode;
+}) {
+  const parts = useContext(PartsCtx);
+  const signals = useMemo(
+    () => [...parts.flatMap((p) => p.signals ?? []), ...(model?.signals ?? [])],
+    [parts, model?.signals],
+  );
+  return (
+    <SignalsProvider
+      app={app}
+      signals={signals}
+      options={model?.signalOptions}
+      openSettings={openSettings}
+    >
+      {children}
+    </SignalsProvider>
+  );
 }
 
 /** A TanStack Query result's freshness as a `StatusSync`: the page's main read, with no app code. */
@@ -224,6 +269,8 @@ interface Entry {
   detail?: string;
   /** Desktop's own drawing, when it is more than a line (the message stack). */
   bar?: ReactNode;
+  /** A tap on a phone opens this instead of the status sheet (the Signals panel). */
+  tap?: () => void;
 }
 
 function syncEntry(s: StatusSync, now: number): Entry {
@@ -278,6 +325,7 @@ function factEntry(f: StatusFact, i: number, now: number): Entry {
 function useEntries(model: StatusBarModel | undefined, app: string): Entry[] {
   const parts = useContext(PartsCtx);
   const tasks = useTasks();
+  const signals = useSignals();
   const now = useNow();
   const entries: Entry[] = [];
 
@@ -306,16 +354,32 @@ function useEntries(model: StatusBarModel | undefined, app: string): Entry[] {
 
   const messages = [...parts.flatMap((p) => p.messages ?? []), ...(model?.messages ?? [])];
   const groups = groupStatusMessages(messages);
-  const top = groups[0];
-  if (top) {
-    const tone: Tone = top.tone === 'error' ? 'error' : top.tone === 'warning' ? 'warning' : 'none';
+  const first = groups[0];
+  if (first) {
+    const tone: Tone =
+      first.tone === 'error' ? 'error' : first.tone === 'warning' ? 'warning' : 'none';
     entries.push({
       id: 'messages',
       rank: tone === 'error' ? 0 : tone === 'warning' ? 2 : 7,
       tone,
-      text: top.count > 1 ? `${top.text} ×${top.count}` : top.text,
+      text: first.count > 1 ? `${first.text} ×${first.count}` : first.text,
       side: groups.length > 1 ? `+${groups.length - 1}` : undefined,
       bar: <StatusMessages messages={messages} />,
+    });
+  }
+
+  const top = signals?.items[0];
+  if (signals && (top || signals.muted.length)) {
+    const n = signals.items.length;
+    entries.push({
+      id: 'signals',
+      rank: top?.level === 'act' ? 0 : top?.level === 'look' ? 2 : 7,
+      tone: top?.level === 'act' ? 'error' : top?.level === 'look' ? 'warning' : 'idle',
+      text: top ? signalShort(top) : 'Signals muted',
+      side: n > 1 ? `+${n - 1}` : undefined,
+      detail: top ? SIGNAL_LEVELS[top.level].label : undefined,
+      bar: <SignalsChip />,
+      tap: () => signals.setOpen(true),
     });
   }
 
@@ -335,10 +399,12 @@ function EntryLine({ e }: { e: Entry }) {
     </>
   );
   if (!e.detail)
-    return <span className="flex h-6 min-w-0 items-center gap-1.5 px-1.5">{line}</span>;
+    return (
+      <span className="flex h-6 min-w-0 items-center gap-1.5 overflow-hidden px-1.5">{line}</span>
+    );
   return (
     <StatusPop
-      className={cn(STATUS_TRIGGER, 'min-w-0')}
+      className={cn(STATUS_TRIGGER, 'min-w-0 overflow-hidden')}
       content={<p className={TONE_TEXT[e.tone]}>{e.detail}</p>}
     >
       {line}
@@ -346,7 +412,21 @@ function EntryLine({ e }: { e: Entry }) {
   );
 }
 
-function SheetRow({ e }: { e: Entry }) {
+function SheetRow({ e, onTap }: { e: Entry; onTap?: () => void }) {
+  if (onTap)
+    return (
+      <li className="border-b last:border-b-0">
+        <button
+          type="button"
+          onClick={onTap}
+          className="flex w-full items-center gap-2 py-2 text-left"
+        >
+          <Mark tone={e.tone === 'none' ? 'idle' : e.tone} />
+          <span className={cn('min-w-0 flex-1 truncate', TONE_TEXT[e.tone])}>{e.text}</span>
+          {e.side && <span className="shrink-0 tabular-nums text-muted-foreground">{e.side}</span>}
+        </button>
+      </li>
+    );
   return (
     <li className="flex items-start gap-2 border-b py-2 last:border-b-0">
       <span className="flex h-5 items-center">
@@ -393,7 +473,19 @@ export function LumenStatusBar({
         <>
           {urgent && (
             <span aria-live="polite" className="flex min-w-0 items-center">
-              <EntryLine e={{ ...urgent, bar: undefined, detail: undefined }} />
+              {urgent.tap ? (
+                <button
+                  type="button"
+                  onClick={urgent.tap}
+                  className={cn(STATUS_TRIGGER, 'min-w-0 overflow-hidden')}
+                >
+                  <EntryLine
+                    e={{ ...urgent, bar: undefined, detail: undefined, side: undefined }}
+                  />
+                </button>
+              ) : (
+                <EntryLine e={{ ...urgent, bar: undefined, detail: undefined }} />
+              )}
             </span>
           )}
           {/* The pages' old slot stays mounted for their portals, and hidden on a phone. */}
@@ -420,7 +512,18 @@ export function LumenStatusBar({
                   {[...entries]
                     .sort((a, b) => a.rank - b.rank)
                     .map((e) => (
-                      <SheetRow key={e.id} e={e} />
+                      <SheetRow
+                        key={e.id}
+                        e={e}
+                        onTap={
+                          e.tap
+                            ? () => {
+                                setOpen(false);
+                                e.tap?.();
+                              }
+                            : undefined
+                        }
+                      />
                     ))}
                 </ul>
                 <div className="flex items-center justify-end gap-1 border-t px-4 py-2 text-xs text-muted-foreground">

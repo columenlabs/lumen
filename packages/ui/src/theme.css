@@ -859,3 +859,32 @@ body[data-spotlight="nav"] [data-spotlit] {
 [data-slot="sidebar-inset"]:has(> [data-slot="shell-tabbar"]) {
   --shell-tabbar-offset: calc(var(--shell-tabbar-height) + env(safe-area-inset-bottom));
 }
+
+/* Signals panel (signals.tsx): one line a row, columns lined up across groups. Below 34rem wide the
+   Kind and Pace columns go (the hover keeps them), so What · where keeps its room. */
+[data-slot="signals"] {
+  container-type: inline-size;
+}
+[data-signal-grid] {
+  grid-template-columns: 0.5rem 5.5rem minmax(0, 1fr) 6.5rem 8.5rem 2.25rem;
+}
+[data-signal-grid="phone"] {
+  grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+}
+@container (max-width: 40rem) {
+  [data-signal-grid]:not([data-signal-grid="phone"]) {
+    grid-template-columns: 0.5rem minmax(0, 1fr) 6.5rem 8.5rem 2.25rem;
+  }
+  [data-signal-col="kind"] {
+    display: none;
+  }
+}
+@container (max-width: 34rem) {
+  [data-signal-grid]:not([data-signal-grid="phone"]) {
+    grid-template-columns: 0.5rem minmax(0, 1fr) 8.5rem 2.25rem;
+  }
+  [data-signal-col="kind"],
+  [data-signal-col="pace"] {
+    display: none;
+  }
+}

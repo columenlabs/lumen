@@ -1,5 +1,113 @@
 [
   {
+    "tag": "v0.1.175",
+    "date": "2026-11-03T01:51:03Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "10 rows per page for views",
+        "body": "From `@columenlabs/lumen-ui-types/views`, `viewPageSizes` now includes 10 (`[10, 25, 50, 100, 250]`), so a view's `pagination.size` can be set to 10 and the pager size menu in `LumenPager` and the Edit widget offers \"10 per page\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Short cards use the view's own pager",
+        "body": "In `LumenViewCard`, set `pagination: { size: 10 }` to page a short card such as recent orders, with no hand-rolled pager beside a bare `LumenTable`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.174",
+    "date": "2026-11-03T01:12:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tag chips end in an ellipsis instead of being cut mid-word",
+        "body": "In `@columenlabs/lumen-ui`, `TagChips` in a width-capped column now shrinks each chip and ends it in an ellipsis, with the full tag shown on hover, so the last visible tag no longer reads as a broken word."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`ColorChip` accepts `className` and `title`",
+        "body": "In `@columenlabs/lumen-ui`, `ColorChip` now takes `className` to size or constrain it and `title` to show the full label on hover, and its text truncates when space runs out."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "More labels get icons from `tagIcon`",
+        "body": "In `@columenlabs/lumen-ui`, `tagIcon` now recognizes doc, template, how-to, partner and link words, so tags like `Doc` and `Template` show a file, layout, bulb, handshake or link icon."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.173",
+    "date": "2026-11-03T00:36:56Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tags render as coloured chips in tables",
+        "body": "On a `ViewField` in @columenlabs/lumen-ui-types, the new `tags` option makes the table cell draw chips instead of comma text, using the field's `values` or splitting the text on commas when there are none."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New `TagChips` component",
+        "body": "Import `TagChips` from @columenlabs/lumen-ui to show tags on one line anywhere, such as drawers and cards, with a `+N` chip after 3 tags whose hover lists them all."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Stable tag colours and icons",
+        "body": "`tagColor(tag)` gives each tag the same colour on every page and in every app, and `tagIcon(tag)` picks an icon from the tag's words (`security`, `ai`, `data`, `favorite`, `buildout` and more). Set `color` or `iconOf` on the field to override them."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New `tags-text` lint rule",
+        "body": "`lumen-ship check parts` now fails when tags or labels are joined into comma text on a line that has no `tags: true`, so tag lists keep using chips."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.172",
+    "date": "2026-11-02T22:25:46Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Phone bottom tab bar for the shell",
+        "body": "In `LumenShell` from `@columenlabs/lumen-ui`, the new `tabs` prop (a `NavItem[]`) shows a bottom tab bar on phones with the first four pages plus a More tab that opens the sidebar sheet, and apps that don't pass it are unchanged."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Standalone `LumenTabBar`",
+        "body": "`@columenlabs/lumen-ui` now exports `LumenTabBar`, whose active tab is the closest route match, the same rule the sidebar uses."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Status bar and safe area handle the tab bar",
+        "body": "While a tab bar is showing, the shell sets `--shell-tabbar-offset` so the status bar sits above it, and the tab bar adds safe-area padding at the bottom of the screen."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.171",
     "date": "2026-11-02T21:41:43Z",
     "takeaways": [

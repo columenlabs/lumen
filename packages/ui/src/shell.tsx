@@ -35,9 +35,15 @@ import {
   allSettings,
 } from './settings';
 import { DockSlot } from './side-dock';
+import { SignalBanners } from './signals';
 import { SourceHealthProvider } from './source-health';
 import { StatusTimeZone } from './status';
-import { LumenStatusBar, type StatusBarModel, StatusBarProvider } from './status-bar';
+import {
+  LumenStatusBar,
+  type StatusBarModel,
+  StatusBarProvider,
+  StatusSignals,
+} from './status-bar';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import {
   DropdownMenu,
@@ -404,72 +410,75 @@ export function LumenShell({
     >
       <StatusBarProvider>
         <DockSlot.Provider value={dockSlot}>
-          <SourceHealthProvider>
-            {wrap(
-              <TooltipProvider delayDuration={200}>
-                <SidebarProvider defaultOpen={sidebarOpen()}>
-                  <LumenFinder
-                    app={app}
-                    settings={findSettings}
-                    openSettings={openSettings}
-                    config={finder}
-                  >
-                    <CloseDrawerOnNavigate />
-                    <Sidebar collapsible="icon">
-                      <SidebarHeader>{brand}</SidebarHeader>
-                      <SidebarContent>{nav}</SidebarContent>
-                      <SidebarFooter>
-                        <NavUser
-                          who={user}
-                          signOutUrl={signOutUrl}
-                          onSettings={() => openSettings()}
-                          onLogs={onLogs}
+          <StatusSignals app={app} model={bar} openSettings={openSettings}>
+            <SourceHealthProvider>
+              {wrap(
+                <TooltipProvider delayDuration={200}>
+                  <SidebarProvider defaultOpen={sidebarOpen()}>
+                    <LumenFinder
+                      app={app}
+                      settings={findSettings}
+                      openSettings={openSettings}
+                      config={finder}
+                    >
+                      <CloseDrawerOnNavigate />
+                      <Sidebar collapsible="icon">
+                        <SidebarHeader>{brand}</SidebarHeader>
+                        <SidebarContent>{nav}</SidebarContent>
+                        <SidebarFooter>
+                          <NavUser
+                            who={user}
+                            signOutUrl={signOutUrl}
+                            onSettings={() => openSettings()}
+                            onLogs={onLogs}
+                          />
+                        </SidebarFooter>
+                        <SidebarRail />
+                      </Sidebar>
+                      <SidebarInset className="flex min-h-svh min-w-0 flex-col">
+                        <SignalBanners />
+                        <div key={epoch} className="flex min-w-0 flex-1 flex-col">
+                          {children}
+                        </div>
+                        <LumenStatusBar
+                          app={app}
+                          model={bar}
+                          legacy={status}
+                          slot={setStatusSlot}
+                          end={
+                            <>
+                              {health}
+                              {releases && <WhatsNew api={releases} apps={releaseApps} />}
+                              {statusEnd}
+                              <StatusTimeZone />
+                            </>
+                          }
                         />
-                      </SidebarFooter>
-                      <SidebarRail />
-                    </Sidebar>
-                    <SidebarInset className="flex min-h-svh min-w-0 flex-col">
-                      <div key={epoch} className="flex min-w-0 flex-1 flex-col">
-                        {children}
-                      </div>
-                      <LumenStatusBar
-                        app={app}
-                        model={bar}
-                        legacy={status}
-                        slot={setStatusSlot}
-                        end={
-                          <>
-                            {health}
-                            {releases && <WhatsNew api={releases} apps={releaseApps} />}
-                            {statusEnd}
-                            <StatusTimeZone />
-                          </>
-                        }
+                        {tabs && <LumenTabBar items={tabs} />}
+                      </SidebarInset>
+                      {/* A docked LumenDrawer: beside the page, left of the assistant. */}
+                      <div ref={setDockSlot} data-slot="shell-dock" className="contents" />
+                      {panel}
+                      <LumenSettings
+                        open={settingsAt !== null}
+                        section={settingsAt ?? lastSection}
+                        onOpen={openSettings}
+                        onClose={() => setSettingsAt(null)}
+                        appLabel={appLabel}
+                        profile={profile}
+                        security={security}
+                        sections={settings}
+                        shared={shared}
+                        sharedLabel={sharedLabel}
+                        groups={settingsGroups}
                       />
-                      {tabs && <LumenTabBar items={tabs} />}
-                    </SidebarInset>
-                    {/* A docked LumenDrawer: beside the page, left of the assistant. */}
-                    <div ref={setDockSlot} data-slot="shell-dock" className="contents" />
-                    {panel}
-                    <LumenSettings
-                      open={settingsAt !== null}
-                      section={settingsAt ?? lastSection}
-                      onOpen={openSettings}
-                      onClose={() => setSettingsAt(null)}
-                      appLabel={appLabel}
-                      profile={profile}
-                      security={security}
-                      sections={settings}
-                      shared={shared}
-                      sharedLabel={sharedLabel}
-                      groups={settingsGroups}
-                    />
-                    <Toaster position="bottom-right" />
-                  </LumenFinder>
-                </SidebarProvider>
-              </TooltipProvider>,
-            )}
-          </SourceHealthProvider>
+                      <Toaster position="bottom-right" />
+                    </LumenFinder>
+                  </SidebarProvider>
+                </TooltipProvider>,
+              )}
+            </SourceHealthProvider>
+          </StatusSignals>
         </DockSlot.Provider>
       </StatusBarProvider>
     </Ctx.Provider>
