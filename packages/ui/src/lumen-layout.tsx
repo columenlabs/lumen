@@ -1076,6 +1076,7 @@ function ViewLayout<T extends RowData>({
           config={config}
           rows={viewRows}
           total={rows.length}
+          allRows={rows}
           paging={paging}
           groupBy={group.groupField}
           pivot={pivot}

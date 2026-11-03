@@ -45,3 +45,13 @@ export const PageFooter: Story = {
     );
   },
 };
+
+/** Export (the download icon): Download CSV and Copy to clipboard (CSV). A filter hides rows here, so `allRows`
+ *  adds the Filtered / All switch at the top of its menu. */
+export const Export: Story = {
+  args: {
+    rows: STORES.slice(0, Math.ceil(STORES.length / 2)) as never,
+    allRows: STORES as never,
+    filterCount: 1,
+  },
+};

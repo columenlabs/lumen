@@ -128,6 +128,7 @@ export function LumenViewCard<T extends RowData>({
       config={config}
       rows={shown}
       total={rows.length}
+      allRows={rows}
       groupBy={group.groupField}
       pivot={group.pivot}
       subgroup={group.sub}

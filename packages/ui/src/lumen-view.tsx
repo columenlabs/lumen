@@ -43,6 +43,7 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   Columns3CogIcon,
+  CopyIcon,
   CornerDownRightIcon,
   DownloadIcon,
   FilterXIcon,
@@ -62,6 +63,7 @@ import {
   useState,
 } from 'react';
 import type { ComponentType } from 'react';
+import { toast } from 'sonner';
 import { ColorChip, ColorDot } from './color-dot';
 import { ColumnResizer, useColumnWidths } from './column-widths';
 import { DrawerSection } from './drawer-section';
@@ -89,6 +91,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -523,6 +526,9 @@ export interface LumenViewProps<T> {
   /** A grip on each header's right edge resizes its column (desktop), kept on the device per
    *  table (the domain's id and `cardId`); left out: `configureLumen({ resizableColumns })`. */
   resizable?: boolean;
+  /** Every row before the page's filter: Export then offers Filtered or All while a filter hides
+   *  some. Left out (or a server's page): Export takes the rows shown. */
+  allRows?: T[];
 }
 
 /** What the header's + offers. */
@@ -575,19 +581,17 @@ function ColumnPicker<T>({
 }
 
 /**
- * The view's rows as a CSV file: the filtered rows in the view's sort, its
- * shown columns (the grouping first when it is not one), plain numbers; amounts stay masked while
- * Hide amounts is on. The CSV writer loads on the first download, not with the page.
+ * The view's rows as CSV text: the rows in the view's sort, its shown columns (the grouping first
+ * when it is not one), plain numbers; amounts stay masked while Hide amounts is on. The CSV writer
+ * loads on the first export, not with the page.
  */
-async function downloadCsv<T>({
-  name,
+async function csvOf<T>({
   columns,
   rows,
   groupBy,
   sort,
   hidden,
 }: {
-  name: string;
   columns: ViewField<T>[];
   rows: T[];
   groupBy: ViewField<T> | null;
@@ -614,16 +618,134 @@ async function downloadCsv<T>({
     return hidden && f.amount ? maskAmount(String(v)) : v;
   };
   const { default: Papa } = await import('papaparse');
-  const csv = Papa.unparse({
+  return Papa.unparse({
     fields: fields.map((f) => f.label),
     data: sorted.map((r) => fields.map((f) => cell(f, r))),
   });
+}
+
+/** Saves CSV text as `<name>-<date>.csv`. */
+function saveCsv(name: string, csv: string) {
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
   a.download = `${name.trim().replace(/[^\w.-]+/g, '-') || 'view'}-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+type ExportScope = 'filtered' | 'all';
+const SCOPE_KEY = 'lumen:export-scope:';
+
+/** The table's last Filtered / All pick, kept on the device per table. */
+function useExportScope(key: string) {
+  const [scope, setScope] = useState<ExportScope>(() => {
+    try {
+      return localStorage.getItem(SCOPE_KEY + key) === 'all' ? 'all' : 'filtered';
+    } catch {
+      return 'filtered';
+    }
+  });
+  const pick = (s: ExportScope) => {
+    setScope(s);
+    try {
+      localStorage.setItem(SCOPE_KEY + key, s);
+    } catch {}
+  };
+  return [scope, pick] as const;
+}
+
+/**
+ * Export: Download CSV and Copy CSV of the table's rows. While a filter hides rows (`all` holds
+ * more than `rows`), a Filtered / All switch at the top picks which; Filtered is every matching
+ * row on every page. On desktop it is an icon button with its menu; on a phone (`items`) its
+ * entries join the card's ⋯ menu.
+ */
+function useExport<T>({
+  name,
+  columns,
+  rows,
+  all,
+  groupBy,
+  sort,
+  hidden,
+  scopeKey,
+}: {
+  name: string;
+  columns: ViewField<T>[];
+  rows: T[];
+  all?: T[];
+  groupBy: ViewField<T> | null;
+  sort: CustomViewConfig['sort'];
+  hidden: boolean;
+  scopeKey: string;
+}) {
+  const [picked, setScope] = useExportScope(scopeKey);
+  const split = !!all && all.length !== rows.length;
+  const scope = split ? picked : 'filtered';
+  const chosen = scope === 'all' && all ? all : rows;
+  const text = () => csvOf({ columns, rows: chosen, groupBy, sort, hidden });
+  const download = () => text().then((csv) => saveCsv(name, csv));
+  const n = chosen.length;
+  const counted = `${n.toLocaleString()} ${n === 1 ? 'row' : 'rows'}`;
+  const copy = async () => {
+    try {
+      const csv = await text();
+      await navigator.clipboard.writeText(csv);
+      toast.success(`Copied ${counted} to the clipboard`);
+    } catch {
+      toast.error('The browser blocked the copy', {
+        action: { label: 'Download', onClick: () => void download() },
+      });
+    }
+  };
+  const keep = (s: ExportScope) => (e: Event) => {
+    e.preventDefault();
+    setScope(s);
+  };
+  const seg = (s: ExportScope, label: string, count: number) => (
+    <DropdownMenuItem
+      onSelect={keep(s)}
+      aria-checked={scope === s}
+      role="menuitemradio"
+      className={cn(
+        'num justify-center whitespace-nowrap text-xs text-muted-foreground',
+        scope === s && 'bg-accent text-accent-foreground',
+      )}
+    >
+      {label} · {count.toLocaleString()}
+    </DropdownMenuItem>
+  );
+  const items = (
+    <>
+      {split && all && (
+        <div className="grid grid-cols-2 gap-0.5 rounded-md border p-0.5">
+          {seg('filtered', 'Filtered', rows.length)}
+          {seg('all', 'All', all.length)}
+        </div>
+      )}
+      <DropdownMenuLabel className="num truncate text-xs font-normal text-muted-foreground">
+        {counted} · {columns.length} {columns.length === 1 ? 'column' : 'columns'}
+      </DropdownMenuLabel>
+      <DropdownMenuItem onSelect={() => void download()}>
+        <DownloadIcon /> Download CSV
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => void copy()}>
+        <CopyIcon /> Copy to clipboard
+      </DropdownMenuItem>
+    </>
+  );
+  const button = (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <IconButton icon={DownloadIcon} label="Export" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        {items}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  return { items, button };
 }
 
 /**
@@ -665,6 +787,7 @@ export function LumenView<T extends RowData>({
   onSort,
   shown,
   resizable,
+  allRows,
 }: LumenViewProps<T>) {
   // Its controls (Edit widget ▸ Controls): Pager, Columns and Download here.
   const on = (k: WidgetControl) => controlOn({ kind: 'table', controls: shown }, k);
@@ -703,6 +826,21 @@ export function LumenView<T extends RowData>({
   // the page buttons sit in the card's header. Views saved before then
   // carry no pagination, so they read the defaults.
   const isMobile = useIsMobile();
+  const everyRow = useMemo(
+    () => (allRows && !server && !groupRows ? mergeRows(domain, allRows, groupBy) : undefined),
+    [allRows, server, groupRows, domain, groupBy],
+  );
+  const exports = useExport({
+    name: title,
+    columns,
+    rows: tableRows,
+    all: everyRow,
+    groupBy,
+    sort: config.sort,
+    hidden: amountsHidden,
+    scopeKey: `${domain.id}:${cardId}`,
+  });
+  const exporter = !pivot && on('download') ? exports : null;
   const pagination = config.pagination ?? viewPaginationSchema.parse({});
   const [pageSize, setPageSize] = useState<number>(pagination.size);
   const [pageIndex, setPageIndex] = useState(0);
@@ -863,6 +1001,7 @@ export function LumenView<T extends RowData>({
       title={title}
       phoneTitle={false}
       controls={controls}
+      menu={blank || !isMobile ? undefined : exporter?.items}
       tools={
         blank ? (
           tools
@@ -874,24 +1013,7 @@ export function LumenView<T extends RowData>({
             {onColumns && !onAddColumn && on('columns') && (
               <ColumnPicker domain={domain} columns={columns} onColumns={onColumns} />
             )}
-            {!pivot && on('download') && (
-              <IconButton
-                icon={DownloadIcon}
-                label="Download CSV"
-                // A phone's card header has room for the pager, filter, refresh and menu only.
-                className="max-md:hidden"
-                onClick={() =>
-                  downloadCsv({
-                    name: title,
-                    columns,
-                    rows: tableRows,
-                    groupBy,
-                    sort: config.sort,
-                    hidden: amountsHidden,
-                  })
-                }
-              />
-            )}
+            {exporter && !isMobile && exporter.button}
           </>
         )
       }
