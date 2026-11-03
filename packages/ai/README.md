@@ -226,7 +226,9 @@ ctx.waitUntil(meaningStep({ def: notesFind, sql: d1Sql(env.DB), embed, index: en
 
 A ChatGPT plan sign-in is free to the app (`priced` with `free`). Nothing here holds a key or a token: the app passes them per turn.
 
-An app with an `Assistant` gets the whole plan from it: `assistant.agentTurn(caller, { message, tier?, context?, refs?, time_zone? })` returns `{ plan, settle }` with the person's tier and model on whoever pays, the tool groups at their access, the kit's rules, the bearings and the page before the message, `escalate` to a higher tier (its own usage part, inside the same cap) and Claude's advisor. `settle` adds the spend to the payer's month and reports the turn through `onStep`. It throws `AssistantError` when nobody can pay. Drafts, Undo and compaction still run only in `turn`.
+An app with an `Assistant` gets the whole plan from it: `assistant.agentTurn(caller, { message, tier?, context?, refs?, time_zone? })` returns `{ plan, settle }` with the person's tier and model on whoever pays, the tool groups at their access, the kit's rules, the bearings and the page before the message, `escalate` to a higher tier (its own usage part, inside the same cap) and Claude's advisor. `settle` adds the spend to the payer's month and reports the turn through `onStep`. It throws `AssistantError` when nobody can pay.
+
+Drafts and writes are cards in the chat's own storage (`lumen_cards` in the agent's SQLite). A write the person's access only drafts makes an open card and changes nothing. `saveCard(id)` runs it through the app's `applyDraft`, and `dismissCard(id)` drops it. A write made at once is kept for `undoCard(id)` through the app's `undoWrite`. `cards()` lists the cards. The next answer is told how each card ended and what was undone. With an `Assistant`, `applyDraft` is `assistant.runDraft(caller, card)` and `undoWrite` is `assistant.undoChange(caller, card)`. Think compacts the chat past `COMPACT_AT` (150k tokens) on the last answer's model and key, and that spend is added to the next answer.
 
 ```ts
 class Chat extends LumenAgent<Env> {
@@ -237,5 +239,7 @@ class Chat extends LumenAgent<Env> {
     return plan;
   }
   settle(end: AgentTurnEnd) { return this.#settle?.(end) ?? Promise.resolve(); }
+  protected applyDraft(card: AgentCard) { return assistant.runDraft(caller, card); }
+  protected undoWrite(card: AgentCard) { return assistant.undoChange(caller, card); }
 }
 ```

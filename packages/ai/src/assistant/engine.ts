@@ -858,6 +858,49 @@ export class Assistant {
     return { plan, settle };
   }
 
+  /**
+   * Saves a Think chat's draft card (`LumenAgent.applyDraft`): its group's write runs as the person,
+   * while that group is still on Read + draft or Read + write.
+   */
+  async runDraft(caller: Caller, card: { group: string; tool: string; args: unknown }) {
+    const g = this.groupById(card.group);
+    const p = await this.state.person(caller.id);
+    const access = g ? this.access(p, g) : 'off';
+    if (access !== 'draft' && access !== 'write')
+      throw new AssistantError(
+        'Its tools are no longer on Read + draft or Read + write in Settings ▸ Tools.',
+        'off',
+        409,
+      );
+    const sources = (await this.sourcesOf(caller, p)).filter((x) => x.group === card.group);
+    for (const x of sources) {
+      const open = await x.source();
+      try {
+        const def = open.tools.find((d) => d.name === card.tool);
+        if (!def) continue;
+        if (def.read) throw new AssistantError('That card is not a change.', 'not_write', 400);
+        return await withDeadline(card.tool, 60_000, open.call(card.tool, card.args));
+      } finally {
+        await open.close().catch(() => undefined);
+      }
+    }
+    throw new AssistantError('That tool is gone.', 'not_found', 404);
+  }
+
+  /** Takes back a Think chat's write made at once (`LumenAgent.undoWrite`) through its group's `undo`. */
+  async undoChange(
+    caller: Caller,
+    card: { group: string; tool: string; args: unknown; result?: unknown },
+  ) {
+    const g = this.groupById(card.group);
+    if (!g?.undo) throw new AssistantError('That change cannot be undone here.', 'no_undo', 400);
+    await withDeadline(
+      `Undo ${card.tool}`,
+      60_000,
+      g.undo(caller, { tool: card.tool, args: card.args, result: card.result }),
+    );
+  }
+
   /** The escalate tool of a Think turn: one task to a higher tier, its memo back. */
   private agentEscalate(
     tt: TurnTools,
