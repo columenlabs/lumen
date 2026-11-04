@@ -60,6 +60,8 @@ export function SettingField({
         className={cn(
           'flex w-32 shrink-0 items-center gap-1.5 max-sm:w-24',
           stack && 'max-sm:w-auto max-sm:flex-1',
+          // Nothing beside it but `end`: the label takes the row, so a short name never cuts off.
+          children === undefined && 'w-auto min-w-0 flex-1 shrink max-sm:w-auto',
         )}
       >
         <Label
