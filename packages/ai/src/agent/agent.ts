@@ -47,7 +47,7 @@ import {
   connectorId,
   connectorSource,
 } from './connectors';
-import { type ModelKey, aiModel, planFallback, turnSettings } from './models';
+import { type ModelKey, aiModel, cachedTurn, planFallback, turnSettings } from './models';
 import {
   type ScreenCall,
   screenMapOf,
@@ -749,6 +749,10 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       this.#turn.lazy = lazy;
     }
     const turn = this.#turn;
+    const cached = cachedTurn(
+      system,
+      withLead(ctx.messages, `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`),
+    );
     return {
       model: this.#model(plan, () => {
         const fb = plan.fallback;
@@ -757,8 +761,9 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         turn.main = new UsageMeter(fb.model, fb.label, false);
         turn.meters.push(turn.main);
       }),
-      instructions: system,
-      messages: withLead(ctx.messages, `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`),
+      // Think types instructions as a string; the SDK it hands them to takes a system message too.
+      instructions: cached.instructions as unknown as string,
+      messages: cached.messages,
       tools,
       ...(lazy ? { activeTools: lazy.active() } : {}),
       ...(plan.first ? { toolChoice: { type: 'tool', toolName: plan.first } } : {}),
