@@ -35,7 +35,6 @@ import {
   ASSISTANT_EFFORTS,
   ASSISTANT_OWN_WAYS,
   ASSISTANT_PAYERS,
-  type AssistantMessage,
   type AssistantProvider,
   type AssistantSettingsPatch,
   HAND_OFF_POLICIES,
@@ -62,7 +61,6 @@ export interface AssistantRoutesOptions {
 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const MAX_MESSAGE = 20_000;
 const MAX_CAP = 10_000;
 
 const json = (body: unknown, status = 200) =>
@@ -335,26 +333,9 @@ export function assistantRoutes(
           return json(test);
         }
 
-        case 'POST /chat': {
-          const b = (await body(req)) as Partial<AssistantMessage>;
-          const message = typeof b.message === 'string' ? b.message.trim() : '';
-          if (!message || message.length > MAX_MESSAGE)
-            return fail(`Write a message of up to ${MAX_MESSAGE} characters.`);
-          const msg: AssistantMessage = {
-            message,
-            ...(typeof b.chat_id === 'string' ? { chat_id: b.chat_id } : {}),
-            ...(b.context && typeof b.context === 'object' ? { context: b.context } : {}),
-            ...(Array.isArray(b.refs) ? { refs: b.refs.slice(0, 20) } : {}),
-            ...(typeof b.tier === 'string' ? { tier: b.tier } : {}),
-          };
-          return new Response(a.turnStream(caller, msg, req.signal), {
-            headers: {
-              'content-type': 'text/event-stream',
-              'cache-control': 'no-store',
-              'x-accel-buffering': 'no',
-            },
-          });
-        }
+        // A chat turn runs on the agent (`./agent`, LumenAgent): the app routes it there.
+        case 'POST /chat':
+          return fail('Chats run on the agent now. Start a new chat.', 410, 'moved');
 
         case 'GET /chats':
           return json(await a.listChats(caller));
@@ -390,13 +371,6 @@ export function assistantRoutes(
           await a.removeChat(caller, id);
           return json({ ok: true });
         }
-        if (parts.length === 4 && parts[2] === 'drafts' && m === 'POST') {
-          const action = (await body(req)).action;
-          if (action !== 'save' && action !== 'dismiss') return fail('action is save or dismiss.');
-          return json(await a.settleDraft(caller, id, parts[3] as string, action));
-        }
-        if (parts.length === 5 && parts[2] === 'writes' && parts[4] === 'undo' && m === 'POST')
-          return json(await a.undoWrite(caller, id, parts[3] as string));
       }
       return fail('Not found.', 404);
     } catch (err) {

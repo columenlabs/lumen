@@ -1,6 +1,5 @@
 /**
- * An answer from a `LumenAgent` as the panel's server-sent events, the same stream
- * `assistantRoutes`' `POST /chat` sends, so the panel needs no change. The app's route finds the
+ * An answer from a `LumenAgent` as the panel's server-sent events, the stream the panel reads. The app's route finds the
  * person's chat (a facet of their store, or its own agent) and hands `ask` here.
  */
 import type { AssistantEvent } from '@columenlabs/lumen-ui-types/assistant';
