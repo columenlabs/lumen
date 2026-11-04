@@ -25,14 +25,31 @@ export interface AiModelOptions {
 /**
  * A ChatGPT plan sign-in takes function tools only inside one namespace and no output cap, and a
  * forced call is the one tool offered with any call required (developers.openai.com/siwc, Preview
- * limitations). This fetch rewrites each Responses request to those rules, so the AI SDK's OpenAI
- * provider runs on a plan unchanged.
+ * limitations). It also keeps nothing (`store: false`, so earlier reasoning rides along encrypted)
+ * and takes the system prompt as `instructions`, as the assistant's own OpenAI loop sends it (the
+ * AI SDK's request without these came back 400 Bad Request on a plan, 2026-11-04). This fetch
+ * rewrites each Responses request to those rules, so the AI SDK's OpenAI provider runs on a plan
+ * unchanged.
  */
 export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeof fetch {
   return async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (!url.endsWith('/responses') || typeof init?.body !== 'string') return base(input, init);
     const { max_output_tokens: _cap, ...body } = JSON.parse(init.body) as Record<string, unknown>;
+    body.store = false;
+    const include = Array.isArray(body.include) ? (body.include as string[]) : [];
+    if (!include.includes('reasoning.encrypted_content'))
+      body.include = [...include, 'reasoning.encrypted_content'];
+    // System and developer messages become the request's instructions.
+    const items = Array.isArray(body.input) ? (body.input as Record<string, unknown>[]) : [];
+    const lead = items.filter((m) => m.role === 'system' || m.role === 'developer');
+    if (lead.length) {
+      const said = lead.map((m) => textOf(m.content)).filter(Boolean);
+      if (typeof body.instructions === 'string' && body.instructions)
+        said.unshift(body.instructions);
+      body.instructions = said.join('\n\n');
+      body.input = items.filter((m) => !lead.includes(m));
+    }
     let tools =
       (body.tools as { type: string; name?: string; strict?: boolean }[] | undefined) ?? [];
     const choice = body.tool_choice as { type?: string; name?: string } | string | undefined;
@@ -40,15 +57,47 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       tools = tools.filter((t) => t.name === choice.name);
       body.tool_choice = 'required';
     }
-    const fns = tools.filter((t) => t.type === 'function').map(({ strict: _, ...t }) => t);
+    // Each function as the assistant's own loop sends it: no `strict`, no JSON Schema dialect tag.
+    const fns = tools
+      .filter((t) => t.type === 'function')
+      .map(({ strict: _, ...t }) => {
+        const p = (t as { parameters?: Record<string, unknown> }).parameters;
+        if (!p || !('$schema' in p)) return t;
+        const { $schema: _s, ...parameters } = p;
+        return { ...t, parameters };
+      });
     const rest = tools.filter((t) => t.type !== 'function');
     if (fns.length)
       body.tools = [
         ...rest,
         { type: 'namespace', name: 'app', description: `${name}'s tools`, tools: fns },
       ];
-    return base(input, { ...init, body: JSON.stringify(body) });
+    const res = await base(input, { ...init, body: JSON.stringify(body) });
+    // A refusal is logged with OpenAI's own reason; the person sees a plain sentence.
+    if (!res.ok)
+      console.error(
+        JSON.stringify({
+          event: 'assistant_plan_refused',
+          status: res.status,
+          body: (await res.clone().text()).slice(0, 500),
+        }),
+      );
+    return res;
   };
+}
+
+/** A message's text, whether a string or a list of text parts. */
+function textOf(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((p) =>
+      p && typeof p === 'object' && typeof (p as { text?: unknown }).text === 'string'
+        ? (p as { text: string }).text
+        : '',
+    )
+    .filter(Boolean)
+    .join('\n');
 }
 
 /** The AI SDK model a tier runs: its provider's client on the payer's key. */
@@ -67,8 +116,14 @@ export function turnSettings(
   o: { effort: AssistantEffort; out?: number; plan?: boolean },
 ): { maxOutputTokens?: number; providerOptions?: Record<string, Record<string, JSONValue>> } {
   const out = o.plan || !o.out ? {} : { maxOutputTokens: o.out };
-  if (o.effort === 'default') return out;
-  return model.provider === 'anthropic'
-    ? { ...out, providerOptions: { anthropic: { effort: o.effort } } }
-    : { ...out, providerOptions: { openai: { reasoningEffort: o.effort } } };
+  // A plan keeps nothing, so earlier turns go back as items, not references to stored ones.
+  const openai: Record<string, JSONValue> = o.plan ? { store: false } : {};
+  if (o.effort !== 'default') {
+    if (model.provider === 'anthropic')
+      return { ...out, providerOptions: { anthropic: { effort: o.effort } } };
+    openai.reasoningEffort = o.effort;
+  }
+  return model.provider === 'openai' && Object.keys(openai).length
+    ? { ...out, providerOptions: { openai } }
+    : out;
 }
