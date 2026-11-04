@@ -1,5 +1,224 @@
 [
   {
+    "tag": "v0.1.191",
+    "date": "2026-11-04T06:19:34Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "The assistant can move the person's screen again",
+        "body": "In `@columenlabs/lumen-ai`, `LumenAgent` now adds a `screen` tool to a turn when `plan.screen` is on and the message carries `screen`, so the assistant can go to a page, open settings, show a chart, open an item or point at something."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Screen moves show as chips with Undo",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` now sends the page map (`screenMapFor`) with each message and runs each new screen call once, showing it as a chip with ✓ and Undo, the reason it failed, or Go now when it is waiting."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A Screen setting for each person",
+        "body": "`Assistant.agentTurn` now sets `plan.screen` from the person's new `screen` setting (`off` or `move`, Move by default), `PUT /settings` accepts it, and the status response returns it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The assistant learns what happened to its moves",
+        "body": "`AskInput.outcomes` and `AssistantMessage.outcomes` now carry the result of each screen call back to `LumenAgent`, which tells the model once, in the next turn's lead."
+      },
+      {
+        "kinds": [],
+        "title": "`AssistantStatus.screen` is now required",
+        "body": "In `@columenlabs/lumen-ui-types/assistant`, if your app builds its own `AssistantStatus` object, add `screen: 'move'` or `screen: 'off'` to it."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.190",
+    "date": "2026-11-04T05:55:56Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Host workspaces from the kit",
+        "body": "From `@columenlabs/lumen-ai/workspaces`, `createWorkspaces({db, run, tables?, app?})` gives any app a workspace store over SQLite, using `doSql` for a Durable Object or `d1Sql` for D1, so `WorkspacesSection` and `WorkspacePage` no longer need a hand-built server."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Create tabs from recipes",
+        "body": "`workspaceRoutes({base, owner, store, allow?})` now serves `POST /workspaces/:id/tabs` with `{name, recipe}`, which creates a tab from a recipe and runs it once."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Run every tab again",
+        "body": "With `workspaceRoutes`, `POST /workspaces/:id/refresh` re-runs all tabs in a workspace one after another."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Stricter writes and recipes",
+        "body": "Routes from `workspaceRoutes` accept writes only as same-origin JSON and accept only `call` recipes, so `sql` and `script` recipes are refused with a 422."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Ship the tables as a migration",
+        "body": "`workspaceMigrations(tables)` returns the create-table SQL, so your store module can run it as its own migration."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.189",
+    "date": "2026-11-04T05:46:36Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Connections are now settings rows",
+        "body": "In `LumenConnection` from `@columenlabs/lumen-ui`, each way to connect (AI provider, email relay, hub credentials) is a `SettingField` row with a `SettingValue`, so you can show it next to your other settings and, with several ways, choose the active one in the new **Use** row."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer connection status",
+        "body": "`ConnectionBadge` now draws `SettingStatus` (Works, Failed, Not tested or Off), so you can show a connection's state the same way as any other setting."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "MCP servers as copyable rows",
+        "body": "In `McpSettings`, each server address is now a row with a Copy button, and the **From** picker chooses which app's connect steps show."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Schedule editor matches the settings layout",
+        "body": "The `SchedulesSection` editor now lays out each setting as a label-beside-control row, with the On and Notify switches at the row end."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No more double line above actions",
+        "body": "`SettingField` now draws a single divider between rows (`border-t`, none on the first row), so there is no doubled line above `SettingActions`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.188",
+    "date": "2026-11-04T05:33:18Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "`assistantRoutes` no longer handles `POST /chat`",
+        "body": "In `@columenlabs/lumen-ai`, `assistantRoutes` now answers `POST /chat` with 410 `moved`, so change any app client that still calls it to run chats on `LumenAgent`."
+      },
+      {
+        "kinds": [],
+        "title": "Old `drafts` and undo routes are gone",
+        "body": "`assistantRoutes` no longer serves the `drafts` and `writes/:step/undo` routes for old chats, so remove any calls to them from your app."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Chats run on `LumenAgent`",
+        "body": "From the `./agent` export of `@columenlabs/lumen-ai`, `LumenAgent` now runs every chat turn, and the assistant's own turn loop no longer exists."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Smaller `Assistant` that still reads old chats",
+        "body": "`Assistant` keeps `agentTurn`, `runDraft`, `undoChange` and `complete`, and can still read, delete and purge chats saved by the old loop until they age out."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.187",
+    "date": "2026-11-04T05:15:38Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Plan turns fall back when the plan is used up",
+        "body": "In `@columenlabs/lumen-ai`, a turn run through `LumenAgent` on a plan sign-in that hits its usage limit now finishes on a model from the app's other provider instead of ending in the limit error."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New `planFallback` model wrapper",
+        "body": "`planFallback(primary, fallback, onSwitch)` wraps a plan-backed model and hands that call and every later call in the turn to the fallback when the plan runs out, so you can use the same rule in your own agent code."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`agentTurn` sets `AgentTurnPlan.fallback` for you",
+        "body": "When a turn's key is a plan sign-in, `agentTurn` now fills in `AgentTurnPlan.fallback` with the app's smallest model from the other provider on the same payer's API key, and leaves the turn unchanged if that payer has no such key."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Fallback usage is reported and priced separately",
+        "body": "After a swap, `LumenAgent` reports the fallback model's use as its own usage part (`Tier · <model>`), priced, and no longer counts it as free plan use."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.186",
+    "date": "2026-11-04T03:45:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Think works on a plan sign-in",
+        "body": "In `@columenlabs/lumen-ai/agent`, `planFetch` now sends `store: false` with `include: ['reasoning.encrypted_content']`, so the first Think turn on a subscription plan sign-in returns an answer instead of `Bad Request`."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Earlier turns are replayed in full on a plan",
+        "body": "In `@columenlabs/lumen-ai/agent`, `turnSettings` now sets the `store` provider option to `false` on a plan, so the SDK sends earlier turns as full items rather than references to stored responses."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Plan requests match the assistant's own loop",
+        "body": "In `@columenlabs/lumen-ai/agent`, `planFetch` now moves system and developer messages into `instructions` and drops the `$schema` tag from function parameters, so `input` holds only the conversation."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Plan failures name their cause",
+        "body": "When `planFetch` gets a non-2xx response, it now logs `assistant_plan_refused` with the provider's stated reason, so you can see why a plan request was rejected."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.185",
     "date": "2026-11-04T03:22:44Z",
     "takeaways": [

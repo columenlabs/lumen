@@ -45,7 +45,8 @@ Rules:
 5. **Status is the header pill only** (`SettingStatus`: Works, Failed, Not tested, Off, or a count). The action bar adds just the time or the error.
 6. **Several controls on one row are one group** and never wrap. A long value takes `stack`: on a phone its label goes above it.
 7. **A section's pill** is `health` on its `SettingsSectionDef`: `sectionHealth(items)`, the worst thing wins. The Settings list shows it as a dot.
-8. **A form that saves together** keeps label beside field (`SettingField`), and its Test result sits in its footer, not a row of its own.
+8. **A row with only an `end`** (a switch or a status pill, no control) gives its label the whole row, so a short name never cuts off on a phone. A row with a control keeps the fixed label column (8rem, 6rem on a phone).
+9. **A form that saves together** keeps label beside field (`SettingField`), and its Test result sits in its footer, not a row of its own.
 
 ### Built on the slots
 - `LumenConnection` (a key, a sign-in, a relay): one row per way to connect, its value with Replace or Sign in again inside. One way: its last test, Test and Remove sit in the action bar. Several ways: a Use row picks the one that runs, and each way's row ends in its own status, Test and Remove (on a phone the label and those sit above the value).
