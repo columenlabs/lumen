@@ -224,6 +224,18 @@ const CHAT: AssistantChat = {
       kind: 'text',
       text: 'Sam asked for **the Q4 numbers** on Tuesday and again on Thursday. I drafted a note to follow up; press Save to keep it.',
     },
+    {
+      kind: 'text',
+      text: [
+        'His asks by day, as a table (a column of numbers lines up on its right edge):',
+        '',
+        '| Day | Asks | Answered | Open |',
+        '|---|---|---|---|',
+        '| Tuesday (the Q4 review prep call) | 2 | 1 | 1 |',
+        '| Thursday | 1 | 0 | 1 |',
+        '| Total | 3 | 1 | 2 |',
+      ].join('\n'),
+    },
     DRAFT,
   ] as ChatItem[],
   usage: {
