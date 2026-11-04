@@ -1,5 +1,195 @@
 [
   {
+    "tag": "v0.1.204",
+    "date": "2026-11-04T18:54:49Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix",
+          "performance"
+        ],
+        "title": "Lazy parts now load themselves when the tab is idle",
+        "body": "In @columenlabs/lumen-ui, every component made with `lazyPart` now loads on its own 8 seconds after page load, so a deploy can no longer remove a file a long-open tab still needs, with no wiring in your app."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Show a fallback when a lazy part's file is gone",
+        "body": "`lazyPart` now takes a third argument, `stale`, a component that draws in place of the part when its file no longer exists after a deploy."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "No more page reload in the middle of a chat",
+        "body": "When a `lazyPart` has a `stale` component, `LumenBoundary` no longer reloads the page on a stale-build error, so an app's chat Markdown component can fall back to plain text and keep the conversation intact."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.203",
+    "date": "2026-11-04T18:38:54Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Whole-number columns no longer show decimals",
+        "body": "In `toFrame` from `@columenlabs/lumen-ai`, a number column whose values are all whole numbers now gets the `rounded` format, so pushed CSVs and fetched frames show `27` or `1,235` instead of `27.00`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Year columns read as plain years",
+        "body": "In `toFrame` from `@columenlabs/lumen-ai`, a number column where every value is a year between 1900 and 2100 now gets the `integer` format, so values like `2026` stay readable as years."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Decimal columns are unchanged, and saved frames keep their format",
+        "body": "`toFrame` still gives the `number` format to any column with a non-whole value, and frames already saved keep their stored format until you push or refresh them again."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.202",
+    "date": "2026-11-04T18:27:46Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Chat history now reads from the prompt cache on later turns",
+        "body": "In `@columenlabs/lumen-ai`, the agent's `cachedTurn` now marks the message just before the newest person's message with `cacheControl`, so the chat so far is cached and the next turn can read it."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Cache entries no longer go stale after one turn",
+        "body": "In `@columenlabs/lumen-ai`, the agent no longer relies only on the request-level breakpoint, which ended on the newest message and its per-turn bearings (`withLead`). That prefix could never match the next turn, so chats wrote the cache every turn and never read it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Instructions and tools are cached as a system message",
+        "body": "In `@columenlabs/lumen-ai`, `cachedTurn` now sends the agent's instructions as a system message with `cacheControl`, so tools and instructions stay cached across turns without any change to your agent setup."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.201",
+    "date": "2026-11-04T18:08:22Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Per-tier usage pop-up in the assistant panel",
+        "body": "In `LumenAssistant` from @columenlabs/lumen-ui, the usage line now opens a compact pop-up table (`UsageTable`) with one row per usage part and a Total row, so you can see where cost and tokens went."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Denser usage line",
+        "body": "In `LumenAssistant`, the usage line (`UsageLine`) now reads `$cost · ↑in ↓out ⚡cache%` and keeps the context bar, so you get cost, token and cache numbers at a glance."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Hand-off counts on usage parts",
+        "body": "In @columenlabs/lumen-ui-types, `UsagePart` has a new optional `runs` field, set by `UsageMeter.handOff()` in @columenlabs/lumen-ai, so you can show how many times a chat escalated to a higher tier."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.200",
+    "date": "2026-11-04T18:04:47Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Show a pushed dataset as a workspace tab",
+        "body": "In `@columenlabs/lumen-ai`, `createWorkspaces(...).frameTab(owner, workspace, { name, frame, start? })` adds a tab over a frame the person already has, so a dataset an outside agent sent with `pushFrame` can now appear in a workspace without a run or recipe."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Prompt caching for assistant turns",
+        "body": "In `@columenlabs/lumen-ai`, the turn settings used by `LumenAgent` now always send an ephemeral cache breakpoint, so later steps and later turns of an assistant chat read the tools, instructions and earlier messages from cache at about a tenth of the input price."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.199",
+    "date": "2026-11-04T17:20:58Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Lint, type-check and build now run side by side in CI",
+        "body": "In the Lumen repository's CI workflow, a pull request's three checks start together and each prints its full output when it ends, so you see every failure in one run. Locally the step took 67 s instead of 128 s."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A stalled install no longer blocks CI for minutes",
+        "body": "The CI install step is now cut off at 45 s and tried once more. Before, one stalled install ran 360 s and the whole job took 437 s."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Stuck CI jobs fail after 3 minutes",
+        "body": "The CI job timeout drops from 15 min to 3, so a hung run reports a failure quickly and you can re-run it."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.198",
+    "date": "2026-11-04T17:17:25Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Fetch recipes for workspace tabs",
+        "body": "From `@columenlabs/lumen-ui-types/frames`, a tab can now use the `{kind:'fetch', requests, each?, rows?, pick?}` recipe to read from the web with `{field}` templates, with `fetchCalls` capping a run at 50 reads (`FETCH_CALLS`) and `fetchedRows` shaping the rows."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Browser script runner",
+        "body": "From `@columenlabs/lumen-ui`, `runBrowserFrame` runs a `{kind:'script', runtime:'browser', code, requests?}` tab in a sandboxed iframe, so you can wrangle fetched data in the browser and save the rows with one `PUT /frames/:id/rows`."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Scripts get no network of their own",
+        "body": "Browser script code runs in a Web Worker inside an opaque-origin iframe, with a CSP of `connect-src 'none'` and a 30 s stop, and its only way out is `hub.fetch(url, {key})` through your app's `POST <api>/fetch` proxy."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Pushed datasets",
+        "body": "In the workspace store, `pushFrame` replaces a tab's rows (or appends them, with an optional key), `removeFrame` deletes the tab, and `parseCsv` turns CSV text into rows (1 MB per call)."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.197",
     "date": "2026-11-04T16:42:45Z",
     "takeaways": [
