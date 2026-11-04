@@ -12,6 +12,8 @@ import {
   CoinsIcon,
   FlameIcon,
   Grid3x3Icon,
+  Icon,
+  type IconNode,
   LandmarkIcon,
   LayersIcon,
   ListTreeIcon,
@@ -28,7 +30,6 @@ import {
   WalletIcon,
   ZapIcon,
 } from 'lucide-react';
-import type { IconName } from 'lucide-react/dynamic';
 import { createElement, useEffect, useState } from 'react';
 import { cn } from './lib/utils';
 import type { NavIcon } from './nav';
@@ -75,21 +76,39 @@ export const iconOf = (icon: ViewIcon | null | undefined, fallback: NavIcon): Na
   if (!icon) return fallback;
   if (icon in VIEW_ICONS) return VIEW_ICONS[icon as ViewIconName];
   if (/^[a-z]/.test(icon))
-    return lucide && !lucide.names.has(icon) ? fallback : lucideIcon(icon, fallback);
+    return lucide && !lucide.nodes.has(iconKey(icon)) ? fallback : lucideIcon(icon, fallback);
   return emojiIcon(icon);
 };
 
 /**
- * lucide's name → icon map (every icon, each its own lazy file) loads on the first icon picked by
- * name, not with the app: the map alone is a few hundred KB of the first page's JavaScript.
+ * Every lucide icon's drawing, in ONE lazy file: loaded on the first icon picked by name, not with
+ * the app (it is a few hundred KB). Never `lucide-react/dynamic`: that gives each of ~1,800 icons
+ * its own file in every app's build.
  */
-type Lucide = typeof import('lucide-react/dynamic') & { names: Set<string> };
+type Lucide = { iconNames: readonly string[]; nodes: Map<string, IconNode> };
 let lucide: Lucide | undefined;
 let loadingLucide: Promise<Lucide> | undefined;
+/** A name's lookup key: `arrow-down-0-1`, `arrow-down-01` and `ArrowDown01` are one icon. */
+const iconKey = (name: string) => name.replace(/-/g, '').toLowerCase();
+/** `ArrowDown01` → `arrow-down-01`, the name the picker shows and saves. */
+const kebab = (pascal: string) =>
+  pascal
+    .replace(/([a-z])([A-Z0-9])/g, '$1-$2')
+    .replace(/([0-9])([A-Za-z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
 function loadLucide(): Promise<Lucide> {
   if (!loadingLucide)
-    loadingLucide = import('lucide-react/dynamic').then((m) => {
-      lucide = { ...m, names: new Set<string>(m.iconNames) };
+    loadingLucide = import('lucide').then(({ icons }) => {
+      const nodes = new Map<string, IconNode>();
+      const iconNames: string[] = [];
+      for (const [pascal, node] of Object.entries(icons)) {
+        const key = iconKey(pascal);
+        if (nodes.has(key)) continue;
+        nodes.set(key, node as IconNode);
+        iconNames.push(kebab(pascal));
+      }
+      lucide = { iconNames: iconNames.sort(), nodes };
       return lucide;
     });
   return loadingLucide;
@@ -119,8 +138,9 @@ function LucideByName({
       'aria-hidden': true,
       className: cn('inline-block size-4 shrink-0', className),
     });
-  if (!lucide.names.has(name)) return fallback ? createElement(fallback, { className }) : null;
-  return createElement(lucide.DynamicIcon, { name: name as IconName, className });
+  const node = lucide.nodes.get(iconKey(name));
+  if (!node) return fallback ? createElement(fallback, { className }) : null;
+  return createElement(Icon, { iconNode: node, className });
 }
 const made = new Map<string, NavIcon>();
 /** One component per pick, so React keeps it between renders. */
@@ -133,7 +153,7 @@ const once = (key: string, make: () => NavIcon) => {
   return Icon;
 };
 
-/** Any lucide icon by name, loaded on first use (lucide's own DynamicIcon). */
+/** Any lucide icon by name, loaded on first use (all icons in one lazy file). */
 export const lucideIcon = (name: string, fallback?: NavIcon): NavIcon =>
   once(
     `lucide:${name}`,
