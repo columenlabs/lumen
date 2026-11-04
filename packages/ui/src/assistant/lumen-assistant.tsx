@@ -16,6 +16,7 @@ import type {
   HandOffItem,
   ScreenItem,
   StepItem,
+  UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -37,8 +38,17 @@ import {
   Undo2Icon,
   WrenchIcon,
   XIcon,
+  ZapIcon,
 } from 'lucide-react';
-import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react';
+import {
+  Fragment,
+  type ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   LumenAssistantButton,
   LumenAssistantChats,
@@ -47,6 +57,7 @@ import {
   useAssistantHotkey,
 } from '../assistant-panel';
 import { type ScreenApi, screenMapFor, useAssistantScreen } from '../assistant-screen';
+import { useIsMobile } from '../hooks/use-mobile';
 import { IconButton } from '../icon-button';
 import { errorText } from '../integrations';
 import { lazyPart } from '../lazy-part';
@@ -72,6 +83,7 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
 import { Spinner } from '../ui/spinner';
 import { Textarea } from '../ui/textarea';
 import type { AssistantAdapter } from './client';
@@ -1426,32 +1438,111 @@ const pointedRef = (p: PointedAt): AssistantRefNote =>
       }
     : { kind: p.section.kind, label: p.section.label, id: p.section.id, text: textOf(p.el) };
 
-/** The chat's cost and tokens (a popup splits them per part), and how full the context is. */
+/** Share of `in` read from the prompt cache, as a whole percent. */
+const hitPct = (p: { in: number; read: number }) => (p.in ? Math.round((p.read / p.in) * 100) : 0);
+
+/**
+ * A part's row name: its tier (the label's first piece; the whole label is the hover) and what it
+ * was: the main model, `×N` hand-offs to a higher tier, advice or a compaction.
+ */
+function partRow(p: UsagePart, i: number) {
+  const bits = p.label.split(' · ');
+  const last = bits[bits.length - 1] ?? '';
+  const kind = p.runs
+    ? `×${p.runs}`
+    : last === 'advice' || last === 'compact'
+      ? last
+      : i === 0
+        ? 'main'
+        : '';
+  return { tier: bits[0] ?? p.label, kind };
+}
+
+/** The chat's use per part: cost, tokens in with the cache %, out, calls; then the total. */
+function UsageTable({ usage }: { usage: ChatUsage }) {
+  const total = 'mt-1 border-t pt-1';
+  return (
+    <div className="grid grid-cols-[auto_auto_auto_auto_auto_auto] gap-x-3 gap-y-0.5 whitespace-nowrap text-xs">
+      <span />
+      <span />
+      <span className="text-right text-muted-foreground">Cost</span>
+      <span className="text-right text-muted-foreground">In (cached)</span>
+      <span className="text-right text-muted-foreground">Out</span>
+      <span className="text-right text-muted-foreground">Calls</span>
+      {usage.parts.map((p, i) => {
+        const r = partRow(p, i);
+        return (
+          <Fragment key={p.label}>
+            <span className="truncate font-medium" title={p.label}>
+              {r.tier}
+            </span>
+            <span className="text-muted-foreground">{r.kind}</span>
+            <span className="num text-right">{usd(p.usd)}</span>
+            <span className="num text-right">
+              {tokens(p.in)} ({hitPct(p)}%)
+            </span>
+            <span className="num text-right">{tokens(p.out)}</span>
+            <span className="num text-right">{p.calls}</span>
+          </Fragment>
+        );
+      })}
+      <span className={cn(total, 'font-semibold')}>Total</span>
+      <span className={total} />
+      <span className={cn(total, 'num text-right font-semibold')}>{usd(usage.usd)}</span>
+      <span className={cn(total, 'num text-right')}>
+        {tokens(usage.in)} ({hitPct(usage)}%)
+      </span>
+      <span className={cn(total, 'num text-right')}>{tokens(usage.out)}</span>
+      <span className={cn(total, 'num text-right')}>{usage.calls}</span>
+    </div>
+  );
+}
+
+/**
+ * The chat's cost, tokens in and out and cache hit (a pop-up splits them per part, a sheet on a
+ * phone), and how full the context is.
+ */
 function UsageLine({ usage }: { usage: ChatUsage | null }) {
+  const phone = useIsMobile();
   if (!usage || !usage.calls) return null;
   const ctx = usage.context ?? 0;
+  const trigger = (
+    <button
+      type="button"
+      className="flex min-w-0 items-center gap-2 tabular-nums hover:text-foreground"
+      aria-label="This chat's usage"
+    >
+      <span className="num truncate">
+        {usd(usage.usd)} · ↑{tokens(usage.in)} ↓{tokens(usage.out)}
+      </span>
+      <span className="num flex shrink-0 items-center gap-0.5" title="Read from cache">
+        <ZapIcon className="size-3" aria-hidden />
+        {hitPct(usage)}%
+      </span>
+    </button>
+  );
   return (
     <div className="flex shrink-0 items-center gap-3 px-3 pb-2 text-muted-foreground text-xs">
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" className="tabular-nums hover:text-foreground">
-            {usd(usage.usd)} · {tokens(usage.in + usage.out)} tokens
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 gap-1 p-2 text-xs">
-          {usage.parts.map((p) => (
-            <div key={p.label} className="flex justify-between gap-2 tabular-nums">
-              <span className="truncate">{p.label}</span>
-              <span>
-                {tokens(p.in)} in · {tokens(p.out)} out · {usd(p.usd)}
-              </span>
+      {phone ? (
+        <Sheet>
+          <SheetTrigger asChild>{trigger}</SheetTrigger>
+          <SheetContent side="bottom">
+            <SheetHeader>
+              <SheetTitle>This chat's usage</SheetTitle>
+            </SheetHeader>
+            <div className="overflow-x-auto px-4 pb-6">
+              <UsageTable usage={usage} />
             </div>
-          ))}
-          <p className="pt-1 text-muted-foreground">
-            {tokens(usage.read)} of {tokens(usage.in)} in read from cache
-          </p>
-        </PopoverContent>
-      </Popover>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Popover>
+          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-2">
+            <UsageTable usage={usage} />
+          </PopoverContent>
+        </Popover>
+      )}
       {ctx > 0 && (
         <span
           className="ml-auto flex items-center gap-1.5"

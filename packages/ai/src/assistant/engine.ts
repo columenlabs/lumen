@@ -759,7 +759,7 @@ export class Assistant {
           return {
             error: `${tier.label} runs on ${provider} and no ${provider} key is set for whoever pays this answer: answer yourself.`,
           };
-        const meter = tt.meter(sub.model, sub.meter.label, !!key.plan);
+        const meter = tt.meter(sub.model, sub.meter.label, !!key.plan).handOff();
         c.counts.handoffs += 1;
         if (this.tiers.indexOf(tier) > this.tiers.indexOf(c.counts.end)) c.counts.end = tier;
         const shown = asked.has(tier.id) ? 'asked' : why;

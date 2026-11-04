@@ -44,6 +44,11 @@ export class UsageMeter {
     if (!this.free) this.p.usd += t.usd;
     return t;
   }
+  /** Marks this part as one hand-off to a higher tier; parts of the same label add up their runs. */
+  handOff() {
+    this.p.runs = 1;
+    return this;
+  }
   part(): UsagePart {
     return { ...this.p };
   }
