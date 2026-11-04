@@ -8,7 +8,8 @@
  *   GET    /workspaces/:id                one, with its frames' heads
  *   PATCH  /workspaces/:id {name?, app?}
  *   DELETE /workspaces/:id
- *   POST   /workspaces/:id/tabs {name, recipe}   a new tab from a recipe (runs it once)
+ *   POST   /workspaces/:id/tabs {name, recipe, start?}   a new tab from a recipe (runs it once;
+ *                                        `start.formulas`: formula columns its layout starts with)
  *   POST   /workspaces/:id/refresh        runs every tab's recipe again, one after another
  *   PUT    /workspaces/:id/tabs/:tab {name?, config?}
  *   DELETE /workspaces/:id/tabs/:tab
@@ -19,14 +20,30 @@
  *   POST   /frames/:id/refresh            runs its recipe again
  *   GET|PUT /frames/:id/script            its recipe
  *   PATCH  /frames/:id/cells {edits}      hand edits
+ *   PUT    /frames/:id/rows {rows | error, ms}   a browser recipe's run: its rows, or why it failed
+ *   GET    /sandbox                       the page a browser recipe runs in (./sandbox.ts)
+ *   POST   /fetch {url, method?, body?, key?}    one web read for a browser script, through the
+ *                                        product's proxy (`fetch`; 404 when it has none)
  *
  * Every call needs a caller; writes must be same-origin JSON, since a signed-in browser session is
  * a cookie and a foreign page must not reach a person's data.
  */
-import { frameEditSchema, frameName, frameScriptSchema } from '@columenlabs/lumen-ui-types/frames';
-import { type CustomViewConfig, customViewConfigSchema } from '@columenlabs/lumen-ui-types/views';
+import {
+  FRAME_ROWS,
+  type FrameFetch,
+  frameEditSchema,
+  frameName,
+  frameScriptSchema,
+  runsInBrowser,
+} from '@columenlabs/lumen-ui-types/frames';
+import {
+  type CustomViewConfig,
+  customViewConfigSchema,
+  viewFormulaSchema,
+} from '@columenlabs/lumen-ui-types/views';
 import { z } from 'zod';
 import { FrameError } from './frame';
+import { sandboxResponse } from './sandbox';
 import type { Workspaces } from './store';
 
 type Awaitable<T> = T | Promise<T>;
@@ -40,6 +57,15 @@ export interface WorkspaceRoutesOptions {
   owner: (req: Request) => Awaitable<string | null>;
   /** Which recipes this product runs; a recipe it refuses answers 422 with the reason. */
   allow?: (recipe: z.infer<typeof frameScriptSchema>, req: Request) => Awaitable<string | null>;
+  /**
+   * One web read for a browser script (`hub.fetch`): the product checks the host against its
+   * allowlist, adds a named data key server side, bounds the time and size, and answers the
+   * status and body. Left out, `/fetch` is 404 and browser scripts read nothing.
+   */
+  fetch?: (
+    call: FrameFetch,
+    req: Request,
+  ) => Promise<{ status: number; body: unknown; error?: string }>;
 }
 
 const HEADERS = { 'content-type': 'application/json', 'cache-control': 'no-store' };
@@ -50,12 +76,30 @@ const fail = (error: string, status: number) => json({ error }, status);
 const createSchema = z.object({ name: frameName, app: z.string().max(40).optional() });
 const patchSchema = z.object({ name: frameName.optional(), app: z.string().max(40).optional() });
 const addTabSchema = z.object({ name: frameName, recipe: frameScriptSchema });
+const newTabSchema = addTabSchema.extend({
+  /** Formula columns its default layout starts with (dew point over temperature and humidity). */
+  start: z.object({ formulas: z.array(viewFormulaSchema).max(10) }).optional(),
+});
 const putTabSchema = z.object({
   name: frameName.optional(),
   config: customViewConfigSchema.nullable().optional(),
 });
 const cellsSchema = z.object({ edits: z.array(frameEditSchema).min(1).max(200) });
 const scriptSchema = z.object({ script: frameScriptSchema });
+const rowsSchema = z.object({
+  rows: z.array(z.record(z.string(), z.unknown())).max(FRAME_ROWS).optional(),
+  error: z.string().max(2000).optional(),
+  ms: z.number().min(0).max(600_000).optional(),
+});
+const fetchSchema = z.object({
+  url: z.string().url().max(2000),
+  method: z.enum(['GET', 'POST']).optional(),
+  body: z.string().max(20_000).optional(),
+  key: z
+    .string()
+    .regex(/^[a-z0-9_-]{1,40}$/i)
+    .optional(),
+});
 
 export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) => Promise<Response> {
   const base = opts.base.replace(/\/$/, '');
@@ -88,8 +132,12 @@ export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) =>
       return parsed.data;
     };
     const allowed = async (recipe: z.infer<typeof frameScriptSchema>) => {
-      if (recipe.kind !== 'call')
-        throw new FrameError('Recipes here are one call to an app tool.', 422);
+      // The server runs app calls and declarative web reads; code runs only in the browser.
+      if (recipe.kind === 'sql' || (recipe.kind === 'script' && !runsInBrowser(recipe)))
+        throw new FrameError(
+          'Recipes here are an app call, web reads, or a script that runs in your browser.',
+          422,
+        );
       const why = opts.allow ? await opts.allow(recipe, req) : null;
       if (why) throw new FrameError(why, 422);
     };
@@ -116,9 +164,11 @@ export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) =>
           return json(await s.refreshAll(owner, id));
         } else if (sub === 'tabs') {
           if (!tab && m === 'POST') {
-            const p = await body(addTabSchema);
+            const p = await body(newTabSchema);
             await allowed(p.recipe);
-            return json(await s.addTab(owner, id, { name: p.name, recipe: p.recipe }));
+            return json(
+              await s.addTab(owner, id, { name: p.name, recipe: p.recipe, start: p.start }),
+            );
           }
           if (tab && m === 'PUT') {
             const p = await body(putTabSchema);
@@ -132,6 +182,11 @@ export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) =>
           }
           if (tab && m === 'DELETE') return json(await s.removeTab(owner, id, tab));
         }
+      }
+      if (root === 'sandbox' && !id && m === 'GET') return sandboxResponse();
+      if (root === 'fetch' && !id && m === 'POST') {
+        if (!opts.fetch) return fail('not_found', 404);
+        return json(await opts.fetch(await body(fetchSchema), req));
       }
       if (root === 'frames') {
         if (!id) {
@@ -158,6 +213,8 @@ export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) =>
             await allowed(p.script);
             return json(await s.setScript(owner, id, p.script));
           }
+        } else if (sub === 'rows' && m === 'PUT') {
+          return json(await s.putRows(owner, id, await body(rowsSchema)));
         } else if (sub === 'cells' && m === 'PATCH') {
           return json(await s.editCells(owner, id, (await body(cellsSchema)).edits));
         }

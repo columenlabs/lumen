@@ -5,7 +5,7 @@ import { z } from 'zod';
 // source, a frame or one of the app's own data domains. The person edits a tab like any view and
 // keeps it until they delete it. Each workspace belongs to one app of the product (`app`: one
 // of its apps), whose sidebar lists it.
-import type { CustomViewConfig } from './views';
+import type { CustomViewConfig, ViewFormula } from './views';
 
 /** A workspace's or tab's name. */
 export const workspaceName = z.string().trim().min(1).max(60);
@@ -33,6 +33,8 @@ export interface WorkspaceTab {
   source: TabSource;
   /** The layout: the person's and the assistant's edits; null reads the source's default. */
   config: CustomViewConfig | null;
+  /** What its default layout starts with, from its recipe (formula columns), until `config` is set. */
+  start?: { formulas: ViewFormula[] };
 }
 
 export interface Workspace {

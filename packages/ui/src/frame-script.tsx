@@ -4,6 +4,7 @@ import { PlayIcon, RotateCcwIcon, WrapTextIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { apiJson } from './api-fetch';
 import { useAssistantName } from './assistant-context';
+import { runBrowserFrame } from './browser-runner';
 // A frame's Script editor: the one script that makes an assistant's table (a call as
 // JSON, SQL, or JavaScript), as code the person reads and edits, in a dialog off the card's signal
 // dot or ⋯ menu. Run and save runs the edited script once as the person, with the read tools the
@@ -36,20 +37,26 @@ interface ScriptRead {
 function scriptText(s: FrameScript): { text: string; lang: LumenCodeLang } {
   if (s.kind === 'script') return { text: s.code, lang: 'js' };
   if (s.kind === 'sql') return { text: s.query, lang: 'sql' };
+  if (s.kind === 'fetch') {
+    const { kind: _k, ...reads } = s;
+    return { text: JSON.stringify(reads, null, 2), lang: 'json' };
+  }
   return { text: JSON.stringify({ fn: s.fn, args: s.args }, null, 2), lang: 'json' };
 }
 
 /** The edited text back as a script; a call that is not JSON says where. */
 function parseScript(was: FrameScript, text: string): FrameScript {
-  if (was.kind === 'script') return { kind: 'script', code: text };
+  // A browser script keeps where it runs and the reads it starts with.
+  if (was.kind === 'script') return { ...was, code: text };
   if (was.kind === 'sql') return { kind: 'sql', query: text };
   let v: unknown;
   try {
     v = JSON.parse(text);
   } catch (e) {
-    throw new Error(`The call is not valid JSON: ${(e as Error).message}`);
+    throw new Error(`The recipe is not valid JSON: ${(e as Error).message}`);
   }
   const o = (v ?? {}) as Record<string, unknown>;
+  if (was.kind === 'fetch') return { ...(o as object), kind: 'fetch' } as FrameScript;
   return {
     kind: 'call',
     fn: String(o.fn ?? ''),
@@ -93,12 +100,15 @@ export function FrameScriptDialog({
     setError(null);
   }, [open, original]);
   const save = useMutation({
-    mutationFn: (next: FrameScript) =>
-      json<FrameData>(`${api}/frames/${frame}/script`, {
+    // A browser script is kept first (the server runs no code), then run here and its rows saved.
+    mutationFn: async (next: FrameScript) => {
+      const kept = await json<FrameData>(`${api}/frames/${frame}/script`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ script: next }),
-      }),
+      });
+      return kept.meta.browser ? runBrowserFrame(api, frame) : kept;
+    },
     onSuccess: (data) => {
       qc.setQueryData(frameKey(api, frame), data);
       void qc.invalidateQueries({ queryKey: [...frameKey(api, frame), 'script'] });
@@ -125,7 +135,9 @@ export function FrameScriptDialog({
         <DialogHeader>
           <DialogTitle>Script · {name}</DialogTitle>
           <DialogDescription>
-            What {assistant} runs to make these rows. Saved only if it runs.
+            {script?.kind === 'script' && script.runtime === 'browser'
+              ? 'Runs in your browser, in a sandbox, to make these rows.'
+              : `What ${assistant} runs to make these rows. Saved only if it runs.`}
           </DialogDescription>
         </DialogHeader>
         {read.isPending ? (

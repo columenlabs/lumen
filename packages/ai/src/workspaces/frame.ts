@@ -145,3 +145,74 @@ export function applyEdits(
   }
   return { data: rows, edits: kept };
 }
+
+/** A frame's rows back as objects keyed by their column labels (what a CSV push appends to). */
+export function asObjects(columns: FrameColumn[], data: FrameCell[][]): Row[] {
+  return data.map((r) => Object.fromEntries(columns.map((c, i) => [c.label, r[i] ?? null])));
+}
+
+/** Most CSV text one call takes (bigger goes as `append` parts). */
+export const CSV_BYTES = 1_000_000;
+
+const NUMERAL = /^[-−]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i;
+
+/**
+ * CSV text (RFC 4180: quoted fields, `""` for a quote, CRLF or LF) as rows keyed by the header.
+ * A numeral becomes a number, but one with a leading zero (`02134`, a zip) stays text; `types`
+ * says a column's type outright. Empty cells are blank.
+ */
+export function parseCsv(text: string, types: Record<string, 'number' | 'text'> = {}): Row[] {
+  if (text.length > CSV_BYTES)
+    throw new FrameError(
+      `The CSV is ${Math.round(text.length / 1000)} KB: send at most ${CSV_BYTES / 1000} KB a call, the rest as append parts.`,
+    );
+  const records: string[][] = [];
+  let field = '';
+  let rec: string[] = [];
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') quoted = false;
+      else field += ch;
+    } else if (ch === '"' && field === '') quoted = true;
+    else if (ch === ',') {
+      rec.push(field);
+      field = '';
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      rec.push(field);
+      field = '';
+      if (rec.length > 1 || rec[0] !== '') records.push(rec);
+      rec = [];
+    } else field += ch;
+  }
+  if (quoted) throw new FrameError('The CSV has a quote that never closes.');
+  if (field !== '' || rec.length) {
+    rec.push(field);
+    records.push(rec);
+  }
+  const [header, ...body] = records;
+  if (!header?.length) throw new FrameError('The CSV has no header row.');
+  const names = header.map((h, i) => h.trim() || `Column ${i + 1}`);
+  return body.map((r) =>
+    Object.fromEntries(
+      names.map((n, i) => {
+        const raw = (r[i] ?? '').trim();
+        if (raw === '') return [n, null];
+        const want = types[n];
+        if (want === 'text') return [n, raw];
+        const numeric = NUMERAL.test(raw) && !/^[-−]?0\d/.test(raw);
+        if (want === 'number' || numeric) {
+          const v = Number(raw.replace('−', '-').replace(/[,$%\s]/g, ''));
+          if (Number.isFinite(v)) return [n, v];
+          if (want === 'number') throw new FrameError(`${n} holds numbers: "${raw}" is not one.`);
+        }
+        return [n, raw];
+      }),
+    ),
+  );
+}

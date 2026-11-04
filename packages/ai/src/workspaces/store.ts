@@ -20,6 +20,7 @@ import {
   type FrameEditInput,
   type FrameMeta,
   type FrameScript,
+  runsInBrowser,
 } from '@columenlabs/lumen-ui-types/frames';
 import type { CustomViewConfig } from '@columenlabs/lumen-ui-types/views';
 import type {
@@ -27,7 +28,7 @@ import type {
   WorkspaceSummary,
   WorkspaceTab,
 } from '@columenlabs/lumen-ui-types/workspaces';
-import { FrameError, applyEdits, asRows, coerce, dedupeEdits, toFrame } from './frame';
+import { FrameError, applyEdits, asObjects, asRows, coerce, dedupeEdits, toFrame } from './frame';
 
 type Row = Record<string, unknown>;
 
@@ -125,13 +126,19 @@ const parse = <T>(v: unknown, d: T): T => {
     return d;
   }
 };
-const metaOf = ({ script: _s, ...m }: Head): FrameMeta => m;
+/** A frame's meta as pages read it, with what makes it (the tab's icon, where ↻ runs). */
+const metaOf = ({ script, ...m }: Head): FrameMeta => ({
+  ...m,
+  recipe: script?.kind,
+  browser: runsInBrowser(script) || undefined,
+});
 
 /** The recipe's text as the person reads it: `jobs.list` and its arguments. */
 export function recipeText(s: FrameScript | null): string {
   if (!s) return 'nothing (rows written once)';
   if (s.kind === 'call') return `${s.fn} ${JSON.stringify(s.args)}`;
-  return s.kind === 'sql' ? 'a SQL query' : 'a script';
+  if (s.kind === 'fetch') return `web reads ${JSON.stringify(s.requests.map((r) => r.url))}`;
+  return s.kind === 'sql' ? 'a SQL query' : runsInBrowser(s) ? 'a browser script' : 'a script';
 }
 
 export function createWorkspaces(opts: WorkspacesOptions) {
@@ -249,6 +256,8 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     const { head, data } = await getFrame(owner, id);
     if (!head.script)
       throw new FrameError('This tab was written once: it has no recipe to run.', 409);
+    if (runsInBrowser(head.script))
+      throw new FrameError('This tab runs in your browser: open the tab to refresh.', 409);
     return runInto(owner, head, data.edits ?? [], head.script, by, data.rows);
   }
 
@@ -260,6 +269,12 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     by: 'you' | 'assistant',
     lastRows: FrameCell[][],
   ): Promise<FrameData> {
+    if (runsInBrowser(script)) {
+      // No server code runs: the browser runs it on ↻ and saves its rows (`putRows`).
+      const next: Head = { ...head, script, mode: 'asof', error: undefined };
+      await writeFrame(owner, next, lastRows, edits);
+      return { meta: metaOf(next), rows: lastRows, edits };
+    }
     const started = Date.now();
     const at = now();
     try {
@@ -301,12 +316,7 @@ export function createWorkspaces(opts: WorkspacesOptions) {
   }
 
   /** A new frame from a recipe, run once (a failed run keeps the frame with its error). */
-  async function newFrame(
-    owner: string,
-    name: string,
-    recipe: FrameScript,
-    by: 'you' | 'assistant',
-  ): Promise<Head> {
+  async function roomForFrame(owner: string) {
     const [{ n } = { n: 0 }] = await db.all(
       `SELECT COUNT(*) AS n FROM (SELECT 1 FROM ${t.frames} WHERE owner = ? LIMIT ${MAX_FRAMES})`,
       owner,
@@ -316,15 +326,26 @@ export function createWorkspaces(opts: WorkspacesOptions) {
         `You keep ${MAX_FRAMES} tabs of data, the most: delete some first.`,
         409,
       );
+  }
+
+  async function newFrame(
+    owner: string,
+    name: string,
+    recipe: FrameScript,
+    by: 'you' | 'assistant',
+  ): Promise<Head> {
+    await roomForFrame(owner);
+    const browser = runsInBrowser(recipe);
     const head: Head = {
       id: newId('fr'),
       name,
       columns: [],
       rows: 0,
-      mode: 'live',
+      // Web reads change on their own, so they run only when asked; app reads are live.
+      mode: browser || recipe.kind === 'fetch' ? 'asof' : 'live',
       kind: 'snapshot',
       at: now(),
-      origin: 'assistant',
+      origin: browser ? 'script' : 'assistant',
       script: recipe,
     };
     await runInto(owner, head, [], recipe, by, []);
@@ -337,6 +358,9 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     columns: h.columns,
     at: h.at,
     origin: h.origin ?? 'assistant',
+    recipe: h.script?.kind,
+    by: h.by,
+    rows: h.rows,
   });
 
   /** A frame no tab shows but a card links (a recipe added from + Data) still counts as used. */
@@ -438,7 +462,12 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     async addTab(
       owner: string,
       id: string,
-      p: { name: string; recipe: FrameScript; by?: 'you' | 'assistant' },
+      p: {
+        name: string;
+        recipe: FrameScript;
+        by?: 'you' | 'assistant';
+        start?: WorkspaceTab['start'];
+      },
     ): Promise<{ workspace: WorkspaceRead; tab: string }> {
       const w = await getSpace(owner, id);
       if (w.tabs.length >= MAX_TABS)
@@ -449,6 +478,7 @@ export function createWorkspaces(opts: WorkspacesOptions) {
         name: p.name,
         source: { frame: head.id },
         config: null,
+        ...(p.start?.formulas.length ? { start: p.start } : {}),
       };
       const saved = await saveSpace(owner, { ...w, tabs: [...w.tabs, tab] });
       const hs = await heads(
@@ -499,13 +529,25 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     async refreshAll(
       owner: string,
       id: string,
-    ): Promise<{ ran: number; failed: string[]; rows: number }> {
+    ): Promise<{ ran: number; failed: string[]; rows: number; browser: string[] }> {
       const w = await getSpace(owner, id);
       let ran = 0;
       let rows = 0;
       const failed: string[] = [];
+      // Tabs whose recipe runs in the browser: the page runs each one it shows.
+      const browser: string[] = [];
+      const hs = await heads(
+        owner,
+        w.tabs.flatMap((x) => ('frame' in x.source ? [x.source.frame] : [])),
+      );
       for (const x of w.tabs) {
         if (!('frame' in x.source)) continue;
+        const h = hs.get(x.source.frame);
+        if (!h?.script) continue;
+        if (runsInBrowser(h.script)) {
+          browser.push(x.name);
+          continue;
+        }
         try {
           const d = await refresh(owner, x.source.frame);
           ran++;
@@ -514,7 +556,7 @@ export function createWorkspaces(opts: WorkspacesOptions) {
           failed.push(x.name);
         }
       }
-      return { ran, failed, rows };
+      return { ran, failed, rows, browser };
     },
 
     async frames(owner: string): Promise<{ frames: FrameChoice[] }> {
@@ -557,6 +599,125 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     async setScript(owner: string, id: string, script: FrameScript): Promise<FrameData> {
       const { head, data } = await getFrame(owner, id);
       return runInto(owner, head, data.edits ?? [], script, 'you', data.rows);
+    },
+
+    /**
+     * A browser run's result: the rows its script gave (or why it failed), saved as the frame's
+     * rows with the hand edits put back. Only a frame whose recipe runs in the browser takes them.
+     */
+    async putRows(
+      owner: string,
+      id: string,
+      p: { rows?: unknown[]; error?: string; ms?: number },
+    ): Promise<FrameData> {
+      const { head, data } = await getFrame(owner, id);
+      if (!runsInBrowser(head.script))
+        throw new FrameError('Only a browser recipe saves rows here.', 409);
+      const at = now();
+      const ms = Math.max(0, Math.round(p.ms ?? 0));
+      if (p.error !== undefined) {
+        const error = p.error.slice(0, 300) || 'The script failed.';
+        const failed: Head = {
+          ...head,
+          error,
+          runs: [
+            { at, rows: 0, ms, ok: false, by: 'you' as const, error },
+            ...(head.runs ?? []),
+          ].slice(0, FRAME_RUNS),
+        };
+        await writeFrame(owner, failed, data.rows, data.edits ?? []);
+        return { meta: metaOf(failed), rows: data.rows, edits: data.edits ?? [] };
+      }
+      const { columns, data: rows } = toFrame(asRows(p.rows ?? []));
+      const put = applyEdits(columns, rows, data.edits ?? []);
+      const next: Head = {
+        ...head,
+        columns,
+        rows: put.data.length,
+        at,
+        by: 'you',
+        error: undefined,
+        edited: put.edits.length || undefined,
+        runs: [
+          { at, rows: put.data.length, ms, ok: true, by: 'you' as const },
+          ...(head.runs ?? []),
+        ].slice(0, FRAME_RUNS),
+      };
+      await writeFrame(owner, next, put.data, put.edits);
+      return { meta: metaOf(next), rows: put.data, edits: put.edits };
+    },
+
+    /**
+     * A dataset an outside agent pushes (a CSV it wrangled): rows only, no recipe. `replace`
+     * writes the rows; `append` adds them, and with `key` a row whose key is already there
+     * replaces it. One frame per name among pushed ones; the rows pass the same caps as a run.
+     */
+    async pushFrame(
+      owner: string,
+      p: {
+        name: string;
+        rows: Row[];
+        mode: 'replace' | 'append';
+        by: string;
+        key?: string;
+      },
+    ): Promise<FrameData> {
+      const same = await db.all(
+        `SELECT id, head FROM ${t.frames} WHERE owner = ? AND name = ? LIMIT ${MAX_FRAMES}`,
+        owner,
+        p.name,
+      );
+      const pushed = same.find((r) => parse<Head | null>(r.head, null)?.origin === 'harness');
+      const found = pushed ? await getFrame(owner, String(pushed.id)) : null;
+      if (!found) await roomForFrame(owner);
+      let all: Row[] = p.rows;
+      if (found && p.mode === 'append') {
+        const before = asObjects(found.head.columns, found.data.rows);
+        if (p.key) {
+          const k = p.key;
+          const fresh = new Set(p.rows.map((r) => String(r[k] ?? '')));
+          all = [...before.filter((r) => !fresh.has(String(r[k] ?? ''))), ...p.rows];
+        } else all = [...before, ...p.rows];
+      }
+      const { columns, data } = toFrame(all);
+      const at = now();
+      const head: Head = {
+        ...(found?.head ?? {
+          id: newId('fr'),
+          kind: 'snapshot' as const,
+          mode: 'static' as const,
+          origin: 'harness' as const,
+          script: null,
+        }),
+        name: p.name,
+        columns,
+        rows: data.length,
+        at,
+        by: p.by.slice(0, 60),
+        error: undefined,
+        edited: undefined,
+      };
+      await writeFrame(owner, head, data, []);
+      return { meta: metaOf(head), rows: data, edits: [] };
+    },
+
+    /** Deletes a frame and every tab that shows it (a pushed dataset the agent takes away). */
+    async removeFrame(owner: string, id: string): Promise<{ ok: true; tabs: number }> {
+      await getFrame(owner, id);
+      const rows = await db.all(
+        `SELECT id, name, app, tabs, created_at, updated_at FROM ${t.spaces} WHERE owner = ? LIMIT ${MAX_WORKSPACES}`,
+        owner,
+      );
+      let tabs = 0;
+      for (const r of rows) {
+        const w = spaceOf(r);
+        const keep = w.tabs.filter((x) => !('frame' in x.source && x.source.frame === id));
+        if (keep.length === w.tabs.length) continue;
+        tabs += w.tabs.length - keep.length;
+        await saveSpace(owner, { ...w, tabs: keep });
+      }
+      await db.run(`DELETE FROM ${t.frames} WHERE owner = ? AND id = ?`, owner, id);
+      return { ok: true, tabs };
     },
 
     async editCells(owner: string, id: string, edits: FrameEditInput[]): Promise<FrameData> {

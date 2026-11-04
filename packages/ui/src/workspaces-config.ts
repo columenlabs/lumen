@@ -1,7 +1,7 @@
 // What a product tells its workspaces (apps, recipes), in its own module so Edit widget's + Data can
 // read the recipes without importing the workspace pages.
 import type { FrameScript } from '@columenlabs/lumen-ui-types/frames';
-import type { CustomViewConfig } from '@columenlabs/lumen-ui-types/views';
+import type { CustomViewConfig, ViewFormula } from '@columenlabs/lumen-ui-types/views';
 import { type ComponentType, createContext, useContext } from 'react';
 
 type Icon = ComponentType<{ className?: string }>;
@@ -42,6 +42,8 @@ export interface WorkspaceRecipe {
   group?: string;
   icon?: Icon;
   recipe: FrameScript;
+  /** Formula columns the tab's layout starts with (dew point from temperature and humidity). */
+  formulas?: ViewFormula[];
 }
 const ConfigCtx = createContext<WorkspacesConfig>({});
 /** The product's apps and domains for its workspaces. */

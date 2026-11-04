@@ -506,6 +506,7 @@ export {
   useAssistantPending,
 } from './assistant-context';
 export { WORKSPACES_KEY, frameKey, workspacesListQuery } from './workspace-keys';
+export { BROWSER_RUN_MS, runBrowserFrame, runBrowserScript } from './browser-runner';
 export {
   type WorkspaceApp,
   type WorkspaceDraftProps,

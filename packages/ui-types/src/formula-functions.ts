@@ -278,6 +278,48 @@ export const FORMULA_FUNCTIONS: FormulaFunction[] = [
     },
   },
   {
+    name: 'ln',
+    call: 'ln(x)',
+    detail: 'the natural log (dew point, growth rates)',
+    group: 'Number',
+    fn: (v) => {
+      const x = asNum(v);
+      return x === null || x <= 0 ? undefined : Math.log(x);
+    },
+  },
+  {
+    name: 'exp',
+    call: 'exp(x)',
+    detail: 'e to the power x',
+    group: 'Number',
+    fn: (v) => {
+      const x = asNum(v);
+      return x === null ? undefined : Math.exp(x);
+    },
+  },
+  {
+    name: 'pow',
+    call: 'pow(x, y)',
+    detail: 'x to the power y',
+    group: 'Number',
+    fn: (v, y) => {
+      const x = asNum(v);
+      const p = asNum(y);
+      const r = x === null || p === null ? Number.NaN : x ** p;
+      return Number.isFinite(r) ? r : undefined;
+    },
+  },
+  {
+    name: 'sqrt',
+    call: 'sqrt(x)',
+    detail: 'the square root',
+    group: 'Number',
+    fn: (v) => {
+      const x = asNum(v);
+      return x === null || x < 0 ? undefined : Math.sqrt(x);
+    },
+  },
+  {
     name: 'min',
     call: 'min(a, b, ...)',
     detail: 'the smallest (blanks left out)',
