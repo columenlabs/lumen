@@ -127,3 +127,110 @@ export function turnSettings(
     ? { ...out, providerOptions: { openai } }
     : out;
 }
+
+/** A model as the AI SDK calls it: its two entry points, whatever the spec version. */
+interface CallableModel {
+  specificationVersion: string;
+  provider: string;
+  modelId: string;
+  supportedUrls: unknown;
+  doGenerate(o: unknown): PromiseLike<unknown>;
+  doStream(o: unknown): PromiseLike<{ stream: ReadableStream<{ type: string; error?: unknown }> }>;
+}
+
+/** A ChatGPT plan used up for now: a 429 or a usage code, thrown or sent before any output. */
+export function planLimited(err: unknown): boolean {
+  const e = err as {
+    statusCode?: number;
+    status?: number;
+    message?: string;
+    responseBody?: string;
+    code?: string;
+  };
+  if (!e) return false;
+  if (e.statusCode === 429 || e.status === 429) return true;
+  const text = `${e.code ?? ''} ${e.message ?? ''} ${e.responseBody ?? ''} ${typeof err === 'string' ? err : ''}`;
+  return /usage_limit|usage limit|usage_unavailable|insufficient_quota/i.test(text);
+}
+
+/** Parts that come before an answer starts; an error among them means nothing was said yet. */
+const PREAMBLE = new Set(['stream-start', 'response-metadata']);
+
+/**
+ * `primary` until its ChatGPT plan reaches its usage limit, then `fallback` for that call and
+ * every later one on this model (the rest of the turn). The limit shows either as a thrown error
+ * or as an error part before any output; once output has started nothing is swapped. `onSwitch`
+ * runs once, at the swap.
+ */
+export function planFallback(
+  primary: LanguageModel,
+  fallback: LanguageModel,
+  onSwitch: () => void,
+): LanguageModel {
+  const p = primary as unknown as CallableModel;
+  const f = fallback as unknown as CallableModel;
+  let on = p;
+  const swap = () => {
+    if (on === f) return;
+    on = f;
+    onSwitch();
+  };
+  const model: CallableModel = {
+    specificationVersion: p.specificationVersion,
+    provider: p.provider,
+    modelId: p.modelId,
+    get supportedUrls() {
+      return on.supportedUrls;
+    },
+    async doGenerate(o) {
+      if (on === f) return f.doGenerate(o);
+      try {
+        return await p.doGenerate(o);
+      } catch (err) {
+        if (!planLimited(err)) throw err;
+        swap();
+        return f.doGenerate(o);
+      }
+    },
+    async doStream(o) {
+      if (on === f) return f.doStream(o);
+      let r: Awaited<ReturnType<CallableModel['doStream']>>;
+      try {
+        r = await p.doStream(o);
+      } catch (err) {
+        if (!planLimited(err)) throw err;
+        swap();
+        return f.doStream(o);
+      }
+      // Hold the preamble until the first real part shows whether the plan answered.
+      const reader = r.stream.getReader();
+      const held: { type: string; error?: unknown }[] = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value.type === 'error' && planLimited(value.error)) {
+          await reader.cancel().catch(() => undefined);
+          swap();
+          return f.doStream(o);
+        }
+        held.push(value);
+        if (!PREAMBLE.has(value.type)) break;
+      }
+      const stream = new ReadableStream<{ type: string; error?: unknown }>({
+        start(c) {
+          for (const v of held) c.enqueue(v);
+        },
+        async pull(c) {
+          const { done, value } = await reader.read();
+          if (done) c.close();
+          else c.enqueue(value);
+        },
+        cancel(reason) {
+          return reader.cancel(reason);
+        },
+      });
+      return { ...r, stream };
+    },
+  };
+  return model as unknown as LanguageModel;
+}
