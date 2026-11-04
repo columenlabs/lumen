@@ -420,6 +420,9 @@ export interface ServerPaging {
   /** The server groups the rows: the Group button offers the domain's groupable fields, and a
    *  group's rows load when it opens. Without it a server's page groups nothing. */
   groups?: ServerGroups;
+  /** Every row for the filter, in the server's order (the server may cap it): Export saves and
+   *  copies these instead of the one page shown. Left out: Export takes the page. */
+  all?: () => Promise<readonly unknown[]>;
 }
 
 /** One group a server counted: its key (the group field's value as the view shows it), its row
@@ -527,7 +530,7 @@ export interface LumenViewProps<T> {
    *  table (the domain's id and `cardId`); left out: `configureLumen({ resizableColumns })`. */
   resizable?: boolean;
   /** Every row before the page's filter: Export then offers Filtered or All while a filter hides
-   *  some. Left out (or a server's page): Export takes the rows shown. */
+   *  some. Left out: Export takes the rows shown, or a server's `paging.all`. */
   allRows?: T[];
 }
 
@@ -670,11 +673,14 @@ function useExport<T>({
   sort,
   hidden,
   scopeKey,
+  fetchAll,
 }: {
   name: string;
   columns: ViewField<T>[];
   rows: T[];
   all?: T[];
+  /** A server's page: every matching row, fetched when Export runs. */
+  fetchAll?: () => Promise<readonly unknown[]>;
   groupBy: ViewField<T> | null;
   sort: CustomViewConfig['sort'];
   hidden: boolean;
@@ -684,15 +690,33 @@ function useExport<T>({
   const split = !!all && all.length !== rows.length;
   const scope = split ? picked : 'filtered';
   const chosen = scope === 'all' && all ? all : rows;
-  const text = () => csvOf({ columns, rows: chosen, groupBy, sort, hidden });
-  const download = () => text().then((csv) => saveCsv(name, csv));
-  const n = chosen.length;
-  const counted = `${n.toLocaleString()} ${n === 1 ? 'row' : 'rows'}`;
+  const text = async () =>
+    csvOf({
+      columns,
+      rows: fetchAll ? ((await fetchAll()) as T[]) : chosen,
+      groupBy,
+      sort,
+      hidden,
+    });
+  const download = () =>
+    text().then(
+      (csv) => saveCsv(name, csv),
+      () => void toast.error('Could not load every row to export'),
+    );
+  const n = fetchAll ? null : chosen.length;
+  const counted =
+    n == null ? 'Every matching row' : `${n.toLocaleString()} ${n === 1 ? 'row' : 'rows'}`;
   const copy = async () => {
+    let csv: string;
     try {
-      const csv = await text();
+      csv = await text();
+    } catch {
+      toast.error('Could not load every row to export');
+      return;
+    }
+    try {
       await navigator.clipboard.writeText(csv);
-      toast.success(`Copied ${counted} to the clipboard`);
+      toast.success(n == null ? 'Copied every matching row' : `Copied ${counted} to the clipboard`);
     } catch {
       toast.error('The browser blocked the copy', {
         action: { label: 'Download', onClick: () => void download() },
@@ -839,6 +863,7 @@ export function LumenView<T extends RowData>({
     sort: config.sort,
     hidden: amountsHidden,
     scopeKey: `${domain.id}:${cardId}`,
+    fetchAll: server?.all,
   });
   const exporter = !pivot && on('download') ? exports : null;
   const pagination = config.pagination ?? viewPaginationSchema.parse({});
