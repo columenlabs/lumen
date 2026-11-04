@@ -39,8 +39,6 @@ import {
   XIcon,
 } from 'lucide-react';
 import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react';
-import type { ComponentType } from 'react';
-import type MarkdownPart from 'react-markdown';
 import {
   LumenAssistantButton,
   LumenAssistantChats,
@@ -88,10 +86,8 @@ import {
 } from './sources';
 import { type AssistantChatState, type LiveItem, useAssistantChat } from './use-assistant-chat';
 
-// The Markdown renderer loads with the first answer (lazy-part.tsx).
-const Markdown = lazyPart(() =>
-  import('react-markdown').then((m) => m.default as ComponentType<object>),
-) as unknown as typeof MarkdownPart;
+// The Markdown renderer (tables included) loads with the first answer (lazy-part.tsx).
+const ChatMarkdown = lazyPart(() => import('./chat-markdown').then((m) => m.default));
 
 /** The main model's context drawn full (tokens); the mark sits where the assistant compacts. */
 const CONTEXT_MAX = 200_000;
@@ -567,12 +563,7 @@ function Item({
     case 'text':
       return (
         <div className="prose-sm text-sm leading-relaxed [&_code]:font-code [&_code]:text-xs [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1.5 [&_ul]:list-disc">
-          <Markdown
-            allowedElements={['p', 'strong', 'em', 'code', 'ul', 'ol', 'li', 'a', 'pre', 'br']}
-            unwrapDisallowed
-          >
-            {item.text}
-          </Markdown>
+          <ChatMarkdown>{item.text}</ChatMarkdown>
           {item.live && (
             <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-foreground/60 align-middle" />
           )}
