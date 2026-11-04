@@ -1,5 +1,338 @@
 [
   {
+    "tag": "v0.1.185",
+    "date": "2026-11-04T03:22:44Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Export a server-paged table in full",
+        "body": "In `@columenlabs/lumen-ui`, give the `paging` prop of `LumenView` the new `all` function (`ServerPaging.all`) and the table's Export saves every matching row, not just the page on screen."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clear menu wording and a failure toast",
+        "body": "When `paging.all` is set, the Export menu entries Download CSV and Copy to clipboard read \"Every matching row\", and a toast tells the user if fetching the rows fails."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Guidance on exporting paged tables",
+        "body": "The table part page now has an Export section with a new rule: an app should not add its own Download button beside a paged table, and should pass `paging.all` instead."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.184",
+    "date": "2026-11-03T17:43:04Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Status, toggle and actions on expandable rows",
+        "body": "In `@columenlabs/lumen-ui`, `LumenExpandRow` takes new optional `status`, `toggle` and `actions` props, so one row can show a status pill, an on/off switch that sits outside the expand button, and an action bar."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One layout for every setting",
+        "body": "From `@columenlabs/lumen-ui`, the new `SettingField`, `SettingValue`, `SettingStatus` and `SettingActions` parts let you build a Settings section with each control in one fixed place, using `end` for a per-setting switch and `stack` to put the label above the control on a phone."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Health worked out for you",
+        "body": "From `@columenlabs/lumen-ui`, `settingHealth` and `sectionHealth` compute the status for a setting or a section (the worst item wins), and the new `SettingsSectionDef.health` field shows it as a pill by the section title and a dot in the Settings list."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Notifications settings rebuilt on the new parts",
+        "body": "`NotificationsSettings` channels now use the same slots, with no uppercase sub-headers, no separate \"Test\" rows and no trash icon for a channel that is off."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.183",
+    "date": "2026-11-03T06:56:19Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Run a chat turn in the panel's own events",
+        "body": "In `@columenlabs/lumen-ai`, `LumenAgent.ask(input, sink)` runs one agent turn and sends text, step lines, draft cards, hand-off sections, advice, errors and stop to `sink` as `AssistantEvent`s, ending with `done {id, usage}`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Answer a chat route in one call",
+        "body": "From `@columenlabs/lumen-ai`, `askResponse(run, {signal, stop, waitUntil})` returns the streamed (SSE) response for an app's `/chat` route, and a closed request now stops the turn."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Reopen a stored chat",
+        "body": "`LumenAgent.view()` returns a stored chat as the panel's `ChatItem`s, and `LumenAgent.usage()` and `LumenAgent.stop()` report token use and end a running turn."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Cards and hand-offs carry what a stored chat needs",
+        "body": "A draft card's id is now its tool call's id, so a stored chat can tell how each draft or write ended, and `escalate` reports `handoff {tier, label, why, usage}` for its section."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.182",
+    "date": "2026-11-03T06:52:30Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Columns button now shows whenever the columns control is on",
+        "body": "In `LumenView` from @columenlabs/lumen-ui, the Columns button now appears whenever `controls.columns` is `true` (the Table default), even when the header also shows the **+** from `onAddColumn`, so you can pick columns on a wide table where the + is scrolled off screen."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.181",
+    "date": "2026-11-03T06:45:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Per-chat MCP connectors",
+        "body": "On `LumenAgent` from @columenlabs/lumen-ai, the new `addConnector(name, url)`, `connectors()` and `removeConnector(id)` methods let a chat connect to a remote MCP server, list its connectors and remove one."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose the access each connector gets",
+        "body": "In a turn's `plan.connectors`, an app now lists the connectors to open and sets each one to read, read + draft or read + write, and its tools appear as the group `mcp_<id>`."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Lazy tool search for big toolsets",
+        "body": "Once a turn has more than `LAZY_AT` (30) tools, `LumenAgent` sends the model only the core tools plus `tool_search`, and `plan.lazy` (`{ at, core }`) lets an app change the threshold and the core set."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Connector addresses are checked",
+        "body": "`addConnector` accepts only https addresses with no credentials in them (localhost is allowed while developing), and the SSRF block still applies."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.180",
+    "date": "2026-11-03T06:42:45Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Export menu for tables",
+        "body": "In `LumenView`, the Download CSV button is now an Export icon button that opens a menu with Download CSV and Copy CSV, so you can save a table as a file or put it on the clipboard, and `controls.download` still turns it off."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Export filtered or all rows",
+        "body": "`LumenView` has a new `allRows` prop that takes the rows before the page's filter, so while a filter hides rows the Export menu lets users choose between every matching row across all pages and the full set."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Export on phones",
+        "body": "Tables in `LumenView` now put Download CSV and Copy CSV in the card's ⋯ menu on small screens, so phone users can export for the first time."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Custom entries in the widget menu",
+        "body": "`LumenWidget` has a new `menu` prop that takes a `ReactNode`, so you can add your own entries to the card's ⋯ menu."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.179",
+    "date": "2026-11-03T06:28:57Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Chat cards for drafts and writes",
+        "body": "In `LumenAgent` from `@columenlabs/lumen-ai/agent`, every draft and write is now stored as a card in the `lumen_cards` table, and you can list, save, dismiss or undo cards with the new `cards()`, `saveCard`, `dismissCard` and `undoCard` methods."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Undo for assistant writes",
+        "body": "In `LumenAgent`, override `applyDraft` to control what Save does and `undoWrite` to control what Undo does, and the agent tells the model at the start of the next turn which cards were saved, dismissed or undone."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Run drafts and undo changes as the person",
+        "body": "In `@columenlabs/lumen-ai`, `Assistant.runDraft(caller, card)` and `undoChange(caller, card)` run a saved draft or undo a change as that person, re-check their access to the group, and stop after 60 seconds."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Writes return their change",
+        "body": "In `openAiTools`, the new `wrote` hook lets a successful write return its change as well as the cut text, so your app can show an Undo card for it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Long chats compact themselves",
+        "body": "When a chat reaches 150k context tokens, the agent now compacts it with `createCompactFunction`, running the summary on the last turn's model and key and adding its cost to the next turn's usage."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.178",
+    "date": "2026-11-03T06:13:25Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Plan an assistant turn for the agent runtime",
+        "body": "`Assistant.agentTurn(caller, input)` from `@columenlabs/lumen-ai` now returns `{ plan, settle }`, so you can run a turn with the person's tier, payer, tool access, instructions, page bearings and expanded slash command already worked out."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Hand a task to a higher tier",
+        "body": "In the plan from `agentTurn`, `escalate` lets a higher tier run the task on the same tools, with its own usage part and the same spend cap, using the same hand-off rules as `turn`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New plan hooks on `LumenAgent`",
+        "body": "From `@columenlabs/lumen-ai/agent`, the `LumenAgent` plan gains `lead`, `more`, `first` and `advisor`, so you can add text before the newest message, extra metered tools, a tool forced on the first step, and an advisor."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Settle spend and fail clearly when nobody pays",
+        "body": "Calling `settle` adds the turn's spend to the payer's month and reports the turn and each tool call through `onStep`, while `agentTurn` throws `AssistantError` (402) when no one can pay."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.177",
+    "date": "2026-11-03T05:59:53Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A chat agent base class",
+        "body": "From `@columenlabs/lumen-ai/agent`, extend the abstract `LumenAgent` and implement `plan(turn)` (model, payer's key, effort, instructions, tool sources, money left) and `settle(end)` (outcome, usage parts, context size, time) to run one chat on the new agent runtime."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Spend cap built in",
+        "body": "`LumenAgent` now stops offering tools once spend reaches the cap from `plan(turn)` and asks the model for a short answer, so a chat can't run past its budget."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Models on an API key or a plan sign-in",
+        "body": "`aiModel` and `planFetch` from `@columenlabs/lumen-ai/agent` give you a model for either provider on an API key or on a plan sign-in, and `turnSettings` sets the output cap and effort in the form each provider expects."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tools at the person's access",
+        "body": "`openAiTools` turns the kit's tool groups into agent tools for one person, always offering reads, offering drafts and writes only if their access allows, and cutting each result at 16k characters."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Usage priced into `UsagePart`",
+        "body": "`UsageMeter` and `tokenUsage` convert model usage, including cache reads, cache writes and reasoning tokens, into the kit's `UsagePart`, so you can meter and bill each step."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.176",
+    "date": "2026-11-03T03:56:09Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Signals: warnings and errors as data",
+        "body": "In `@columenlabs/lumen-ui`, pass `signals` (and optional `signalOptions`) through `LumenShell bar={{ signals, signalOptions }}` or `useStatus({ signals })` to show structured warnings and errors with a level (`act`, `look` or `fyi`), a reason and a fix, instead of free-text `bar.messages`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Status chip and signals panel",
+        "body": "The new `SignalsChip` counts signals by level and shows the top one, and opening it shows `SignalsPanel`, a docked `LumenDrawer` on desktop and a bottom sheet on a phone, where users can open, mute or dismiss each signal."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Signal banners",
+        "body": "Mark a `Signal` with `banner` and `SignalBanners` shows it as a banner that a user can hide for an hour with ×; signals without `banner` stay in the chip and panel."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Muting and dismissing stay on the device",
+        "body": "Dismiss and mute choices are saved per app in localStorage under `lumen:signals:<app>`, a newer `at` on a signal reopens it, and repeats collapse into ×N; for an \"always\" mute, handle it through your own `onMute`."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Status bar entries no longer overlap",
+        "body": "In `LumenShell`, status bar entries now clip instead of drawing over each other when the bar is narrow, for example with a docked drawer open."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.175",
     "date": "2026-11-03T01:51:03Z",
     "takeaways": [
