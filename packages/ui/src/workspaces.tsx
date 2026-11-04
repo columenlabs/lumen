@@ -322,7 +322,11 @@ function WorkspaceBody({
     mutationFn: (r: WorkspaceRecipe) =>
       json<{ workspace: WorkspaceRead; tab: string }>(`${api}/workspaces/${w.id}/tabs`, {
         method: 'POST',
-        body: JSON.stringify({ name: r.label, recipe: r.recipe }),
+        body: JSON.stringify({
+          name: r.label,
+          recipe: r.recipe,
+          ...(r.formulas?.length ? { start: { formulas: r.formulas } } : {}),
+        }),
       }),
     onSuccess: ({ workspace, tab: t }) => {
       put(workspace);
@@ -752,7 +756,10 @@ function FrameTab({
       ),
     [current, symbolAt, edited, edits.mutateAsync, drop, assistant],
   );
-  const config = useMemo(() => tab.config ?? frameConfig(current), [tab.config, current]);
+  const config = useMemo(
+    () => tab.config ?? frameConfig(current, tab.start),
+    [tab.config, tab.start, current],
+  );
   // The cause once, even from a frame stored before the server unwrapped it.
   const failed = (refresh.error?.message ?? current.error)?.replace(
     /^(?:(?:Code execution failed|Refresh failed):\s*)+/,
@@ -944,7 +951,10 @@ function tabConfig(
   if (t.config) return t.config;
   if ('frame' in t.source) {
     const meta = w.frames[t.source.frame];
-    return { ...(meta ? frameConfig(meta) : customViewConfigSchema.parse({})), name: t.name };
+    return {
+      ...(meta ? frameConfig(meta, t.start) : customViewConfigSchema.parse({})),
+      name: t.name,
+    };
   }
   const start = defaultConfig?.(t.source.domain);
   return { ...customViewConfigSchema.parse(start ?? {}), name: t.name };

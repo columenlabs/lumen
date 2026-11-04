@@ -462,7 +462,12 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     async addTab(
       owner: string,
       id: string,
-      p: { name: string; recipe: FrameScript; by?: 'you' | 'assistant' },
+      p: {
+        name: string;
+        recipe: FrameScript;
+        by?: 'you' | 'assistant';
+        start?: WorkspaceTab['start'];
+      },
     ): Promise<{ workspace: WorkspaceRead; tab: string }> {
       const w = await getSpace(owner, id);
       if (w.tabs.length >= MAX_TABS)
@@ -473,6 +478,7 @@ export function createWorkspaces(opts: WorkspacesOptions) {
         name: p.name,
         source: { frame: head.id },
         config: null,
+        ...(p.start?.formulas.length ? { start: p.start } : {}),
       };
       const saved = await saveSpace(owner, { ...w, tabs: [...w.tabs, tab] });
       const hs = await heads(

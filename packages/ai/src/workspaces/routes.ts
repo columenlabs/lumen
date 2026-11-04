@@ -8,7 +8,8 @@
  *   GET    /workspaces/:id                one, with its frames' heads
  *   PATCH  /workspaces/:id {name?, app?}
  *   DELETE /workspaces/:id
- *   POST   /workspaces/:id/tabs {name, recipe}   a new tab from a recipe (runs it once)
+ *   POST   /workspaces/:id/tabs {name, recipe, start?}   a new tab from a recipe (runs it once;
+ *                                        `start.formulas`: formula columns its layout starts with)
  *   POST   /workspaces/:id/refresh        runs every tab's recipe again, one after another
  *   PUT    /workspaces/:id/tabs/:tab {name?, config?}
  *   DELETE /workspaces/:id/tabs/:tab
@@ -35,7 +36,11 @@ import {
   frameScriptSchema,
   runsInBrowser,
 } from '@columenlabs/lumen-ui-types/frames';
-import { type CustomViewConfig, customViewConfigSchema } from '@columenlabs/lumen-ui-types/views';
+import {
+  type CustomViewConfig,
+  customViewConfigSchema,
+  viewFormulaSchema,
+} from '@columenlabs/lumen-ui-types/views';
 import { z } from 'zod';
 import { FrameError } from './frame';
 import { sandboxResponse } from './sandbox';
@@ -71,6 +76,10 @@ const fail = (error: string, status: number) => json({ error }, status);
 const createSchema = z.object({ name: frameName, app: z.string().max(40).optional() });
 const patchSchema = z.object({ name: frameName.optional(), app: z.string().max(40).optional() });
 const addTabSchema = z.object({ name: frameName, recipe: frameScriptSchema });
+const newTabSchema = addTabSchema.extend({
+  /** Formula columns its default layout starts with (dew point over temperature and humidity). */
+  start: z.object({ formulas: z.array(viewFormulaSchema).max(10) }).optional(),
+});
 const putTabSchema = z.object({
   name: frameName.optional(),
   config: customViewConfigSchema.nullable().optional(),
@@ -155,9 +164,11 @@ export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) =>
           return json(await s.refreshAll(owner, id));
         } else if (sub === 'tabs') {
           if (!tab && m === 'POST') {
-            const p = await body(addTabSchema);
+            const p = await body(newTabSchema);
             await allowed(p.recipe);
-            return json(await s.addTab(owner, id, { name: p.name, recipe: p.recipe }));
+            return json(
+              await s.addTab(owner, id, { name: p.name, recipe: p.recipe, start: p.start }),
+            );
           }
           if (tab && m === 'PUT') {
             const p = await body(putTabSchema);

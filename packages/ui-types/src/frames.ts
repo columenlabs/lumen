@@ -484,7 +484,13 @@ export function frameConfig(meta: FrameMeta, start?: Partial<CustomViewConfig>):
     // A frame's rows are whatever the assistant found; adding them all up rarely means anything.
     total: false,
   });
-  const merged = customViewConfigSchema.safeParse({ ...base, ...(start ?? {}) });
+  // Formula columns a recipe starts with (dew point from temperature and humidity) show after the
+  // frame's own, unless it names the columns itself.
+  const formulaCols =
+    start?.formulas?.length && !start.columns
+      ? { columns: [...base.columns, ...start.formulas.map((f) => f.key)] }
+      : {};
+  const merged = customViewConfigSchema.safeParse({ ...base, ...(start ?? {}), ...formulaCols });
   const config = merged.success ? merged.data : base;
   // Columns the assistant named that the frame lacks are dropped, not refused: rows change over time.
   return {
