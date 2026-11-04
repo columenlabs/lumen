@@ -508,6 +508,7 @@ export {
   type WorkspaceApp,
   type WorkspaceDraftProps,
   WorkspacePage,
+  type WorkspaceRecipe,
   type WorkspacesConfig,
   WorkspacesProvider,
   WorkspacesSection,

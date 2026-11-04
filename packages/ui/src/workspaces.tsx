@@ -519,8 +519,9 @@ function WorkspaceBody({
             kind: 'widget',
             children: (
               <p className="text-sm text-muted-foreground">
-                Ask {assistant} for data and to open it here: “
-                {config.example?.(here) ?? 'put this month’s numbers in'} {w.name}”.
+                {recipes.length > 0
+                  ? 'Pick a recipe from + above: its rows open here as a tab, and run again whenever you tap ↻.'
+                  : `Ask ${assistant} for data and to open it here: “${config.example?.(here) ?? 'put this month’s numbers in'} ${w.name}”.`}
               </p>
             ),
           },
