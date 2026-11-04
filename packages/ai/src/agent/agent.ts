@@ -29,6 +29,8 @@ import type {
   AssistantEffort,
   AssistantEvent,
   AssistantRefNote,
+  AssistantScreenMap,
+  AssistantScreenOutcome,
   ChatUsage,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
@@ -46,6 +48,14 @@ import {
   connectorSource,
 } from './connectors';
 import { type ModelKey, aiModel, planFallback, turnSettings } from './models';
+import {
+  type ScreenCall,
+  screenMapOf,
+  screenNews,
+  screenOutcomesOf,
+  screenRules,
+  screenTool,
+} from './screen';
 import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools } from './search';
 import { type AskMeta, chunkEvents, itemsOf } from './stream';
 import {
@@ -99,6 +109,8 @@ export interface AgentTurnPlan {
   fallback?: { model: ModelDef; key: ModelKey; label: string };
   /** Dollars the payer has left; at or past it the model gets no more tools. */
   left?: number;
+  /** The person lets the assistant move their screen: the `screen` tool joins when the browser sent its map. */
+  screen?: boolean;
   /** Most model calls in one answer; 8. */
   maxSteps?: number;
   /** Fetch for provider calls (a metered one). */
@@ -207,6 +219,10 @@ export interface AskInput {
   refs?: AssistantRefNote[];
   tier?: string;
   time_zone?: string;
+  /** What the browser can show (Screen on): the `screen` tool and its rules join the turn. */
+  screen?: AssistantScreenMap;
+  /** How earlier screen calls ended in the browser. */
+  outcomes?: AssistantScreenOutcome[];
 }
 
 /** Where an answer's events go: the app's route, over RPC. */
@@ -324,7 +340,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       id,
       title: this.#get<string>('title') ?? '',
       at: this.#get<number>('at') ?? 0,
-      items: itemsOf(await this.getMessages(), this.cards()),
+      items: itemsOf(await this.getMessages(), this.cards(), this.#screens()),
       usage: this.usage(),
     };
   }
@@ -348,18 +364,22 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     }
     this.#put('at', at);
     await sink.event({ event: 'chat', data: { id: this.name, title } });
+    this.#outcomes(screenOutcomesOf(input.outcomes));
     const meta: AskMeta = {
       at,
       ...(input.context ? { context: { label: input.context.label } } : {}),
       ...(input.refs?.length ? { refs: input.refs } : {}),
       ...(input.tier ? { tier: input.tier } : {}),
     };
-    const map = chunkEvents({
+    const toEvents = chunkEvents({
       ...(this.#last?.plan.advisor ? { advisor: this.#last.plan.advisor.label } : {}),
       cards: () => new Map(this.cards().map((c) => [c.id, c])),
+      screens: () => this.#screens(),
       kindOf: (n) => this.#turn?.tools.info.find((i) => i.name === n)?.kind,
     });
-    this.#input = input;
+    const map = screenMapOf(input.screen);
+    this.#input = { ...input, ...(map ? { screen: map } : {}) };
+    if (!map) delete this.#input.screen;
     let failed = false;
     try {
       await this.chat(
@@ -378,7 +398,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
             } catch {
               return;
             }
-            for (const e of map(chunk)) await sink.event(e);
+            for (const e of toEvents(chunk)) await sink.event(e);
           },
           onDone: () => undefined,
           onError: async (message) => {
@@ -432,6 +452,71 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   #setCard(id: string, status: AgentCard['status'], o: { result?: unknown; error?: string } = {}) {
     this
       .sql`UPDATE lumen_cards SET status = ${status}, result = COALESCE(${o.result === undefined ? null : JSON.stringify(o.result).slice(0, 20_000)}, result), error = ${o.error ?? null}, told = 0 WHERE id = ${id}`;
+  }
+
+  #screensTabled = false;
+  #screenTable() {
+    if (!this.#screensTabled) {
+      this
+        .sql`CREATE TABLE IF NOT EXISTS lumen_screens (id TEXT PRIMARY KEY, label TEXT NOT NULL, moves TEXT NOT NULL, status TEXT NOT NULL, text TEXT, told INTEGER NOT NULL DEFAULT 1, at INTEGER NOT NULL)`;
+      this.#screensTabled = true;
+    }
+  }
+
+  /** The chat's screen calls (at most 200), by id. */
+  #screens(): Map<string, ScreenCall> {
+    this.#screenTable();
+    const rows = this.sql<{
+      id: string;
+      label: string;
+      moves: string;
+      status: string;
+      text: string | null;
+    }>`SELECT id, label, moves, status, text FROM lumen_screens ORDER BY at DESC LIMIT 200`;
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          label: r.label,
+          moves: JSON.parse(r.moves),
+          status: r.status as ScreenCall['status'],
+          ...(r.text ? { text: r.text } : {}),
+        },
+      ]),
+    );
+  }
+
+  /** How screen calls ended in the browser: kept, and told to the model with its next turn. */
+  #outcomes(list: AssistantScreenOutcome[]) {
+    if (!list.length) return;
+    this.#screenTable();
+    for (const o of list)
+      this
+        .sql`UPDATE lumen_screens SET status = ${o.status}, text = ${o.text ?? null}, told = 0 WHERE id = ${o.id} AND (status != ${o.status} OR COALESCE(text, '') != ${o.text ?? ''})`;
+  }
+
+  /** Screen calls whose end the model has not heard, as its note; marks them told. */
+  #screenNews(): string {
+    this.#screenTable();
+    const rows = this.sql<{
+      id: string;
+      label: string;
+      moves: string;
+      status: string;
+      text: string | null;
+    }>`SELECT id, label, moves, status, text FROM lumen_screens WHERE told = 0 ORDER BY at LIMIT 20`;
+    if (!rows.length) return '';
+    for (const r of rows) this.sql`UPDATE lumen_screens SET told = 1 WHERE id = ${r.id}`;
+    return screenNews(
+      rows.map((r) => ({
+        id: r.id,
+        label: r.label,
+        moves: JSON.parse(r.moves),
+        status: r.status as ScreenCall['status'],
+        ...(r.text ? { text: r.text } : {}),
+      })),
+    );
   }
 
   #connectorClient(): ConnectorClient {
@@ -633,7 +718,19 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         maxUses: plan.advisor.maxUses,
         maxTokens: plan.advisor.maxTokens,
       });
-    const tools: ToolSet = { ...opened.tools, ...more, ...advisor };
+    const shown = plan.screen ? this.#input?.screen : undefined;
+    const screen: ToolSet = shown
+      ? screenTool(shown, (c) => {
+          this.#screenTable();
+          this
+            .sql`INSERT OR REPLACE INTO lumen_screens (id, label, moves, status, told, at) VALUES (${c.id}, ${c.label}, ${JSON.stringify(c.moves)}, 'sent', 1, ${Date.now()})`;
+        })
+      : {};
+    if (shown) {
+      system = `${system}\n\n${screenRules(shown)}`;
+      this.#turn.system = system;
+    }
+    const tools: ToolSet = { ...opened.tools, ...more, ...advisor, ...screen };
     let lazy: LazyTools | undefined;
     if (Object.keys(tools).length > (plan.lazy?.at ?? LAZY_AT)) {
       const groups = new Map(opened.info.map((i) => [i.name, i.group]));
@@ -641,6 +738,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         ...opened.info.filter((i) => i.find).map((i) => i.name),
         ...Object.keys(more ?? {}),
         ...Object.keys(advisor),
+        ...Object.keys(screen),
       ];
       if (plan.first && !core.includes(plan.first)) core.push(plan.first);
       lazy = lazyTools(tools, core, (n) => groups.get(n) ?? 'other');
@@ -659,7 +757,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         turn.meters.push(turn.main);
       }),
       instructions: system,
-      messages: withLead(ctx.messages, `${this.#news()}${plan.lead ?? ''}`),
+      messages: withLead(ctx.messages, `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`),
       tools,
       ...(lazy ? { activeTools: lazy.active() } : {}),
       ...(plan.first ? { toolChoice: { type: 'tool', toolName: plan.first } } : {}),

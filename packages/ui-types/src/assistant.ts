@@ -6,6 +6,7 @@
  *
  * Product-neutral: the app names the assistant, its tiers and its tool groups.
  */
+import type { IndicatorSpec } from './chart-formula';
 
 /** How hard a tier's model thinks; `default` sends nothing, so the model's own default applies. */
 export const ASSISTANT_EFFORTS = ['default', 'low', 'medium', 'high', 'max'] as const;
@@ -105,6 +106,58 @@ export interface HandOffItem {
   usage?: UsagePart;
 }
 
+/**
+ * One move of the assistant's `screen` tool, run in the person's browser: a page of the app, Settings
+ * at a section (pulsing a row, never changing it), a symbol's chart (or up to 8 to compare), a row's
+ * details in the view on screen, or a card pointed at.
+ */
+export type AssistantScreenMove =
+  | { go: string }
+  | { settings: string; row?: string }
+  | { chart: string | string[]; indicators?: IndicatorSpec[] }
+  | { open: string }
+  | { point: string };
+
+/** How a `screen` call ended in the browser: ran, failed (and why), waited for a tap, or undone. */
+export const SCREEN_STATUSES = ['done', 'failed', 'waiting', 'undone'] as const;
+export type AssistantScreenStatus = (typeof SCREEN_STATUSES)[number];
+
+/** A screen call's outcome, sent back with the person's next message. */
+export interface AssistantScreenOutcome {
+  id: string;
+  status: AssistantScreenStatus;
+  /** Why it failed, or what the view on screen shows now. */
+  text?: string;
+}
+
+/** What the browser can show, sent with each message while Screen is on. */
+export interface AssistantScreenMap {
+  /** The app's route patterns (`/items/$id`). */
+  routes: string[];
+  /** Named pages from the nav. */
+  pages: { path: string; title: string; section?: string }[];
+  /** Settings sections. */
+  settings: { id: string; title: string }[];
+  /** Cards on the page now. */
+  cards: { id: string; title: string; kind?: string }[];
+  /** Rows the view on screen can open by title (the first few). */
+  rows?: string[];
+}
+
+/** Whether the assistant may move the person's screen (Settings): never, or with an Undo. */
+export const ASSISTANT_SCREEN = ['off', 'move'] as const;
+export type AssistantScreenSetting = (typeof ASSISTANT_SCREEN)[number];
+
+/** A `screen` call in the chat: what it put on screen and, once the browser says, how it ended. */
+export interface ScreenItem {
+  kind: 'screen';
+  id: string;
+  /** What the screen shows after it, in a few words. */
+  label: string;
+  moves: AssistantScreenMove[];
+  outcome?: Omit<AssistantScreenOutcome, 'id'>;
+}
+
 export type ChatItem =
   | {
       kind: 'user';
@@ -117,6 +170,7 @@ export type ChatItem =
   | { kind: 'text'; text: string }
   | StepItem
   | DraftItem
+  | ScreenItem
   | HandOffItem
   | { kind: 'advice'; tier: string; label: string; error?: string }
   | { kind: 'compacted' }
@@ -151,6 +205,7 @@ export type AssistantEvent =
   | { event: 'step_start'; data: { id: string; tool: string; title: string; handoff?: boolean } }
   | { event: 'step'; data: StepItem & { handoff?: boolean } }
   | { event: 'draft'; data: DraftItem & { handoff?: boolean } }
+  | { event: 'screen'; data: ScreenItem & { handoff?: boolean } }
   | { event: 'handoff'; data: Omit<HandOffItem, 'items' | 'usage'> }
   | { event: 'handoff_done'; data: { usage: UsagePart } }
   | { event: 'advice'; data: { tier: string; label: string } }
@@ -172,6 +227,10 @@ export interface AssistantMessage {
   tier?: string;
   /** The browser's IANA zone, for the assistant's bearings (the time now where the person is). */
   time_zone?: string;
+  /** What the browser can show, while Screen is on: the assistant gets its `screen` tool. */
+  screen?: AssistantScreenMap;
+  /** How earlier screen calls ended since the last message. */
+  outcomes?: AssistantScreenOutcome[];
 }
 
 /** A tier as the person set it, with what it runs. */
@@ -313,6 +372,8 @@ export interface AssistantStatus {
   hand_off: HandOffPolicy;
   /** The tier asked for advice, or off. */
   advice: string;
+  /** Whether the assistant may move the screen. */
+  screen: AssistantScreenSetting;
   web: {
     fetch: boolean;
     /** Null when the app has no ScrapeQL; `bound` when it is reached over a service binding (no token). */
@@ -335,6 +396,7 @@ export interface AssistantSettingsPatch {
   tasks?: Record<string, string>;
   hand_off?: HandOffPolicy;
   advice?: string;
+  screen?: AssistantScreenSetting;
   access?: Record<string, AssistantAccess>;
   web?: { fetch?: boolean };
   pay?: AssistantPayer;

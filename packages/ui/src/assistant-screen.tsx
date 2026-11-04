@@ -12,6 +12,11 @@
 // every call has Undo (the page through browser history, the rest from the snapshot). While the
 // person is mid-edit (a layout or view being edited, a confirm open) moves don't run: the chip says
 // Tap to go. The nav registers its pages (`useAssistantPages`) for the page map the assistant reads.
+import type {
+  AssistantScreenMap,
+  AssistantScreenMove,
+  AssistantScreenStatus,
+} from '@columenlabs/lumen-ui-types/assistant';
 import type { IndicatorSpec } from '@columenlabs/lumen-ui-types/chart-formula';
 import { useRouter } from '@tanstack/react-router';
 import {
@@ -51,14 +56,9 @@ export interface AssistantMoveHandlers {
 }
 
 /** One move, as the server checked it. */
-export type AssistantMove =
-  | { go: string }
-  | { settings: string; row?: string }
-  | { chart: string | string[]; indicators?: IndicatorSpec[] }
-  | { open: string }
-  | { point: string };
+export type AssistantMove = AssistantScreenMove;
 
-export type ScreenStatus = 'done' | 'failed' | 'waiting' | 'undone';
+export type ScreenStatus = AssistantScreenStatus;
 export interface ScreenOutcome {
   status: ScreenStatus;
   text?: string;
@@ -106,7 +106,7 @@ interface Snapshot {
   slots: [string, unknown][];
 }
 
-interface ScreenApi {
+export interface ScreenApi {
   register: (slot: string, h: AssistantMoveHandlers | null) => void;
   pages: (key: string, items: AssistantPage[] | null) => void;
   /** The workspace page says which workspace and tabs are on screen while it shows. */
@@ -220,6 +220,32 @@ const cardOf = (id: string) =>
 
 /** Holds what each part of the screen takes, and runs the assistant's moves over them. */
 export function AssistantScreenProvider({ children }: { children: ReactNode }) {
+  // One per app: a shell inside an app's own provider uses that one.
+  if (useContext(ScreenCtx)) return <>{children}</>;
+  return <ScreenProvider>{children}</ScreenProvider>;
+}
+
+/**
+ * The page map as the assistant's server reads it (`AssistantMessage.screen`): routes, named pages,
+ * Settings sections, the cards on screen and the rows the view can open.
+ */
+export function screenMapFor(api: ScreenApi): AssistantScreenMap {
+  const m = api.map();
+  const rows = api.can()?.rows ?? [];
+  return {
+    routes: m.routes,
+    pages: m.pages.map((p) => ({
+      path: p.path,
+      title: p.title,
+      ...(p.section ? { section: p.section } : {}),
+    })),
+    settings: m.settings,
+    cards: m.cards.map((c) => ({ id: c.id, title: c.title, kind: c.kind })),
+    ...(rows.length ? { rows } : {}),
+  };
+}
+
+function ScreenProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const slots = useRef(new Map<string, AssistantMoveHandlers>());
   const navPages = useRef(new Map<string, AssistantPage[]>());

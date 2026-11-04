@@ -9,11 +9,13 @@ import type {
   ChatItem,
   DraftItem,
   HandOffWhy,
+  ScreenItem,
   StepItem,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { rowCount } from '../assistant/tools';
 import type { AgentCard } from './agent';
+import type { ScreenCall } from './screen';
 
 /** A tool's name as a line's title: `notes__find_notes` → `find notes`. */
 export function stepTitle(name: string): string {
@@ -45,8 +47,24 @@ function settledCall(
   out: { output?: unknown; error?: string },
   ms: number,
   cards: Map<string, AgentCard>,
+  screens: Map<string, ScreenCall> = new Map(),
 ): AssistantEvent[] {
   const o = obj(out.output);
+  if (c.name === 'screen') {
+    // A call the page map refused goes back to the model only; the person sees the one that ran.
+    const call = typeof o?.screen === 'string' ? screens.get(o.screen) : undefined;
+    if (!call) return [];
+    const item: ScreenItem = {
+      kind: 'screen',
+      id: call.id,
+      label: call.label,
+      moves: call.moves,
+      ...(call.status !== 'sent'
+        ? { outcome: { status: call.status, ...(call.text ? { text: call.text } : {}) } }
+        : {}),
+    };
+    return [{ event: 'screen', data: item }];
+  }
   const card = cards.get(id);
   if (card?.kind === 'draft' || (o && typeof o.card === 'string')) {
     const draft: DraftItem = {
@@ -98,6 +116,8 @@ export function chunkEvents(
   o: {
     advisor?: string;
     cards?: () => Map<string, AgentCard>;
+    /** The chat's screen calls by id: a `screen` tool's result names its call. */
+    screens?: () => Map<string, ScreenCall>;
     /** A tool's kind this turn: a draft shows as its card only, with no line before it. */
     kindOf?: (name: string) => 'read' | 'draft' | 'write' | undefined;
   } = {},
@@ -120,7 +140,7 @@ export function chunkEvents(
           advising = true;
           return [{ event: 'advice', data: { tier: 'advisor', label: o.advisor ?? 'Advice' } }];
         }
-        if (name === 'escalate' || o.kindOf?.(name) === 'draft') return [];
+        if (name === 'escalate' || name === 'screen' || o.kindOf?.(name) === 'draft') return [];
         return [{ event: 'step_start', data: { id, tool: name, title: stepTitle(name) } }];
       }
       case 'tool-input-available': {
@@ -145,6 +165,7 @@ export function chunkEvents(
           error !== undefined ? { error } : { output: chunk.output },
           Date.now() - c.t0,
           o.cards?.() ?? new Map(),
+          c.name === 'screen' ? (o.screens?.() ?? new Map()) : undefined,
         );
       }
       case 'error':
@@ -180,7 +201,11 @@ export interface AskMeta {
 }
 
 /** A stored chat as the panel's items: the messages in order, each tool call as it ended. */
-export function itemsOf(messages: StoredMessage[], cards: AgentCard[]): ChatItem[] {
+export function itemsOf(
+  messages: StoredMessage[],
+  cards: AgentCard[],
+  screens: Map<string, ScreenCall> = new Map(),
+): ChatItem[] {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const items: ChatItem[] = [];
   for (const m of messages) {
@@ -232,12 +257,13 @@ export function itemsOf(messages: StoredMessage[], cards: AgentCard[]): ChatItem
         ended,
         0,
         byId,
+        screens,
       )) {
         if (e.event === 'handoff') items.push({ ...e.data, items: [] });
         else if (e.event === 'handoff_done') {
           const h = items[items.length - 1];
           if (h?.kind === 'handoff') h.usage = e.data.usage;
-        } else if (e.event === 'step' || e.event === 'draft') {
+        } else if (e.event === 'step' || e.event === 'draft' || e.event === 'screen') {
           const { handoff: _h, ...item } = e.data;
           items.push(item);
         }

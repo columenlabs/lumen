@@ -7,6 +7,7 @@ export * from './agent';
 export * from './connectors';
 export * from './models';
 export * from './respond';
+export * from './screen';
 export * from './search';
 export * from './stream';
 export * from './tools';

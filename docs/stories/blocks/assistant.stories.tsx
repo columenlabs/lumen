@@ -107,6 +107,7 @@ const STATUS: AssistantStatus = {
   ],
   hand_off: 'next',
   advice: 'off',
+  screen: 'move',
   web: {
     fetch: true,
     scrapeql: {
@@ -355,6 +356,7 @@ function mockAdapter(
         ...(p.tier ? { tier: p.tier } : {}),
         ...(p.hand_off ? { hand_off: p.hand_off } : {}),
         ...(p.advice ? { advice: p.advice } : {}),
+        ...(p.screen ? { screen: p.screen } : {}),
         ...(p.pay ? { pay: p.pay } : {}),
         ...(p.own_use
           ? {
