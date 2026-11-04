@@ -438,6 +438,10 @@ export interface FrameChoice extends Omit<LinkedFrame, 'key'> {
   /** None: a snapshot, which a card links by field pairs (`frame:<id>` connection). */
   key?: JoinKey;
   origin: FrameOrigin;
+  /** What makes it (none: written or pushed), who pushed or ran it last, and its row count. */
+  recipe?: FrameScript['kind'];
+  by?: string;
+  rows?: number;
   /** The card it enriches now ("tab Watch in workspace Ideas", "a saved view"); none when free. */
   used?: string;
 }

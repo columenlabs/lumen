@@ -358,6 +358,9 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     columns: h.columns,
     at: h.at,
     origin: h.origin ?? 'assistant',
+    recipe: h.script?.kind,
+    by: h.by,
+    rows: h.rows,
   });
 
   /** A frame no tab shows but a card links (a recipe added from + Data) still counts as used. */
