@@ -99,13 +99,12 @@ export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) =>
       if (root === 'workspaces') {
         if (!id) {
           if (m === 'GET') return json(await s.list(owner));
-          if (m === 'POST')
-            return json({ workspace: await s.create(owner, await body(createSchema)) });
+          if (m === 'POST') return json(await s.create(owner, await body(createSchema)));
         } else if (!sub) {
-          if (m === 'GET') return json({ workspace: await s.read(owner, id) });
+          if (m === 'GET') return json(await s.read(owner, id));
           if (m === 'PATCH') {
             const p = await body(patchSchema);
-            return json({ workspace: await s.patch(owner, id, p) });
+            return json(await s.patch(owner, id, p));
           }
           if (m === 'DELETE') {
             await s.remove(owner, id);
@@ -121,15 +120,15 @@ export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) =>
           }
           if (tab && m === 'PUT') {
             const p = await body(putTabSchema);
-            return json({
-              workspace: await s.putTab(owner, id, tab, {
+            return json(
+              await s.putTab(owner, id, tab, {
                 name: p.name,
                 // The schema checks the layout; the tab's name rides beside it.
                 config: p.config as CustomViewConfig | null | undefined,
               }),
-            });
+            );
           }
-          if (tab && m === 'DELETE') return json({ workspace: await s.removeTab(owner, id, tab) });
+          if (tab && m === 'DELETE') return json(await s.removeTab(owner, id, tab));
         }
       }
       if (root === 'frames') {

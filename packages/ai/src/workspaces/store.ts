@@ -282,7 +282,10 @@ export function createWorkspaces(opts: WorkspacesOptions) {
       await writeFrame(owner, next, put.data, put.edits);
       return { meta: metaOf(next), rows: put.data, edits: put.edits };
     } catch (err) {
-      const error = err instanceof FrameError ? err.message : 'The recipe failed.';
+      // The product's runner speaks to the person (a tool that is not a read, a grant missing).
+      const error = (
+        err instanceof Error && err.message ? err.message : 'The recipe failed.'
+      ).slice(0, 300);
       const failed: Head = {
         ...head,
         error,
