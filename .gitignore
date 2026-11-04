@@ -4,3 +4,4 @@ out
 *.tgz
 .DS_Store
 .wrangler
+.ci-*.log
