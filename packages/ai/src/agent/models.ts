@@ -6,7 +6,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { AssistantEffort } from '@columenlabs/lumen-ui-types/assistant';
-import type { JSONValue, LanguageModel } from 'ai';
+import type { JSONValue, LanguageModel, ModelMessage, SystemModelMessage } from 'ai';
 import type { ModelDef } from '../assistant/models';
 
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
@@ -111,12 +111,46 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
 }
 
 /**
- * Claude's prompt cache: one breakpoint on the request, which Claude moves to the newest block on
- * each call, so a turn's later steps and the next turn read the tools, instructions and chat so
- * far from cache (a tenth of the input price) instead of paying for them again. Sent whatever the
- * tier's provider, so a plan's fallback to Claude caches too; other providers ignore it.
+ * Claude's prompt cache. The request's own breakpoint follows the newest block, so a turn's later
+ * steps read the steps before them. It alone never helps the next turn: the bearings put before
+ * the newest message are gone from it by then, so that prefix never comes again. `cachedTurn`
+ * adds two breakpoints that do: after the instructions (tools and instructions) and on the last
+ * message before the newest question (the chat so far). Sent whatever the tier's provider, so a
+ * plan's fallback to Claude caches too; other providers ignore it.
  */
 const CLAUDE_CACHE: Record<string, JSONValue> = { cacheControl: { type: 'ephemeral' } };
+const CACHED = { anthropic: CLAUDE_CACHE };
+
+/**
+ * A turn's instructions and messages with Claude's two lasting cache breakpoints: the instructions
+ * as a system message that carries one, and the message before the newest person's message.
+ */
+export function cachedTurn(
+  instructions: string,
+  messages: ModelMessage[],
+): { instructions: SystemModelMessage; messages: ModelMessage[] } {
+  let i = messages.length - 1;
+  while (i >= 0 && messages[i]?.role !== 'user') i -= 1;
+  const before = i - 1;
+  const marked =
+    before >= 0
+      ? messages.map((m, n) =>
+          n === before
+            ? ({
+                ...m,
+                providerOptions: {
+                  ...m.providerOptions,
+                  anthropic: { ...m.providerOptions?.anthropic, ...CLAUDE_CACHE },
+                },
+              } as ModelMessage)
+            : m,
+        )
+      : messages;
+  return {
+    instructions: { role: 'system', content: instructions, providerOptions: CACHED },
+    messages: marked,
+  };
+}
 
 /** A tier's effort and output cap as a turn's settings, with Claude's prompt cache on. */
 export function turnSettings(
