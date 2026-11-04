@@ -13,6 +13,8 @@
  *   PUT    /workspaces/:id/tabs/:tab {name?, config?}
  *   DELETE /workspaces/:id/tabs/:tab
  *   GET    /frames                        every frame (for + Data)
+ *   POST   /frames {name, recipe}         a frame from a recipe, for a card to link (reuses one
+ *                                        that runs the same recipe)
  *   GET    /frames/:id                    rows, meta and hand edits
  *   POST   /frames/:id/refresh            runs its recipe again
  *   GET|PUT /frames/:id/script            its recipe
@@ -134,7 +136,17 @@ export function workspaceRoutes(opts: WorkspaceRoutesOptions): (req: Request) =>
       if (root === 'frames') {
         if (!id) {
           if (m === 'GET') return json(await s.frames(owner));
-          if (m === 'POST') return fail('Your own columns are not offered here yet.', 501);
+          if (m === 'POST') {
+            const raw = await req
+              .clone()
+              .json()
+              .catch(() => null);
+            if (!raw || typeof raw !== 'object' || !('recipe' in raw))
+              return fail('Your own columns are not offered here yet.', 501);
+            const p = await body(addTabSchema);
+            await allowed(p.recipe);
+            return json(await s.makeFrame(owner, p));
+          }
         } else if (!sub && m === 'GET') {
           return json(await s.frame(owner, id));
         } else if (sub === 'refresh' && m === 'POST') {

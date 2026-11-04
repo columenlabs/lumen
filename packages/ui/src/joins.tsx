@@ -28,6 +28,7 @@ import {
   type FrameData,
   type FrameEditInput,
   type FrameMeta,
+  type FrameScript,
   type YourColumn,
   frameKeyAt,
 } from '@columenlabs/lumen-ui-types/frames';
@@ -532,6 +533,22 @@ export function useFrameChoices(enabled: boolean) {
     queryFn: () => json<{ frames: FrameChoice[] }>(`${api}/frames`).then((r) => r.frames),
     enabled: enabled && !!api,
     staleTime: 30_000,
+  });
+}
+
+/** Makes a frame from one of the product's recipes (+ Data's app recipes), or reuses the one that
+ * already runs it, and lists it with the person's frames. */
+export function useMakeFrame() {
+  const api = useAssistant()?.api ?? null;
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (r: { name: string; recipe: FrameScript }) =>
+      json<FrameChoice>(`${api}/frames`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(r),
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...WORKSPACES_KEY, api, 'frames'] }),
   });
 }
 
