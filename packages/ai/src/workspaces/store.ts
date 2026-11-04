@@ -494,6 +494,31 @@ export function createWorkspaces(opts: WorkspacesOptions) {
       };
     },
 
+    /**
+     * A new tab over a frame the person already has (a dataset an outside agent pushed): no run,
+     * the rows are the frame's. One tab per frame in a workspace; asking again gives that tab.
+     */
+    async frameTab(
+      owner: string,
+      id: string,
+      p: { name: string; frame: string; start?: WorkspaceTab['start'] },
+    ): Promise<{ workspace: Workspace; tab: string }> {
+      const w = await getSpace(owner, id);
+      await getFrame(owner, p.frame);
+      const had = w.tabs.find((x) => 'frame' in x.source && x.source.frame === p.frame);
+      if (had) return { workspace: w, tab: had.id };
+      if (w.tabs.length >= MAX_TABS)
+        throw new FrameError(`${w.name} has ${MAX_TABS} tabs, the most: delete one first.`, 409);
+      const tab: WorkspaceTab = {
+        id: newId('tb'),
+        name: p.name,
+        source: { frame: p.frame },
+        config: null,
+        ...(p.start?.formulas.length ? { start: p.start } : {}),
+      };
+      return { workspace: await saveSpace(owner, { ...w, tabs: [...w.tabs, tab] }), tab: tab.id };
+    },
+
     async putTab(
       owner: string,
       id: string,
