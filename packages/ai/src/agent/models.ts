@@ -110,22 +110,31 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
   return createOpenAI({ apiKey: key.apiKey, ...(f ? { fetch: f } : {}) }).responses(model.id);
 }
 
-/** A tier's effort and output cap as a turn's settings; nothing at the model's own default. */
+/**
+ * Claude's prompt cache: one breakpoint on the request, which Claude moves to the newest block on
+ * each call, so a turn's later steps and the next turn read the tools, instructions and chat so
+ * far from cache (a tenth of the input price) instead of paying for them again. Sent whatever the
+ * tier's provider, so a plan's fallback to Claude caches too; other providers ignore it.
+ */
+const CLAUDE_CACHE: Record<string, JSONValue> = { cacheControl: { type: 'ephemeral' } };
+
+/** A tier's effort and output cap as a turn's settings, with Claude's prompt cache on. */
 export function turnSettings(
   model: ModelDef,
   o: { effort: AssistantEffort; out?: number; plan?: boolean },
-): { maxOutputTokens?: number; providerOptions?: Record<string, Record<string, JSONValue>> } {
+): { maxOutputTokens?: number; providerOptions: Record<string, Record<string, JSONValue>> } {
   const out = o.plan || !o.out ? {} : { maxOutputTokens: o.out };
+  const anthropic: Record<string, JSONValue> = { ...CLAUDE_CACHE };
   // A plan keeps nothing, so earlier turns go back as items, not references to stored ones.
   const openai: Record<string, JSONValue> = o.plan ? { store: false } : {};
   if (o.effort !== 'default') {
-    if (model.provider === 'anthropic')
-      return { ...out, providerOptions: { anthropic: { effort: o.effort } } };
-    openai.reasoningEffort = o.effort;
+    if (model.provider === 'anthropic') anthropic.effort = o.effort;
+    else openai.reasoningEffort = o.effort;
   }
-  return model.provider === 'openai' && Object.keys(openai).length
-    ? { ...out, providerOptions: { openai } }
-    : out;
+  return {
+    ...out,
+    providerOptions: { anthropic, ...(Object.keys(openai).length ? { openai } : {}) },
+  };
 }
 
 /** A model as the AI SDK calls it: its two entry points, whatever the spec version. */
