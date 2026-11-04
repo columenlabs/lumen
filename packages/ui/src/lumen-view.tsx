@@ -1199,16 +1199,19 @@ const colPropsOf =
  */
 const capOf = <T,>(f: ViewField<T>, i: number) =>
   f.maxWidth === false ? undefined : (f.maxWidth ?? (i === 0 ? 'var(--lead-col-max)' : undefined));
-/** Holds a cell to its column's cap on one line: text past it ends in an ellipsis. */
+/** Holds a cell to its column's cap on one line: text past it ends in an ellipsis. `end` keeps a
+ *  right-aligned column's value on its right edge (the wrapper is a flex row, which `text-right`
+ *  alone does not move), so a capped or resized column keeps one edge. */
 function CappedCell({
   max,
+  end,
   title,
   children,
-}: { max: string | undefined; title?: string; children: ReactNode }) {
+}: { max: string | undefined; end?: boolean; title?: string; children: ReactNode }) {
   if (!max) return children;
   return (
     <div
-      className="flex min-w-0 *:min-w-0 *:max-w-full *:truncate"
+      className={cn('flex min-w-0 *:min-w-0 *:max-w-full *:truncate', end && 'justify-end')}
       style={{ maxWidth: max }}
       title={title}
     >
@@ -1332,11 +1335,6 @@ function LumenTableRows<T extends RowData>({
   const colWidths = useColumnWidths(resizing ? (widthsKey ?? '') || undefined : undefined);
   const widthOf = (f: ViewField<T> | undefined) =>
     resizing && f ? colWidths.widths[f.key] : undefined;
-  // A dragged width caps the column's cells in its place (the cell's own padding taken off).
-  const capFor = (f: ViewField<T>, i: number) => {
-    const w = widthOf(f);
-    return w ? `calc(${w}px - 2 * var(--cell-x))` : capOf(f, i);
-  };
   const [sorting, setSorting] = useState<SortingState>(() => sortingOf(sort, columns, serverSorts));
   // A saved sort patched while the table is open (the assistant's card move) applies at once.
   const savedSort = JSON.stringify(sort ?? null);
@@ -1351,7 +1349,6 @@ function LumenTableRows<T extends RowData>({
     pageIndex: paging ? page.index : 0,
     pageSize: paging ? page.size : Math.max(rows.length, 1),
   };
-  // Groups whose state differs from where they start: open, or past OPEN_ALL rows only the first.
   // Columns a UnitValue has drawn in (`UnitColumns`): their cells share the numbers' edge.
   const [units, setUnits] = useState<ReadonlySet<string>>(() => new Set());
   const markUnits = useCallback(
@@ -1359,6 +1356,14 @@ function LumenTableRows<T extends RowData>({
     [],
   );
   const colProps = colPropsOf(units);
+  // A dragged width caps the column's cells in its place (the cell's own padding taken off).
+  const capFor = (f: ViewField<T>, i: number) => {
+    const w = widthOf(f);
+    // A units column's right padding also holds the unit slot (theme.css `[data-units]`).
+    const pad = units.has(f.key) ? '2 * var(--cell-x) - var(--unit-slot)' : '2 * var(--cell-x)';
+    return w ? `calc(${w}px - ${pad})` : capOf(f, i);
+  };
+  // Groups whose state differs from where they start: open, or past OPEN_ALL rows only the first.
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [more, setMore] = useState<Map<string, number>>(new Map());
   // Under a sub-group's `flat` grouping each row names itself by its sub-group key instead of
@@ -1578,6 +1583,7 @@ function LumenTableRows<T extends RowData>({
           return (
             <CappedCell
               max={capFor(field, i)}
+              end={(field.format ?? 'text') !== 'text'}
               title={!field.render && typeof v === 'string' ? v : undefined}
             >
               {i === 0 && inline.length ? (

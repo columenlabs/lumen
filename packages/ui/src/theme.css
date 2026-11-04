@@ -433,6 +433,9 @@
 }
 [data-units] [data-slot="unit-value"] {
   position: relative;
+  /* A resized column wraps its cells in a truncating box; the unit hangs outside the value's box,
+     so it must not be clipped with it. */
+  overflow: visible;
 }
 [data-units] [data-slot="unit-value-unit"] {
   position: absolute;
