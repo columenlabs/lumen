@@ -311,9 +311,13 @@ export function frameConfig(meta: FrameMeta, start?: Partial<CustomViewConfig>):
   const own = meta.columns.map((c) => c.key);
   const joins = frameSymbolAt(meta) >= 0 ? joinKeys(['symbol'], own) : [];
   const keys = new Set([...own, ...joins]);
+  // An opaque id (`id`, `job_id`) starts hidden, so a row leads with its name, on a phone above
+  // all; Columns adds it back. A linked frame's key and a frame of nothing but ids keep theirs.
+  const opaque = (k: string) => (k === 'id' || k.endsWith('_id')) && k !== meta.key;
+  const shown = own.some((k) => !opaque(k)) ? own.filter((k) => !opaque(k)) : own;
   const base = customViewConfigSchema.parse({
     shape: 'table',
-    columns: [...own, ...joins.filter((k) => k === 'price' || k === 'change_pct')],
+    columns: [...shown, ...joins.filter((k) => k === 'price' || k === 'change_pct')],
     // Empty offers every field the frame's catalog marks groupable or filterable: listing them
     // would break on a frame wider than the 20 fields a view may name.
     group: { fields: [], default: null },
