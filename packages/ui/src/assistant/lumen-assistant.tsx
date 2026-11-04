@@ -1458,7 +1458,7 @@ function partRow(p: UsagePart, i: number) {
   return { tier: bits[0] ?? p.label, kind };
 }
 
-/** The chat's use per part (Zeus's pop-up): cost, tokens in with the cache %, out, calls; then the total. */
+/** The chat's use per part: cost, tokens in with the cache %, out, calls; then the total. */
 function UsageTable({ usage }: { usage: ChatUsage }) {
   const total = 'mt-1 border-t pt-1';
   return (

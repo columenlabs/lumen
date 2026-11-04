@@ -48,7 +48,7 @@ export interface UsagePart {
   read: number;
   out: number;
   usd: number;
-  /** A hand-off part: how many times a higher tier was handed a task (Zeus's `×2`). */
+  /** A hand-off part: how many times a higher tier was handed a task. */
   runs?: number;
 }
 
