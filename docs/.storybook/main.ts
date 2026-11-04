@@ -23,7 +23,23 @@ const config: StorybookConfig = {
   },
   staticDirs: ['../public'],
   core: { disableTelemetry: true },
-  viteFinal: (vite) => ({ ...vite, plugins: [...(vite.plugins ?? []), tailwindcss()] }),
+  // A quiet build log: warnings and errors only (no list of every asset), and not the
+  // "use client" directive notice, which every client part in a dependency raises once.
+  viteFinal: (vite) => ({
+    ...vite,
+    logLevel: 'warn',
+    plugins: [...(vite.plugins ?? []), tailwindcss()],
+    build: {
+      ...vite.build,
+      rolldownOptions: {
+        ...vite.build?.rolldownOptions,
+        onwarn(warning, warn) {
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
+          warn(warning);
+        },
+      },
+    },
+  }),
 };
 
 export default config;
