@@ -26,6 +26,7 @@ import type {
   AssistantOwnWay,
   AssistantPayer,
   AssistantProvider,
+  AssistantScreenSetting,
   AssistantWait,
   HandOffPolicy,
   KeyState,
@@ -76,6 +77,8 @@ export interface PersonDoc {
   tasks?: Record<string, string>;
   hand_off?: HandOffPolicy;
   advice?: string;
+  /** Whether the assistant may move the screen; Move when unset. */
+  screen?: AssistantScreenSetting;
   access?: Record<string, AssistantAccess>;
   web?: boolean;
   pay?: AssistantPayer;

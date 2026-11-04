@@ -477,6 +477,7 @@ export { useBackClose } from './hooks/use-back-close';
 export { VIEW_ICONS, iconOf, viewIcon } from './view-icons';
 export { type AppViewState, useAppView } from './app-views';
 export {
+  type ScreenApi,
   type ScreenMap,
   type ScreenOutcome,
   type ScreenStatus,
@@ -486,6 +487,7 @@ export {
   type AssistantPage,
   type AssistantPageType,
   AssistantScreenProvider,
+  screenMapFor,
   useAssistantMoves,
   useAssistantPages,
   useAssistantScreen,

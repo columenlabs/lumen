@@ -585,6 +585,7 @@ export class Assistant {
       ...(fallback ? { fallback } : {}),
       left: paying.left,
       maxSteps: MAX_ROUNDS,
+      screen: (p.screen ?? 'move') === 'move',
       ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
       ...(handTo && reach.length ? { first: 'escalate' } : {}),
       ...(advisor
@@ -887,6 +888,7 @@ export class Assistant {
       })),
       hand_off: p.hand_off ?? 'next',
       advice: p.advice && (p.advice === 'off' || this.tierById(p.advice)) ? p.advice : 'off',
+      screen: p.screen ?? 'move',
       web: {
         fetch: p.web ?? true,
         scrapeql: this.o.web?.scrapeql

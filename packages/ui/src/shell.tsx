@@ -21,6 +21,7 @@ import {
   useState,
 } from 'react';
 import type { ComponentType } from 'react';
+import { AssistantScreenProvider } from './assistant-screen';
 import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
 import { LumenFinder, type LumenFinderConfig } from './lumen-finder';
@@ -394,94 +395,97 @@ export function LumenShell({
   );
 
   return (
-    <Ctx.Provider
-      value={{
-        app,
-        appLabel,
-        statusSlot,
-        openSettings,
-        closeSettings: () => setSettingsAt(null),
-        hasSettings: (section) => findSettings.some((s) => s.id === section),
-        refresh: onRefresh ? refresh : null,
-        refreshing,
-        hideAmounts,
-        headerActions,
-      }}
-    >
-      <StatusBarProvider>
-        <DockSlot.Provider value={dockSlot}>
-          <StatusSignals app={app} model={bar} openSettings={openSettings}>
-            <SourceHealthProvider>
-              {wrap(
-                <TooltipProvider delayDuration={200}>
-                  <SidebarProvider defaultOpen={sidebarOpen()}>
-                    <LumenFinder
-                      app={app}
-                      settings={findSettings}
-                      openSettings={openSettings}
-                      config={finder}
-                    >
-                      <CloseDrawerOnNavigate />
-                      <Sidebar collapsible="icon">
-                        <SidebarHeader>{brand}</SidebarHeader>
-                        <SidebarContent>{nav}</SidebarContent>
-                        <SidebarFooter>
-                          <NavUser
-                            who={user}
-                            signOutUrl={signOutUrl}
-                            onSettings={() => openSettings()}
-                            onLogs={onLogs}
+    // The screen map (nav pages, Settings, cards) for Find and the assistant's screen moves.
+    <AssistantScreenProvider>
+      <Ctx.Provider
+        value={{
+          app,
+          appLabel,
+          statusSlot,
+          openSettings,
+          closeSettings: () => setSettingsAt(null),
+          hasSettings: (section) => findSettings.some((s) => s.id === section),
+          refresh: onRefresh ? refresh : null,
+          refreshing,
+          hideAmounts,
+          headerActions,
+        }}
+      >
+        <StatusBarProvider>
+          <DockSlot.Provider value={dockSlot}>
+            <StatusSignals app={app} model={bar} openSettings={openSettings}>
+              <SourceHealthProvider>
+                {wrap(
+                  <TooltipProvider delayDuration={200}>
+                    <SidebarProvider defaultOpen={sidebarOpen()}>
+                      <LumenFinder
+                        app={app}
+                        settings={findSettings}
+                        openSettings={openSettings}
+                        config={finder}
+                      >
+                        <CloseDrawerOnNavigate />
+                        <Sidebar collapsible="icon">
+                          <SidebarHeader>{brand}</SidebarHeader>
+                          <SidebarContent>{nav}</SidebarContent>
+                          <SidebarFooter>
+                            <NavUser
+                              who={user}
+                              signOutUrl={signOutUrl}
+                              onSettings={() => openSettings()}
+                              onLogs={onLogs}
+                            />
+                          </SidebarFooter>
+                          <SidebarRail />
+                        </Sidebar>
+                        <SidebarInset className="flex min-h-svh min-w-0 flex-col">
+                          <SignalBanners />
+                          <div key={epoch} className="flex min-w-0 flex-1 flex-col">
+                            {children}
+                          </div>
+                          <LumenStatusBar
+                            app={app}
+                            model={bar}
+                            legacy={status}
+                            slot={setStatusSlot}
+                            end={
+                              <>
+                                {health}
+                                {releases && <WhatsNew api={releases} apps={releaseApps} />}
+                                {statusEnd}
+                                <StatusTimeZone />
+                              </>
+                            }
                           />
-                        </SidebarFooter>
-                        <SidebarRail />
-                      </Sidebar>
-                      <SidebarInset className="flex min-h-svh min-w-0 flex-col">
-                        <SignalBanners />
-                        <div key={epoch} className="flex min-w-0 flex-1 flex-col">
-                          {children}
-                        </div>
-                        <LumenStatusBar
-                          app={app}
-                          model={bar}
-                          legacy={status}
-                          slot={setStatusSlot}
-                          end={
-                            <>
-                              {health}
-                              {releases && <WhatsNew api={releases} apps={releaseApps} />}
-                              {statusEnd}
-                              <StatusTimeZone />
-                            </>
-                          }
+                          {tabs && <LumenTabBar items={tabs} />}
+                        </SidebarInset>
+                        {/* A docked LumenDrawer: beside the page, left of the assistant. */}
+                        <div ref={setDockSlot} data-slot="shell-dock" className="contents" />
+                        {panel}
+                        <LumenSettings
+                          open={settingsAt !== null}
+                          section={settingsAt ?? lastSection}
+                          onOpen={openSettings}
+                          onClose={() => setSettingsAt(null)}
+                          appLabel={appLabel}
+                          profile={profile}
+                          security={security}
+                          sections={settings}
+                          shared={shared}
+                          sharedLabel={sharedLabel}
+                          groups={settingsGroups}
                         />
-                        {tabs && <LumenTabBar items={tabs} />}
-                      </SidebarInset>
-                      {/* A docked LumenDrawer: beside the page, left of the assistant. */}
-                      <div ref={setDockSlot} data-slot="shell-dock" className="contents" />
-                      {panel}
-                      <LumenSettings
-                        open={settingsAt !== null}
-                        section={settingsAt ?? lastSection}
-                        onOpen={openSettings}
-                        onClose={() => setSettingsAt(null)}
-                        appLabel={appLabel}
-                        profile={profile}
-                        security={security}
-                        sections={settings}
-                        shared={shared}
-                        sharedLabel={sharedLabel}
-                        groups={settingsGroups}
-                      />
-                      <Toaster position="bottom-right" />
-                    </LumenFinder>
-                  </SidebarProvider>
-                </TooltipProvider>,
-              )}
-            </SourceHealthProvider>
-          </StatusSignals>
-        </DockSlot.Provider>
-      </StatusBarProvider>
-    </Ctx.Provider>
+                        <Toaster position="bottom-right" />
+                      </LumenFinder>
+                    </SidebarProvider>
+                  </TooltipProvider>,
+                )}
+              </SourceHealthProvider>
+            </StatusSignals>
+          </DockSlot.Provider>
+        </StatusBarProvider>
+      </Ctx.Provider>
+    </AssistantScreenProvider>
   );
 }
 

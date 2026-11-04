@@ -8,11 +8,13 @@ import type {
   AllowanceUnit,
   AssistantMessage,
   AssistantRefNote,
+  AssistantScreenMove,
   AssistantStatus,
   ChatItem,
   ChatUsage,
   DraftItem,
   HandOffItem,
+  ScreenItem,
   StepItem,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -26,10 +28,12 @@ import {
   CrosshairIcon,
   FileTextIcon,
   LightbulbIcon,
+  MonitorIcon,
   PencilIcon,
   PlusIcon,
   SparklesIcon,
   SquareIcon,
+  TriangleAlertIcon,
   Undo2Icon,
   WrenchIcon,
   XIcon,
@@ -44,6 +48,7 @@ import {
   assistantOpen,
   useAssistantHotkey,
 } from '../assistant-panel';
+import { type ScreenApi, screenMapFor, useAssistantScreen } from '../assistant-screen';
 import { IconButton } from '../icon-button';
 import { errorText } from '../integrations';
 import { lazyPart } from '../lazy-part';
@@ -184,6 +189,43 @@ export function LumenAssistant({
     }
   };
 
+  // The assistant moves the screen (Settings ▸ Screen): the page map goes with each message, and
+  // each new screen call runs here once; how it ended goes with the next message.
+  const screen = useAssistantScreen();
+  const screenOn = !!screen && (s?.screen ?? 'move') === 'move';
+  const extra = (): Omit<AssistantMessage, 'message' | 'chat_id'> => ({
+    ...(context ? { context } : {}),
+    ...(screenOn && screen ? { screen: screenMapFor(screen) } : {}),
+  });
+  const ran = useRef(new Set<string>());
+  const ended = chat.screenEnded;
+  useEffect(() => {
+    for (const i of screenCalls(chat.items)) {
+      if (!i.live || ran.current.has(i.id)) continue;
+      ran.current.add(i.id);
+      if (!screen) {
+        ended({ id: i.id, status: 'failed', text: 'this page cannot be moved' });
+        continue;
+      }
+      void screen.run(i.id, i.moves).then((o) => {
+        ended({ id: i.id, ...o });
+        // On a phone the panel covers the page: it steps aside so the move shows.
+        if (o.status === 'done' && onClose && window.matchMedia('(max-width: 767px)').matches)
+          onClose();
+      });
+    }
+  }, [chat.items, screen, ended, onClose]);
+  const controls: ScreenControls | null = screen
+    ? {
+        canUndo: (id) => screen.canUndo(id),
+        undo: (id) => void screen.undo(id).then((o) => ended({ id, ...o })),
+        go: (item) => {
+          ran.current.add(item.id);
+          void screen.run(item.id, item.moves, true).then((o) => ended({ id: item.id, ...o }));
+        },
+      }
+    : null;
+
   const tiers = s?.tiers ?? [];
   const above = tiers.slice(tiers.findIndex((t) => t.id === s?.tier) + 1);
   // The kit's commands; the app's own (`commands`, then the server's) come first and win a name.
@@ -236,8 +278,7 @@ export function LumenAssistant({
             about: `Hand a task to ${above[0].label}`,
             args: '<task>',
             run: (task: string) => {
-              if (task.trim())
-                chat.send(task, { ...(context ? { context } : {}), tier: above[0]?.id as string });
+              if (task.trim()) chat.send(task, { ...extra(), tier: above[0]?.id as string });
               return undefined;
             },
           },
@@ -301,7 +342,9 @@ export function LumenAssistant({
         )}
       </div>
       <AssistantName.Provider value={name}>
-        <Messages chat={chat} status={s} onSettings={onSettings} />
+        <Screen.Provider value={controls}>
+          <Messages chat={chat} status={s} onSettings={onSettings} />
+        </Screen.Provider>
       </AssistantName.Provider>
       <LumenComposer
         name={s?.name ?? 'the assistant'}
@@ -312,7 +355,7 @@ export function LumenAssistant({
         tiers={tiers}
         sources={allSources}
         page={context?.label}
-        onSend={(text, extra) => chat.send(text, { ...(context ? { context } : {}), ...extra })}
+        onSend={(text, more) => chat.send(text, { ...extra(), ...more })}
         onStop={chat.stop}
       />
       <UsageLine usage={chat.usage} />
@@ -539,6 +582,8 @@ function Item({
       return <Step step={item} live={!!item.live} />;
     case 'draft':
       return <Draft draft={item} onSettle={onSettle} busy={busy} />;
+    case 'screen':
+      return <ScreenChip item={item} />;
     case 'handoff':
       return <HandOff item={item} onSettle={onSettle} busy={busy} />;
     case 'advice':
@@ -564,6 +609,92 @@ function Item({
         </p>
       );
   }
+}
+
+/** Every screen call in the chat, hand-off sections included. */
+function screenCalls(items: LiveItem[]): (ScreenItem & { live?: boolean })[] {
+  return items.flatMap((i) =>
+    i.kind === 'screen' ? [i] : i.kind === 'handoff' ? screenCalls(i.items as LiveItem[]) : [],
+  );
+}
+
+/** What the panel can do with a screen call: Undo it, or run one that waited for a tap. */
+interface ScreenControls {
+  canUndo: ScreenApi['canUndo'];
+  undo: (id: string) => void;
+  go: (item: ScreenItem) => void;
+}
+const Screen = createContext<ScreenControls | null>(null);
+
+/** A screen call's moves in words, for the chip's hover. */
+const movesText = (moves: AssistantScreenMove[]) =>
+  moves
+    .map((m) =>
+      'go' in m
+        ? `Go to ${m.go}`
+        : 'settings' in m
+          ? `Settings ▸ ${m.settings}${m.row ? ` ▸ ${m.row}` : ''}`
+          : 'chart' in m
+            ? `Chart ${[m.chart].flat().join(', ')}`
+            : 'open' in m
+              ? `Open ${m.open}`
+              : `Point at ${m.point.replace(/^card:/, '')}`,
+    )
+    .join(' · ');
+
+/**
+ * A screen call in the chat: ✓ and what is on screen, with Undo; why it failed; or, while the
+ * person was mid-edit, Go now.
+ */
+function ScreenChip({ item }: { item: ScreenItem & { live?: boolean } }) {
+  const c = useContext(Screen);
+  // No outcome and not running: it ran in another tab or before a reload, which kept no result.
+  const status = item.outcome?.status ?? (item.live ? 'running' : 'sent');
+  const said =
+    status === 'failed'
+      ? `Couldn't move · ${item.outcome?.text ?? ''}`
+      : status === 'waiting'
+        ? 'Waits while you edit'
+        : status === 'undone'
+          ? 'Undone'
+          : null;
+  return (
+    <div
+      data-slot="assistant-screen"
+      data-status={status}
+      className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/30 px-3 py-1.5 text-muted-foreground text-xs"
+    >
+      {status === 'running' ? (
+        <Spinner className="size-3.5" />
+      ) : status === 'done' ? (
+        <CheckIcon className="size-3.5 shrink-0 text-edge" />
+      ) : status === 'failed' ? (
+        <TriangleAlertIcon className="size-3.5 shrink-0 text-loss" />
+      ) : status === 'undone' ? (
+        <Undo2Icon className="size-3.5 shrink-0" />
+      ) : (
+        <MonitorIcon className="size-3.5 shrink-0" />
+      )}
+      <span className="min-w-0 flex-1 truncate" title={`${item.label} · ${movesText(item.moves)}`}>
+        <span className={cn(status === 'undone' ? 'line-through' : 'text-foreground')}>
+          {item.label}
+        </span>
+        {said && <span> · {said}</span>}
+      </span>
+      {status === 'done' && c?.canUndo(item.id) && (
+        <IconButton icon={Undo2Icon} label="Undo" size="icon-xs" onClick={() => c.undo(item.id)} />
+      )}
+      {status === 'waiting' && c && (
+        <IconButton
+          icon={MonitorIcon}
+          label="Go now"
+          variant="outline"
+          size="icon-xs"
+          onClick={() => c.go(item)}
+        />
+      )}
+    </div>
+  );
 }
 
 const Rule = ({ children }: { children: ReactNode }) => (

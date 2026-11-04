@@ -68,6 +68,8 @@ function itemMarkdown(i: ChatItem, depth: number, name: string): string {
       ]
         .filter(Boolean)
         .join('\n\n');
+    case 'screen':
+      return `_Screen: ${i.label}${i.outcome ? ` (${i.outcome.status})` : ''}._`;
     case 'handoff':
       return [
         `${h} ${i.label} (${i.why})`,

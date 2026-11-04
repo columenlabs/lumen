@@ -3,6 +3,7 @@
 import type {
   AssistantEvent,
   AssistantMessage,
+  AssistantScreenOutcome,
   ChatItem,
   ChatUsage,
   DraftItem,
@@ -20,6 +21,26 @@ function browserZone(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+// Screen calls' outcomes not yet sent (they go with the next message), kept for this tab so a
+// reload neither loses them nor leaves their chips without a result.
+const SCREEN_KEY = 'lumen-assistant:screen';
+function readOutcomes(): Map<string, AssistantScreenOutcome> {
+  try {
+    const m = new Map<string, AssistantScreenOutcome>(
+      JSON.parse(sessionStorage.getItem(SCREEN_KEY) ?? '[]'),
+    );
+    return m;
+  } catch {
+    return new Map();
+  }
+}
+function keepOutcomes(m: Map<string, AssistantScreenOutcome>) {
+  try {
+    if (m.size) sessionStorage.setItem(SCREEN_KEY, JSON.stringify([...m].slice(-50)));
+    else sessionStorage.removeItem(SCREEN_KEY);
+  } catch {}
 }
 
 /** An item as the panel draws it: a text still streaming, a step still running. */
@@ -43,6 +64,8 @@ export interface AssistantChatState {
   settle: (draft: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
   /** Takes back a change the assistant made at once (Undo on its line). */
   undo: (step: StepItem) => Promise<void>;
+  /** A screen call ended in the browser: shown on its chip, and sent with the next message. */
+  screenEnded: (outcome: AssistantScreenOutcome) => void;
 }
 
 /** Where an event lands: the chat, or the last hand-off section when it came from inside one. */
@@ -95,6 +118,12 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
       sink.push(draft);
       break;
     }
+    case 'screen': {
+      // Live until the browser runs it: the panel runs a screen call once, while it is new.
+      const { handoff: _h, ...call } = e.data;
+      sink.push({ ...call, live: true });
+      break;
+    }
     case 'handoff':
       items.push({ ...e.data, items: [] } as HandOffItem);
       break;
@@ -135,11 +164,14 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
   return items;
 }
 
-/** Nothing streams any more: a text or step cut by Stop ends where it was. */
+/**
+ * Nothing streams any more: a text or step cut by Stop ends where it was. A screen call stays live
+ * until the browser has run it (`screenEnded`).
+ */
 const settled = (items: LiveItem[]): LiveItem[] =>
   items.map((i) => {
     if (i.kind === 'handoff') return { ...i, items: settled(i.items as LiveItem[]) };
-    if (!i.live) return i;
+    if (!i.live || i.kind === 'screen') return i;
     const { live: _l, ...rest } = i;
     return rest as LiveItem;
   });
@@ -156,6 +188,8 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     extra?: Omit<AssistantMessage, 'message' | 'chat_id'>;
   } | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const outcomes = useRef<Map<string, AssistantScreenOutcome> | null>(null);
+  outcomes.current ??= readOutcomes();
   const idRef = useRef<string | null>(null);
   idRef.current = chatId;
 
@@ -176,6 +210,10 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             ...(extra?.tier ? { tier: extra.tier } : {}),
           },
         ]);
+      // Every screen outcome not yet sent goes with this message; kept again if it fails.
+      const sent = [...(outcomes.current?.values() ?? [])];
+      outcomes.current?.clear();
+      keepOutcomes(new Map());
       try {
         await client.send(
           {
@@ -183,6 +221,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             ...(idRef.current ? { chat_id: idRef.current } : {}),
             ...(browserZone() ? { time_zone: browserZone() } : {}),
             ...extra,
+            ...(sent.length ? { outcomes: sent } : {}),
           },
           (e) => {
             if (e.event === 'chat') {
@@ -196,6 +235,8 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
           ctl.signal,
         );
       } catch (err) {
+        for (const o of sent) if (!outcomes.current?.has(o.id)) outcomes.current?.set(o.id, o);
+        if (outcomes.current) keepOutcomes(outcomes.current);
         if (ctl.signal.aborted) setItems((p) => [...p, { kind: 'stopped' }]);
         else setItems((p) => [...p, { kind: 'error', text: errorText(err) }]);
       } finally {
@@ -246,7 +287,16 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         idRef.current = c.id;
         setChatId(c.id);
         setTitle(c.title);
-        setItems(c.items);
+        // A call that ended here but whose outcome is not sent yet shows it already.
+        const kept = outcomes.current ?? new Map();
+        setItems(
+          c.items.map((i) => {
+            const o = i.kind === 'screen' && !i.outcome ? kept.get(i.id) : undefined;
+            return o && i.kind === 'screen'
+              ? { ...i, outcome: { status: o.status, ...(o.text ? { text: o.text } : {}) } }
+              : i;
+          }),
+        );
         setUsage(c.usage ?? null);
       } catch (err) {
         setItems([{ kind: 'error', text: errorText(err) }]);
@@ -288,6 +338,21 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     [client, replace],
   );
 
+  const screenEnded = useCallback((o: AssistantScreenOutcome) => {
+    outcomes.current?.set(o.id, o);
+    if (outcomes.current) keepOutcomes(outcomes.current);
+    const outcome = { status: o.status, ...(o.text ? { text: o.text } : {}) };
+    const mark = (list: LiveItem[]): LiveItem[] =>
+      list.map((i) =>
+        i.kind === 'screen' && i.id === o.id
+          ? { kind: 'screen', id: i.id, label: i.label, moves: i.moves, outcome }
+          : i.kind === 'handoff'
+            ? { ...i, items: mark(i.items as LiveItem[]) }
+            : i,
+      );
+    setItems(mark);
+  }, []);
+
   return {
     chatId,
     title,
@@ -302,5 +367,6 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     reset,
     settle,
     undo,
+    screenEnded,
   };
 }

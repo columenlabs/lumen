@@ -1,5 +1,5 @@
 // The assistant's Settings sections, for any app on `@columenlabs/lumen-ai/assistant`: the assistant
-// itself (tier, hand off, advice), then Model providers (a person's own key for each provider and
+// itself (tier, hand off, advice, screen), then Model providers (a person's own key for each provider and
 // its monthly cap), Models (each tier's model and effort, each task's starting tier), Tools (each group
 // Off, Read or Read + draft), Web (fetch, ScrapeQL's token) and Spend (this month). Keys and tokens
 // are tested before they are kept and never shown again, only their last characters. The app's
@@ -187,6 +187,22 @@ function General({ client }: { client: AssistantAdapter }) {
                 />
               </Row>
             )}
+            <Row
+              label="Screen"
+              info="Takes you to a page, a Settings row, a chart or a card when you ask. Each move has an Undo; nothing is saved."
+            >
+              <LumenSelector
+                label="Screen"
+                size="sm"
+                className="w-44"
+                value={s.screen ?? 'move'}
+                options={[
+                  { value: 'move', label: 'Move' },
+                  { value: 'off', label: 'Off' },
+                ]}
+                onChange={(screen) => void set({ screen: screen as 'off' | 'move' })}
+              />
+            </Row>
           </div>
         );
       }}

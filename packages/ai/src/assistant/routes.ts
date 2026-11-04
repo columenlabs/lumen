@@ -5,7 +5,7 @@
  *   app.all('/api/assistant/*', (c) => assistant(c.req.raw));   // Hono
  *
  *   GET    /status                  what the panel and Settings show
- *   PUT    /settings                the person's tiers, tasks, hand off, advice, tool access, web, payer
+ *   PUT    /settings                the person's tiers, tasks, hand off, advice, screen, tool access, web, payer
  *   PUT    /app {cap_usd}           admin: what each person may spend a month on the app's keys
  *   PUT    /key {api_key}           admin: the app's key of `?provider=` (anthropic by default,
  *                                   or openai), tested before it is kept
@@ -35,6 +35,7 @@ import {
   ASSISTANT_EFFORTS,
   ASSISTANT_OWN_WAYS,
   ASSISTANT_PAYERS,
+  ASSISTANT_SCREEN,
   type AssistantProvider,
   type AssistantSettingsPatch,
   HAND_OFF_POLICIES,
@@ -114,6 +115,7 @@ function settingsChange(a: Assistant, groups: string[], b: Record<string, unknow
   if (p.hand_off !== undefined && !oneOf(HAND_OFF_POLICIES, p.hand_off)) return 'No such hand off.';
   if (p.advice !== undefined && p.advice !== 'off' && !tierIds.has(p.advice))
     return 'Advice is off or a tier.';
+  if (p.screen !== undefined && !oneOf(ASSISTANT_SCREEN, p.screen)) return 'screen is off or move.';
   if (p.access !== undefined) {
     if (!p.access || typeof p.access !== 'object') return 'access is {group: off | read | draft}.';
     for (const [g, v] of Object.entries(p.access)) {
@@ -145,6 +147,7 @@ function settingsChange(a: Assistant, groups: string[], b: Record<string, unknow
       ...(p.tasks !== undefined ? { tasks: { ...(d.tasks ?? {}), ...p.tasks } } : {}),
       ...(p.hand_off !== undefined ? { hand_off: p.hand_off } : {}),
       ...(p.advice !== undefined ? { advice: p.advice } : {}),
+      ...(p.screen !== undefined ? { screen: p.screen } : {}),
       ...(p.access !== undefined ? { access: { ...(d.access ?? {}), ...p.access } } : {}),
       ...(p.web !== undefined ? { web: p.web.fetch } : {}),
       ...(p.pay !== undefined ? { pay: p.pay } : {}),
