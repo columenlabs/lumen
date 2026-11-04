@@ -20,6 +20,7 @@ import { useIsMobile } from './hooks/use-mobile';
 import { LumenSelector } from './lumen-selector';
 import { IconButton } from './page';
 import { usePrefs, zoneAbbr } from './prefs';
+import { SettingField } from './setting-parts';
 import { useShell } from './shell';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -228,12 +229,22 @@ function OnSwitch({ s, onSave }: { s: ScheduleItem; onSave: Save }) {
   );
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/** One setting in the editor: its label beside its control (`stack` puts it above on a phone). */
+function Row({
+  label,
+  stack,
+  end,
+  children,
+}: {
+  label: string;
+  stack?: boolean;
+  end?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
-    <div className="grid grid-cols-1 gap-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+    <SettingField label={label} stack={stack} end={end}>
       {children}
-    </div>
+    </SettingField>
   );
 }
 
@@ -261,7 +272,7 @@ function TimeFields({
           />
         </Row>
       ) : null}
-      <Row label="Days">
+      <Row label="Days" stack>
         <ToggleGroup
           type="multiple"
           variant="outline"
@@ -364,8 +375,8 @@ function Editor({
         <SheetTitle>{s.name}</SheetTitle>
         <SheetDescription>{when(s, timeZone)}</SheetDescription>
       </SheetHeader>
-      <div className="grid grid-cols-1 gap-5 overflow-y-auto px-4">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+      <div className="flex flex-col overflow-y-auto px-4">
+        <dl className="mb-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
           {(
             [
               ['Inspects', s.about.inspects],
@@ -384,7 +395,7 @@ function Editor({
             ))}
         </dl>
         {s.brief ? (
-          <Row label="Instructions">
+          <Row label="Instructions" stack>
             {own ? (
               <Textarea
                 aria-label="Instructions"
@@ -398,12 +409,18 @@ function Editor({
             )}
           </Row>
         ) : null}
-        <div className="flex items-center justify-between">
-          <Label htmlFor="sched-on">On</Label>
-          <Switch id="sched-on" checked={draft.on} onCheckedChange={(on) => set({ on })} />
-        </div>
+        <Row
+          label="On"
+          end={
+            <Switch
+              aria-label={`${s.name} on`}
+              checked={draft.on}
+              onCheckedChange={(on) => set({ on })}
+            />
+          }
+        />
         {s.choices.length ? (
-          <Row label="Every">
+          <Row label="Every" stack>
             <ToggleGroup
               type="single"
               variant="outline"
@@ -447,7 +464,7 @@ function Editor({
         ) : null}
         {s.brief ? (
           <>
-            <Row label="Spend cap a run">
+            <Row label="Cap a run">
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">$</span>
                 <Input
@@ -462,23 +479,29 @@ function Editor({
                 />
               </div>
             </Row>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="brief-notify">Notify when ready</Label>
-              <Switch
-                id="brief-notify"
-                checked={brief.notify ?? false}
-                onCheckedChange={(notify) => setBrief((b) => ({ ...b, notify }))}
-              />
-            </div>
+            <Row
+              label="Notify"
+              end={
+                <Switch
+                  aria-label="Notify when ready"
+                  checked={brief.notify ?? false}
+                  onCheckedChange={(notify) => setBrief((b) => ({ ...b, notify }))}
+                />
+              }
+            />
           </>
         ) : null}
         {s.waiting ? (
-          <p className="text-sm text-warning">{s.waiting}</p>
+          <p className="py-2 text-sm text-warning">{s.waiting}</p>
         ) : s.next ? (
-          <p className="text-sm text-muted-foreground">Next run {time(s.next)}</p>
+          <Row label="Next run">
+            <span className="truncate text-sm">{time(s.next)}</span>
+          </Row>
         ) : null}
         {recent && !ran ? (
-          <Row label="Last runs">{recent(s.id)}</Row>
+          <Row label="Last runs" stack>
+            {recent(s.id)}
+          </Row>
         ) : (
           <Row label="Last run">
             <span className="text-sm">
@@ -490,7 +513,7 @@ function Editor({
           <Button
             variant="outline"
             size="sm"
-            className="justify-self-start"
+            className="mt-2 self-start"
             onClick={() => {
               assistant.loadChat(last.chat);
               assistant.setOpen(true);
@@ -762,7 +785,7 @@ function NewBrief({
             onChange={(e) => setName(e.target.value)}
           />
         </Row>
-        <Row label="Instructions">
+        <Row label="Instructions" stack>
           <Textarea
             aria-label="Instructions"
             rows={6}

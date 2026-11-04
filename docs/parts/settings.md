@@ -47,6 +47,12 @@ Rules:
 7. **A section's pill** is `health` on its `SettingsSectionDef`: `sectionHealth(items)`, the worst thing wins. The Settings list shows it as a dot.
 8. **A form that saves together** keeps label beside field (`SettingField`), and its Test result sits in its footer, not a row of its own.
 
+### Built on the slots
+- `LumenConnection` (a key, a sign-in, a relay): one row per way to connect, its value with Replace or Sign in again inside. One way: its last test, Test and Remove sit in the action bar. Several ways: a Use row picks the one that runs, and each way's row ends in its own status, Test and Remove (on a phone the label and those sit above the value).
+- `NotificationsSettings`: email and ntfy turn on and off with the header switch, and each webhook is one row.
+- `McpSettings`: each server's address is a row with Copy, then From picks the app whose steps show.
+- `SchedulesSection`'s editor: each setting is a row (On and Notify end in their switch).
+
 ## Anatomy
 
 ```

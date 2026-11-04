@@ -13,7 +13,7 @@ import {
   RefreshCwIcon,
   Trash2Icon,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ComponentType, type ReactNode, useState } from 'react';
 import { LumenConfirm } from './confirm';
 import { IconButton } from './icon-button';
 import { InfoTip } from './info-tip';
@@ -51,7 +51,7 @@ export function SettingField({
       data-slot="setting-field"
       data-stack={stack || undefined}
       className={cn(
-        'flex min-h-10 min-w-0 items-center gap-3 border-b border-border/60 py-1.5 last:border-b-0',
+        'flex min-h-10 min-w-0 items-center gap-3 border-t border-border/60 py-1.5 first:border-t-0',
         stack && 'max-sm:flex-wrap max-sm:gap-y-1.5',
         className,
       )}
@@ -94,6 +94,7 @@ export function SettingValue({
   copy = false,
   onReplace,
   replaceLabel = 'Replace',
+  replaceIcon: ReplaceIcon = PencilIcon,
 }: {
   value: string;
   /** The value's name for Copy's and Replace's accessible names. */
@@ -102,6 +103,8 @@ export function SettingValue({
   copy?: boolean;
   onReplace?: () => void;
   replaceLabel?: string;
+  /** Replace's icon: a pencil, or a sign-in for `Sign in again`. */
+  replaceIcon?: ComponentType<{ className?: string }>;
 }) {
   const [copied, setCopied] = useState(false);
   const doCopy = async () => {
@@ -140,7 +143,7 @@ export function SettingValue({
               title={`${replaceLabel} ${label.toLowerCase()}`}
               onClick={onReplace}
             >
-              <PencilIcon />
+              <ReplaceIcon />
             </InputGroupButton>
           )}
         </InputGroupAddon>

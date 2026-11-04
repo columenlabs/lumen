@@ -6,7 +6,8 @@ import { type ReactNode, useState } from 'react';
 // common `mcp-remote` bridge on the person's own computer, whose sign-in returns to localhost.
 import { LumenSelector } from './lumen-selector';
 import { IconButton } from './page';
-import { SettingRow } from './settings';
+import { SettingField, SettingValue } from './setting-parts';
+import { SettingsFooter } from './settings';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 
@@ -157,63 +158,38 @@ function ClientSteps({ client, server }: { client: Client; server: McpServer }) 
 }
 
 export function McpSettings({ servers, current }: { servers: McpServer[]; current?: string }) {
-  const { copied, copy } = useCopy();
   const [serverId, setServerId] = useState(current ?? servers[0]?.id);
   const [client, setClient] = useState<Client>('claude');
   const server = servers.find((d) => d.id === serverId) ?? servers[0];
   if (!server) return null;
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col">
-        <h4 className="text-xs font-medium text-muted-foreground">Servers</h4>
-        {servers.map((d) => {
-          const url = d.url;
-          return (
-            <SettingRow key={d.id} label={d.label} description="MCP address">
-              <InputGroup className="w-56 sm:w-80">
-                <InputGroupInput
-                  readOnly
-                  value={url}
-                  aria-label={`${d.label} MCP address`}
-                  className="font-mono text-xs"
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    size="icon-xs"
-                    aria-label={`Copy the ${d.label} address`}
-                    onClick={() => copy(url)}
-                  >
-                    {copied === url ? <CheckIcon /> : <CopyIcon />}
-                  </InputGroupButton>
-                </InputGroupAddon>
-              </InputGroup>
-            </SettingRow>
-          );
-        })}
-      </section>
-      <section className="flex flex-col gap-3">
-        <h4 className="text-xs font-medium text-muted-foreground">Connect</h4>
-        <div className="flex flex-wrap items-center gap-2">
-          {servers.length > 1 && (
-            <LumenSelector
-              label="Server"
-              size="sm"
-              className="w-40"
-              options={servers.map((d) => ({ value: d.id, label: d.label }))}
-              value={server.id}
-              onChange={setServerId}
-            />
-          )}
+    <div className="flex flex-col">
+      {servers.map((d) => (
+        <SettingField key={d.id} label={d.label} stack>
+          <SettingValue value={d.url} label={`${d.label} address`} mono copy />
+        </SettingField>
+      ))}
+      {servers.length > 1 && (
+        <SettingField label="Connect">
           <LumenSelector
-            label="App"
+            label="Server"
             size="sm"
-            className="w-36 md:hidden"
-            options={Object.entries(CLIENTS).map(([k, label]) => ({ value: k, label }))}
-            value={client}
-            onChange={(v) => setClient(v as Client)}
+            className="w-40"
+            options={servers.map((d) => ({ value: d.id, label: d.label }))}
+            value={server.id}
+            onChange={setServerId}
           />
-        </div>
+        </SettingField>
+      )}
+      <SettingField label="From">
+        <LumenSelector
+          label="App"
+          size="sm"
+          className="w-36 md:hidden"
+          options={Object.entries(CLIENTS).map(([k, label]) => ({ value: k, label }))}
+          value={client}
+          onChange={(v) => setClient(v as Client)}
+        />
         <Tabs
           value={client}
           onValueChange={(v) => setClient(v as Client)}
@@ -227,13 +203,17 @@ export function McpSettings({ servers, current }: { servers: McpServer[]; curren
             ))}
           </TabsList>
         </Tabs>
+      </SettingField>
+      <div className="pt-3">
         <ClientSteps client={client} server={server} />
-      </section>
-      <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-        <ShieldIcon className="mt-0.5 size-3.5 shrink-0" />
-        Every client signs in as you through your browser; there are no API keys. Sign-ins return
-        only to known apps and to http://localhost or http://127.0.0.1 on your own computer.
-      </p>
+      </div>
+      <SettingsFooter>
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <ShieldIcon className="mt-0.5 size-3.5 shrink-0" />
+          Every client signs in as you through your browser; there are no API keys. Sign-ins return
+          only to known apps and to http://localhost or http://127.0.0.1 on your own computer.
+        </p>
+      </SettingsFooter>
     </div>
   );
 }

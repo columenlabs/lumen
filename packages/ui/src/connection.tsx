@@ -1,31 +1,26 @@
 // One connection, one look on every app: an AI provider, an email relay, a Google account, a
-// connector. A row that expands in place (LumenExpandRow) with one status pill; inside, each way to
-// connect (a pasted key or token, a sign-in that ends on an address the person pastes back, or the
-// app's own form). Several ways show radios and an In use tag, so a person who has both an API key and
-// a plan sign-in picks which one runs. A way that is set up shows who or what it is and its last test,
-// then Test, Remove (asks first) and Replace or Sign in again, all on the right. `lines` and
-// `children` hold the app's own settings below the ways (a server, a sender, folders).
-import {
-  AlertTriangleIcon,
-  CheckIcon,
-  ExternalLinkIcon,
-  KeyRoundIcon,
-  LogInIcon,
-  PlusIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-  XIcon,
-} from 'lucide-react';
+// connector. Built on the settings slots (docs/parts/settings.md): a LumenExpandRow whose header has
+// one status pill; inside, each way to connect is a row (a pasted key or token, a sign-in that ends on
+// an address the person pastes back, or the app's own form) with Replace or Sign in again inside its
+// value. Several ways add a Use row, so a person who has both an API key and a plan sign-in picks which
+// one runs, and each way's row ends in its own status, Test and Remove; one way puts its last test,
+// Test and Remove in the action bar. `lines` and `children` are the app's own rows below the ways.
+import { ExternalLinkIcon, LogInIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from 'lucide-react';
 import { type ComponentType, type ReactNode, useId, useState } from 'react';
 import { LumenConfirm } from './confirm';
 import { LumenExpandRow } from './expand-list';
 import { type FormIssue, SaveButton } from './form-issues';
 import { IconButton } from './icon-button';
-import { InfoLabel } from './info-tip';
-import { ErrorLine, errorText, useClock } from './integrations';
+import { ErrorLine, errorText } from './integrations';
 import { cn } from './lib/utils';
 import { lumenToast } from './lumen-toast';
-import { Badge } from './ui/badge';
+import {
+  SettingActions,
+  SettingField,
+  type SettingHealth,
+  SettingStatus,
+  SettingValue,
+} from './setting-parts';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -144,42 +139,28 @@ export function activeWay(ways: ConnectionWay[], use?: string) {
   return ways.find((w) => w.id === use && w.set) ?? ways.find((w) => w.set);
 }
 
-/** The row's pill for a status. */
+/** The row's pill for a status: Works, Failed, Not tested or Off; hover says to sign in again. */
 export function ConnectionBadge({
   status,
   signin,
-}: { status: ConnectionStatus; signin?: boolean }) {
-  switch (status) {
-    case 'connected':
-      return (
-        <Badge variant="outline" className="text-gain">
-          <CheckIcon />
-          Connected
-        </Badge>
-      );
-    case 'untested':
-      return <Badge variant="outline">Not tested</Badge>;
-    case 'expired':
-      return (
-        <Badge variant="outline" className="text-warning">
-          <AlertTriangleIcon />
-          {signin ? 'Sign in again' : 'Key expired'}
-        </Badge>
-      );
-    case 'failed':
-      return (
-        <Badge variant="outline" className="text-loss">
-          <AlertTriangleIcon />
-          Failed
-        </Badge>
-      );
-    default:
-      return (
-        <Badge variant="outline" className="border-dashed text-muted-foreground">
-          Not connected
-        </Badge>
-      );
-  }
+  title,
+}: { status: ConnectionStatus; signin?: boolean; title?: string }) {
+  const health: SettingHealth =
+    status === 'connected'
+      ? 'works'
+      : status === 'untested'
+        ? 'untested'
+        : status === 'off'
+          ? 'off'
+          : 'failed';
+  return (
+    <SettingStatus
+      health={health}
+      title={
+        title ?? (status === 'expired' ? (signin ? 'Sign in again' : 'Key expired') : undefined)
+      }
+    />
+  );
 }
 
 /** A connection's mark: an icon or a letter on a tile. */
@@ -200,22 +181,42 @@ export function ConnectionLogo({
   );
 }
 
-/** `just now`, `5 min ago`, `3 h ago`, `2 d ago`. */
-function ago(ms: number) {
-  const s = Math.max(0, (Date.now() - ms) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
-  return `${Math.floor(s / 86400)} d ago`;
-}
-
 /** `Service token` → `service token`; `API key` stays. */
 const lower = (label: string) =>
   /^[A-Z][a-z]/.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label;
 
-const toMs = (at: string | number) => (typeof at === 'number' ? at : Date.parse(at));
+const toIso = (at: string | number) =>
+  new Date(typeof at === 'number' ? at : Date.parse(at)).toISOString();
 
-/** One connection: a row with its status, the ways to connect inside. */
+/** A way's last test as the action bar reads it. */
+const lastTest = (t: ConnectionTest | null | undefined) =>
+  t
+    ? {
+        at: toIso(t.at),
+        ok: t.ok,
+        detail: t.detail,
+        error: t.ok ? t.error : (t.error ?? (t.expired ? 'Expired' : null)),
+      }
+    : null;
+
+/** The confirm that removes a way. */
+const removeOf = (way: ConnectionWay) =>
+  !way.readOnly && !way.note && way.onRemove
+    ? {
+        label: way.removeLabel ?? `Remove ${way.label}`,
+        title: way.removeTitle ?? `Remove ${lower(way.label)}?`,
+        description: way.removeText ?? 'You can add it again any time.',
+        action: way.removeLabel ?? 'Remove',
+        run: () => way.onRemove?.(),
+      }
+    : undefined;
+
+/**
+ * One connection on the settings slots: the header carries its name, the way in use and one
+ * status pill; each way is a row (its label beside its value, Replace or Sign in again inside);
+ * with one way the action bar holds its last test, Test and Remove, with several each row ends in
+ * its own. `lines` are rows of their own; `children` the app's settings below them.
+ */
 export function LumenConnection({
   id,
   name,
@@ -231,6 +232,7 @@ export function LumenConnection({
   const active = activeWay(ways, use);
   const status = connectionStatus(active);
   const pick = ways.length > 1 && !!onUse;
+  const solo = ways.length === 1 ? ways[0] : null;
   const [picking, setPicking] = useState(false);
   const choose = async (way: string) => {
     if (!onUse || way === active?.id) return;
@@ -254,9 +256,7 @@ export function LumenConnection({
     ) : (
       'Not set up'
     ));
-  const list = ways.map((w) => (
-    <WayRow key={w.id} way={w} pick={pick} inUse={w.id === active?.id && ways.length > 1} />
-  ));
+  const t = active?.test;
   return (
     <LumenExpandRow
       id={id}
@@ -264,71 +264,80 @@ export function LumenConnection({
       meta={line}
       icon={logo}
       defaultOpen={defaultOpen}
-      badge={<ConnectionBadge status={status} signin={!!active?.signin} />}
+      status={
+        <ConnectionBadge
+          status={status}
+          signin={!!active?.signin}
+          title={t ? (t.ok ? (t.detail ?? undefined) : (t.error ?? undefined)) : undefined}
+        />
+      }
+      actions={
+        solo?.set && !solo.note && (solo.onTest || removeOf(solo)) ? (
+          <SettingActions test={lastTest(solo.test)} onTest={solo.onTest} remove={removeOf(solo)} />
+        ) : undefined
+      }
     >
-      <div className="grid grid-cols-1 gap-2">
-        {pick ? (
+      {pick && (
+        <SettingField label="Use">
           <RadioGroup
             value={active?.id ?? ''}
             onValueChange={(v) => void choose(v)}
             disabled={picking}
             aria-label={`Which way ${typeof name === 'string' ? name : ''} connects`}
-            className="gap-2"
+            className="flex flex-wrap gap-x-4 gap-y-1"
           >
-            {list}
+            {ways.map((w) => (
+              <WayChoice key={w.id} way={w} />
+            ))}
           </RadioGroup>
-        ) : (
-          list
-        )}
-      </div>
-      {lines?.length ? (
-        <dl className="grid grid-cols-1 text-sm">
-          {lines.map((l) => (
-            <div key={l.label} className="flex items-center gap-3 border-b py-2 last:border-b-0">
-              <dt className="shrink-0 text-muted-foreground">
-                <InfoLabel info={l.info}>{l.label}</InfoLabel>
-              </dt>
-              <dd
-                className={cn('min-w-0 flex-1 truncate text-right', l.mono && 'font-code text-xs')}
-                title={typeof l.value === 'string' ? l.value : undefined}
-              >
-                {l.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
+        </SettingField>
+      )}
+      {ways.map((w) => (
+        <WayField key={w.id} way={w} solo={!!solo} />
+      ))}
+      {lines?.map((l) => (
+        <SettingField key={l.label} label={l.label} info={l.info}>
+          <span
+            className={cn('min-w-0 truncate text-sm', l.mono && 'font-code text-xs')}
+            title={typeof l.value === 'string' ? l.value : undefined}
+          >
+            {l.value}
+          </span>
+        </SettingField>
+      ))}
       {children}
     </LumenExpandRow>
   );
 }
 
-/** One way: its name and state, its actions on the right, its form when open. */
-function WayRow({ way, pick, inUse }: { way: ConnectionWay; pick: boolean; inUse: boolean }) {
-  const radioId = useId();
-  const clock = useClock();
+/** One way in the Use picker. */
+function WayChoice({ way }: { way: ConnectionWay }) {
+  const rid = useId();
+  return (
+    <span className="flex min-h-8 items-center gap-2">
+      <RadioGroupItem id={rid} value={way.id} disabled={!way.set} aria-label={`Use ${way.label}`} />
+      <Label htmlFor={rid} className={cn('font-normal', !way.set && 'text-muted-foreground')}>
+        {way.label}
+      </Label>
+    </span>
+  );
+}
+
+/** One way as a row: its label, then its value with Replace inside, or Add; its form when open. */
+function WayField({ way, solo }: { way: ConnectionWay; solo: boolean }) {
   const [editing, setEditing] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const Icon = way.icon;
-  const status = connectionStatus(way);
-  const failing = status === 'failed' || status === 'expired';
+  const close = () => setEditing(false);
   const editable = !way.readOnly && !way.note;
   const hasForm = !!(way.form || way.fields?.length || way.signin);
-  const test = async () => {
-    if (!way.onTest) return;
-    setTesting(true);
-    setError(null);
-    try {
-      await way.onTest();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setTesting(false);
-    }
-  };
-  const close = () => setEditing(false);
-  const fixLabel = way.signin ? 'Sign in again' : 'Replace';
+  if (editing)
+    return way.form ? (
+      <div className="py-2">{way.form(close)}</div>
+    ) : way.signin ? (
+      <SigninForm way={way} close={close} />
+    ) : (
+      <FieldsForm way={way} close={close} />
+    );
+  const Icon = way.signin ? LogInIcon : PlusIcon;
   const addLabel =
     way.addLabel ??
     (way.signin
@@ -336,138 +345,93 @@ function WayRow({ way, pick, inUse }: { way: ConnectionWay; pick: boolean; inUse
         ? `Sign in with ${way.signin.provider}`
         : 'Sign in'
       : `Add ${lower(way.label)}`);
-  const t = way.test;
+  const control = way.note ? (
+    <span className="min-w-0 truncate text-muted-foreground text-sm">{way.note}</span>
+  ) : way.set ? (
+    (typeof way.ident === 'string' || way.ident == null) && editable && hasForm ? (
+      <SettingValue
+        value={way.ident ?? 'Set'}
+        label={way.label}
+        mono
+        onReplace={() => setEditing(true)}
+        replaceLabel={way.signin ? 'Sign in again' : 'Replace'}
+        replaceIcon={way.signin ? LogInIcon : undefined}
+      />
+    ) : (
+      <span
+        className={cn(
+          'min-w-0 truncate text-sm',
+          typeof way.ident === 'string' && 'font-code text-xs',
+        )}
+        title={typeof way.ident === 'string' ? way.ident : undefined}
+      >
+        {way.ident ?? 'Set'}
+      </span>
+    )
+  ) : editable && hasForm ? (
+    <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+      <Icon />
+      {addLabel}
+    </Button>
+  ) : (
+    <span className="text-muted-foreground text-sm">Not set up</span>
+  );
   return (
-    <div
-      className={cn(
-        'grid grid-cols-1 gap-2 rounded-md border px-3 py-2.5',
-        inUse && 'border-primary/60 bg-primary/5',
-      )}
+    <SettingField
+      label={way.label}
+      info={way.info}
+      stack={!solo}
+      end={!solo && way.set && !way.note ? <WayEnd way={way} /> : undefined}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {pick && (
-          <RadioGroupItem
-            id={radioId}
-            value={way.id}
-            disabled={!way.set}
-            aria-label={`Use ${way.label}`}
-          />
-        )}
-        {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
-        <span className="min-w-0 flex-1 basis-40">
-          <span className="flex min-w-0 items-center gap-2">
-            {pick ? (
-              <Label htmlFor={radioId} className="whitespace-nowrap font-medium">
-                <InfoLabel info={way.info}>{way.label}</InfoLabel>
-              </Label>
-            ) : (
-              <InfoLabel className="whitespace-nowrap font-medium text-sm" info={way.info}>
-                {way.label}
-              </InfoLabel>
-            )}
-            {inUse && (
-              <Badge variant="outline" className="h-5 shrink-0 border-primary/40 text-primary">
-                In use
-              </Badge>
-            )}
-          </span>
-          <span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
-            {way.set ? (
-              <>
-                {way.ident && (
-                  <span
-                    className="truncate"
-                    title={typeof way.ident === 'string' ? way.ident : undefined}
-                  >
-                    {way.ident}
-                  </span>
-                )}
-                {way.ident && <span aria-hidden>·</span>}
-                {t ? (
-                  <span
-                    className={cn(
-                      'flex shrink-0 items-center gap-1',
-                      t.ok ? 'text-gain' : 'text-loss',
-                    )}
-                    title={`Tested ${clock(new Date(toMs(t.at)).toISOString())}${t.ok && t.detail ? ` · ${t.detail}` : ''}`}
-                  >
-                    {t.ok ? (
-                      <CheckIcon className="size-3" />
-                    ) : (
-                      <AlertTriangleIcon className="size-3" />
-                    )}
-                    {t.ok ? 'Works' : t.expired ? 'Expired' : 'Failed'} {ago(toMs(t.at))}
-                  </span>
-                ) : (
-                  <span className="shrink-0">Not tested</span>
-                )}
-              </>
-            ) : (
-              <span>Not set up</span>
-            )}
-          </span>
-        </span>
-        {way.note ? (
-          <span className="ml-auto shrink-0 text-muted-foreground text-xs">{way.note}</span>
-        ) : way.set ? (
-          <span className="ml-auto flex shrink-0 items-center gap-1">
-            {way.onTest && (
-              <IconButton
-                icon={RefreshCwIcon}
-                label={testing ? 'Testing…' : `Test ${way.label}`}
-                busy={testing}
-                disabled={testing}
-                onClick={() => void test()}
-              />
-            )}
-            {editable && way.onRemove && (
-              <LumenConfirm
-                title={way.removeTitle ?? `Remove ${lower(way.label)}?`}
-                description={way.removeText ?? 'You can add it again any time.'}
-                action={way.removeLabel ?? 'Remove'}
-                onConfirm={() => way.onRemove?.()}
-                problem={errorText}
-              >
-                <IconButton icon={Trash2Icon} label={way.removeLabel ?? `Remove ${way.label}`} />
-              </LumenConfirm>
-            )}
-            {editable && hasForm && !editing && (
-              <Button
-                size="sm"
-                variant={failing ? 'default' : 'outline'}
-                onClick={() => setEditing(true)}
-              >
-                {way.signin ? <LogInIcon /> : <KeyRoundIcon />}
-                {fixLabel}
-              </Button>
-            )}
-          </span>
-        ) : (
-          editable &&
-          hasForm &&
-          !editing && (
-            <Button size="sm" className="ml-auto shrink-0" onClick={() => setEditing(true)}>
-              {way.signin ? <LogInIcon /> : <PlusIcon />}
-              {addLabel}
-            </Button>
-          )
-        )}
-      </div>
-      {t && !t.ok && t.error && (
-        <p role="alert" className="text-xs text-loss">
-          {t.error}
-        </p>
+      {control}
+    </SettingField>
+  );
+}
+
+/** With several ways, each set-up way's row ends in its status, Test and Remove. */
+function WayEnd({ way }: { way: ConnectionWay }) {
+  const [testing, setTesting] = useState(false);
+  const remove = removeOf(way);
+  const t = way.test;
+  const test = async () => {
+    if (!way.onTest) return;
+    setTesting(true);
+    try {
+      await way.onTest();
+    } catch (e) {
+      lumenToast.error(errorText(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+  return (
+    <span className="flex items-center gap-1">
+      <ConnectionBadge
+        status={connectionStatus(way)}
+        signin={!!way.signin}
+        title={t ? (t.ok ? (t.detail ?? undefined) : (t.error ?? undefined)) : undefined}
+      />
+      {way.onTest && (
+        <IconButton
+          icon={RefreshCwIcon}
+          label={testing ? 'Testing…' : `Test ${way.label}`}
+          busy={testing}
+          disabled={testing}
+          onClick={() => void test()}
+        />
       )}
-      <ErrorLine error={error} />
-      {editing &&
-        (way.form ? (
-          way.form(close)
-        ) : way.signin ? (
-          <SigninForm way={way} close={close} />
-        ) : (
-          <FieldsForm way={way} close={close} />
-        ))}
-    </div>
+      {remove && (
+        <LumenConfirm
+          title={remove.title}
+          description={remove.description}
+          action={remove.action}
+          onConfirm={remove.run}
+          problem={errorText}
+        >
+          <IconButton icon={Trash2Icon} label={remove.label} className="text-loss" />
+        </LumenConfirm>
+      )}
+    </span>
   );
 }
 
@@ -482,7 +446,17 @@ async function keep(run: () => Promise<unknown>, setError: (e: unknown) => void)
   }
 }
 
-/** The way's fields, checked before Test and save. */
+/** A form's footer: a link on the left, then Cancel and its Save. */
+function FormFooter({ left, children }: { left?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="mt-1 flex min-h-10 min-w-0 items-center gap-2 border-t pt-2 text-sm">
+      <span className="min-w-0 flex-1 truncate">{left}</span>
+      {children}
+    </div>
+  );
+}
+
+/** The way's fields, a row each, checked before Test and save. */
 function FieldsForm({ way, close }: { way: ConnectionWay; close: () => void }) {
   const ids = useId();
   const fields = way.fields ?? [];
@@ -509,37 +483,39 @@ function FieldsForm({ way, close }: { way: ConnectionWay; close: () => void }) {
     setBusy(false);
   };
   return (
-    <div className="grid grid-cols-1 gap-2 border-t pt-2">
+    <div className="flex flex-col">
       {fields.map((f) => (
-        <div key={f.id} className="grid grid-cols-1 gap-1">
-          {fields.length > 1 && (
-            <Label htmlFor={`${ids}-${f.id}`} className="text-xs">
-              <InfoLabel info={f.info}>{f.label}</InfoLabel>
-            </Label>
-          )}
+        <SettingField
+          key={f.id}
+          label={fields.length > 1 ? f.label : way.label}
+          info={fields.length > 1 ? f.info : (f.info ?? way.info)}
+          htmlFor={`${ids}-${f.id}`}
+        >
           <Input
             id={`${ids}-${f.id}`}
-            aria-label={f.label}
             type={f.secret ? 'password' : 'text'}
             autoComplete="off"
             placeholder={f.placeholder ?? (f.prefix ? `${f.prefix}…` : f.label)}
-            className="font-code text-xs"
+            className="h-8 font-code text-xs"
             value={values[f.id] ?? ''}
             onChange={(e) => setValues((s) => ({ ...s, [f.id]: e.target.value }))}
             onKeyDown={(e) => e.key === 'Enter' && !empty && !issues.length && void save()}
           />
-        </div>
+        </SettingField>
       ))}
       <ErrorLine error={error} />
-      <div className="flex items-center justify-end gap-1">
-        {way.getUrl && (
-          <IconButton
-            icon={ExternalLinkIcon}
-            label={`Get ${/^[AEIOU]/i.test(way.label) ? 'an' : 'a'} ${lower(way.label)}`}
-            href={way.getUrl}
-          />
-        )}
-        <IconButton icon={XIcon} label="Cancel" onClick={close} />
+      <FormFooter
+        left={
+          way.getUrl && (
+            <a className="underline" href={way.getUrl} target="_blank" rel="noreferrer">
+              Get {/^[AEIOU]/i.test(way.label) ? 'an' : 'a'} {lower(way.label)} ↗
+            </a>
+          )
+        }
+      >
+        <Button type="button" size="sm" variant="ghost" onClick={close}>
+          Cancel
+        </Button>
         <SaveButton
           issues={issues}
           busy={busy}
@@ -547,7 +523,7 @@ function FieldsForm({ way, close }: { way: ConnectionWay; close: () => void }) {
           label="Test and save"
           onSave={() => void save()}
         />
-      </div>
+      </FormFooter>
     </div>
   );
 }
@@ -593,10 +569,8 @@ function SigninForm({ way, close }: { way: ConnectionWay; close: () => void }) {
     setBusy(false);
   };
   return (
-    <ol className="grid grid-cols-1 gap-3 border-t pt-2 text-sm">
-      <li className="flex items-center gap-2">
-        <Step n={1} />
-        <span className="flex-1">Sign in in a new tab</span>
+    <div className="flex flex-col">
+      <SettingField label={way.label} info={way.info}>
         <Button
           size="sm"
           variant={redirect === null ? 'default' : 'outline'}
@@ -605,33 +579,28 @@ function SigninForm({ way, close }: { way: ConnectionWay; close: () => void }) {
           <ExternalLinkIcon />
           {redirect === null ? 'Open sign-in' : 'Open again'}
         </Button>
-      </li>
-      <li className="grid grid-cols-1 gap-2">
-        <span className="flex items-center gap-2">
-          <Step n={2} />
-          <Label htmlFor={id} className={cn(redirect === null && 'text-muted-foreground')}>
-            <InfoLabel
-              info={`The sign-in ends on ${redirect || signin.redirect || 'an address'} that does not load. That is expected: copy the whole address from that tab's address bar.`}
-            >
-              Paste the address it ended on
-            </InfoLabel>
-          </Label>
-        </span>
-        <span className="flex gap-2 pl-7">
-          <Input
-            id={id}
-            autoComplete="off"
-            disabled={redirect === null}
-            placeholder={`${redirect || signin.redirect || 'http://localhost'}…`}
-            className="font-code text-xs"
-            value={pasted}
-            onChange={(e) => setPasted(e.target.value)}
-          />
-        </span>
-      </li>
+      </SettingField>
+      <SettingField
+        label="Address"
+        htmlFor={id}
+        stack
+        info={`The sign-in ends on ${redirect || signin.redirect || 'an address'} that does not load. That is expected: copy the whole address from that tab's address bar and paste it here.`}
+      >
+        <Input
+          id={id}
+          autoComplete="off"
+          disabled={redirect === null}
+          placeholder={`${redirect || signin.redirect || 'http://localhost'}…`}
+          className="h-8 font-code text-xs"
+          value={pasted}
+          onChange={(e) => setPasted(e.target.value)}
+        />
+      </SettingField>
       <ErrorLine error={error} />
-      <li className="flex items-center justify-end gap-1">
-        <IconButton icon={XIcon} label="Cancel" onClick={close} />
+      <FormFooter>
+        <Button type="button" size="sm" variant="ghost" onClick={close}>
+          Cancel
+        </Button>
         <SaveButton
           issues={issues}
           busy={busy}
@@ -639,15 +608,7 @@ function SigninForm({ way, close }: { way: ConnectionWay; close: () => void }) {
           label="Finish"
           onSave={() => void finish()}
         />
-      </li>
-    </ol>
-  );
-}
-
-function Step({ n }: { n: number }) {
-  return (
-    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-xs tabular-nums">
-      {n}
-    </span>
+      </FormFooter>
+    </div>
   );
 }
