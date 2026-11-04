@@ -98,11 +98,20 @@ export function toFrame(rows: Row[]): { columns: FrameColumn[]; data: FrameCell[
       key: columnKey(label, taken),
       label: label.slice(0, 40),
       type,
-      format: type === 'number' ? 'number' : 'text',
+      format: type === 'number' ? numberFormat(values as number[]) : 'text',
       ...(tags ? { tags: true } : {}),
     };
   });
   return { columns, data };
+}
+
+/**
+ * How a number column reads: whole numbers without decimals (`27`, not `27.00`),
+ * years without a thousands comma (`2026`), anything else as a number.
+ */
+function numberFormat(values: number[]): FrameColumn['format'] {
+  if (!values.every(Number.isInteger)) return 'number';
+  return values.every((v) => v >= 1900 && v <= 2100) ? 'integer' : 'rounded';
 }
 
 /** A typed value for a column: numbers from numerals (a comma, %, $ or a true minus allowed). */
