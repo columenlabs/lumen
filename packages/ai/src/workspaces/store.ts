@@ -300,6 +300,46 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     }
   }
 
+  /** A new frame from a recipe, run once (a failed run keeps the frame with its error). */
+  async function newFrame(
+    owner: string,
+    name: string,
+    recipe: FrameScript,
+    by: 'you' | 'assistant',
+  ): Promise<Head> {
+    const [{ n } = { n: 0 }] = await db.all(
+      `SELECT COUNT(*) AS n FROM (SELECT 1 FROM ${t.frames} WHERE owner = ? LIMIT ${MAX_FRAMES})`,
+      owner,
+    );
+    if (Number(n) >= MAX_FRAMES)
+      throw new FrameError(
+        `You keep ${MAX_FRAMES} tabs of data, the most: delete some first.`,
+        409,
+      );
+    const head: Head = {
+      id: newId('fr'),
+      name,
+      columns: [],
+      rows: 0,
+      mode: 'live',
+      kind: 'snapshot',
+      at: now(),
+      origin: 'assistant',
+      script: recipe,
+    };
+    await runInto(owner, head, [], recipe, by, []);
+    return (await heads(owner, [head.id])).get(head.id) ?? head;
+  }
+
+  const choiceOf = (h: Head): FrameChoice => ({
+    id: h.id,
+    name: h.name,
+    columns: h.columns,
+    at: h.at,
+    origin: h.origin ?? 'assistant',
+  });
+
+  /** A frame no tab shows but a card links (a recipe added from + Data) still counts as used. */
   async function dropFrameIfUnused(owner: string, frame: string) {
     const rows = await db.all(
       `SELECT tabs FROM ${t.spaces} WHERE owner = ? LIMIT ${MAX_WORKSPACES}`,
@@ -307,7 +347,9 @@ export function createWorkspaces(opts: WorkspacesOptions) {
     );
     const used = rows.some((r) =>
       parse<WorkspaceTab[]>(r.tabs, []).some(
-        (x) => 'frame' in x.source && x.source.frame === frame,
+        (x) =>
+          ('frame' in x.source && x.source.frame === frame) ||
+          JSON.stringify(x.config ?? null).includes(frame),
       ),
     );
     if (!used) await db.run(`DELETE FROM ${t.frames} WHERE owner = ? AND id = ?`, owner, frame);
@@ -401,27 +443,7 @@ export function createWorkspaces(opts: WorkspacesOptions) {
       const w = await getSpace(owner, id);
       if (w.tabs.length >= MAX_TABS)
         throw new FrameError(`${w.name} has ${MAX_TABS} tabs, the most: delete one first.`, 409);
-      const [{ n } = { n: 0 }] = await db.all(
-        `SELECT COUNT(*) AS n FROM (SELECT 1 FROM ${t.frames} WHERE owner = ? LIMIT ${MAX_FRAMES})`,
-        owner,
-      );
-      if (Number(n) >= MAX_FRAMES)
-        throw new FrameError(
-          `You keep ${MAX_FRAMES} tabs of data, the most: delete some first.`,
-          409,
-        );
-      const head: Head = {
-        id: newId('fr'),
-        name: p.name,
-        columns: [],
-        rows: 0,
-        mode: 'live',
-        kind: 'snapshot',
-        at: now(),
-        origin: 'assistant',
-        script: p.recipe,
-      };
-      await runInto(owner, head, [], p.recipe, p.by ?? 'you', []);
+      const head = await newFrame(owner, p.name, p.recipe, p.by ?? 'you');
       const tab: WorkspaceTab = {
         id: newId('tb'),
         name: p.name,
@@ -501,17 +523,24 @@ export function createWorkspaces(opts: WorkspacesOptions) {
         owner,
       );
       return {
-        frames: rows.map((r) => {
-          const h = parse<Head>(r.head, null as unknown as Head);
-          return {
-            id: h.id,
-            name: h.name,
-            columns: h.columns,
-            at: h.at,
-            origin: h.origin ?? 'assistant',
-          };
-        }),
+        frames: rows.map((r) => choiceOf(parse<Head>(r.head, null as unknown as Head))),
       };
+    },
+
+    /**
+     * A frame from a recipe the product offers (+ Data's app recipes), for a card to link. One that
+     * already runs the same recipe is reused, so picking it twice keeps one copy.
+     */
+    async makeFrame(owner: string, p: { name: string; recipe: FrameScript }): Promise<FrameChoice> {
+      const rows = await db.all(
+        `SELECT head FROM ${t.frames} WHERE owner = ? LIMIT ${MAX_FRAMES}`,
+        owner,
+      );
+      const want = recipeText(p.recipe);
+      const same = rows
+        .map((r) => parse<Head>(r.head, null as unknown as Head))
+        .find((h) => h?.script && recipeText(h.script) === want);
+      return choiceOf(same ?? (await newFrame(owner, p.name, p.recipe, 'you')));
     },
 
     async frame(owner: string, id: string): Promise<FrameData> {

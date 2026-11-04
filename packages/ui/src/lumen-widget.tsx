@@ -1,3 +1,4 @@
+import { FRAME_LINK } from '@columenlabs/lumen-ui-types/catalog';
 import { OUTLOOK_INDEXES } from '@columenlabs/lumen-ui-types/market';
 // LumenSavedWidget (as blocks; renamed): a page (LumenLayout) is an ordered list of cards, each a third, half, two thirds or the full width.
 // A card is the view (LumenView) or a widget. Chart and top-N widgets read every row of the view
@@ -122,7 +123,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { type ViewCellValue, type ViewDomain, type ViewField, computedOf } from './view-model';
-import { PAGE_SOURCE, useWidgetDataOptions } from './widget-data';
+import { MAKE_RECIPE, PAGE_SOURCE, useMakeRecipe, useWidgetDataOptions } from './widget-data';
 import { COMPACT, MINUS } from './widget-values';
 
 // Loaded when it first shows (lazy-part.tsx).
@@ -1167,6 +1168,14 @@ export function AddWidgetDialog<T>({
   useEffect(() => setData(PAGE_SOURCE), [open]);
   const pageLabel = `${name} (this page)`;
   const dataOptions = useWidgetDataOptions(open, pageLabel);
+  // A product recipe not made yet pulls its rows once, then is the widget's data.
+  const maker = useMakeRecipe();
+  const pickData = (v: string) =>
+    v.startsWith(MAKE_RECIPE)
+      ? void maker.run(v).then((f) => {
+          if (f) setData(`${FRAME_LINK}${f.id}`);
+        })
+      : setData(v);
   const own = data !== PAGE_SOURCE;
   const ids = useMemo(() => (own ? [data] : []), [own, data]);
   const read = useDomainReads(ids, ids)[data];
@@ -1200,7 +1209,7 @@ export function AddWidgetDialog<T>({
             search
             value={data}
             options={dataOptions}
-            onChange={setData}
+            onChange={pickData}
           />
           {own && read?.state !== 'ok' && (
             <p

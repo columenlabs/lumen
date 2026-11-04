@@ -34,15 +34,7 @@ import {
   Trash2Icon,
   TypeIcon,
 } from 'lucide-react';
-import {
-  type ComponentType,
-  type ReactNode,
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { apiJson } from './api-fetch';
 import { useAssistant, useAssistantName, useAssistantPending } from './assistant-context';
 import { useAssistantWorkspace } from './assistant-screen';
@@ -83,50 +75,15 @@ import {
 import { Input } from './ui/input';
 import { iconOf } from './view-icons';
 import { WORKSPACES_KEY, frameKey, workspacesListQuery } from './workspace-keys';
+import {
+  type WorkspaceRecipe,
+  type WorkspacesConfig,
+  useWorkspacesConfig,
+} from './workspaces-config';
 
 type WorkspaceRead = Workspace & { frames: Record<string, FrameMeta> };
-type Icon = ComponentType<{ className?: string }>;
-
-/** An app a workspace can belong to (the product's apps). */
-export interface WorkspaceApp {
-  id: string;
-  label: string;
-  /** Its address; a workspace there is at `${href}workspaces/<id>`. */
-  href: string;
-  icon?: Icon;
-}
-
-/** What the product tells its workspaces; every field may be left out by a one-app product. */
-export interface WorkspacesConfig {
-  /** The apps a workspace may move to that this person can open, this one included. */
-  apps?: WorkspaceApp[];
-  /** What the product calls an app: e.g. `desk`. */
-  appNoun?: string;
-  /** Which app draws a tab over a domain; one it does not say is this app's. */
-  domainApp?: (domain: string) => string | undefined;
-  /** A domain tab's starting layout. */
-  defaultConfig?: (domain: string) => CustomViewConfig | null;
-  /** The empty workspace's example ask, on an app: `put my holdings with their earnings dates in`. */
-  example?: (app: string) => string;
-  /** Recipes a person picks to start a tab by hand (+ in the tab bar); none hides the +. */
-  recipes?: WorkspaceRecipe[];
-}
-
-/** A saved data pull a person can start a tab from: one call to one of the product's read tools. */
-export interface WorkspaceRecipe {
-  id: string;
-  /** The tab's name and the picker's row: `Jobs scoring 70+`. */
-  label: string;
-  /** When to pick it, under the label. */
-  description?: string;
-  /** The picker's section: the app the rows come from. */
-  group?: string;
-  icon?: Icon;
-  recipe: FrameScript;
-}
-const ConfigCtx = createContext<WorkspacesConfig>({});
-/** The product's apps and domains for its workspaces. */
-export const WorkspacesProvider = ConfigCtx.Provider;
+export { WorkspacesProvider } from './workspaces-config';
+export type { WorkspaceApp, WorkspaceRecipe, WorkspacesConfig } from './workspaces-config';
 
 const json = <T,>(url: string, init?: RequestInit) => apiJson<T>(url, init, 'workspaces');
 
@@ -288,7 +245,7 @@ function WorkspaceBody({
   });
   // Move to app: the workspace leaves this app's sidebar for another's.
   const here = useShell().app;
-  const config = useContext(ConfigCtx);
+  const config = useWorkspacesConfig();
   const assistant = useAssistantName();
   const noun = config.appNoun ?? 'app';
   const appOf = (id: string) => config.apps?.find((a) => a.id === id);

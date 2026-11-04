@@ -184,7 +184,13 @@ import {
   withViewFields,
 } from './view-model';
 import { WidgetControlsEditor } from './widget-controls';
-import { PAGE_SOURCE, useWidgetDataOptions } from './widget-data';
+import {
+  MAKE_RECIPE,
+  PAGE_SOURCE,
+  recipeOptions,
+  useMakeRecipe,
+  useWidgetDataOptions,
+} from './widget-data';
 import {
   EditorRow as Row,
   type WidgetDraft,
@@ -520,6 +526,13 @@ export function ViewEditDialog<T>({
     (f) => !frameIds.includes(f.id) && !connections.some((c) => c.to === `${FRAME_LINK}${f.id}`),
   );
   const addRecipe = (f: FrameChoice) => (byKey(f) ? addFrame(f) : link(`${FRAME_LINK}${f.id}`, []));
+  // The product's recipes not made yet, by app: picking one pulls its rows once, then links them.
+  const maker = useMakeRecipe();
+  const templates = recipeOptions(maker.recipes, choices.data ?? []);
+  const makeRecipe = (v: string) =>
+    void maker.run(v).then((f) => {
+      if (f) addRecipe(f);
+    });
   const addFrame = (f: FrameChoice) =>
     setDraft({
       ...draft,
@@ -936,7 +949,12 @@ export function ViewEditDialog<T>({
               label: mainLabel,
               empty: source === '',
               options: mainOptions,
-              onPick: pickMain,
+              onPick: (to: string) =>
+                to.startsWith(MAKE_RECIPE)
+                  ? void maker.run(to).then((f) => {
+                      if (f) pickMain(`${FRAME_LINK}${f.id}`);
+                    })
+                  : pickMain(to),
               onDrop: dropMain,
               onClear: clearAll,
               onMakeMain: makeMain,
@@ -953,6 +971,9 @@ export function ViewEditDialog<T>({
       recipes={recipes}
       recipeNote={choices.isError ? `Recipes did not load: ${choices.error.message}` : null}
       onAddRecipe={addRecipe}
+      templates={templates}
+      onMakeRecipe={makeRecipe}
+      making={maker.pending}
       recipeByKey={byKey}
       onRemoveRecipe={card ? dropRecipe : removeFrame}
       onNewRecipe={askRecipe}
@@ -1608,6 +1629,9 @@ function FieldTree<T>({
   recipes = [],
   recipeNote,
   onAddRecipe,
+  templates = [],
+  onMakeRecipe,
+  making = false,
   recipeByKey = () => false,
   onRemoveRecipe,
   onNewRecipe,
@@ -1637,6 +1661,12 @@ function FieldTree<T>({
   /** Why the recipes are missing (they failed to load). */
   recipeNote?: string | null;
   onAddRecipe?: (f: FrameChoice) => void;
+  /** The product's recipes not made yet (`make:<id>`), grouped by the app they read. */
+  templates?: LumenOption[];
+  /** Pulls a product recipe's rows once and links them. */
+  onMakeRecipe?: (value: string) => void;
+  /** While a product recipe pulls its rows. */
+  making?: boolean;
   /** Whether a recipe attaches by its key (else it links by field pairs). */
   recipeByKey?: (f: FrameChoice) => boolean;
   onRemoveRecipe?: (id: string) => void;
@@ -1681,6 +1711,9 @@ function FieldTree<T>({
             : {}),
         }))
       : []),
+    ...(onMakeRecipe
+      ? templates.map((o) => (making ? { ...o, disabled: 'Pulling rows…' } : o))
+      : []),
     ...(onNewRecipe
       ? [
           {
@@ -1695,6 +1728,7 @@ function FieldTree<T>({
   ];
   const addData = (v: string) => {
     if (v === 'new') setWish('');
+    else if (v.startsWith(MAKE_RECIPE)) onMakeRecipe?.(v);
     else if (v.startsWith('link:')) {
       const d = deskDomains.find((x) => `link:${x.id}` === v);
       if (d && !d.why) onLink?.(d.id, d.on ?? []);
