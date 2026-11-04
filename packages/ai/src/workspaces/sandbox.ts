@@ -63,6 +63,8 @@ export function sandboxResponse(): Response {
       'cache-control': 'private, max-age=3600',
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'no-referrer',
+      // Framed by the app's own pages only (a product's default may be DENY).
+      'x-frame-options': 'SAMEORIGIN',
     },
   });
 }
