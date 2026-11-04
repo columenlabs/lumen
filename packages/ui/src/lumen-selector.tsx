@@ -292,10 +292,16 @@ export function SelectorRowContent({
           <span className="truncate text-xs text-muted-foreground">{option.description}</span>
         </span>
       ) : (
-        <span className="min-w-0 flex-1 truncate">{option.content ?? option.label}</span>
+        // The name keeps its room (up to two thirds of the row); a long detail truncates first.
+        <span className={cn('min-w-0 truncate', option.detail ? 'max-w-2/3 shrink-0' : 'flex-1')}>
+          {option.content ?? option.label}
+        </span>
       )}
       {option.detail && (
-        <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
+        <span
+          className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground"
+          title={option.detail}
+        >
           {option.detail}
         </span>
       )}

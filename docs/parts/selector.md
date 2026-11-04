@@ -35,6 +35,7 @@ import { Select, SelectContent } from '@columenlabs/lumen-ui/ui/select';
 ```
 
 - ✗ A `DropdownMenu` of one or two actions behind ⋯. ✓ The actions as `IconButton`s on the row.
+- ✓ A long `detail` is fine: the name keeps up to two thirds of the row and the detail truncates first, its full text on hover. ✗ Shortening a detail to save the name.
 - ✗ Capping the list's height without its footer. ✓ Leave sizing to the kit.
 
 ## Checked by
