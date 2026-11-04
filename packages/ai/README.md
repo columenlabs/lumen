@@ -220,11 +220,12 @@ ctx.waitUntil(meaningStep({ def: notesFind, sql: d1Sql(env.DB), embed, index: en
 | `LumenAgent` | An abstract Think agent. The app answers `plan(turn)` (model, key, effort, instructions, tool sources, money left) and hears `settle(end)` (outcome, usage parts, context size, time) when the turn ends |
 | `aiModel(model, key, opts?)` | The AI SDK model for a tier on an API key, or on a ChatGPT plan sign-in (`key.plan`, through `planFetch`) |
 | `planFetch(fetch?, name?)` | Rewrites Responses calls to a plan sign-in's rules: tools in one namespace, no output cap, a forced call as the only tool |
+| `planFallback(primary, fallback, onSwitch)` | A plan's model that hands the call, and the rest of the turn, to `fallback` when the plan reaches its usage limit (a 429 or a usage code, before any output) |
 | `turnSettings(model, opts)` | Output cap and effort as the provider takes them |
 | `openAiTools(sources, opts)` | The app's tool groups as AI SDK tools: reads always, drafts and writes by access, results cut at 16k characters |
 | `UsageMeter`, `tokenUsage(u)` | Prices each step's tokens (cache reads and writes, reasoning) into one usage part |
 
-A ChatGPT plan sign-in is free to the app (`priced` with `free`). Nothing here holds a key or a token: the app passes them per turn.
+A ChatGPT plan sign-in is free to the app (`priced` with `free`). When the plan is used up for now, a turn with `fallback` (`agentTurn` sets the app's first Claude on the same payer's Anthropic key) answers on Claude instead of ending in the limit's error, its use its own part. Nothing here holds a key or a token: the app passes them per turn.
 
 An app with an `Assistant` gets the whole plan from it: `assistant.agentTurn(caller, { message, tier?, context?, refs?, time_zone? })` returns `{ plan, settle }` with the person's tier and model on whoever pays, the tool groups at their access, the kit's rules, the bearings and the page before the message, `escalate` to a higher tier (its own usage part, inside the same cap) and Claude's advisor. `settle` adds the spend to the payer's month and reports the turn through `onStep`. It throws `AssistantError` when nobody can pay.
 

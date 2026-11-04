@@ -743,6 +743,14 @@ export class Assistant {
       return apiKey ? { apiKey, ...(paying.plans[provider] ? { plan: true } : {}) } : null;
     };
     const key = keyOf(main.model.provider) ?? { apiKey: paying.apiKey };
+    // A ChatGPT plan used up for now: the app's first Claude (its smallest) answers instead, on
+    // the same payer's Anthropic key, rather than the turn ending in the limit's error.
+    const claude = key.plan ? this.models.find((m) => m.provider === 'anthropic') : undefined;
+    const claudeKey = claude ? keyOf('anthropic') : null;
+    const fallback =
+      claude && claudeKey
+        ? { model: claude, key: claudeKey, label: `${main.tier.label} · ${claude.label}` }
+        : undefined;
     const p = await this.state.person(caller.id);
     const policy: HandOffPolicy = p.hand_off ?? 'next';
     const advisor = await this.advisorFor(caller, p.advice, main);
@@ -784,6 +792,7 @@ export class Assistant {
           : ''
       }${command}`,
       sources: await this.sourcesOf(caller, p),
+      ...(fallback ? { fallback } : {}),
       left: paying.left,
       maxSteps: MAX_ROUNDS,
       ...(this.o.fetch ? { fetch: this.o.fetch } : {}),

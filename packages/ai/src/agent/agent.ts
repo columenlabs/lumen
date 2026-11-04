@@ -45,7 +45,7 @@ import {
   connectorId,
   connectorSource,
 } from './connectors';
-import { type ModelKey, aiModel, turnSettings } from './models';
+import { type ModelKey, aiModel, planFallback, turnSettings } from './models';
 import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools } from './search';
 import { type AskMeta, chunkEvents, itemsOf } from './stream';
 import {
@@ -92,6 +92,11 @@ export interface AgentTurnPlan {
   lazy?: { at?: number; core?: string[] };
   /** Claude's advisor: a bigger Claude reads the chat and sends a plan. */
   advisor?: { model: ModelDef; label: string; maxUses: number; maxTokens: number };
+  /**
+   * Who answers when the ChatGPT plan `key` signs in with reaches its usage limit: a Claude model
+   * on the payer's own key, for the rest of the turn. Its use is its own part (`label`).
+   */
+  fallback?: { model: ModelDef; key: ModelKey; label: string };
   /** Dollars the payer has left; at or past it the model gets no more tools. */
   left?: number;
   /** Most model calls in one answer; 8. */
@@ -540,18 +545,28 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     const last = this.#last;
     if (!last) throw new Error('No model to compact with until the next answer.');
     const { plan } = last;
-    const meter = new UsageMeter(plan.model, `${plan.label} · compact`, !!plan.key.plan);
+    let meter = new UsageMeter(plan.model, `${plan.label} · compact`, !!plan.key.plan);
     this.#owed.push(meter);
     const r = await generateText({
-      model: aiModel(plan.model, plan.key, {
-        ...(plan.fetch ? { fetch: plan.fetch } : {}),
-        name: this.constructor.name,
+      model: this.#model(plan, () => {
+        const fb = plan.fallback;
+        if (!fb) return;
+        meter = new UsageMeter(fb.model, `${fb.label} · compact`, false);
+        this.#owed.push(meter);
       }),
       prompt,
       ...turnSettings(plan.model, { effort: 'default', out: 4000, plan: !!plan.key.plan }),
     });
     meter.add(r.usage);
     return r.text;
+  }
+
+  /** The turn's model; on a ChatGPT plan with a fallback, Claude once the plan's limit is reached. */
+  #model(plan: AgentTurnPlan, onSwitch: () => void) {
+    const o = { ...(plan.fetch ? { fetch: plan.fetch } : {}), name: this.constructor.name };
+    const model = aiModel(plan.model, plan.key, o);
+    if (!plan.key.plan || !plan.fallback) return model;
+    return planFallback(model, aiModel(plan.fallback.model, plan.fallback.key, o), onSwitch);
   }
 
   /** Never read: `beforeTurn` gives every turn its own model. */
@@ -634,10 +649,14 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       this.#turn.system = system;
       this.#turn.lazy = lazy;
     }
+    const turn = this.#turn;
     return {
-      model: aiModel(plan.model, plan.key, {
-        ...(plan.fetch ? { fetch: plan.fetch } : {}),
-        name: this.constructor.name,
+      model: this.#model(plan, () => {
+        const fb = plan.fallback;
+        if (!fb) return;
+        // Claude answers the rest of the turn on the payer's key: its use is its own part.
+        turn.main = new UsageMeter(fb.model, fb.label, false);
+        turn.meters.push(turn.main);
       }),
       instructions: system,
       messages: withLead(ctx.messages, `${this.#news()}${plan.lead ?? ''}`),
