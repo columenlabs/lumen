@@ -16,6 +16,7 @@ import { ChevronRight, RefreshCw, RotateCcw, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { fetchWithin } from './fetch-within';
+import { isStaleBuildError } from './lazy-part';
 import { reportClientError } from './telemetry';
 import { Button } from './ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
@@ -32,18 +33,7 @@ import { Spinner } from './ui/spinner';
 const KEY = 'lumen_new_build_reload';
 const GAP_MS = 10_000;
 
-/** A dynamic import that failed to load (Chrome, Firefox, Safari wording), not a page's own bug. */
-export function isStaleBuildError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : '';
-  return (
-    message.startsWith('Failed to fetch dynamically imported module') ||
-    message.startsWith('error loading dynamically imported module') ||
-    message.startsWith('Importing a module script failed') ||
-    message.includes('Unable to preload CSS') ||
-    // Safari, when a missing file comes back as a page instead of a script.
-    message.includes('is not a valid JavaScript MIME type')
-  );
-}
+export { isStaleBuildError } from './lazy-part';
 
 /** A reload this tab has already started; anything failing meanwhile waits for it. */
 let reloadStarted = false;

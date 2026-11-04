@@ -99,7 +99,12 @@ import {
 import { type AssistantChatState, type LiveItem, useAssistantChat } from './use-assistant-chat';
 
 // The Markdown renderer (tables included) loads with the first answer (lazy-part.tsx).
-const ChatMarkdown = lazyPart(() => import('./chat-markdown').then((m) => m.default));
+// A tab whose build a deploy replaced shows the answer as plain text instead of reloading mid chat.
+const ChatMarkdown = lazyPart(
+  () => import('./chat-markdown').then((m) => m.default),
+  null,
+  ({ children }: { children: string }) => <p className="whitespace-pre-wrap">{children}</p>,
+);
 
 /** The main model's context drawn full (tokens); the mark sits where the assistant compacts. */
 const CONTEXT_MAX = 200_000;
