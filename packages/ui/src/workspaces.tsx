@@ -22,7 +22,9 @@ import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import {
   ArrowRightLeftIcon,
   CalendarIcon,
+  CodeIcon,
   ExternalLinkIcon,
+  FileSpreadsheetIcon,
   HashIcon,
   LayersIcon,
   PencilIcon,
@@ -33,11 +35,13 @@ import {
   TextCursorInputIcon,
   Trash2Icon,
   TypeIcon,
+  WorkflowIcon,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { apiJson } from './api-fetch';
 import { useAssistant, useAssistantName, useAssistantPending } from './assistant-context';
 import { useAssistantWorkspace } from './assistant-screen';
+import { runBrowserFrame } from './browser-runner';
 import { LumenConfirm } from './confirm';
 import { FrameScriptDialog } from './frame-script';
 import { editedCells, editedKey, frameColor, useFrameEdits } from './joins';
@@ -329,13 +333,17 @@ function WorkspaceBody({
   });
   const runAll = useMutation({
     mutationFn: () =>
-      json<{ ran: number; failed: string[]; rows: number }>(`${api}/workspaces/${w.id}/refresh`, {
-        method: 'POST',
-      }),
+      json<{ ran: number; failed: string[]; rows: number; browser?: string[] }>(
+        `${api}/workspaces/${w.id}/refresh`,
+        { method: 'POST' },
+      ),
     onSuccess: (r) => {
       void qc.invalidateQueries({ queryKey: WORKSPACES_KEY });
       const ran = `Ran ${r.ran} ${r.ran === 1 ? 'tab' : 'tabs'}: ${r.rows.toLocaleString('en-US')} rows`;
-      if (r.failed.length) lumenToast.warning(`${ran}. Failed: ${r.failed.join(', ')}`);
+      // A browser tab runs only where it is open: each one's own ↻.
+      const open = r.browser?.length ? `. Open to refresh: ${r.browser.join(', ')}` : '';
+      if (r.failed.length) lumenToast.warning(`${ran}. Failed: ${r.failed.join(', ')}${open}`);
+      else if (open) lumenToast.info(`${ran}${open}`);
       else lumenToast.success(ran);
     },
     onError: (e: Error) => lumenToast.error(`Couldn’t run the tabs: ${e.message}`),
@@ -345,7 +353,11 @@ function WorkspaceBody({
 
   const intro = (
     <LumenTabs
-      tabs={w.tabs.map((t) => ({ value: t.id, label: t.name, icon: tabIcon(t) }))}
+      tabs={w.tabs.map((t) => ({
+        value: t.id,
+        label: t.name,
+        icon: tabIcon(t, 'frame' in t.source ? w.frames[t.source.frame] : undefined),
+      }))}
       value={tab?.id}
       onChange={(t) => void navigate({ href: workspacePath(w.id, t), replace: true })}
       actions={
@@ -430,7 +442,10 @@ function WorkspaceBody({
           onClose={() => setEditingTab(false)}
           name={tab.name}
           icon={tab.config?.icon}
-          fallback={tabIcon({ ...tab, config: null })}
+          fallback={tabIcon(
+            { ...tab, config: null },
+            'frame' in tab.source ? w.frames[tab.source.frame] : undefined,
+          )}
           description="Its filters and columns save as you change them."
           maxName={60}
           busy={editTab.isPending}
@@ -688,15 +703,26 @@ function FrameTab({
     queryFn: () => json<FrameData>(`${api}/frames/${meta.id}`),
   });
   const refresh = useMutation({
-    mutationFn: () => json<FrameData>(`${api}/frames/${meta.id}/refresh`, { method: 'POST' }),
+    // A browser recipe runs here, in a sandbox, and saves its rows; any other runs on the server.
+    mutationFn: () =>
+      (rows.data?.meta ?? meta).browser
+        ? runBrowserFrame(api, meta.id)
+        : json<FrameData>(`${api}/frames/${meta.id}/refresh`, { method: 'POST' }),
     onSuccess: (data) => {
       qc.setQueryData(frameKey(api, meta.id), data);
       void qc.invalidateQueries({ queryKey: [...WORKSPACES_KEY, api, 'ws'] });
     },
   });
   // A frame refreshes only when the person taps ↻: opening a tab shows the
-  // stored rows.
+  // stored rows. A browser recipe that never ran runs once when its tab first opens.
   const current = rows.data?.meta ?? meta;
+  const firstRun = Boolean(rows.data && current.browser && !current.runs?.length);
+  const started = useRef(false);
+  useEffect(() => {
+    if (!firstRun || started.current) return;
+    started.current = true;
+    refresh.mutate();
+  }, [firstRun, refresh.mutate]);
   const reload = useLumenLoad(rows);
   const data: FrameRow[] = useMemo(
     () => (rows.data?.rows ?? []).map((v, i) => ({ i, v })),
@@ -734,9 +760,10 @@ function FrameTab({
   );
   // The card's own ↻ runs the assistant's script again and its footer says when they last ran (per card, not the page header); rows the assistant wrote itself only reload.
   const runs = current.mode !== 'static' && current.origin !== 'yours';
-  // The assistant's script as code to read and edit; a Your data column has none.
+  // The recipe as code to read and edit; a Your data column and a pushed dataset have none.
   const [scriptOpen, setScriptOpen] = useState(false);
-  const assistantMade = current.origin !== 'yours';
+  const pushed = current.origin === 'harness';
+  const assistantMade = current.origin !== 'yours' && !pushed;
   const load = useMemo(
     () => ({
       ...reload,
@@ -751,11 +778,15 @@ function FrameTab({
         about:
           current.origin === 'yours'
             ? 'Your own data: you change it by typing.'
-            : !runs
-              ? `${assistant} wrote these rows once: nothing to run again.`
-              : current.mode === 'asof'
-                ? `${assistant}’s script reads the web, so it runs only when you ask.`
-                : `${assistant}’s script reads live data.`,
+            : pushed
+              ? `${current.by ?? 'An agent'} pushed these rows: it pushes again to change them.`
+              : current.browser
+                ? 'This recipe runs in your browser: ↻ runs it here and saves the rows.'
+                : !runs
+                  ? `${assistant} wrote these rows once: nothing to run again.`
+                  : current.mode === 'asof'
+                    ? `${assistant}’s script reads the web, so it runs only when you ask.`
+                    : `${assistant}’s script reads live data.`,
       },
       ...(assistantMade ? { editScript: () => setScriptOpen(true) } : {}),
       ...(runs
@@ -765,8 +796,9 @@ function FrameTab({
             refresh: async () => {
               await refresh.mutateAsync().catch(() => undefined);
             },
-            refreshLabel:
-              current.mode === 'asof'
+            refreshLabel: current.browser
+              ? 'Run the script in your browser'
+              : current.mode === 'asof'
                 ? `Run ${assistant}’s script again (it reads the web, so only when you ask)`
                 : `Run ${assistant}’s script again`,
           }
@@ -777,6 +809,9 @@ function FrameTab({
       current.at,
       current.mode,
       current.origin,
+      current.by,
+      current.browser,
+      pushed,
       failed,
       runs,
       assistantMade,
@@ -808,33 +843,43 @@ function FrameTab({
               value={
                 current.origin === 'yours'
                   ? `Your data, by ${current.key}`
-                  : current.kind === 'linked'
-                    ? `Linked by ${current.key}`
-                    : 'Snapshot'
+                  : pushed
+                    ? 'Pushed dataset'
+                    : current.kind === 'linked'
+                      ? `Linked by ${current.key}`
+                      : 'Snapshot'
               }
             />
             {current.edited ? (
               <StatusItem label="Edited by hand" value={current.edited.toLocaleString('en-US')} />
             ) : null}
-            <StatusItem
-              label={
-                current.kind === 'linked'
-                  ? 'As of'
-                  : current.mode === 'live'
-                    ? 'Live, read'
-                    : current.mode === 'asof'
-                      ? 'As of'
-                      : current.origin === 'yours'
-                        ? 'Yours, changed'
-                        : `Made by ${assistant}`
-              }
-              value={new Date(current.at).toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
-            />
+            {pushed ? (
+              <StatusItem
+                label="Pushed by"
+                value={`${current.by ?? 'an agent'} · ${ago(current.at)}`}
+              />
+            ) : null}
+            {pushed ? null : (
+              <StatusItem
+                label={
+                  current.kind === 'linked'
+                    ? 'As of'
+                    : current.mode === 'live'
+                      ? 'Live, read'
+                      : current.mode === 'asof'
+                        ? 'As of'
+                        : current.origin === 'yours'
+                          ? 'Yours, changed'
+                          : `Made by ${assistant}`
+                }
+                value={new Date(current.at).toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              />
+            )}
             {failed ? (
               <StatusItem
                 label="Refresh failed"
@@ -864,9 +909,30 @@ function FrameTab({
   );
 }
 
-/** A tab's icon: the person's pick, else the assistant's mark on a frame, else a table. */
-function tabIcon(t: WorkspaceTab) {
-  return iconOf(t.config?.icon, 'frame' in t.source ? SparklesIcon : TableIcon);
+/**
+ * A tab's icon: the person's pick, else what makes its frame (a file for a pushed CSV, a
+ * pipeline for web reads, code for a browser script, the assistant's mark), else a table.
+ */
+function tabIcon(t: WorkspaceTab, meta?: FrameMeta) {
+  const made = !('frame' in t.source)
+    ? TableIcon
+    : meta?.origin === 'harness'
+      ? FileSpreadsheetIcon
+      : meta?.recipe === 'fetch'
+        ? WorkflowIcon
+        : meta?.browser
+          ? CodeIcon
+          : SparklesIcon;
+  return iconOf(t.config?.icon, made);
+}
+
+/** How long ago, in short words: `4 min ago`, `2 h ago`, `3 d ago`. */
+function ago(at: string): string {
+  const min = Math.max(0, Math.round((Date.now() - Date.parse(at)) / 60_000));
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
 }
 
 /** A tab's layout as it shows: its own config, else its source's default. */

@@ -92,9 +92,11 @@ export type FrameKind = 'linked' | 'snapshot';
 /**
  * Where a frame came from (Edits in place): `assistant` made it with a script;
  * `yours` is a column the person typed (Your data on a card's + Add column), a linked frame of
- * one key column and their own columns that the assistant never writes over.
+ * one key column and their own columns that the assistant never writes over; `harness` is a
+ * dataset an outside agent pushed (a CSV over MCP, rows only, `by` names the agent); `script` is
+ * a browser script's rows (a tab recipe that runs in the person's browser on ↻).
  */
-export type FrameOrigin = 'assistant' | 'yours';
+export type FrameOrigin = 'assistant' | 'yours' | 'harness' | 'script';
 
 /**
  * What makes a frame (one script, never stacked steps): one call, one SQL query
@@ -104,10 +106,141 @@ export type FrameOrigin = 'assistant' | 'yours';
 export type FrameScript =
   | { kind: 'call'; fn: string; args: Record<string, unknown> }
   | { kind: 'sql'; query: string }
-  | { kind: 'script'; code: string };
+  | {
+      kind: 'script';
+      code: string;
+      /**
+       * Where it runs: the product's server sandbox (left out), or `browser`, a sandboxed frame in
+       * the person's page that runs on ↻ and saves its rows (no server code runs).
+       */
+      runtime?: 'browser';
+      /** What a browser script gets as `fetched` before it runs (the same shape as a fetch recipe). */
+      requests?: FrameRequests;
+    }
+  | FrameFetchRecipe;
 
 /** Longest code or SQL a frame's script may carry. */
 export const FRAME_SCRIPT_CHARS = 20_000;
+/** Most web reads one run makes (the free Workers plan's subrequests a request). */
+export const FETCH_CALLS = 50;
+
+/**
+ * One web read: an address with `{field}` holes filled from each value of `each`, through the
+ * product's fetch proxy (allowlisted hosts). `key` names a data key the server adds; the browser
+ * never sees it.
+ */
+export interface FrameFetch {
+  url: string;
+  method?: 'GET' | 'POST';
+  body?: string;
+  key?: string;
+}
+
+/** The reads a recipe makes: the requests, once, or once per value of `each`. */
+export interface FrameRequests {
+  requests: FrameFetch[];
+  /** Repeat the requests per value: text fills `{value}`, an object fills its own fields. */
+  each?: { values: (string | number | Record<string, string | number>)[] };
+}
+
+/**
+ * A fetch recipe (declarative, runs on the product's server): each answer is one row, or the list
+ * at `rows`; `pick` names the columns by a dotted path (`main.temp`, `hourly.rain.0`). The
+ * `each` value's fields lead every row, so a row says which zip or ticker it is.
+ */
+export interface FrameFetchRecipe extends FrameRequests {
+  kind: 'fetch';
+  rows?: string;
+  pick?: Record<string, string>;
+}
+
+/** One read a recipe makes, its holes filled, with the values that filled them. */
+export interface FetchCall extends FrameFetch {
+  vars: Record<string, string | number>;
+}
+
+/** The reads a recipe makes, in order; more than `FETCH_CALLS` is refused. */
+export function fetchCalls(r: FrameRequests): FetchCall[] {
+  const values = r.each?.values ?? [null];
+  const out: FetchCall[] = [];
+  for (const v of values) {
+    const vars: Record<string, string | number> =
+      v === null ? {} : typeof v === 'object' ? v : { value: v };
+    const fill = (s: string) =>
+      s.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (all, k: string) =>
+        k in vars ? encodeURIComponent(String(vars[k])) : all,
+      );
+    for (const q of r.requests)
+      out.push({
+        url: fill(q.url),
+        method: q.method ?? 'GET',
+        ...(q.body !== undefined ? { body: q.body } : {}),
+        ...(q.key ? { key: q.key } : {}),
+        vars,
+      });
+  }
+  if (out.length > FETCH_CALLS)
+    throw new Error(`${out.length} web reads: a run makes at most ${FETCH_CALLS}.`);
+  return out;
+}
+
+/** The value at a dotted path (`main.temp`, `list.0.dt`); undefined when it is not there. */
+export function pickPath(v: unknown, path: string): unknown {
+  let at: unknown = v;
+  for (const k of path.split('.').filter(Boolean)) {
+    if (at === null || typeof at !== 'object') return undefined;
+    at = (at as Record<string, unknown>)[k];
+  }
+  return at;
+}
+
+/** A fetch recipe's rows from its answers (one per call, in `fetchCalls` order). */
+export function fetchedRows(
+  r: FrameFetchRecipe,
+  answers: { call: FetchCall; body: unknown }[],
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const { call, body } of answers) {
+    const list = r.rows ? pickPath(body, r.rows) : body;
+    const items = Array.isArray(list) ? list : [list];
+    for (const item of items) {
+      const picked: Record<string, unknown> = r.pick
+        ? Object.fromEntries(Object.entries(r.pick).map(([c, p]) => [c, pickPath(item, p)]))
+        : item && typeof item === 'object'
+          ? (item as Record<string, unknown>)
+          : { value: item };
+      out.push({ ...call.vars, ...picked });
+    }
+  }
+  return out;
+}
+
+const fetchSchema = z.object({
+  url: z.string().trim().url().max(2000),
+  method: z.enum(['GET', 'POST']).optional(),
+  body: z.string().max(20_000).optional(),
+  key: z
+    .string()
+    .regex(/^[a-z0-9_-]{1,40}$/i)
+    .optional(),
+});
+const requestsShape = {
+  requests: z.array(fetchSchema).min(1).max(FETCH_CALLS),
+  each: z
+    .object({
+      values: z
+        .array(
+          z.union([
+            z.string().max(200),
+            z.number(),
+            z.record(z.string(), z.union([z.string().max(200), z.number()])),
+          ]),
+        )
+        .min(1)
+        .max(FETCH_CALLS),
+    })
+    .optional(),
+};
 /** A frame's script as the person saves it from the Script editor. */
 export const frameScriptSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -119,8 +252,23 @@ export const frameScriptSchema = z.discriminatedUnion('kind', [
     args: z.record(z.string(), z.unknown()),
   }),
   z.object({ kind: z.literal('sql'), query: z.string().trim().min(1).max(FRAME_SCRIPT_CHARS) }),
-  z.object({ kind: z.literal('script'), code: z.string().trim().min(1).max(FRAME_SCRIPT_CHARS) }),
+  z.object({
+    kind: z.literal('script'),
+    code: z.string().trim().min(1).max(FRAME_SCRIPT_CHARS),
+    runtime: z.literal('browser').optional(),
+    requests: z.object(requestsShape).optional(),
+  }),
+  z.object({
+    kind: z.literal('fetch'),
+    ...requestsShape,
+    rows: z.string().max(200).optional(),
+    pick: z.record(z.string().min(1).max(40), z.string().max(200)).optional(),
+  }),
 ]);
+
+/** A recipe runs in the person's browser (a script with `runtime: 'browser'`). */
+export const runsInBrowser = (s: FrameScript | null | undefined): boolean =>
+  s?.kind === 'script' && s.runtime === 'browser';
 
 /** A frame cell's value. */
 export type FrameCell = string | number | null;
@@ -155,6 +303,12 @@ export interface FrameMeta {
   error?: string;
   /** Who made it; absent means the assistant. */
   origin?: FrameOrigin;
+  /** Who pushed or ran it last, in words (`Claude Code`, `you`): the status bar's "Pushed by". */
+  by?: string;
+  /** What kind of recipe makes it (a tab's icon): none when its rows were written or pushed. */
+  recipe?: FrameScript['kind'];
+  /** Its recipe runs in the person's browser: ↻ runs it there and saves the rows. */
+  browser?: boolean;
   /** How many cells the person edited by hand (the edits themselves ride with the rows). */
   edited?: number;
   /** Its recipe's last runs, newest first (at most `FRAME_RUNS`). */

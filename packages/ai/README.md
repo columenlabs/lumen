@@ -273,3 +273,13 @@ const routes = workspaceRoutes({ base: '/api/assistant', owner: callerOf, store:
 ```
 
 Budget: one frame is one row (at most 1.5 MB of rows, 10,000 rows, 50 columns), so a run writes one row; every read has a LIMIT (30 workspaces, 12 tabs each, 100 frames). Columns are typed from their values (number, date, text); a list of words, or short text from a small set, becomes a tags column (chips). The kit's `WorkspacesProvider` takes `recipes` to offer + New tab from a recipe in the tab bar.
+
+### Web data and pushed datasets (no server code runs)
+
+Three more ways rows reach a tab, all on a free Workers plan (no Dynamic Workers):
+
+- **Fetch recipe** (`{kind: 'fetch', requests: [{url, method?, key?}], each?: {values}, rows?, pick?}`): declarative web reads the product runs on its server. `{field}` holes in a URL fill from each value of `each` (text fills `{value}`); `fetchCalls` expands them (at most `FETCH_CALLS`, 50 a run) and `fetchedRows` turns the answers into rows, the `each` value's fields first, then `pick`'s dotted paths (`current.temperature_2m`). A data key is named (`key`), never sent: the product adds it server side.
+- **Browser script** (`{kind: 'script', runtime: 'browser', code, requests?}`): JavaScript that runs in the person's page. The kit's `runBrowserFrame` loads `<base>/sandbox` (this package's `SANDBOX_HTML`, served with `SANDBOX_CSP`: `connect-src 'none'`) in an iframe with `sandbox="allow-scripts"`, runs the code in a Web Worker there (stopped at `BROWSER_RUN_MS`, 30 s), and saves what it returns with `PUT /frames/:id/rows` (one write, the frame's caps checked). The code is the body of `async (fetched, hub) => rows`: `fetched` holds the answers to its `requests`, `hub.fetch(url, {key})` makes one more read through the product's proxy (`fetch` in `workspaceRoutes`, `POST <base>/fetch`). The server never runs it: `refresh` refuses it (409, open the tab), and `refreshAll` lists such tabs as `browser`.
+- **Pushed dataset** (`store.pushFrame(owner, {name, rows, mode, by, key?})`): rows an outside agent wrangled (a CSV parsed by `parseCsv`, at most `CSV_BYTES` a call, the rest as `append` parts; with `key`, an appended row replaces the one with its key). Origin `harness`, no recipe; `by` names the agent and the tab's status bar reads "Pushed by Claude Code · 4 min ago". `removeFrame` deletes one with its tabs.
+
+`workspaceRoutes` lets `call`, `fetch` and browser `script` recipes through to the product's `allow`; server `sql` and `script` are refused.
