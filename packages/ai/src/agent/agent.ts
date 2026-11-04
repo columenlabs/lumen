@@ -245,6 +245,7 @@ export function chatUsage(parts: UsagePart[], context?: number): ChatUsage {
             read: was.read + p.read,
             out: was.out + p.out,
             usd: was.usd + p.usd,
+            ...(was.runs || p.runs ? { runs: (was.runs ?? 0) + (p.runs ?? 0) } : {}),
           }
         : { ...p },
     );
