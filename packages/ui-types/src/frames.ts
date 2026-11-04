@@ -57,7 +57,23 @@ export interface FrameColumn {
   format: ViewFormat;
   /** A holding amount the assistant marked (`frameFormat`): Hide amounts masks it. */
   amount?: boolean;
+  /** Short values from a small set (a stage, a source) or lists of words: drawn as tag chips. */
+  tags?: boolean;
 }
+
+/** One run of a frame's recipe, newest first on `FrameMeta.runs`. */
+export interface FrameRun {
+  at: string;
+  rows: number;
+  ms: number;
+  ok: boolean;
+  /** Who started it: the person, or the assistant. */
+  by: 'you' | 'assistant';
+  error?: string;
+}
+
+/** How many runs a frame remembers. */
+export const FRAME_RUNS = 10;
 
 /**
  * How a frame refreshes: `live` runs its script again when its tab opens (app data only), `asof`
@@ -141,6 +157,8 @@ export interface FrameMeta {
   origin?: FrameOrigin;
   /** How many cells the person edited by hand (the edits themselves ride with the rows). */
   edited?: number;
+  /** Its recipe's last runs, newest first (at most `FRAME_RUNS`). */
+  runs?: FrameRun[];
 }
 
 /** A frame's rows, one array per row in the order of `columns`, and the person's hand edits. */
@@ -293,9 +311,13 @@ export function frameConfig(meta: FrameMeta, start?: Partial<CustomViewConfig>):
   const own = meta.columns.map((c) => c.key);
   const joins = frameSymbolAt(meta) >= 0 ? joinKeys(['symbol'], own) : [];
   const keys = new Set([...own, ...joins]);
+  // An opaque id (`id`, `job_id`) starts hidden, so a row leads with its name, on a phone above
+  // all; Columns adds it back. A linked frame's key and a frame of nothing but ids keep theirs.
+  const opaque = (k: string) => (k === 'id' || k.endsWith('_id')) && k !== meta.key;
+  const shown = own.some((k) => !opaque(k)) ? own.filter((k) => !opaque(k)) : own;
   const base = customViewConfigSchema.parse({
     shape: 'table',
-    columns: [...own, ...joins.filter((k) => k === 'price' || k === 'change_pct')],
+    columns: [...shown, ...joins.filter((k) => k === 'price' || k === 'change_pct')],
     // Empty offers every field the frame's catalog marks groupable or filterable: listing them
     // would break on a frame wider than the 20 fields a view may name.
     group: { fields: [], default: null },
