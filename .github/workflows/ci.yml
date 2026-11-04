@@ -1,4 +1,4 @@
-# Lint, type-check and build on OpenShip's self-hosted runner. This repo is public, so the job
+# Lint, type-check and build on OpenShip's self-hosted runner, side by side (budget 84 s from push). This repo is public, so the job
 # runs only for branches of this repo: a pull request from a fork never reaches the runner.
 name: CI
 on:
@@ -10,7 +10,7 @@ jobs:
   check:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, openship, linux]
-    timeout-minutes: 15
+    timeout-minutes: 3
     env:
       LUMEN_FORBIDDEN_NAMES: ${{ vars.LUMEN_FORBIDDEN_NAMES }}
     steps:
@@ -18,7 +18,17 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
-      - run: bun install --frozen-lockfile
-      - run: bun run lint
-      - run: bun run type-check
-      - run: bun run build
+      # A stalled install (360 s seen 2026-11-04) is cut at 45 s and tried once more.
+      - name: Install
+        run: timeout 45 bun install --frozen-lockfile || timeout 45 bun install --frozen-lockfile
+      # Side by side; each one's output is printed whole when it ends, and any failure fails the step.
+      - name: Lint, type-check and build
+        run: |
+          run() { name=$1; shift; ( start=$SECONDS; "$@" > ".ci-$name.log" 2>&1; code=$?; echo "$name: exit $code in $((SECONDS - start)) s" >> .ci-$name.log; exit $code ) & }
+          run lint bun run lint
+          run typecheck bun run type-check
+          run build bun run build
+          failed=0
+          for job in $(jobs -p); do wait "$job" || failed=1; done
+          for f in .ci-*.log; do echo "::group::${f#.ci-}"; cat "$f"; echo "::endgroup::"; tail -1 "$f"; done
+          exit $failed
