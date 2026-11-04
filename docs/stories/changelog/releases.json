@@ -1,5 +1,18 @@
 [
   {
+    "tag": "v0.1.192",
+    "date": "2026-11-04T06:36:18Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "SettingField labels use the full row when there is no control",
+        "body": "In `@columenlabs/lumen-ui`, a `SettingField` that has only an `end` (a switch or a `SettingStatus` pill) and no `children` now lets its label take the row, so short labels no longer cut off on a phone."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.191",
     "date": "2026-11-04T06:19:34Z",
     "takeaways": [
