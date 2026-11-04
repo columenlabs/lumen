@@ -1,4 +1,4 @@
-import type { FrameData, FrameScript } from '@columenlabs/lumen-ui-types/frames';
+import type { FrameData, FrameRun, FrameScript } from '@columenlabs/lumen-ui-types/frames';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlayIcon, RotateCcwIcon, WrapTextIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -61,12 +61,15 @@ export function FrameScriptDialog({
   api,
   frame,
   name,
+  runs,
   open,
   onOpenChange,
 }: {
   api: string;
   frame: string;
   name: string;
+  /** The last runs, newest first: when, how many rows, how long, who, and why one failed. */
+  runs?: FrameRun[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -161,6 +164,7 @@ export function FrameScriptDialog({
               wrap={wrap}
               onChange={setText}
             />
+            {runs && runs.length > 0 && <RunList runs={runs} assistant={assistant} />}
             {error && (
               <Alert variant="destructive" className="max-h-32 overflow-y-auto">
                 <AlertTitle>Didn't save</AlertTitle>
@@ -187,5 +191,35 @@ export function FrameScriptDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The frame's last runs, one line each; a failure's reason in its hover. */
+function RunList({ runs, assistant }: { runs: FrameRun[]; assistant: string }) {
+  return (
+    <ul className="flex max-h-28 flex-col gap-0.5 overflow-y-auto text-xs text-muted-foreground">
+      {runs.map((r) => (
+        <li key={r.at} className="flex min-w-0 items-center gap-2" title={r.error}>
+          <span
+            className={`size-1.5 shrink-0 rounded-full ${r.ok ? 'bg-[var(--meter-ok)]' : 'bg-destructive'}`}
+          />
+          <time className="shrink-0" dateTime={r.at}>
+            {new Date(r.at).toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+          </time>
+          <span className="num shrink-0">
+            {r.ok ? `${r.rows.toLocaleString('en-US')} rows` : 'failed'}
+          </span>
+          <span className="num shrink-0">{(r.ms / 1000).toFixed(1)} s</span>
+          <span className="min-w-0 truncate">
+            {r.ok ? `by ${r.by === 'you' ? 'you' : assistant}` : r.error}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

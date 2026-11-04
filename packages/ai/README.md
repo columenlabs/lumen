@@ -251,3 +251,24 @@ class Chat extends LumenAgent<Env> {
   protected undoWrite(card: AgentCard) { return assistant.undoChange(caller, card); }
 }
 ```
+
+## Workspaces: tabs over recipes, run again on demand
+
+`@columenlabs/lumen-ai/workspaces` is the server the kit's `WorkspacesSection` and `WorkspacePage` call. A workspace is a person's page of tabs; each tab is a table over a **frame**: the rows one **recipe** pulled, the recipe itself and the person's hand edits. A recipe is one call to one of the product's read tools (`{kind: 'call', fn: 'jobs.list', args}`), so running it again needs no model. Nothing runs on a timer: ↻ on a tab runs its recipe, ↻ in the header runs every tab one after another, each within 15 s (`RUN_MS`); a failed run keeps the last rows and says why.
+
+```ts
+import { createWorkspaces, doSql, workspaceMigrations, workspaceRoutes } from '@columenlabs/lumen-ai/workspaces';
+
+// In the store that holds the person's data (a Durable Object's SQLite, or D1 with d1Sql):
+for (const q of workspaceMigrations({ spaces: 'app_ws_spaces', frames: 'app_ws_frames' })) sql.exec(q);
+const store = createWorkspaces({
+  db: doSql(sql),
+  tables: { spaces: 'app_ws_spaces', frames: 'app_ws_frames' },
+  run: (recipe, { owner, signal }) => callReadTool(owner, recipe, signal), // the product's own tools, as the person
+});
+
+// In the Worker, at the assistant's api:
+const routes = workspaceRoutes({ base: '/api/assistant', owner: callerOf, store: () => store });
+```
+
+Budget: one frame is one row (at most 1.5 MB of rows, 10,000 rows, 50 columns), so a run writes one row; every read has a LIMIT (30 workspaces, 12 tabs each, 100 frames). Columns are typed from their values (number, date, text); a list of words, or short text from a small set, becomes a tags column (chips). The kit's `WorkspacesProvider` takes `recipes` to offer + New tab from a recipe in the tab bar.

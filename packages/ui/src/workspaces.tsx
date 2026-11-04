@@ -1,6 +1,7 @@
 import {
   type FrameData,
   type FrameMeta,
+  type FrameScript,
   frameConfig,
   frameKeyAt,
   frameSymbolAt,
@@ -25,6 +26,8 @@ import {
   HashIcon,
   LayersIcon,
   PencilIcon,
+  PlusIcon,
+  RefreshCwIcon,
   SparklesIcon,
   TableIcon,
   TextCursorInputIcon,
@@ -105,6 +108,21 @@ export interface WorkspacesConfig {
   defaultConfig?: (domain: string) => CustomViewConfig | null;
   /** The empty workspace's example ask, on an app: `put my holdings with their earnings dates in`. */
   example?: (app: string) => string;
+  /** Recipes a person picks to start a tab by hand (+ in the tab bar); none hides the +. */
+  recipes?: WorkspaceRecipe[];
+}
+
+/** A saved data pull a person can start a tab from: one call to one of the product's read tools. */
+export interface WorkspaceRecipe {
+  id: string;
+  /** The tab's name and the picker's row: `Jobs scoring 70+`. */
+  label: string;
+  /** When to pick it, under the label. */
+  description?: string;
+  /** The picker's section: the app the rows come from. */
+  group?: string;
+  icon?: Icon;
+  recipe: FrameScript;
 }
 const ConfigCtx = createContext<WorkspacesConfig>({});
 /** The product's apps and domains for its workspaces. */
@@ -338,19 +356,83 @@ function WorkspaceBody({
     );
   };
 
+  // + in the tab bar: a tab from a recipe, run once now; ↻ in the header runs every tab again.
+  const addTab = useMutation({
+    mutationFn: (r: WorkspaceRecipe) =>
+      json<{ workspace: WorkspaceRead; tab: string }>(`${api}/workspaces/${w.id}/tabs`, {
+        method: 'POST',
+        body: JSON.stringify({ name: r.label, recipe: r.recipe }),
+      }),
+    onSuccess: ({ workspace, tab: t }) => {
+      put(workspace);
+      void qc.invalidateQueries({ queryKey: [...WORKSPACES_KEY, api, 'list'] });
+      void navigate({ href: workspacePath(w.id, t), replace: true });
+    },
+    onError: (e: Error) => lumenToast.error(`Couldn’t add the tab: ${e.message}`),
+  });
+  const runAll = useMutation({
+    mutationFn: () =>
+      json<{ ran: number; failed: string[]; rows: number }>(`${api}/workspaces/${w.id}/refresh`, {
+        method: 'POST',
+      }),
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: WORKSPACES_KEY });
+      const ran = `Ran ${r.ran} ${r.ran === 1 ? 'tab' : 'tabs'}: ${r.rows.toLocaleString('en-US')} rows`;
+      if (r.failed.length) lumenToast.warning(`${ran}. Failed: ${r.failed.join(', ')}`);
+      else lumenToast.success(ran);
+    },
+    onError: (e: Error) => lumenToast.error(`Couldn’t run the tabs: ${e.message}`),
+  });
+  const recipes = config.recipes ?? [];
+  const runnable = w.tabs.some((t) => 'frame' in t.source);
+
   const intro = (
     <LumenTabs
       tabs={w.tabs.map((t) => ({ value: t.id, label: t.name, icon: tabIcon(t) }))}
       value={tab?.id}
       onChange={(t) => void navigate({ href: workspacePath(w.id, t), replace: true })}
       actions={
-        tab && <IconButton icon={PencilIcon} label="Edit tab" onClick={() => setEditingTab(true)} />
+        <>
+          {recipes.length > 0 && (
+            <LumenSelector
+              trigger="icon"
+              icon={PlusIcon}
+              label={addTab.isPending ? 'Adding a tab…' : 'New tab from a recipe'}
+              align="end"
+              disabled={addTab.isPending}
+              options={recipes.map((r) => ({
+                value: r.id,
+                label: r.label,
+                description: r.description,
+                group: r.group,
+                icon: r.icon,
+              }))}
+              value={null}
+              onChange={(id) => {
+                const r = recipes.find((x) => x.id === id);
+                if (r) addTab.mutate(r);
+              }}
+            />
+          )}
+          {tab && (
+            <IconButton icon={PencilIcon} label="Edit tab" onClick={() => setEditingTab(true)} />
+          )}
+        </>
       }
     />
   );
   const crumbs: Crumb[] = [{ label: 'Workspaces' }, { label: w.name }];
   const actions = (
     <>
+      {runnable && (
+        <IconButton
+          icon={RefreshCwIcon}
+          label={runAll.isPending ? 'Running every tab…' : 'Run every tab again'}
+          disabled={runAll.isPending}
+          className={runAll.isPending ? '[&_svg]:animate-spin' : undefined}
+          onClick={() => runAll.mutate()}
+        />
+      )}
       <IconButton
         icon={TextCursorInputIcon}
         label="Rename workspace"
@@ -571,6 +653,7 @@ function frameDomain(
             value: (r) => r.v[i] ?? null,
             format: c.format,
             amount: c.amount,
+            ...(c.tags ? { tags: true } : {}),
             filterable: true,
             groupable: c.type !== 'number',
             ...(c.type === 'number' ? { aggregate: c.format === 'percent' ? 'mean' : 'sum' } : {}),
@@ -814,6 +897,7 @@ function FrameTab({
           api={api}
           frame={current.id}
           name={current.name}
+          runs={current.runs}
           open={scriptOpen}
           onOpenChange={setScriptOpen}
         />

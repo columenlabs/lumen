@@ -57,7 +57,23 @@ export interface FrameColumn {
   format: ViewFormat;
   /** A holding amount the assistant marked (`frameFormat`): Hide amounts masks it. */
   amount?: boolean;
+  /** Short values from a small set (a stage, a source) or lists of words: drawn as tag chips. */
+  tags?: boolean;
 }
+
+/** One run of a frame's recipe, newest first on `FrameMeta.runs`. */
+export interface FrameRun {
+  at: string;
+  rows: number;
+  ms: number;
+  ok: boolean;
+  /** Who started it: the person, or the assistant. */
+  by: 'you' | 'assistant';
+  error?: string;
+}
+
+/** How many runs a frame remembers. */
+export const FRAME_RUNS = 10;
 
 /**
  * How a frame refreshes: `live` runs its script again when its tab opens (app data only), `asof`
@@ -141,6 +157,8 @@ export interface FrameMeta {
   origin?: FrameOrigin;
   /** How many cells the person edited by hand (the edits themselves ride with the rows). */
   edited?: number;
+  /** Its recipe's last runs, newest first (at most `FRAME_RUNS`). */
+  runs?: FrameRun[];
 }
 
 /** A frame's rows, one array per row in the order of `columns`, and the person's hand edits. */
