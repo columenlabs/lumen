@@ -16,6 +16,8 @@ for pkg in ui-types ui ship auth ops ai people tasks person vault; do
   rm -rf "$dir/dist" "$OUT/$pkg"
   (cd "$dir" && bunx tsc -p tsconfig.build.json)
   [ -f "$dir/src/theme.css" ] && cp "$dir/src/theme.css" "$dir/dist/theme.css"
+  # theme.css draws its faces from ./fonts (Latin and Latin Extended only).
+  if [ -d "$dir/src/fonts" ]; then cp -R "$dir/src/fonts" "$dir/dist/fonts"; fi
   # Values reach `bun -e` through the environment: older Bun mangles its argv.
   DIST="$dir/dist" bun -e '
     import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
