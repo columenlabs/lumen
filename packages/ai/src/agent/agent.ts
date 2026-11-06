@@ -56,7 +56,7 @@ import {
   screenRules,
   screenTool,
 } from './screen';
-import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools } from './search';
+import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools, usedTools } from './search';
 import { type AskMeta, chunkEvents, itemsOf } from './stream';
 import {
   type AiToolsOptions,
@@ -742,7 +742,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         ...Object.keys(screen),
       ];
       if (plan.first && !core.includes(plan.first)) core.push(plan.first);
-      lazy = lazyTools(tools, core, (n) => groups.get(n) ?? 'other');
+      lazy = lazyTools(tools, core, (n) => groups.get(n) ?? 'other', usedTools(ctx.messages));
       tools[TOOL_SEARCH] = lazy.search;
       system = `${system}\n\n${lazy.catalog}`;
       this.#turn.system = system;
