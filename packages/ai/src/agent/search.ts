@@ -44,15 +44,43 @@ export function toolScore(query: string, name: string, description = ''): number
 }
 
 /**
+ * The tools a chat already used or found in earlier turns: each turn starts with only its core
+ * tools on, so a reply such as "yes" to a card offered last turn would call a tool that is off
+ * (AI_NoSuchToolError). Read from the history's tool calls and `tool_search` results.
+ */
+export function usedTools(messages: readonly unknown[]): string[] {
+  const out = new Set<string>();
+  for (const m of messages) {
+    const content = (m as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    for (const part of content as { type?: string; toolName?: string; output?: unknown }[]) {
+      if (part.type === 'tool-call' && part.toolName) out.add(part.toolName);
+      if (part.type === 'tool-result' && part.toolName === TOOL_SEARCH) {
+        const o = part.output as { value?: unknown } | undefined;
+        const v = (o && typeof o === 'object' && 'value' in o ? o.value : o) as
+          | { found?: { name?: unknown }[] }
+          | undefined;
+        for (const f of v?.found ?? []) if (typeof f?.name === 'string') out.add(f.name);
+      }
+    }
+  }
+  return [...out];
+}
+
+/**
  * A search over `tools` whose finds stay on for the rest of the turn. `core` names are always on;
- * `groupOf` names each tool's group for the catalog.
+ * `groupOf` names each tool's group for the catalog; `start` names tools already on (those the
+ * chat used or found in earlier turns, `usedTools`), at most `FOUND_MAX` of the latest.
  */
 export function lazyTools(
   tools: ToolSet,
   core: string[],
   groupOf: (name: string) => string,
+  start: readonly string[] = [],
 ): LazyTools {
-  const found = new Set<string>();
+  const found = new Set<string>(
+    start.filter((n) => n in tools && !core.includes(n) && n !== TOOL_SEARCH).slice(-FOUND_MAX),
+  );
   const about = (n: string) => {
     const d = tools[n]?.description;
     return typeof d === 'string' ? d : '';
