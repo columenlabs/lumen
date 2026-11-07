@@ -124,6 +124,8 @@ const DOLLARS: AllowanceUnit = { one: 'dollar', many: 'dollars', usd: 1 };
 const round2 = (n: number) => Math.round(n * 100) / 100;
 /** A request may ask for at most this many times the starter or monthly cap. */
 const REQUEST_MAX_TIMES = 100;
+/** The largest answer `complete` asks for, tokens (thinking included). Streamed, so minutes are fine. */
+export const COMPLETE_MAX_TOKENS = 32_000;
 
 /** A change a write tool made at once, as `undo` gets it. */
 export interface AssistantWrite {
@@ -1218,7 +1220,7 @@ export class Assistant {
     max: number,
     signal?: AbortSignal,
     images?: CompleteImage[],
-  ): Promise<string> {
+  ): Promise<{ text: string; cut: boolean }> {
     // xAI's API is OpenAI's Responses API at another address.
     const xai = s.model.provider === 'xai';
     const client = (xai ? clients.xai : clients.openai) as OpenAI;
@@ -1290,7 +1292,10 @@ export class Assistant {
         plan,
       );
     }
-    return text || done?.output_text || '';
+    return {
+      text: text || done?.output_text || '',
+      cut: done?.status === 'incomplete' && done.incomplete_details?.reason === 'max_output_tokens',
+    };
   }
 
   // ---------------------------------------------------------------- one-shot work
@@ -1309,10 +1314,11 @@ export class Assistant {
       prompt: string;
       /** Photos read with the prompt (a scanned page, a screenshot). */
       images?: CompleteImage[];
+      /** The answer's token cap, thinking included (default 1,000, at most COMPLETE_MAX_TOKENS). */
       maxTokens?: number;
       signal?: AbortSignal;
     },
-  ): Promise<{ text: string; usd: number; model: string }> {
+  ): Promise<{ text: string; usd: number; model: string; cut: boolean }> {
     const s = await this.session(caller, await this.mainTier(caller, o.task));
     const { paying, wait } = await this.state.paying(caller.id, s.model.provider);
     if (!paying) {
@@ -1320,43 +1326,58 @@ export class Assistant {
       throw new AssistantError(waitText(code, s.model.provider, !!this.o.allowance), code, 402);
     }
     const clients = this.clients(paying);
-    const max = Math.min(o.maxTokens ?? 1000, 8000);
+    const max = Math.min(o.maxTokens ?? 1000, COMPLETE_MAX_TOKENS);
     let text = '';
+    // The answer stopped at `max` before it ended (its thinking counts toward the cap too).
+    let cut = false;
     try {
       if (
         (s.model.provider === 'openai' && clients.openai) ||
         (s.model.provider === 'xai' && clients.xai)
       ) {
-        text = await this.openaiOnce(clients, s, o.system, o.prompt, max, o.signal, o.images);
+        ({ text, cut } = await this.openaiOnce(
+          clients,
+          s,
+          o.system,
+          o.prompt,
+          max,
+          o.signal,
+          o.images,
+        ));
       } else if (clients.anthropic) {
-        const msg = await clients.anthropic.messages.create(
-          {
-            model: s.model.id,
-            max_tokens: max,
-            system: o.system,
-            messages: [
-              {
-                role: 'user',
-                content: o.images?.length
-                  ? [
-                      ...o.images.map((i) => ({
-                        type: 'image' as const,
-                        source: {
-                          type: 'base64' as const,
-                          media_type: i.mediaType as Anthropic.Base64ImageSource['media_type'],
-                          data: i.data,
-                        },
-                      })),
-                      { type: 'text' as const, text: o.prompt },
-                    ]
-                  : o.prompt,
-              },
-            ],
-            ...effortParams(s.effort),
-          },
-          o.signal ? { signal: o.signal } : undefined,
-        );
+        // Streamed and read whole: a long answer (minutes at a high cap) keeps its connection alive,
+        // and the SDK refuses a long answer as one unstreamed request.
+        const msg = await clients.anthropic.messages
+          .stream(
+            {
+              model: s.model.id,
+              max_tokens: max,
+              system: o.system,
+              messages: [
+                {
+                  role: 'user',
+                  content: o.images?.length
+                    ? [
+                        ...o.images.map((i) => ({
+                          type: 'image' as const,
+                          source: {
+                            type: 'base64' as const,
+                            media_type: i.mediaType as Anthropic.Base64ImageSource['media_type'],
+                            data: i.data,
+                          },
+                        })),
+                        { type: 'text' as const, text: o.prompt },
+                      ]
+                    : o.prompt,
+                },
+              ],
+              ...effortParams(s.effort),
+            },
+            o.signal ? { signal: o.signal } : undefined,
+          )
+          .finalMessage();
         s.meter.add(msg.usage);
+        cut = msg.stop_reason === 'max_tokens';
         text = msg.content
           .filter((b): b is Anthropic.TextBlock => b.type === 'text')
           .map((b) => b.text)
@@ -1373,7 +1394,7 @@ export class Assistant {
     } finally {
       await this.state.addSpend(caller.id, paying.payer, [s.meter.part()]);
     }
-    return { text, usd: s.meter.usd, model: s.model.id };
+    return { text, usd: s.meter.usd, model: s.model.id, cut };
   }
 
   // ---------------------------------------------------------------- keys
