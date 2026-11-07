@@ -28,7 +28,7 @@ export const HAND_OFF_WHYS = ['asked', 'judgement', 'stuck', 'check_failed'] as 
 export type HandOffWhy = (typeof HAND_OFF_WHYS)[number];
 
 /** Whose models a tier runs, each with its own keys. */
-export const ASSISTANT_PROVIDERS = ['anthropic', 'openai'] as const;
+export const ASSISTANT_PROVIDERS = ['anthropic', 'openai', 'xai'] as const;
 export type AssistantProvider = (typeof ASSISTANT_PROVIDERS)[number];
 
 /** Who pays for a person's answers: the app's key (under the cap an admin sets) or their own key. */

@@ -69,6 +69,28 @@ export const OPENAI_MODELS: ModelDef[] = [
   read: r as number,
 }));
 
+/**
+ * xAI's Grok models, smallest first (list prices from docs.x.ai/developers/pricing, October 2026,
+ * under 200k tokens of context). xAI's API is OpenAI-compatible (`XAI_BASE_URL`), so they run on the
+ * same Responses client as OpenAI's. Not in `ALL_MODELS`: an app opts in by listing them.
+ */
+export const XAI_MODELS: ModelDef[] = [
+  ['grok-4.3', 'Grok 4.3', 1.25, 2.5, 0.2],
+  ['grok-4.6', 'Grok 4.6', 2, 6, 0.5],
+  ['grok-4.7', 'Grok 4.7', 2, 6, 0.5],
+].map(([id, label, i, o, r]) => ({
+  id: id as string,
+  label: label as string,
+  provider: 'xai' as const,
+  group: 'xAI',
+  in: i as number,
+  out: o as number,
+  read: r as number,
+}));
+
+/** xAI's OpenAI-compatible API. */
+export const XAI_BASE_URL = 'https://api.x.ai/v1';
+
 /** Every model the kit knows: what a tier may run unless the app lists its own. */
 export const ALL_MODELS: ModelDef[] = [...CLAUDE_MODELS, ...OPENAI_MODELS];
 
@@ -87,6 +109,11 @@ export const PROVIDERS: Record<
     prefix: 'sk-',
     keysUrl: 'https://platform.openai.com/api-keys',
     signin: 'chatgpt',
+  },
+  xai: {
+    label: 'xAI',
+    prefix: 'xai-',
+    keysUrl: 'https://console.x.ai/team/default/api-keys',
   },
 };
 
