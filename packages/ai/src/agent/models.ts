@@ -7,7 +7,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { AssistantEffort } from '@columenlabs/lumen-ui-types/assistant';
 import type { JSONValue, LanguageModel, ModelMessage, SystemModelMessage } from 'ai';
-import type { ModelDef } from '../assistant/models';
+import { type ModelDef, XAI_BASE_URL } from '../assistant/models';
 
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
 export interface ModelKey {
@@ -106,6 +106,12 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
     return createAnthropic({ apiKey: key.apiKey, ...(o.fetch ? { fetch: o.fetch } : {}) })(
       model.id,
     );
+  if (model.provider === 'xai')
+    return createOpenAI({
+      apiKey: key.apiKey,
+      baseURL: XAI_BASE_URL,
+      ...(o.fetch ? { fetch: o.fetch } : {}),
+    }).responses(model.id);
   const f = key.plan ? planFetch(o.fetch, o.name) : o.fetch;
   return createOpenAI({ apiKey: key.apiKey, ...(f ? { fetch: f } : {}) }).responses(model.id);
 }

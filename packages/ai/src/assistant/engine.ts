@@ -48,6 +48,7 @@ import {
   PROVIDERS,
   type TaskDef,
   type TierDef,
+  XAI_BASE_URL,
   effortParams,
 } from './models';
 import {
@@ -285,6 +286,8 @@ interface Clients {
   openai?: OpenAI;
   /** The OpenAI key is a ChatGPT plan sign-in: the plan's request rules apply, and it costs nothing. */
   openaiPlan?: boolean;
+  /** xAI's OpenAI-compatible API on the payer's xAI key. */
+  xai?: OpenAI;
 }
 
 interface Session {
@@ -442,6 +445,10 @@ export class Assistant {
     // A plan sign-in's calls are not retried: a usage limit is final for now.
     return new OpenAI({ apiKey, maxRetries: plan ? 0 : 1, ...(f ? { fetch: f } : {}) });
   }
+  private xai(apiKey: string) {
+    const f = this.o.fetch;
+    return new OpenAI({ apiKey, baseURL: XAI_BASE_URL, maxRetries: 1, ...(f ? { fetch: f } : {}) });
+  }
   private clients(paying: Pick<Paying, 'keys' | 'plans'>): Clients {
     const { keys, plans } = paying;
     return {
@@ -449,6 +456,7 @@ export class Assistant {
       ...(keys.openai
         ? { openai: this.openai(keys.openai, !!plans.openai), openaiPlan: !!plans.openai }
         : {}),
+      ...(keys.xai ? { xai: this.xai(keys.xai) } : {}),
     };
   }
   /** The providers the app's models run on, in the order the models list them. */
@@ -1198,7 +1206,7 @@ export class Assistant {
 
   /** Swaps the history for a short summary. False with nothing to compact. */
   /**
-   * One plain answer from OpenAI, metered on `s`: no tools, no chat. Streamed and read from the raw
+   * One plain answer from OpenAI (or xAI, on the same API), metered on `s`: no tools, no chat. Streamed and read from the raw
    * events like the chat loop, because a ChatGPT plan sign-in answers only streamed calls, takes no
    * output cap and may send its words only as deltas.
    */
@@ -1211,8 +1219,10 @@ export class Assistant {
     signal?: AbortSignal,
     images?: CompleteImage[],
   ): Promise<string> {
-    const client = clients.openai as OpenAI;
-    const plan = !!clients.openaiPlan;
+    // xAI's API is OpenAI's Responses API at another address.
+    const xai = s.model.provider === 'xai';
+    const client = (xai ? clients.xai : clients.openai) as OpenAI;
+    const plan = !xai && !!clients.openaiPlan;
     let text = '';
     let done: OpenAI.Responses.Response | undefined;
     try {
@@ -1313,7 +1323,10 @@ export class Assistant {
     const max = Math.min(o.maxTokens ?? 1000, 8000);
     let text = '';
     try {
-      if (s.model.provider === 'openai' && clients.openai) {
+      if (
+        (s.model.provider === 'openai' && clients.openai) ||
+        (s.model.provider === 'xai' && clients.xai)
+      ) {
         text = await this.openaiOnce(clients, s, o.system, o.prompt, max, o.signal, o.images);
       } else if (clients.anthropic) {
         const msg = await clients.anthropic.messages.create(
@@ -1451,6 +1464,7 @@ export class Assistant {
     if (!model) return { ok: false, detail: `This app runs no ${label} models.`, at };
     try {
       if (provider === 'openai') await this.openai(apiKey).models.retrieve(model.id);
+      else if (provider === 'xai') await this.xai(apiKey).models.retrieve(model.id);
       else await this.anthropic(apiKey).models.retrieve(model.id);
       return { ok: true, detail: `${label} took the key.`, at };
     } catch (err) {
