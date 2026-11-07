@@ -24,6 +24,7 @@ import type {
   ChatUsage,
   HandOffPolicy,
   HandOffWhy,
+  UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
 import { type ToolSet, generateText, jsonSchema, stepCountIs, tool } from 'ai';
@@ -373,6 +374,11 @@ export interface AgentTurnInput {
   time_zone?: string;
   /** When the chat's last message was, for "since you last asked". */
   last_at?: number;
+  /**
+   * The chat this turn is in (the agent's name), so its use shows as one line of the person's
+   * usage history (`GET /usage`). Left out, the turn counts toward spend only.
+   */
+  chat?: string;
 }
 
 /**
@@ -640,6 +646,14 @@ export class Assistant {
     };
     const settle = async (end: AgentTurnEnd) => {
       await this.state.addSpend(caller.id, paying.payer, end.parts).catch(() => undefined);
+      if (input.chat)
+        await this.state
+          .addUsage(
+            caller.id,
+            { id: `chat:${input.chat}`, kind: 'chat', title: message.split('\n')[0] || 'Chat' },
+            end.parts,
+          )
+          .catch(() => undefined);
       const total = end.parts.reduce(
         (a, m) => ({
           calls: a.calls + m.calls,
@@ -1317,8 +1331,14 @@ export class Assistant {
       /** The answer's token cap, thinking included (default 1,000, at most COMPLETE_MAX_TOKENS). */
       maxTokens?: number;
       signal?: AbortSignal;
+      /**
+       * The run this call belongs to, as one line of the person's usage history (`GET /usage`):
+       * calls with the same `id` add up (every round of one rebuild). Left out, the task's calls
+       * that day share one line named after the task.
+       */
+      run?: { id: string; title: string };
     },
-  ): Promise<{ text: string; usd: number; model: string; cut: boolean }> {
+  ): Promise<{ text: string; usd: number; model: string; cut: boolean; usage: UsagePart }> {
     const s = await this.session(caller, await this.mainTier(caller, o.task));
     const { paying, wait } = await this.state.paying(caller.id, s.model.provider);
     if (!paying) {
@@ -1392,9 +1412,23 @@ export class Assistant {
         502,
       );
     } finally {
-      await this.state.addSpend(caller.id, paying.payer, [s.meter.part()]);
+      const part = s.meter.part();
+      await this.state.addSpend(caller.id, paying.payer, [part]);
+      const task = this.tasks.find((t) => t.id === o.task);
+      await this.state
+        .addUsage(
+          caller.id,
+          {
+            id: `task:${o.task}:${o.run?.id ?? new Date().toISOString().slice(0, 10)}`,
+            kind: 'task',
+            task: o.task,
+            title: o.run?.title ?? task?.label ?? o.task,
+          },
+          [part],
+        )
+        .catch(() => undefined);
     }
-    return { text, usd: s.meter.usd, model: s.model.id, cut };
+    return { text, usd: s.meter.usd, model: s.model.id, cut, usage: s.meter.part() };
   }
 
   // ---------------------------------------------------------------- keys

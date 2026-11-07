@@ -50,6 +50,8 @@ export interface UsagePart {
   usd: number;
   /** A hand-off part: how many times a higher tier was handed a task. */
   runs?: number;
+  /** The model's id (`claude-sonnet-5-5`), so use can be counted per model and provider. */
+  model?: string;
 }
 
 /** A chat's running use: the sum, each part, and the main model's last context size. */
@@ -297,6 +299,38 @@ export interface SpendState {
   cap: number | null;
   payer: AssistantPayer | null;
   rows: (UsagePart & { payer: AssistantPayer })[];
+}
+
+/**
+ * One line of a person's usage history: a chat, or a run of background work an app asked for
+ * (`complete` with a `run`, such as every round of one rebuild). Its parts are per tier and model.
+ */
+export interface UsageEntry {
+  /** `chat:<id>`, or `task:<task>:<run>`. */
+  id: string;
+  kind: 'chat' | 'task';
+  /** The task's id (`rebuild`) when `kind` is `task`. */
+  task?: string;
+  title: string;
+  /** First and last use, ms. */
+  first: number;
+  at: number;
+  calls: number;
+  in: number;
+  read: number;
+  out: number;
+  usd: number;
+  parts: UsagePart[];
+}
+
+/** One month of a person's use: the total, per tier and model, and each chat and run, newest first. */
+export interface UsageHistory {
+  month: string;
+  /** Months with any history, newest first (this month always). */
+  months: string[];
+  usd: number;
+  rows: (UsagePart & { payer: AssistantPayer })[];
+  entries: UsageEntry[];
 }
 
 /** What an app's allowance on its shared keys is counted in: credits, or dollars. */

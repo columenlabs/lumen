@@ -32,6 +32,7 @@ import {
   MonitorIcon,
   PencilIcon,
   PlusIcon,
+  ReceiptIcon,
   SparklesIcon,
   SquareIcon,
   TriangleAlertIcon,
@@ -96,6 +97,7 @@ import {
   usePageSelection,
   useShownAssistantSources,
 } from './sources';
+import { UsageHistoryView, tokens, usd } from './usage-history';
 import { type AssistantChatState, type LiveItem, useAssistantChat } from './use-assistant-chat';
 
 // The Markdown renderer (tables included) loads with the first answer (lazy-part.tsx).
@@ -121,14 +123,7 @@ export function useAssistantStatus(client: AssistantAdapter) {
   return useQuery({ queryKey: assistantStatusKey(client), queryFn: () => client.status() });
 }
 
-export const usd = (n: number) =>
-  n === 0 ? '$0' : n < 0.01 ? '<$0.01' : `$${n.toFixed(n < 10 ? 2 : 0)}`;
-const tokens = (n: number) =>
-  n < 1000
-    ? String(n)
-    : n < 1_000_000
-      ? `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`
-      : `${(n / 1e6).toFixed(1)}M`;
+export { usd };
 const seconds = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 export interface LumenAssistantProps {
@@ -371,7 +366,7 @@ export function LumenAssistant({
         onSend={(text, more) => chat.send(text, { ...extra(), ...more })}
         onStop={chat.stop}
       />
-      <UsageLine usage={chat.usage} />
+      <UsageLine usage={chat.usage} client={client} spent={s?.spend.usd} />
     </div>
   );
 }
@@ -1504,13 +1499,78 @@ function UsageTable({ usage }: { usage: ChatUsage }) {
 }
 
 /**
- * The chat's cost, tokens in and out and cache hit (a pop-up splits them per part, a sheet on a
- * phone), and how full the context is.
+ * This month's total of every chat and run; it opens the month's history (each model, chat and
+ * run), a sheet on a phone.
  */
-function UsageLine({ usage }: { usage: ChatUsage | null }) {
+function MonthTotal({
+  client,
+  spent,
+  phone,
+  className,
+}: { client: AssistantAdapter; spent: number; phone: boolean; className?: string }) {
+  const trigger = (
+    <button
+      type="button"
+      className={cn(
+        'flex shrink-0 items-center gap-1 tabular-nums hover:text-foreground',
+        className,
+      )}
+      aria-label="Usage this month"
+      title="Usage this month: every chat and run"
+    >
+      <ReceiptIcon className="size-3" aria-hidden />
+      <span>
+        This month <span className="num">{usd(spent)}</span>
+      </span>
+    </button>
+  );
+  return phone ? (
+    <Sheet>
+      <SheetTrigger asChild>{trigger}</SheetTrigger>
+      <SheetContent side="bottom">
+        <SheetHeader>
+          <SheetTitle>Usage</SheetTitle>
+        </SheetHeader>
+        <UsageHistoryView client={client} className="px-4 pb-6" />
+      </SheetContent>
+    </Sheet>
+  ) : (
+    <Popover>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent align="end" className="w-md max-w-[92vw] p-3">
+        <UsageHistoryView client={client} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * The chat's cost, tokens in and out and cache hit (a pop-up splits them per part, a sheet on a
+ * phone), how full the context is, and this month's total (`MonthTotal`).
+ */
+function UsageLine({
+  usage,
+  client,
+  spent,
+}: { usage: ChatUsage | null; client: AssistantAdapter; spent: number | undefined }) {
   const phone = useIsMobile();
-  if (!usage || !usage.calls) return null;
-  const ctx = usage.context ?? 0;
+  const month = !!client.usage && spent !== undefined && spent > 0;
+  if ((!usage || !usage.calls) && !month) return null;
+  const ctx = usage?.context ?? 0;
+  const total = month ? (
+    <MonthTotal
+      client={client}
+      spent={spent ?? 0}
+      phone={phone}
+      className={ctx > 0 ? '' : 'ml-auto'}
+    />
+  ) : null;
+  if (!usage || !usage.calls)
+    return (
+      <div className="flex shrink-0 items-center gap-3 px-3 pb-2 text-muted-foreground text-xs">
+        {total}
+      </div>
+    );
   const trigger = (
     <button
       type="button"
@@ -1569,6 +1629,7 @@ function UsageLine({ usage }: { usage: ChatUsage | null }) {
           <span className="tabular-nums">{tokens(ctx)}</span>
         </span>
       )}
+      {total}
     </div>
   );
 }

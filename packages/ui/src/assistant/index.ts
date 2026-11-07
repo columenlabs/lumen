@@ -14,6 +14,13 @@ export {
 } from './lumen-assistant';
 export { assistantAdminSections, assistantSettingsSections } from './settings';
 export {
+  UsageHistoryView,
+  assistantUsageKey,
+  tokens as formatTokens,
+  usd as formatUsd,
+  useAssistantUsage,
+} from './usage-history';
+export {
   type AssistantSource,
   type AssistantSourceItem,
   type ComposeRequest,

@@ -30,6 +30,8 @@ import type {
   AssistantWait,
   HandOffPolicy,
   KeyState,
+  UsageEntry,
+  UsageHistory,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { type ChatgptTokens, refreshChatgpt, staleChatgpt } from './chatgpt';
@@ -115,6 +117,35 @@ const REQUESTS_KEPT = 300;
 export type SpendRow = UsagePart & { payer: AssistantPayer };
 export interface SpendDoc {
   rows: SpendRow[];
+}
+
+/** Chats and runs kept in one month's usage history: the newest this many. */
+export const USAGE_KEPT = 300;
+/** Months of usage history offered (`usage:YYYY-MM` documents are listed this far back). */
+const USAGE_MONTHS = 24;
+
+export interface UsageDoc {
+  entries: UsageEntry[];
+}
+
+/** Adds `more` to `parts`, merged by label (the model kept from the first). */
+export function mergeParts(parts: UsagePart[], more: UsagePart[]) {
+  const out = parts.map((p) => ({ ...p }));
+  for (const p of more) {
+    if (!p.calls) continue;
+    const prev = out.find((r) => r.label === p.label);
+    if (!prev) out.push({ ...p });
+    else {
+      prev.calls += p.calls;
+      prev.in += p.in;
+      prev.read += p.read;
+      prev.out += p.out;
+      prev.usd += p.usd;
+      if (p.runs) prev.runs = (prev.runs ?? 0) + p.runs;
+      if (!prev.model && p.model) prev.model = p.model;
+    }
+  }
+  return out;
 }
 
 /** USD a month when nobody set a cap. */
@@ -354,6 +385,61 @@ export class State {
       if (usd > 0)
         await this.setAllowance(id, (d) => ({ ...d, spent_usd: (d.spent_usd ?? 0) + usd }));
     }
+  }
+
+  /**
+   * Adds one answer's use to a chat or run in this month's history (`usage:YYYY-MM`): one entry a
+   * chat or run, its parts merged, the newest `USAGE_KEPT` kept. `title` names a new entry only.
+   */
+  async addUsage(
+    id: string,
+    e: { id: string; kind: UsageEntry['kind']; task?: string; title: string },
+    parts: UsagePart[],
+  ) {
+    if (!parts.some((p) => p.calls)) return;
+    const now = Date.now();
+    await this.docs.update<UsageDoc>(id, `usage:${this.month()}`, (d) => {
+      const entries = [...(d?.entries ?? [])];
+      const i = entries.findIndex((x) => x.id === e.id);
+      const prev = i >= 0 ? entries.splice(i, 1)[0] : undefined;
+      const merged = mergeParts(prev?.parts ?? [], parts);
+      const sum = (k: 'calls' | 'in' | 'read' | 'out' | 'usd') =>
+        merged.reduce((a, p) => a + p[k], 0);
+      entries.unshift({
+        id: e.id,
+        kind: e.kind,
+        ...(e.task ? { task: e.task } : {}),
+        title: prev?.title || e.title.slice(0, 120),
+        first: prev?.first ?? now,
+        at: now,
+        calls: sum('calls'),
+        in: sum('in'),
+        read: sum('read'),
+        out: sum('out'),
+        usd: sum('usd'),
+        parts: merged,
+      });
+      return { entries: entries.slice(0, USAGE_KEPT) };
+    });
+  }
+
+  /** One month's history (this month by default) beside its spend, and the months that have one. */
+  async usage(id: string, month = this.month()): Promise<UsageHistory> {
+    const [doc, spend, listed] = await Promise.all([
+      this.docs.read<UsageDoc>(id, `usage:${month}`),
+      this.spend(id, month),
+      this.docs.list(id, 'usage:', USAGE_MONTHS),
+    ]);
+    const months = [...new Set([this.month(), ...listed.map((r) => r.key.slice(6))])].sort((a, b) =>
+      b.localeCompare(a),
+    );
+    return {
+      month,
+      months,
+      usd: spend.rows.reduce((a, r) => a + r.usd, 0),
+      rows: spend.rows,
+      entries: doc?.entries ?? [],
+    };
   }
 
   /** The payer's key of each provider, those set, and which are plan sign-ins. */
