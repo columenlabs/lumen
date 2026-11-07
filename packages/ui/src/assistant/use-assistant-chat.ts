@@ -208,6 +208,9 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             ...(extra?.context ? { context: extra.context.label } : {}),
             ...(extra?.refs?.length ? { refs: extra.refs } : {}),
             ...(extra?.tier ? { tier: extra.tier } : {}),
+            ...(extra?.images?.length
+              ? { images: extra.images.map((i) => `data:${i.media_type};base64,${i.data}`) }
+              : {}),
           },
         ]);
       // Every screen outcome not yet sent goes with this message; kept again if it fails.
