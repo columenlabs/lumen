@@ -52,6 +52,7 @@ import { Switch } from '../ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import type { AssistantAdapter } from './client';
 import { allowanceAmount, assistantStatusKey, usd, useAssistantStatus } from './lumen-assistant';
+import { UsageHistoryView } from './usage-history';
 
 const EFFORTS: { value: AssistantEffort; label: string }[] = [
   { value: 'default', label: 'Model default' },
@@ -615,6 +616,18 @@ function Spend({ client }: { client: AssistantAdapter }) {
     <WithStatus client={client}>
       {(s) => {
         const sp = s.spend;
+        // With the history route: each month, model, chat and run (`UsageHistoryView`).
+        if (client.usage)
+          return (
+            <div className="flex flex-col gap-2">
+              {sp.cap != null && sp.payer && (
+                <p className="text-muted-foreground text-sm">
+                  {`${usd(sp.cap)} a month on ${sp.payer === 'app' ? 'the app key' : 'your key'}`}
+                </p>
+              )}
+              <UsageHistoryView client={client} />
+            </div>
+          );
         return (
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline gap-2">
@@ -983,7 +996,7 @@ export function assistantSettingsSections({
       title: 'Spend',
       icon: ReceiptIcon,
       sub: true,
-      description: 'What answers cost this month',
+      description: 'What each model, chat and run cost',
       content: <Spend client={client} />,
     },
     ...(allowance

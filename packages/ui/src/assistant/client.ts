@@ -13,6 +13,7 @@ import type {
   DraftItem,
   KeyState,
   StepItem,
+  UsageHistory,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { ApiError, apiJson } from '../api-fetch';
 
@@ -46,6 +47,8 @@ export interface AssistantAdapter {
   chats(): Promise<AssistantChatRow[]>;
   chat(id: string): Promise<AssistantChat>;
   removeChat(id: string): Promise<void>;
+  /** The person's use in a month (`YYYY-MM`, this month when left out): each model, chat and run. */
+  usage?(month?: string): Promise<UsageHistory>;
   /** One answer: `onEvent` hears each event as it streams; abort `signal` to stop it. */
   send(
     msg: AssistantMessage,
@@ -129,6 +132,7 @@ export function assistantClient(base: string): AssistantAdapter {
     removeChat: async (id) => {
       await send('DELETE', `/chats/${encodeURIComponent(id)}`);
     },
+    usage: (month) => get(`/usage${month ? `?month=${encodeURIComponent(month)}` : ''}`),
     settleDraft: (chatId, draftId, action) =>
       send('POST', `/chats/${encodeURIComponent(chatId)}/drafts/${encodeURIComponent(draftId)}`, {
         action,

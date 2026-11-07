@@ -20,6 +20,7 @@
  *   PUT    /web/scrapeql {client_id, client_secret}, DELETE /web/scrapeql, POST /web/test   admin
  *   POST   /chat                    one answer as server-sent events; closing the request stops it
  *   GET    /chats, GET|DELETE /chats/:id
+ *   GET    /usage?month=YYYY-MM    the person's use that month: total, per tier and model, each chat and run
  *   POST   /chats/:id/drafts/:draft {action: save | dismiss}
  *   POST   /chats/:id/writes/:step/undo
  *   POST   /allowance/request {amount, why}   asks for more allowance (one open at a time)
@@ -342,6 +343,13 @@ export function assistantRoutes(
 
         case 'GET /chats':
           return json(await a.listChats(caller));
+
+        // The person's own use: one month's total, per tier and model, and each chat and run.
+        case 'GET /usage': {
+          const month = url.searchParams.get('month') ?? undefined;
+          if (month !== undefined && !/^\d{4}-\d{2}$/.test(month)) return fail('month is YYYY-MM.');
+          return json(await a.state.usage(caller.id, month));
+        }
 
         case 'POST /allowance/request': {
           const b = await body(req);

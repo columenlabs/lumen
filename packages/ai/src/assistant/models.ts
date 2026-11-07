@@ -184,7 +184,7 @@ export class Meter {
   }
   part(): UsagePart {
     const { label, calls, read, out, usd } = this;
-    return { label, calls, in: this.in, read, out, usd };
+    return { label, calls, in: this.in, read, out, usd, model: this.model.id };
   }
 }
 
