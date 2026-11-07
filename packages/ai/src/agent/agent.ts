@@ -24,15 +24,19 @@ import {
   type TurnConfig,
   type TurnContext,
 } from '@cloudflare/think';
-import type {
-  AssistantChat,
-  AssistantEffort,
-  AssistantEvent,
-  AssistantRefNote,
-  AssistantScreenMap,
-  AssistantScreenOutcome,
-  ChatUsage,
-  UsagePart,
+import {
+  ASSISTANT_IMAGES_MAX,
+  ASSISTANT_IMAGE_CHARS,
+  ASSISTANT_IMAGE_TYPES,
+  type AssistantChat,
+  type AssistantEffort,
+  type AssistantEvent,
+  type AssistantImage,
+  type AssistantRefNote,
+  type AssistantScreenMap,
+  type AssistantScreenOutcome,
+  type ChatUsage,
+  type UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { createCompactFunction } from 'agents/sessions';
 import { type ModelMessage, type ToolSet, generateText } from 'ai';
@@ -215,6 +219,8 @@ export function withLead(messages: ModelMessage[], lead: string | undefined): Mo
 /** One message the person sent, with the page, refs and tier the composer added. */
 export interface AskInput {
   message: string;
+  /** Images to look at with the message; kept to the allowed types, count and size. */
+  images?: AssistantImage[];
   context?: { label: string; note?: unknown };
   refs?: AssistantRefNote[];
   tier?: string;
@@ -223,6 +229,24 @@ export interface AskInput {
   screen?: AssistantScreenMap;
   /** How earlier screen calls ended in the browser. */
   outcomes?: AssistantScreenOutcome[];
+}
+
+/**
+ * The images a message may carry, as file parts: allowed types only, at most `ASSISTANT_IMAGES_MAX`,
+ * and no more than `ASSISTANT_IMAGE_CHARS` of base64 together; the rest are left out.
+ */
+export function imageParts(images: unknown): { type: 'file'; mediaType: string; url: string }[] {
+  if (!Array.isArray(images)) return [];
+  const out: { type: 'file'; mediaType: string; url: string }[] = [];
+  let chars = 0;
+  for (const i of images.slice(0, ASSISTANT_IMAGES_MAX) as Partial<AssistantImage>[]) {
+    const type = ASSISTANT_IMAGE_TYPES.find((t) => t === i?.media_type);
+    if (!type || typeof i?.data !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(i.data)) continue;
+    if (chars + i.data.length > ASSISTANT_IMAGE_CHARS) break;
+    chars += i.data.length;
+    out.push({ type: 'file', mediaType: type, url: `data:${type};base64,${i.data}` });
+  }
+  return out;
 }
 
 /** Where an answer's events go: the app's route, over RPC. */
@@ -379,7 +403,9 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       kindOf: (n) => this.#turn?.tools.info.find((i) => i.name === n)?.kind,
     });
     const map = screenMapOf(input.screen);
-    this.#input = { ...input, ...(map ? { screen: map } : {}) };
+    // The images go in the message's parts; the turn's plan reads the rest.
+    const { images: _images, ...asked } = input;
+    this.#input = { ...asked, ...(map ? { screen: map } : {}) };
     if (!map) delete this.#input.screen;
     let failed = false;
     try {
@@ -387,7 +413,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         {
           id: `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
           role: 'user',
-          parts: [{ type: 'text', text: input.message }],
+          parts: [{ type: 'text', text: input.message }, ...imageParts(input.images)],
           metadata: meta,
         },
         {

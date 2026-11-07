@@ -3,20 +3,23 @@
 // (the person's messages, the answer as it streams, each tool call as a line, drafted changes as
 // cards to Save or Dismiss, work handed to a higher tier in its own section); and the composer,
 // with Stop, a queued message and the chat's cost and context under it.
-import type {
-  AllowanceState,
-  AllowanceUnit,
-  AssistantMessage,
-  AssistantRefNote,
-  AssistantScreenMove,
-  AssistantStatus,
-  ChatItem,
-  ChatUsage,
-  DraftItem,
-  HandOffItem,
-  ScreenItem,
-  StepItem,
-  UsagePart,
+import {
+  ASSISTANT_IMAGES_MAX,
+  ASSISTANT_IMAGE_CHARS,
+  type AllowanceState,
+  type AllowanceUnit,
+  type AssistantImage,
+  type AssistantMessage,
+  type AssistantRefNote,
+  type AssistantScreenMove,
+  type AssistantStatus,
+  type ChatItem,
+  type ChatUsage,
+  type DraftItem,
+  type HandOffItem,
+  type ScreenItem,
+  type StepItem,
+  type UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -145,6 +148,11 @@ export interface LumenAssistantProps {
   commands?: AssistantCommand[];
   /** What `#` lists everywhere; a page adds its own with `useAssistantSource`. */
   sources?: readonly AssistantSource[];
+  /**
+   * Images can go with a message: pasted (Cmd+V / Ctrl+V) or dropped on the box, shown as chips
+   * until it is sent. Turn it on when the app's chat route passes `images` on to the agent.
+   */
+  images?: boolean;
 }
 
 /** A slash command: typing `/` in the composer lists them. */
@@ -171,6 +179,7 @@ export function LumenAssistant({
   chat: outside,
   commands = [],
   sources = [],
+  images = false,
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
@@ -363,6 +372,7 @@ export function LumenAssistant({
         tiers={tiers}
         sources={allSources}
         page={context?.label}
+        images={images}
         onSend={(text, more) => chat.send(text, { ...extra(), ...more })}
         onStop={chat.stop}
       />
@@ -566,6 +576,18 @@ function Item({
               ))}
             </span>
           )}
+          {item.images?.length ? (
+            <span className="mb-1 flex flex-wrap gap-1.5">
+              {item.images.map((src, i) => (
+                <img
+                  key={`${i}:${src.length}`}
+                  src={src}
+                  alt={`Pasted ${i + 1}`}
+                  className="max-h-32 max-w-40 rounded-md border object-cover"
+                />
+              ))}
+            </span>
+          ) : null}
           {item.text}
           {item.context && (
             <span className="mt-1 block text-muted-foreground text-xs">on {item.context}</span>
@@ -1047,7 +1069,40 @@ function ComposerChip({
 export interface ComposerExtra {
   tier?: string;
   refs?: AssistantRefNote[];
+  images?: AssistantImage[];
 }
+
+/** The longest edge an image is sent at (what the models read best; larger only costs more). */
+const IMAGE_EDGE = 1568;
+
+/**
+ * A pasted or dropped image, ready to send: scaled to `IMAGE_EDGE` on a canvas and saved as JPEG
+ * (PNG when it has few pixels to lose), as base64. `null` when the browser cannot read it.
+ */
+async function readImage(file: File): Promise<AssistantImage | null> {
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, IMAGE_EDGE / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bmp.width * k));
+    canvas.height = Math.max(1, Math.round(bmp.height * k));
+    const g = canvas.getContext('2d');
+    if (!g) return null;
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    g.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
+    const png = canvas.toDataURL('image/png');
+    const url = png.length < 400_000 ? png : canvas.toDataURL('image/jpeg', 0.85);
+    const [head, data] = url.split(',');
+    const media_type = head?.includes('png') ? 'image/png' : 'image/jpeg';
+    return data ? { media_type, data } : null;
+  } catch {
+    return null;
+  }
+}
+
+const imageUrl = (i: AssistantImage) => `data:${i.media_type};base64,${i.data}`;
 
 /**
  * The message box: Enter sends, Shift+Enter breaks a line; Stop while an answer runs. Three
@@ -1063,10 +1118,13 @@ export function LumenComposer({
   tiers = [],
   sources = [],
   page,
+  images: canAttach = false,
   onSend,
   onStop,
 }: {
   name: string;
+  /** Images can be pasted or dropped on the box (`LumenAssistant` `images`). */
+  images?: boolean;
   /** The page's name for `#` This page; the document's title by default. */
   page?: string;
   busy: boolean;
@@ -1085,6 +1143,7 @@ export function LumenComposer({
   const [closed, setClosed] = useState<string | null>(null);
   const [tier, setTier] = useState<string | null>(null);
   const [refs, setRefs] = useState<AssistantRefNote[]>([]);
+  const [images, setImages] = useState<AssistantImage[]>([]);
   const list = useRef<LumenSelectorListHandle>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const selection = usePageSelection();
@@ -1118,12 +1177,43 @@ export function LumenComposer({
   const extra = (): ComposerExtra => ({
     ...(tier ? { tier } : {}),
     ...(refs.length ? { refs } : {}),
+    ...(images.length ? { images } : {}),
   });
   const clear = () => {
     setText('');
     setCaret(0);
     setTier(null);
     setRefs([]);
+    setImages([]);
+  };
+  /** Adds the image files among `files`; says so when one is left out. Returns whether any was an image. */
+  const attach = (files: FileList | File[]): boolean => {
+    const picked = [...files].filter((f) => f.type.startsWith('image/'));
+    if (!canAttach || !picked.length) return false;
+    void (async () => {
+      const read = (await Promise.all(picked.map(readImage))).filter(
+        (x): x is AssistantImage => !!x,
+      );
+      if (read.length < picked.length)
+        lumenToast.error("That image couldn't be read. Try a PNG or JPEG.");
+      setImages((p) => {
+        const next = [...p];
+        let chars = next.reduce((n, x) => n + x.data.length, 0);
+        for (const img of read) {
+          if (
+            next.length >= ASSISTANT_IMAGES_MAX ||
+            chars + img.data.length > ASSISTANT_IMAGE_CHARS
+          ) {
+            lumenToast.error(`Up to ${ASSISTANT_IMAGES_MAX} images go with one message.`);
+            break;
+          }
+          next.push(img);
+          chars += img.data.length;
+        }
+        return next;
+      });
+    })();
+    return true;
   };
   const run = async (c: AssistantCommand, args: string) => {
     const keep = extra();
@@ -1360,6 +1450,27 @@ export function LumenComposer({
           onClose={() => setClosed(`${text}|${caret}`)}
         />
       )}
+      {images.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Images going with your message">
+          {images.map((img, i) => (
+            <span key={`${i}:${img.data.length}`} className="relative">
+              <img
+                src={imageUrl(img)}
+                alt={`Pasted ${i + 1}`}
+                className="size-12 rounded-md border object-cover"
+              />
+              <button
+                type="button"
+                aria-label={`Remove image ${i + 1}`}
+                className="absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full border bg-background text-muted-foreground hover:text-foreground"
+                onClick={() => setImages((p) => p.filter((_, j) => j !== i))}
+              >
+                <XIcon className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       {(tierLabel || refs.length > 0) && (
         <div className="mb-2 flex flex-wrap gap-1">
           {tierLabel && <ComposerChip sign="@" label={tierLabel} onRemove={() => setTier(null)} />}
@@ -1386,6 +1497,18 @@ export function LumenComposer({
             setCaret(e.target.selectionStart);
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+          onPaste={(e) => {
+            // An image on the clipboard becomes a chip; text pastes as usual.
+            if (!e.clipboardData.getData('text/plain') && attach(e.clipboardData.files))
+              e.preventDefault();
+          }}
+          onDragOver={(e) => {
+            if (canAttach && [...e.dataTransfer.items].some((x) => x.type.startsWith('image/')))
+              e.preventDefault();
+          }}
+          onDrop={(e) => {
+            if (attach(e.dataTransfer.files)) e.preventDefault();
+          }}
           onKeyDown={(e) => {
             if (picking && list.current?.key(e)) return;
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {

@@ -237,6 +237,8 @@ Drafts and writes are cards in the chat's own storage (`lumen_cards` in the agen
 
 **Lazy tools.** Past `LAZY_AT` (30) tools, a turn sends the model its core tools and `tool_search`, with one catalog line per group in the instructions. By default the core tools are the apps' finds, the hand off and the advisor. `plan.lazy` sets `{ at, core }`. A search matches the words in a tool's name and description and turns on up to 8 tools from the next step on.
 
+**Images.** `AskInput.images` (base64 PNG, JPEG, WebP or GIF; at most `ASSISTANT_IMAGES_MAX` (4) and `ASSISTANT_IMAGE_CHARS` together) go into the user message as file parts (`imageParts`), so the model sees them and the chat shows them again. `LumenAssistant images` lets the person paste (Cmd+V) or drop images on the box; the composer scales each to 1568 px on its long edge. An app's `POST /chat` passes `images` on in its `AskInput`.
+
 **The panel.** `LumenAssistant` reads a Think chat with no change. `ask(input, sink)` runs one answer and sends the panel's own events (`AssistantEvent`: the chat, the text, each tool line, cards, hand-off sections, advice, the use) to `sink`. The app's `POST /chat` returns `askResponse((sink) => chat.ask(input, sink), { signal, stop: () => chat.stop() })`, the same server-sent events `assistantRoutes` sends. `view()` gives a stored chat as the panel's items, and `usage()` gives the chat's use so far. A card's id is its tool call's, so the panel's Save, Dismiss and Undo go to `saveCard`, `dismissCard` and `undoCard`. The app keeps the list of chats, and each chat is its own agent, such as a facet of the person's store. `chunkEvents` and `itemsOf` are the mapping, for an app that streams some other way.
 
 ```ts

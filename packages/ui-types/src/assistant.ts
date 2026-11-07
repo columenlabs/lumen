@@ -167,6 +167,8 @@ export type ChatItem =
       kind: 'user';
       text: string;
       at: number;
+      /** The images sent with it, as `data:` addresses to show. */
+      images?: string[];
       context?: string;
       refs?: AssistantRefNote[];
       tier?: string;
@@ -221,9 +223,29 @@ export type AssistantEvent =
   | { event: 'done'; data: { id: string; usage: ChatUsage } };
 
 /** What the composer sends. */
+/** The image types a message may carry. */
+export const ASSISTANT_IMAGE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+] as const;
+/** At most this many images go with one message. */
+export const ASSISTANT_IMAGES_MAX = 4;
+/** All of a message's images together, in base64 characters (rows stay under the store's 2 MB). */
+export const ASSISTANT_IMAGE_CHARS = 1_400_000;
+
+/** An image sent with a message (pasted or dropped in the composer), as base64 with no `data:` prefix. */
+export interface AssistantImage {
+  media_type: (typeof ASSISTANT_IMAGE_TYPES)[number];
+  data: string;
+}
+
 export interface AssistantMessage {
   chat_id?: string;
   message: string;
+  /** Images to look at with the message (an app's composer with `images` on). */
+  images?: AssistantImage[];
   /** The page the person is on: a label and a short note of what it shows. */
   context?: { label: string; note?: unknown };
   refs?: AssistantRefNote[];
