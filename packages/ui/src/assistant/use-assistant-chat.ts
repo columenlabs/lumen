@@ -1,5 +1,6 @@
 // One chat with the assistant in the browser: its items built from the answer's stream as it
-// comes, Stop, a message queued while an answer runs, opening an older chat and starting anew.
+// comes, Stop, messages steered into or queued after a running answer, opening an older chat and
+// starting anew.
 import type {
   AssistantEvent,
   AssistantMessage,
@@ -11,6 +12,7 @@ import type {
   StepItem,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ApiError } from '../api-fetch';
 import { errorText } from '../integrations';
 import type { AssistantAdapter } from './client';
 
@@ -46,6 +48,20 @@ function keepOutcomes(m: Map<string, AssistantScreenOutcome>) {
 /** An item as the panel draws it: a text still streaming, a step still running. */
 export type LiveItem = ChatItem & { live?: boolean };
 
+type Extra = Omit<AssistantMessage, 'message' | 'chat_id'>;
+
+/** A message sent while an answer runs: waiting for it to end, or steered into it. */
+export interface QueuedMessage {
+  id: string;
+  message: string;
+  extra?: Extra;
+  /** Sent into the running answer, not read by it yet. */
+  steering?: boolean;
+}
+
+let queuedSeq = 0;
+const queuedId = () => `q${++queuedSeq}`;
+
 export interface AssistantChatState {
   chatId: string | null;
   title: string;
@@ -53,11 +69,23 @@ export interface AssistantChatState {
   usage: ChatUsage | null;
   /** An answer is streaming. */
   busy: boolean;
-  /** A message waiting for the answer to end. */
+  /** The first message waiting for the answer to end (`queue` has them all). */
   queued: string | null;
+  /** Messages sent while the answer runs, in order: steering ones first wait to be read. */
+  queue: QueuedMessage[];
+  /** The adapter takes a message into a running answer (Steer). */
+  canSteer: boolean;
   /** The chat is loading. */
   loading: boolean;
-  send: (message: string, extra?: Omit<AssistantMessage, 'message' | 'chat_id'>) => void;
+  /**
+   * Sends now, or while an answer runs: `steer` (the default where the adapter can) into it at its
+   * next step, else queued for after it.
+   */
+  send: (message: string, extra?: Extra, how?: 'steer' | 'queue') => void;
+  /** A queued message steered into the running answer now. */
+  steerQueued: (id: string) => void;
+  /** Takes a queued message out; its words and extras come back (Edit puts them in the box). */
+  unqueue: (id: string) => QueuedMessage | undefined;
   stop: () => void;
   open: (id: string) => Promise<void>;
   reset: () => void;
@@ -183,18 +211,37 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   const [usage, setUsage] = useState<ChatUsage | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [queued, setQueued] = useState<{
-    message: string;
-    extra?: Omit<AssistantMessage, 'message' | 'chat_id'>;
-  } | null>(null);
+  const [queue, setQueue] = useState<QueuedMessage[]>([]);
+  // An adapter whose app has no steer route: Steer hides and messages queue.
+  const [steerOff, setSteerOff] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const outcomes = useRef<Map<string, AssistantScreenOutcome> | null>(null);
   outcomes.current ??= readOutcomes();
   const idRef = useRef<string | null>(null);
   idRef.current = chatId;
 
+  const queueRef = useRef<QueuedMessage[]>([]);
+  queueRef.current = queue;
+
+  /** Steering messages not read (all, or those `texts`) go back to waiting, first in line. */
+  const unsteer = useCallback((texts?: string[]) => {
+    setQueue((q) => {
+      const left = [...(texts ?? [])];
+      const back = q.map((x) => {
+        if (!x.steering) return x;
+        if (texts) {
+          const at = left.indexOf(x.message);
+          if (at < 0) return x;
+          left.splice(at, 1);
+        }
+        return { ...x, steering: false };
+      });
+      return back.some((x, i) => x !== q[i]) ? back : q;
+    });
+  }, []);
+
   const run = useCallback(
-    async (message: string, extra?: Omit<AssistantMessage, 'message' | 'chat_id'>) => {
+    async (message: string, extra?: Extra) => {
       const ctl = new AbortController();
       abort.current = ctl;
       setBusy(true);
@@ -233,6 +280,17 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
               setTitle(e.data.title);
             } else if (e.event === 'usage') setUsage(e.data);
             else if (e.event === 'done') setUsage(e.data.usage);
+            else if (e.event === 'steered') {
+              // Read by the answer here: the line moves from the queue into the chat.
+              setQueue((q) => {
+                const at = q.findIndex((m) => m.steering && m.message === e.data.text);
+                return at < 0 ? q : [...q.slice(0, at), ...q.slice(at + 1)];
+              });
+              setItems((p) => [
+                ...settled(p),
+                { kind: 'user', text: e.data.text, at: e.data.at, steered: true },
+              ]);
+            } else if (e.event === 'unsteered') unsteer(e.data.texts);
             else setItems((p) => applyEvent(p, e));
           },
           ctl.signal,
@@ -244,35 +302,89 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         else setItems((p) => [...p, { kind: 'error', text: errorText(err) }]);
       } finally {
         setItems(settled);
+        // Steers the answer never read (Stop, an error) wait for the next answer instead.
+        unsteer();
         abort.current = null;
         setBusy(false);
       }
     },
+    [client, unsteer],
+  );
+
+  // A queued message goes once the answer ends, one an answer.
+  useEffect(() => {
+    if (busy) return;
+    const next = queue[0];
+    if (!next || next.steering) return;
+    setQueue((q) => q.slice(1));
+    void run(next.message, next.extra);
+  }, [busy, queue, run]);
+
+  const canSteer = !!client.steer && !steerOff;
+
+  // Into the running answer; refused (none runs, the model reads none) it waits in the queue.
+  const steerIn = useCallback(
+    async (m: QueuedMessage) => {
+      const id = idRef.current;
+      let steered = false;
+      if (id && client.steer && abort.current)
+        try {
+          steered = (await client.steer(id, m.message)).steered;
+        } catch (err) {
+          if (err instanceof ApiError && [404, 405, 410].includes(err.status)) setSteerOff(true);
+        }
+      if (!steered) setQueue((q) => q.map((x) => (x.id === m.id ? { ...x, steering: false } : x)));
+    },
     [client],
   );
 
-  // A queued message goes once the answer ends.
-  useEffect(() => {
-    if (busy || !queued) return;
-    setQueued(null);
-    void run(queued.message, queued.extra);
-  }, [busy, queued, run]);
-
   const send = useCallback(
-    (message: string, extra?: Omit<AssistantMessage, 'message' | 'chat_id'>) => {
+    (message: string, extra?: Extra, how?: 'steer' | 'queue') => {
       const text = message.trim();
       if (!text) return;
-      if (abort.current) setQueued({ message: text, ...(extra ? { extra } : {}) });
-      else void run(text, extra);
+      if (!abort.current) return void run(text, extra);
+      const steer = (how ?? 'steer') === 'steer' && canSteer && !!idRef.current;
+      const m: QueuedMessage = {
+        id: queuedId(),
+        message: text,
+        ...(extra ? { extra } : {}),
+        ...(steer ? { steering: true } : {}),
+      };
+      // Steering ones sit first: they are read before anything queued after the answer.
+      setQueue((q) =>
+        steer ? [...q.filter((x) => x.steering), m, ...q.filter((x) => !x.steering)] : [...q, m],
+      );
+      if (steer) void steerIn(m);
     },
-    [run],
+    [run, canSteer, steerIn],
   );
+
+  const steerQueued = useCallback(
+    (id: string) => {
+      const m = queueRef.current.find((x) => x.id === id && !x.steering);
+      if (!m || !abort.current) return;
+      const on = { ...m, steering: true };
+      setQueue((q) => [
+        ...q.filter((x) => x.steering),
+        on,
+        ...q.filter((x) => !x.steering && x.id !== id),
+      ]);
+      void steerIn(on);
+    },
+    [steerIn],
+  );
+
+  const unqueue = useCallback((id: string) => {
+    const m = queueRef.current.find((x) => x.id === id && !x.steering);
+    if (m) setQueue((q) => q.filter((x) => x.id !== id));
+    return m;
+  }, []);
 
   const stop = useCallback(() => abort.current?.abort(), []);
 
   const reset = useCallback(() => {
     abort.current?.abort();
-    setQueued(null);
+    setQueue([]);
     setChatId(null);
     idRef.current = null;
     setTitle('');
@@ -283,7 +395,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   const open = useCallback(
     async (id: string) => {
       abort.current?.abort();
-      setQueued(null);
+      setQueue([]);
       setLoading(true);
       try {
         const c = await client.chat(id);
@@ -362,9 +474,13 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     items,
     usage,
     busy,
-    queued: queued?.message ?? null,
+    queued: queue[0]?.message ?? null,
+    queue,
+    canSteer,
     loading,
     send,
+    steerQueued,
+    unqueue,
     stop,
     open,
     reset,

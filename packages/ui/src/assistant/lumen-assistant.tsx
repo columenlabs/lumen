@@ -32,6 +32,7 @@ import {
   CrosshairIcon,
   FileTextIcon,
   LightbulbIcon,
+  ListPlusIcon,
   MonitorIcon,
   PencilIcon,
   PlusIcon,
@@ -102,7 +103,12 @@ import {
   useShownAssistantSources,
 } from './sources';
 import { UsageHistoryView, tokens, usd } from './usage-history';
-import { type AssistantChatState, type LiveItem, useAssistantChat } from './use-assistant-chat';
+import {
+  type AssistantChatState,
+  type LiveItem,
+  type QueuedMessage,
+  useAssistantChat,
+} from './use-assistant-chat';
 
 // The Markdown renderer (tables included) loads with the first answer (lazy-part.tsx).
 // A tab whose build a deploy replaced shows the answer as plain text instead of reloading mid chat.
@@ -381,13 +387,17 @@ export function LumenAssistant({
         name={s?.name ?? 'the assistant'}
         busy={chat.busy}
         queued={chat.queued}
+        queue={chat.queue}
+        canSteer={chat.canSteer}
+        onSteerQueued={chat.steerQueued}
+        onUnqueue={chat.unqueue}
         disabled={!s || !!s.wait}
         commands={allCommands}
         tiers={tiers}
         sources={allSources}
         page={context?.label}
         images={images}
-        onSend={(text, more) => chat.send(text, { ...extra(), ...more })}
+        onSend={(text, more, how) => chat.send(text, { ...extra(), ...more }, how)}
         onStop={chat.stop}
       />
       <UsageLine usage={chat.usage} client={client} spent={s?.spend.usd} />
@@ -580,6 +590,18 @@ function Item({
   const tierName = useContext(TierNames);
   switch (item.kind) {
     case 'user':
+      if (item.steered)
+        return (
+          <div className="ml-8 flex flex-col items-end gap-0.5 self-end">
+            <span className="flex items-center gap-1 text-primary text-xs">
+              <CornerDownRightIcon className="size-3" />
+              Steered
+            </span>
+            <div className="rounded-lg border border-primary/40 bg-muted px-3 py-2 text-sm whitespace-pre-wrap break-words">
+              {item.text}
+            </div>
+          </div>
+        );
       return (
         <div className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap has-[[data-slot=chat-image]]:ml-0 has-[[data-slot=chat-image]]:w-full">
           {(item.tier || item.refs?.length) && (
@@ -1118,7 +1140,10 @@ async function readImage(file: File): Promise<AssistantImage | null> {
 const imageUrl = (i: AssistantImage) => `data:${i.media_type};base64,${i.data}`;
 
 /**
- * The message box: Enter sends, Shift+Enter breaks a line; Stop while an answer runs. Three
+ * The message box: Enter sends, Shift+Enter breaks a line; Stop while an answer runs. While it
+ * runs, words in the box go into it with Enter (Steer, where `canSteer`) or wait for it to end
+ * with Alt+Enter (Queue); the `queue` lists above the box, each with Steer now, Edit and Remove.
+ * Three
  * triggers list what can follow them as it is typed: `/` at the start a command, `@` a thing to
  * point at (the `sources`), `#` a tier for this message; a picked tier or thing shows as a chip.
  */
@@ -1126,6 +1151,10 @@ export function LumenComposer({
   name,
   busy,
   queued,
+  queue,
+  canSteer = false,
+  onSteerQueued,
+  onUnqueue,
   disabled,
   commands = [],
   tiers = [],
@@ -1141,14 +1170,21 @@ export function LumenComposer({
   /** The page's name for `@` This page; the document's title by default. */
   page?: string;
   busy: boolean;
+  /** The first queued message; `queue` lists them all, with their actions. */
   queued: string | null;
+  queue?: QueuedMessage[];
+  /** Enter steers a message into the running answer; Alt+Enter queues it. */
+  canSteer?: boolean;
+  onSteerQueued?: (id: string) => void;
+  /** Takes a queued message out; Edit puts its words back in the box. */
+  onUnqueue?: (id: string) => QueuedMessage | undefined;
   disabled?: boolean;
   commands?: AssistantCommand[];
   /** What `#` lists. */
   tiers?: { id: string; label: string; model_label?: string }[];
   /** What `@` lists, a group each. */
   sources?: readonly AssistantSource[];
-  onSend: (text: string, extra: ComposerExtra) => void;
+  onSend: (text: string, extra: ComposerExtra, how?: 'steer' | 'queue') => void;
   onStop: () => void;
 }) {
   const [text, setText] = useState('');
@@ -1238,16 +1274,28 @@ export function LumenComposer({
       lumenToast.error(errorText(e));
     }
   };
-  const send = () => {
+  const send = (how?: 'steer' | 'queue') => {
     if (!text.trim() || disabled) return;
     const c = m ? commands.find((x) => x.name === m[1]) : undefined;
     if (c) {
       void run(c, m?.[2] ?? '');
       return;
     }
-    onSend(text, extra());
+    onSend(text, extra(), busy ? (how ?? (canSteer ? 'steer' : 'queue')) : undefined);
     clear();
   };
+  // Edit: a queued message back in the box, its chips with it.
+  const edit = (id: string) => {
+    const q = onUnqueue?.(id);
+    if (!q) return;
+    setText(q.message);
+    setCaret(q.message.length);
+    if (q.extra?.tier) setTier(q.extra.tier);
+    if (q.extra?.refs?.length) setRefs(q.extra.refs);
+    if (q.extra?.images?.length) setImages(q.extra.images);
+    requestAnimationFrame(() => box.current?.focus());
+  };
+  const waiting = queue ?? (queued ? [{ id: 'queued', message: queued }] : []);
   const pickCommand = (o: LumenOption) => {
     const c = commands.find((x) => x.name === o.value);
     if (!c) return;
@@ -1388,10 +1436,14 @@ export function LumenComposer({
 
   return (
     <div className="shrink-0 border-t p-3">
-      {queued && (
-        <p className="mb-2 truncate text-muted-foreground text-xs">
-          Queued: <span className="text-foreground">{queued}</span>
-        </p>
+      {waiting.length > 0 && (
+        <ComposerQueue
+          queue={waiting}
+          canSteer={busy && canSteer && !!onSteerQueued}
+          onSteer={(id) => onSteerQueued?.(id)}
+          onEdit={onUnqueue ? edit : undefined}
+          onRemove={onUnqueue ? (id) => void onUnqueue(id) : undefined}
+        />
       )}
       {picking === 'command' && (
         <LumenSelectorList
@@ -1504,7 +1556,10 @@ export function LumenComposer({
           ref={box}
           aria-label={`Message ${name}`}
           placeholder={`Ask ${name}…${hints.length ? ` (${hints.join(' ')})` : ''}`}
-          className="max-h-48 min-h-11 resize-none pr-11"
+          className={cn(
+            'max-h-48 min-h-11 resize-none',
+            busy && text.trim() && canSteer ? 'pr-18' : 'pr-11',
+          )}
           value={text}
           disabled={disabled}
           onChange={(e) => {
@@ -1528,7 +1583,7 @@ export function LumenComposer({
             if (picking && list.current?.key(e)) return;
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
-              send();
+              send(e.altKey ? 'queue' : undefined);
             }
           }}
         />
@@ -1541,18 +1596,107 @@ export function LumenComposer({
               size="icon-xs"
               onClick={onStop}
             />
+          ) : busy ? (
+            <span className="flex gap-1">
+              <IconButton
+                icon={ListPlusIcon}
+                label={canSteer ? 'Queue for after (⌥↩)' : 'Queue for after (↩)'}
+                variant={canSteer ? 'outline' : 'default'}
+                size="icon-xs"
+                disabled={disabled}
+                onClick={() => send('queue')}
+              />
+              {canSteer && (
+                <IconButton
+                  icon={CornerDownRightIcon}
+                  label="Steer now (↩)"
+                  variant="default"
+                  size="icon-xs"
+                  disabled={disabled}
+                  onClick={() => send('steer')}
+                />
+              )}
+            </span>
           ) : (
             <IconButton
               icon={ArrowUpIcon}
-              label={busy ? 'Queue' : 'Send'}
+              label="Send"
               variant="default"
               size="icon-xs"
               disabled={!text.trim() || disabled}
-              onClick={send}
+              onClick={() => send()}
             />
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What waits above the box while an answer runs: steering messages until the answer reads them,
+ * then queued ones in order, each with Steer now, Edit (back in the box) and Remove.
+ */
+function ComposerQueue({
+  queue,
+  canSteer,
+  onSteer,
+  onEdit,
+  onRemove,
+}: {
+  queue: QueuedMessage[];
+  canSteer: boolean;
+  onSteer: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onRemove?: (id: string) => void;
+}) {
+  const waiting = queue.filter((q) => !q.steering).length;
+  return (
+    <div className="mb-2 flex flex-col gap-1">
+      {waiting > 0 && (
+        <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
+          <ListPlusIcon className="size-3.5" />
+          Queued · {waiting}
+        </p>
+      )}
+      {queue.map((q) => (
+        <div
+          key={q.id}
+          className="flex h-8 min-w-0 items-center gap-1 rounded-md border bg-background pr-1 pl-2 text-sm"
+        >
+          {q.steering && (
+            <CornerDownRightIcon
+              aria-label="Steering: Sage reads it at its next step"
+              className="size-3.5 shrink-0 animate-pulse text-primary"
+            />
+          )}
+          <span
+            className={cn('min-w-0 flex-1 truncate', q.steering && 'text-muted-foreground')}
+            title={q.message}
+          >
+            {q.message}
+          </span>
+          {!q.steering && canSteer && (
+            <IconButton
+              icon={CornerDownRightIcon}
+              label="Steer now"
+              size="icon-xs"
+              onClick={() => onSteer(q.id)}
+            />
+          )}
+          {!q.steering && onEdit && (
+            <IconButton
+              icon={PencilIcon}
+              label="Edit"
+              size="icon-xs"
+              onClick={() => onEdit(q.id)}
+            />
+          )}
+          {!q.steering && onRemove && (
+            <IconButton icon={XIcon} label="Remove" size="icon-xs" onClick={() => onRemove(q.id)} />
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -55,6 +55,11 @@ export interface AssistantAdapter {
     onEvent: (e: AssistantEvent) => void,
     signal?: AbortSignal,
   ): Promise<void>;
+  /**
+   * A message for the answer running in `chatId`: it joins at the answer's next step. `steered:
+   * false` (or no method) and the panel queues it for after the answer instead.
+   */
+  steer?(chatId: string, message: string): Promise<{ steered: boolean }>;
   settleDraft(chatId: string, draftId: string, action: 'save' | 'dismiss'): Promise<DraftItem>;
   /** Takes back a change the assistant made at once. */
   undoWrite(chatId: string, stepId: string): Promise<StepItem>;
@@ -149,6 +154,8 @@ export function assistantClient(base: string): AssistantAdapter {
         action,
         ...(amount !== undefined ? { amount } : {}),
       }),
+    steer: (chatId, message) =>
+      send('POST', `/chats/${encodeURIComponent(chatId)}/steer`, { message }),
     async send(msg, onEvent, signal) {
       const url = `${root}/chat`;
       const res = await fetch(url, {

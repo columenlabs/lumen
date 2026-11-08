@@ -172,6 +172,8 @@ export type ChatItem =
       context?: string;
       refs?: AssistantRefNote[];
       tier?: string;
+      /** Sent while an answer ran and read by it at its next step (Steer). */
+      steered?: boolean;
     }
   | { kind: 'text'; text: string }
   | StepItem
@@ -224,6 +226,10 @@ export type AssistantEvent =
   | { event: 'compacted'; data: Record<string, never> }
   | { event: 'usage'; data: ChatUsage }
   | { event: 'stopped'; data: { reason?: 'cap' } }
+  /** A message steered into the running answer was read by it here. */
+  | { event: 'steered'; data: { text: string; at: number } }
+  /** Steered messages the answer ended before reading: the panel queues them next. */
+  | { event: 'unsteered'; data: { texts: string[] } }
   | { event: 'error'; data: { message: string; code?: string } }
   | { event: 'done'; data: { id: string; usage: ChatUsage } };
 
