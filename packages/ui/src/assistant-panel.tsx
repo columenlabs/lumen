@@ -5,7 +5,7 @@
 // Open or closed and the width are each browser tab's own (sessionStorage). The
 // product fills the body (the product's assistant: its chat, composer, cards and spend).
 import { HistoryIcon, SparklesIcon } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useIsMobile } from './hooks/use-mobile';
 import { cn } from './lib/utils';
 import { LumenBoundary } from './lumen-boundary';
@@ -14,7 +14,9 @@ import { ASSISTANT_WIDTH, usePrefs } from './prefs';
 import { ResizeEdge, tabState } from './side-dock';
 import { Button } from './ui/button';
 import { Kbd } from './ui/kbd';
+import { Label } from './ui/label';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
+import { Switch } from './ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 export { tabState };
@@ -185,6 +187,8 @@ export interface AssistantChat {
   title: string;
   /** ISO time of its last message. */
   updated_at: string;
+  /** Where it was started, shown before its time (`LumenAssistant` `chatScope`, its switch on). */
+  where?: string;
 }
 
 /** The history groups, newest first. */
@@ -242,6 +246,7 @@ export function LumenAssistantChats<C extends AssistantChat>({
   chats,
   value,
   note,
+  toggle,
   disabled,
   onOpen,
   onRefresh,
@@ -252,6 +257,8 @@ export function LumenAssistantChats<C extends AssistantChat>({
   value?: string;
   /** A line above the list: how long chats are kept. */
   note?: ReactNode;
+  /** A switch at the top of the menu, such as All workspaces (`LumenAssistant` `chatScope`). */
+  toggle?: { label: string; on: boolean; onChange: (on: boolean) => void };
   disabled?: boolean;
   onOpen: (chat: C) => void;
   /** The menu opened: read the list again. */
@@ -259,6 +266,7 @@ export function LumenAssistantChats<C extends AssistantChat>({
   onHighlight?: (chat: C) => void;
 }) {
   const { timeZone } = usePrefs();
+  const toggleId = useId();
   const now = new Date();
   const byId = new Map((chats ?? []).map((c) => [c.id, c]));
   const groups = GROUPS.map((group) => ({
@@ -267,7 +275,13 @@ export function LumenAssistantChats<C extends AssistantChat>({
       const at = new Date(c.updated_at);
       const g = groupOf(at, now, timeZone);
       return g === group
-        ? [{ value: c.id, label: c.title, detail: whenOf(at, now, g, timeZone) }]
+        ? [
+            {
+              value: c.id,
+              label: c.title,
+              detail: [c.where, whenOf(at, now, g, timeZone)].filter(Boolean).join(' · '),
+            },
+          ]
         : [];
     }),
   })).filter((g) => g.options.length > 0);
@@ -280,7 +294,26 @@ export function LumenAssistantChats<C extends AssistantChat>({
       align="end"
       groups={groups}
       empty={chats === null ? 'Loading…' : 'No chats yet'}
-      header={note && <p className="px-2 pt-1 text-xs text-muted-foreground">{note}</p>}
+      header={
+        (toggle || note) && (
+          <>
+            {toggle && (
+              <div className="flex items-center gap-2 px-2 pt-1.5">
+                <Label htmlFor={toggleId} className="min-w-0 flex-1 truncate text-xs font-normal">
+                  {toggle.label}
+                </Label>
+                <Switch
+                  id={toggleId}
+                  checked={toggle.on}
+                  onCheckedChange={toggle.onChange}
+                  aria-label={toggle.label}
+                />
+              </div>
+            )}
+            {note && <p className="px-2 pt-1 text-xs text-muted-foreground">{note}</p>}
+          </>
+        )
+      }
       value={value}
       disabled={disabled}
       onOpenChange={(o) => o && onRefresh?.()}
