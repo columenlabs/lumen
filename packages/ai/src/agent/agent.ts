@@ -61,7 +61,7 @@ import {
   screenTool,
 } from './screen';
 import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools, usedTools } from './search';
-import { type AskMeta, chunkEvents, itemsOf } from './stream';
+import { type AskMeta, type SteerNote, chunkEvents, itemsOf } from './stream';
 import {
   type AiToolsOptions,
   type DraftCall,
@@ -117,6 +117,11 @@ export interface AgentTurnPlan {
   screen?: boolean;
   /** Most model calls in one answer; 8. */
   maxSteps?: number;
+  /**
+   * A message sent while the answer runs joins it at its next step (Steer); on unless `false`,
+   * for a model that should not read a new message between its calls. Refused steers are queued.
+   */
+  steer?: boolean;
   /** Fetch for provider calls (a metered one). */
   fetch?: typeof fetch;
   tools?: Omit<AiToolsOptions, 'maxChars'>;
@@ -138,6 +143,10 @@ export interface AgentTurnEnd {
 
 export const CAP_NOTE =
   'The spend cap for this month is reached: answer now from what you have, in a sentence or two. You can call no more tools.';
+
+/** Put before a message the person steered into a running answer, for the model only. */
+export const STEER_NOTE =
+  'The person sent this while you were working. Take it into account from here on; it does not cancel what you were asked before unless it says so.';
 
 /** A card in the chat: a draft the person saves or dismisses, or a write made at once (Undo). */
 export interface AgentCard {
@@ -329,6 +338,14 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
 
   #turn: Running | null = null;
   #input: AskInput | null = null;
+  /** The answer's events go here while it runs; a steer's line goes here too. */
+  #sink: AskSink | null = null;
+  /** The person's message this answer is to, by id: where its steers are kept. */
+  #asked: string | null = null;
+  /** Steered messages waiting for the next step. */
+  #steers: { text: string; at: number }[] = [];
+  /** Steered messages read this answer: where they sit in the step's messages, and their words. */
+  #steered: { index: number; text: string }[] = [];
   #metaTabled = false;
 
   /** What the person sent with the message this turn answers (page, refs, tier, zone). */
@@ -365,7 +382,12 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       id,
       title: this.#get<string>('title') ?? '',
       at: this.#get<number>('at') ?? 0,
-      items: itemsOf(await this.getMessages(), this.cards(), this.#screens()),
+      items: itemsOf(
+        await this.getMessages(),
+        this.cards(),
+        this.#screens(),
+        this.#get<Record<string, SteerNote[]>>('steers') ?? {},
+      ),
       usage: this.usage(),
     };
   }
@@ -373,6 +395,19 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   /** Stops the answer running now; what was said so far is kept. */
   stop(): void {
     this.cancelAllChats();
+  }
+
+  /**
+   * A message for the answer running now: it joins at the answer's next step (after the tool it
+   * is on), shown there as steered. `steered: false` when no answer runs or its plan turned steer
+   * off: the panel queues it. One the answer ends without reading comes back as `unsteered`.
+   */
+  steer(message: string): { steered: boolean } {
+    const text = message.trim();
+    const t = this.#turn;
+    if (!text || !t || !this.#sink || t.plan.steer === false) return { steered: false };
+    this.#steers.push({ text: text.slice(0, 20_000), at: Date.now() });
+    return { steered: true };
   }
 
   /**
@@ -403,6 +438,11 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       kindOf: (n) => this.#turn?.tools.info.find((i) => i.name === n)?.kind,
     });
     const map = screenMapOf(input.screen);
+    const userId = `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+    this.#sink = sink;
+    this.#asked = userId;
+    this.#steers = [];
+    this.#steered = [];
     // The images go in the message's parts; the turn's plan reads the rest.
     const { images: _images, ...asked } = input;
     this.#input = { ...asked, ...(map ? { screen: map } : {}) };
@@ -411,7 +451,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     try {
       await this.chat(
         {
-          id: `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
+          id: userId,
           role: 'user',
           parts: [{ type: 'text', text: input.message }, ...imageParts(input.images)],
           metadata: meta,
@@ -442,7 +482,13 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         });
     } finally {
       this.#input = null;
+      this.#sink = null;
+      this.#asked = null;
+      this.#steered = [];
     }
+    // Steers the answer ended before reading go back to the panel, first in its queue.
+    const unread = this.#steers.splice(0).map((s) => s.text);
+    if (unread.length) await sink.event({ event: 'unsteered', data: { texts: unread } });
     if (this.#capped) await sink.event({ event: 'stopped', data: { reason: 'cap' } });
     await sink.event({ event: 'done', data: { id: this.name, usage: this.usage() } });
   }
@@ -805,18 +851,56 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   override beforeStep(ctx: PrepareStepContext): StepConfig | undefined {
     const t = this.#turn;
     if (!t) return undefined;
+    const steered = this.#steerInto(ctx);
+    const messages = steered ? { messages: steered } : {};
     // The SDK's step result is a union that Omit narrows to shared keys; these exist on it.
     if (t.plan.left !== undefined && this.#spent() >= t.plan.left) {
       t.capped = true;
-      return { activeTools: [], instructions: `${t.system}\n\n${CAP_NOTE}` } as StepConfig;
+      const capped: Record<string, unknown> = {
+        ...messages,
+        activeTools: [],
+        instructions: `${t.system}\n\n${CAP_NOTE}`,
+      };
+      return capped as StepConfig;
     }
     // A forced first call is for the first step only; tools a search found join each step.
     const auto = t.plan.first && ctx.stepNumber > 0;
-    if (!auto && !t.lazy) return undefined;
+    if (!auto && !t.lazy && !steered) return undefined;
     return {
       ...(auto ? { toolChoice: 'auto' } : {}),
       ...(t.lazy ? { activeTools: t.lazy.active() } : {}),
+      ...messages,
     } as StepConfig;
+  }
+
+  /**
+   * The step's messages with every steer read so far in its place: waiting ones join at the end
+   * now (told to the panel and kept for the chat's history), earlier ones where they joined.
+   */
+  #steerInto(ctx: PrepareStepContext): PrepareStepContext['messages'] | null {
+    const sink = this.#sink;
+    const asked = this.#asked;
+    if (this.#steers.length && sink && asked) {
+      const now = this.#steers.splice(0);
+      const kept = this.#get<Record<string, SteerNote[]>>('steers') ?? {};
+      kept[asked] = [
+        ...(kept[asked] ?? []),
+        ...now.map((s) => ({ step: ctx.stepNumber, text: s.text, at: s.at })),
+      ];
+      this.#put('steers', kept);
+      for (const s of now) {
+        this.#steered.push({ index: ctx.messages.length, text: s.text });
+        void Promise.resolve(sink.event({ event: 'steered', data: s })).catch(() => undefined);
+      }
+    }
+    if (!this.#steered.length) return null;
+    const out = [...ctx.messages];
+    for (const s of [...this.#steered].reverse())
+      out.splice(s.index, 0, {
+        role: 'user',
+        content: [{ type: 'text', text: `${STEER_NOTE}\n\n${s.text}` }],
+      });
+    return out;
   }
 
   override onStepFinish(ctx: StepContext): void {

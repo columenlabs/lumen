@@ -187,6 +187,7 @@ export function chunkEvents(
 
 /** A stored UI message, as much of it as a chat's items need. */
 interface StoredMessage {
+  id?: string;
   role: string;
   parts: { type: string; [k: string]: unknown }[];
   metadata?: unknown;
@@ -201,15 +202,25 @@ export interface AskMeta {
 }
 
 /** A stored chat as the panel's items: the messages in order, each tool call as it ended. */
+/** A message steered into an answer: the step it was read at, under the message the answer is to. */
+export interface SteerNote {
+  step: number;
+  text: string;
+  at: number;
+}
+
 export function itemsOf(
   messages: StoredMessage[],
   cards: AgentCard[],
   screens: Map<string, ScreenCall> = new Map(),
+  steers: Record<string, SteerNote[]> = {},
 ): ChatItem[] {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const items: ChatItem[] = [];
+  let asked: string | undefined;
   for (const m of messages) {
     if (m.role === 'user') {
+      asked = m.id;
       const text = m.parts
         .filter((p) => p.type === 'text')
         .map((p) => String(p.text ?? ''))
@@ -232,7 +243,21 @@ export function itemsOf(
       continue;
     }
     if (m.role !== 'assistant') continue;
+    // Steered messages show where the answer read them: before the step they joined.
+    const steered = [...((asked && steers[asked]) || [])].sort((x, y) => x.step - y.step);
+    const steerTo = (step: number) => {
+      while (steered.length && (steered[0] as SteerNote).step <= step) {
+        const n = steered.shift() as SteerNote;
+        items.push({ kind: 'user', text: n.text, at: n.at, steered: true });
+      }
+    };
+    let step = -1;
     for (const p of m.parts) {
+      if (p.type === 'step-start') {
+        step += 1;
+        steerTo(step);
+        continue;
+      }
       if (p.type === 'text' && typeof p.text === 'string' && p.text) {
         const last = items[items.length - 1];
         if (last?.kind === 'text') last.text += p.text;
@@ -275,6 +300,7 @@ export function itemsOf(
         }
       }
     }
+    steerTo(Number.POSITIVE_INFINITY);
   }
   return items;
 }

@@ -355,6 +355,8 @@ function mockAdapter(
   let status: AssistantStatus = { ...STATUS, ...o.status };
   const requests = structuredClone(o.requests ?? []);
   const chat = structuredClone(o.chat ?? CHAT);
+  const steers: string[] = [];
+  let running = false;
   const done = (patch: Partial<AssistantStatus>) => {
     status = { ...status, ...patch };
     return Promise.resolve(status);
@@ -520,13 +522,28 @@ function mockAdapter(
       st.write = { undo: true, status: 'undone' };
       return { ...st };
     },
+    // Steer: a message for the running answer, read at its next step (here, the next event).
+    steer: async (_c, message) => {
+      if (!running) return { steered: false };
+      steers.push(message);
+      return { steered: true };
+    },
     async send(msg, on, signal) {
       on({ event: 'chat', data: { id: chat.id, title: chat.title } });
-      for (const e of SCRIPT) {
-        await wait(350);
-        signal?.throwIfAborted();
-        on(e);
+      running = true;
+      try {
+        for (const e of SCRIPT) {
+          await wait(350);
+          signal?.throwIfAborted();
+          for (const text of steers.splice(0))
+            on({ event: 'steered', data: { text, at: Date.now() } });
+          on(e);
+        }
+      } finally {
+        running = false;
       }
+      const unread = steers.splice(0);
+      if (unread.length) on({ event: 'unsteered', data: { texts: unread } });
       for (const word of `I checked your ${msg.message.length > 40 ? 'notes' : 'notes again'}: the Q4 numbers and the venue are still open. Want me to draft a reminder for each?`.split(
         ' ',
       )) {
