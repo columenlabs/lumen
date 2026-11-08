@@ -244,7 +244,7 @@ function useDuplicateWarning(all: LumenOptionGroup[]) {
 }
 
 const ROW =
-  'relative flex w-full cursor-default items-center gap-2 rounded-md px-2 text-sm outline-hidden select-none h-8 max-md:h-11 max-md:px-4 max-md:text-[15px] data-highlighted:bg-accent data-highlighted:text-accent-foreground data-selected:bg-muted data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4';
+  'relative flex w-full cursor-default items-center gap-2 rounded-md px-2 text-sm outline-hidden select-none h-8 max-md:h-11 max-md:px-4 max-md:text-[15px] data-highlighted:bg-accent data-highlighted:text-accent-foreground data-selected:bg-muted data-disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4';
 /** A row with a description or thumbnail grows to fit it. */
 const TALL = 'h-auto min-h-8 py-1.5 max-md:h-auto';
 const GROUP_LABEL =
@@ -265,6 +265,8 @@ export function SelectorRowContent({
   trailing?: ReactNode;
 }) {
   const Icon = option.icon;
+  const off = !!option.disabled;
+  const reason = typeof option.disabled === 'string' ? option.disabled : null;
   return (
     <>
       {option.indent && <span aria-hidden className="w-4 shrink-0" />}
@@ -284,26 +286,40 @@ export function SelectorRowContent({
           {option.thumb}
         </span>
       ) : (
-        Icon && <Icon className="text-muted-foreground" />
+        Icon && <Icon className={cn('text-muted-foreground', off && 'opacity-60')} />
       )}
       {option.description ? (
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className={cn('flex min-w-0 flex-1 flex-col', off && 'text-muted-foreground')}>
           <span className="truncate">{option.content ?? option.label}</span>
           <span className="truncate text-xs text-muted-foreground">{option.description}</span>
         </span>
       ) : (
         // The name keeps its room (up to two thirds of the row); a long detail truncates first.
-        <span className={cn('min-w-0 truncate', option.detail ? 'max-w-2/3 shrink-0' : 'flex-1')}>
+        <span
+          className={cn(
+            'min-w-0 truncate',
+            option.detail || reason ? 'max-w-2/3 shrink-0' : 'flex-1',
+            off && 'text-muted-foreground',
+          )}
+        >
           {option.content ?? option.label}
         </span>
       )}
-      {option.detail && (
-        <span
-          className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground"
-          title={option.detail}
-        >
-          {option.detail}
+      {reason ? (
+        // Why the row can't be picked ("Added"), in place of its detail.
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-px text-xs text-foreground/80">
+          <CheckIcon className="size-3! text-emerald-600 dark:text-emerald-400" />
+          {reason}
         </span>
+      ) : (
+        option.detail && (
+          <span
+            className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground"
+            title={option.detail}
+          >
+            {option.detail}
+          </span>
+        )
       )}
       {trailing}
     </>
@@ -341,16 +357,7 @@ function Rows<V extends string>({
             />
           </Base.Item>
         );
-        return typeof o.disabled === 'string' ? (
-          <Tooltip key={o.value}>
-            <TooltipTrigger asChild>
-              <div>{row}</div>
-            </TooltipTrigger>
-            <TooltipContent>{o.disabled}</TooltipContent>
-          </Tooltip>
-        ) : (
-          row
-        );
+        return row;
       })}
       {g.more > 0 && (
         <button
@@ -821,12 +828,13 @@ export function LumenSelectorList<V extends string = string>({
 }) {
   const none = useMemo(() => new Set<string>(), []);
   const { shown, flat, expand } = useSelectorRows(options, groups, query, none, fuzzy);
-  const [at, setAt] = useState(0);
+  const first = flat.findIndex((o) => !o.disabled);
+  const [at, setAt] = useState(first);
   const listId = useId();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new query starts at the first row.
-  useEffect(() => setAt(0), [query]);
-  const index = Math.min(at, flat.length - 1);
-  const active = flat[index];
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new query starts at the first pickable row.
+  useEffect(() => setAt(first), [query]);
+  const index = flat[at] && !flat[at].disabled ? at : first;
+  const active = index < 0 ? undefined : flat[index];
   useEffect(() => {
     spotlight(active?.target, active?.targetName ?? active?.label);
   }, [active]);
@@ -839,7 +847,11 @@ export function LumenSelectorList<V extends string = string>({
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
           const step = e.key === 'ArrowDown' ? 1 : -1;
-          setAt((i) => (Math.min(i, flat.length - 1) + step + flat.length) % flat.length);
+          if (index < 0) return true;
+          let i = index;
+          do i = (i + step + flat.length) % flat.length;
+          while (flat[i]?.disabled && i !== index);
+          setAt(i);
           return true;
         }
         if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
@@ -856,7 +868,7 @@ export function LumenSelectorList<V extends string = string>({
         return false;
       },
     }),
-    [flat, active, onPick, onClose],
+    [flat, index, active, onPick, onClose],
   );
   return (
     <div
@@ -889,6 +901,7 @@ export function LumenSelectorList<V extends string = string>({
                   key={o.value}
                   aria-current={i === index || undefined}
                   disabled={!!o.disabled}
+                  data-disabled={o.disabled ? '' : undefined}
                   data-highlighted={i === index ? '' : undefined}
                   className={cn(ROW, 'text-left')}
                   onMouseMove={() => i !== index && setAt(i)}
@@ -898,7 +911,7 @@ export function LumenSelectorList<V extends string = string>({
                   <SelectorRowContent
                     option={o}
                     trailing={
-                      i === 0 ? (
+                      i === index ? (
                         <kbd className="rounded border px-1 font-mono text-[11px] text-muted-foreground">
                           Tab
                         </kbd>
