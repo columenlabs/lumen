@@ -1,5 +1,5 @@
 // ChatImage: an image in a chat message. A thumbnail until clicked; then it opens full width in place,
-// where the wheel or a pinch zooms at the pointer, a drag or two fingers pan and a double-click
+// where a pinch (or Ctrl + wheel) zooms at the pointer, a drag or two fingers pan and a double-click
 // toggles fit and 2× (react-zoom-pan-pinch). Its toolbar zooms, resets, opens the image in a 90%
 // lightbox with the same controls (the kit's Dialog: Esc, × or a click outside closes it) and
 // shrinks it back to the thumbnail.
@@ -61,18 +61,25 @@ function ZoomBar({ children }: { children: React.ReactNode }) {
 function Zoomable({
   src,
   alt,
+  panAtFit = false,
   children,
 }: {
   src: string;
   alt: string;
+  /** Two fingers pan even at fit (the lightbox); in the chat they scroll the chat until zoomed in. */
+  panAtFit?: boolean;
   children: React.ReactNode;
 }) {
+  const [zoomed, setZoomed] = useState(false);
   return (
     <TransformWrapper
       minScale={1}
       maxScale={MAX_SCALE}
       centerZoomedOut
-      wheel={{ step: 0.004 }}
+      // A pinch (a wheel with ctrlKey) zooms; two fingers or a plain wheel pan.
+      wheel={{ step: 0.01, wheelDisabled: true }}
+      trackPadPanning={{ disabled: !panAtFit && !zoomed, velocityDisabled: true }}
+      onTransform={(_, { scale }) => setZoomed(scale > 1.001)}
       doubleClick={{ mode: 'toggle', step: 1 }}
     >
       <ZoomBar>{children}</ZoomBar>
@@ -156,7 +163,7 @@ export function ChatImage({ src, alt }: { src: string; alt: string }) {
         >
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           <div className="relative size-full">
-            <Zoomable src={src} alt={alt}>
+            <Zoomable src={src} alt={alt} panAtFit>
               <DialogClose asChild>
                 <IconButton icon={XIcon} label="Close" />
               </DialogClose>
