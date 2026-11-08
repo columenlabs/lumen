@@ -90,6 +90,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
 import { Spinner } from '../ui/spinner';
 import { Textarea } from '../ui/textarea';
+import { ChatImage } from './chat-image';
 import type { AssistantAdapter } from './client';
 import { chatMarkdown, chatTurns, copyMarkdown, turnMarkdown } from './copy';
 import {
@@ -567,7 +568,7 @@ function Item({
   switch (item.kind) {
     case 'user':
       return (
-        <div className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap">
+        <div className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap has-[[data-slot=chat-image]]:ml-0 has-[[data-slot=chat-image]]:w-full">
           {(item.tier || item.refs?.length) && (
             <span className="mb-1 flex flex-wrap gap-1">
               {item.tier && <ComposerChip sign="@" label={tierName(item.tier)} />}
@@ -579,12 +580,7 @@ function Item({
           {item.images?.length ? (
             <span className="mb-1 flex flex-wrap gap-1.5">
               {item.images.map((src, i) => (
-                <img
-                  key={`${i}:${src.length}`}
-                  src={src}
-                  alt={`Pasted ${i + 1}`}
-                  className="max-h-32 max-w-40 rounded-md border object-cover"
-                />
+                <ChatImage key={`${i}:${src.length}`} src={src} alt={`Pasted ${i + 1}`} />
               ))}
             </span>
           ) : null}
