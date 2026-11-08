@@ -154,7 +154,7 @@ export interface LumenAssistantProps {
    * kit's: /compact, /clear, /model and /escalate.
    */
   commands?: AssistantCommand[];
-  /** What `#` lists everywhere; a page adds its own with `useAssistantSource`. */
+  /** What `@` lists everywhere; a page adds its own with `useAssistantSource`. */
   sources?: readonly AssistantSource[];
   /**
    * Images can go with a message: pasted (Cmd+V / Ctrl+V) or dropped on the box, shown as chips
@@ -504,7 +504,7 @@ function allowanceWait(a: AllowanceState) {
 
 /** The assistant's name, for a copied turn's headings. */
 const AssistantName = createContext('Assistant');
-/** A tier's name for a message's `@` chip. */
+/** A tier's name for a message's `#` chip. */
 const TierNames = createContext<(id: string) => string>((id) => id);
 /** Takes back a change made at once (Undo on its line). */
 const UndoWrite = createContext<((s: StepItem) => Promise<void>) | null>(null);
@@ -584,9 +584,9 @@ function Item({
         <div className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap has-[[data-slot=chat-image]]:ml-0 has-[[data-slot=chat-image]]:w-full">
           {(item.tier || item.refs?.length) && (
             <span className="mb-1 flex flex-wrap gap-1">
-              {item.tier && <ComposerChip sign="@" label={tierName(item.tier)} />}
+              {item.tier && <ComposerChip sign={TIER} label={tierName(item.tier)} />}
               {item.refs?.map((r, i) => (
-                <ComposerChip key={`${r.kind}:${r.label}:${i}`} sign="#" label={r.label} />
+                <ComposerChip key={`${r.kind}:${r.label}:${i}`} sign={POINT} label={r.label} />
               ))}
             </span>
           )}
@@ -1046,13 +1046,17 @@ function HandOff({
   );
 }
 
-/** A chip over the message box: a tier picked with `@` or a thing pointed at with `#`. */
+/** The composer's triggers: `@` points at a thing (the `sources`), `#` picks the tier for one message. */
+const POINT = '@';
+const TIER = '#';
+
+/** A chip over the message box: a tier picked with `#` or a thing pointed at with `@`. */
 function ComposerChip({
   sign,
   label,
   onRemove,
 }: {
-  sign: '@' | '#';
+  sign: typeof POINT | typeof TIER;
   label: string;
   onRemove?: () => void;
 }) {
@@ -1074,7 +1078,7 @@ function ComposerChip({
   );
 }
 
-/** What the composer sends with the text: the tier picked with `@` and the things pointed at with `#`. */
+/** What the composer sends with the text: the tier picked with `#` and the things pointed at with `@`. */
 export interface ComposerExtra {
   tier?: string;
   refs?: AssistantRefNote[];
@@ -1115,8 +1119,8 @@ const imageUrl = (i: AssistantImage) => `data:${i.media_type};base64,${i.data}`;
 
 /**
  * The message box: Enter sends, Shift+Enter breaks a line; Stop while an answer runs. Three
- * triggers list what can follow them as it is typed: `/` at the start a command, `@` a tier for
- * this message, `#` a thing to point at (the `sources`); a picked tier or thing shows as a chip.
+ * triggers list what can follow them as it is typed: `/` at the start a command, `@` a thing to
+ * point at (the `sources`), `#` a tier for this message; a picked tier or thing shows as a chip.
  */
 export function LumenComposer({
   name,
@@ -1134,15 +1138,15 @@ export function LumenComposer({
   name: string;
   /** Images can be pasted or dropped on the box (`LumenAssistant` `images`). */
   images?: boolean;
-  /** The page's name for `#` This page; the document's title by default. */
+  /** The page's name for `@` This page; the document's title by default. */
   page?: string;
   busy: boolean;
   queued: string | null;
   disabled?: boolean;
   commands?: AssistantCommand[];
-  /** What `@` lists. */
+  /** What `#` lists. */
   tiers?: { id: string; label: string; model_label?: string }[];
-  /** What `#` lists, a group each. */
+  /** What `@` lists, a group each. */
   sources?: readonly AssistantSource[];
   onSend: (text: string, extra: ComposerExtra) => void;
   onStop: () => void;
@@ -1173,14 +1177,14 @@ export function LumenComposer({
 
   const m = /^\/(\S*)(?:\s(.*))?$/s.exec(text);
   const cmd = m && m[2] !== undefined ? commands.find((c) => c.name === m[1]) : undefined;
-  // `@` or `#` as the word the caret is in: `pick #sto|` lists the sources' items matching "sto".
+  // `@` or `#` as the word the caret is in: `pick @sto|` lists the sources' items matching "sto".
   const word = /(^|\s)([@#])([^\s@#]*)$/.exec(text.slice(0, caret));
-  const trigger = word ? (word[2] as '@' | '#') : null;
+  const trigger = word ? word[2] : null;
   const asked = word?.[3] ?? '';
   const open = closed !== `${text}|${caret}`;
   const slash =
     m && commands.length ? (m[2] === undefined ? 'command' : cmd?.options ? 'arg' : null) : null;
-  const at = trigger === '@' && tiers.length > 1 ? '@' : trigger === '#' ? '#' : null;
+  const at = trigger === TIER && tiers.length > 1 ? 'tier' : trigger === POINT ? 'point' : null;
   const picking = open ? (slash ?? at) : null;
 
   const extra = (): ComposerExtra => ({
@@ -1266,13 +1270,13 @@ export function LumenComposer({
     });
   };
 
-  // Each `#` row makes its chip when picked, so what it carries (a card's words) is read then.
+  // Each `@` row makes its chip when picked, so what it carries (a card's words) is read then.
   const sourceItems = new Map<string, () => AssistantRefNote>();
   const picked = selection ? selectionRef(selection) : null;
   const added = (r: AssistantRefNote) =>
     refs.some((x) => sameRef(x, r)) ? { disabled: 'Added' } : {};
   const onPage: LumenOption[] = [];
-  if (picking === '#') {
+  if (picking === 'point') {
     const pageRef = (): AssistantRefNote => ({
       kind: 'page',
       label: page || document.title || 'This page',
@@ -1331,7 +1335,7 @@ export function LumenComposer({
   }
   if (picked) sourceItems.set('selection', () => picked);
   const sourceOptions: LumenOption[] =
-    picking === '#'
+    picking === 'point'
       ? [
           ...(picked
             ? [
@@ -1380,7 +1384,7 @@ export function LumenComposer({
     requestAnimationFrame(() => box.current?.focus());
   };
   const tierLabel = tiers.find((t) => t.id === tier)?.label;
-  const hints = [commands.length && '/', tiers.length > 1 && '@', '#'].filter(Boolean);
+  const hints = [commands.length && '/', POINT, tiers.length > 1 && TIER].filter(Boolean);
 
   return (
     <div className="shrink-0 border-t p-3">
@@ -1419,7 +1423,7 @@ export function LumenComposer({
           onClose={() => setClosed(`${text}|${caret}`)}
         />
       )}
-      {picking === '@' && (
+      {picking === 'tier' && (
         <LumenSelectorList
           handle={list}
           label="Answer this message on"
@@ -1439,7 +1443,7 @@ export function LumenComposer({
           onClose={() => setClosed(`${text}|${caret}`)}
         />
       )}
-      {picking === '#' && (
+      {picking === 'point' && (
         <LumenSelectorList
           handle={list}
           label="Point at"
@@ -1482,11 +1486,13 @@ export function LumenComposer({
       )}
       {(tierLabel || refs.length > 0) && (
         <div className="mb-2 flex flex-wrap gap-1">
-          {tierLabel && <ComposerChip sign="@" label={tierLabel} onRemove={() => setTier(null)} />}
+          {tierLabel && (
+            <ComposerChip sign={TIER} label={tierLabel} onRemove={() => setTier(null)} />
+          )}
           {refs.map((r, i) => (
             <ComposerChip
               key={`${r.kind}:${r.label}:${i}`}
-              sign="#"
+              sign={POINT}
               label={r.label}
               onRemove={() => setRefs((p) => p.filter((_, j) => j !== i))}
             />

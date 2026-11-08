@@ -368,7 +368,7 @@ export interface AgentTurnInput {
   message: string;
   context?: AssistantMessage['context'];
   refs?: AssistantMessage['refs'];
-  /** The tier the person picked for this message (`@`). */
+  /** The tier the person picked for this message (`#`). */
   tier?: string;
   /** The browser's IANA zone, for the bearings. */
   time_zone?: string;

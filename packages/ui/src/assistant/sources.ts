@@ -1,10 +1,10 @@
-// What the person can point the assistant at with `#` in the composer: each source is a group in
+// What the person can point the assistant at with `@` in the composer: each source is a group in
 // the list (On this page, Stories), its items what it holds now. An app passes its standing sources
 // to the assistant (`sources`); a page adds its own while it is shown (`useAssistantSource`).
 import type { AssistantRefNote } from '@columenlabs/lumen-ui-types/assistant';
 import { type ComponentType, useEffect, useRef, useSyncExternalStore } from 'react';
 
-/** One thing a source holds: a row in the `#` list, sent with the message as `ref`. */
+/** One thing a source holds: a row in the `@` list, sent with the message as `ref`. */
 export interface AssistantSourceItem {
   /** Unique within its source. */
   id: string;
@@ -19,14 +19,14 @@ export interface AssistantSourceItem {
   ref: AssistantRefNote;
 }
 
-/** A group of things in the `#` list. */
+/** A group of things in the `@` list. */
 export interface AssistantSource {
   /** Unique: a page's source replaces an app source of the same id. */
   id: string;
   /** The group heading: "On this page", "Stories". */
   label: string;
   icon?: ComponentType<{ className?: string }>;
-  /** What it holds now; `query` is what follows the `#`, for a source that searches. */
+  /** What it holds now; `query` is what follows the `@`, for a source that searches. */
   items: (query: string) => readonly AssistantSourceItem[];
 }
 
@@ -42,7 +42,7 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 
-/** Adds a source to the `#` list while the calling page is shown. */
+/** Adds a source to the `@` list while the calling page is shown. */
 export function useAssistantSource(source: AssistantSource | null | undefined) {
   const latest = useRef(source);
   latest.current = source;
@@ -165,7 +165,7 @@ export function usePageSelection() {
   );
 }
 
-/** A highlight as a `#` chip: its first words, the whole text and where it sits go to the model. */
+/** A highlight as an `@` chip: its first words, the whole text and where it sits go to the model. */
 export const selectionRef = (s: PageSelection): AssistantRefNote => ({
   kind: 'selection',
   label: `“${s.text.length > 40 ? `${s.text.slice(0, 40)}…` : s.text}”`,

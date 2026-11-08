@@ -61,7 +61,7 @@ export interface ChatUsage extends Omit<UsagePart, 'label'> {
   context?: number;
 }
 
-/** Something the person pointed at with `#` (a page, a card, a row, a story): its label and how to find it. */
+/** Something the person pointed at with `@` (a page, a card, a row, a story): its label and how to find it. */
 export interface AssistantRefNote {
   kind: string;
   label: string;
@@ -254,7 +254,7 @@ export interface AssistantMessage {
   /** The page the person is on: a label and a short note of what it shows. */
   context?: { label: string; note?: unknown };
   refs?: AssistantRefNote[];
-  /** The tier the person picked for this message (`@`): a higher one takes it as a task, the same or a lower one answers it. */
+  /** The tier the person picked for this message (`#`): a higher one takes it as a task, the same or a lower one answers it. */
   tier?: string;
   /** The browser's IANA zone, for the assistant's bearings (the time now where the person is). */
   time_zone?: string;
