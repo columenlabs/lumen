@@ -125,8 +125,8 @@ The panel's composer lists what can follow three keys as they are typed. The kit
   ```
 
   A command that acts in the browser (opens a page, sets a filter) goes on the panel instead: `LumenAssistant` (or `useLumenAssistantDock`) takes `commands`, each `{ name, about, args?, options?, run }`; `run` returns text to send, or nothing when it acted itself, and `options` lists choices for its words as they are typed.
-- **`@` a tier.** `@` lists the app's tiers; the pick is a chip and goes with that message only (`tier`). A higher tier takes it as a task in its own section of the chat; the same or a lower one answers it.
-- **`#` a thing.** `#` lists what the person can point at, a group per source; each pick is a chip and goes with the message as a ref (`kind`, `label` and whatever finds it), which the model reads before the message. Standing sources go on the panel (`sources`); a page adds its own while it is shown:
+- **`#` a tier.** `#` lists the app's tiers; the pick is a chip and goes with that message only (`tier`). A higher tier takes it as a task in its own section of the chat; the same or a lower one answers it.
+- **`@` a thing.** `@` lists what the person can point at, a group per source; each pick is a chip and goes with the message as a ref (`kind`, `label` and whatever finds it), which the model reads before the message. Standing sources go on the panel (`sources`); a page adds its own while it is shown:
 
   ```tsx
   import { useAssistantSource } from '@columenlabs/lumen-ui/assistant';
@@ -143,7 +143,7 @@ The panel's composer lists what can follow three keys as they are typed. The kit
 
   `target` lights the thing on screen while its row is hovered. A page's source replaces a standing one with the same `id`.
 
-  Text the person highlights on the page is offered first under `#` (Selected text), with where it sits from the nearest `data-assistant-where` attribute. To hand a highlight over from the page, an Ask button calls `composeAssistant({ refs: [selectionRef({ text, where })], text: '' })` (or any refs and text): the panel opens with the chips in the composer, focused for the person to finish.
+  Text the person highlights on the page is offered first under `@` (Selected text), with where it sits from the nearest `data-assistant-where` attribute. To hand a highlight over from the page, an Ask button calls `composeAssistant({ refs: [selectionRef({ text, where })], text: '' })` (or any refs and text): the panel opens with the chips in the composer, focused for the person to finish.
 
 ### Bearings
 
