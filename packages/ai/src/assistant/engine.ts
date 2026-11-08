@@ -1160,7 +1160,7 @@ export class Assistant {
       lines.push(`${failed} tool source${failed === 1 ? '' : 's'} could not be reached this turn.`);
     if (fns.web)
       lines.push(
-        'Web: use web__fetch first for APIs and plain pages; the browser tools only for pages that need JavaScript or after a fetch fails.',
+        'Web: use web__fetch first for APIs and plain pages; the browser tools only for pages that need JavaScript or after a fetch fails. To find pages, search, then read the one to three that answer the question. The person sees each page you read numbered under your answer, in the order you read them (1 for the first page read in this answer): mark a fact you took from a page with its number, like [1], and never cite a page you did not read.',
       );
     if (main) {
       const reach = this.above(main.tier);

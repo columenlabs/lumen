@@ -14,6 +14,7 @@ import type {
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { rowCount } from '../assistant/tools';
+import { webStep } from '../assistant/web';
 import type { AgentCard } from './agent';
 import type { ScreenCall } from './screen';
 
@@ -92,6 +93,7 @@ function settledCall(
   }
   const error = out.error ?? (o && typeof o.error === 'string' ? o.error : undefined);
   const rows = rowCount(o && 'result' in o ? o.result : out.output);
+  const web = webStep(c.name, c.input, out.output, !!error);
   const step: StepItem = {
     kind: 'step',
     id,
@@ -104,6 +106,7 @@ function settledCall(
     ...(card?.kind === 'write' || (o && typeof o.change === 'string')
       ? { write: { undo: true, status: card?.status === 'undone' ? 'undone' : 'done' } }
       : {}),
+    ...(web ? { web } : {}),
   };
   return [{ event: 'step', data: step }];
 }

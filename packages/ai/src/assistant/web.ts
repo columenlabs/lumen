@@ -4,6 +4,7 @@
  * for pages that need a real browser or after a fetch fails. ScrapeQL sits behind Cloudflare Access,
  * so the app reaches it with one Access service token an admin pastes in Settings.
  */
+import type { StepWeb, WebLink } from '@columenlabs/lumen-ui-types/assistant';
 import { type ToolSource, plainTools, remoteMcpTools } from './tools';
 
 /** Fetches one answer may have in flight at once; more wait their turn. */
@@ -201,4 +202,70 @@ export function scrapeqlTools(
     const open = await remote();
     return { ...open, tools: open.tools.map((t) => ({ ...t, read: true })) };
   };
+}
+
+const LINK = /\[([^\]\n]{0,300})\]\((https?:\/\/[^)\s]{1,2000})\)/g;
+/** Results a search step lists; more are cut. */
+const RESULTS_MAX = 10;
+
+/** Text a tool's output carries: a plain string, or the `result` string it was wrapped in. */
+function textOf(v: unknown): string {
+  if (typeof v === 'string') return v;
+  const r = v && typeof v === 'object' ? (v as { result?: unknown }).result : undefined;
+  return typeof r === 'string' ? r : '';
+}
+
+/** A page's title from the HTML a fetch read, when it has one. */
+function htmlTitle(text: string): string | undefined {
+  const m = /<title[^>]*>([^<]{1,300})<\/title>/i.exec(text.slice(0, 50_000));
+  const t = m?.[1]?.replace(/\s+/g, ' ').trim();
+  return t || undefined;
+}
+
+/**
+ * What a finished web tool call shows the person, or undefined for any other tool: a search's
+ * words and the pages it listed, or the page a read opened (`web__fetch` after redirects; ScrapeQL's
+ * `scrape`, `extract`, `ask` and `screenshot` by the address they were given). A failed read is no
+ * page.
+ */
+export function webStep(
+  name: string,
+  input: unknown,
+  output: unknown,
+  failed: boolean,
+): StepWeb | undefined {
+  if (!name.startsWith('web__')) return undefined;
+  const tool = name.slice(5);
+  const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (tool === 'search') {
+    const query = typeof args.query === 'string' ? args.query.slice(0, 300) : undefined;
+    const results: WebLink[] = [];
+    for (const m of textOf(output).matchAll(LINK)) {
+      if (results.length >= RESULTS_MAX) break;
+      const url = m[2] as string;
+      if (results.some((r) => r.url === url)) continue;
+      const title = (m[1] as string).trim();
+      results.push(title ? { url, title } : { url });
+    }
+    return { ...(query ? { query } : {}), results };
+  }
+  if (failed) return undefined;
+  if (tool === 'fetch') {
+    // A long answer reaches the model cut, as text: read its fields from that text.
+    const cut = typeof output === 'string' ? output : '';
+    const o = (output && typeof output === 'object' ? output : {}) as Record<string, unknown>;
+    if (o.ok === false || cut.startsWith('{"ok":false')) return undefined;
+    const said = cut ? /"url":"(https?:\/\/[^"]{1,2000})"/.exec(cut)?.[1] : undefined;
+    const url =
+      typeof o.url === 'string' ? o.url : (said ?? (typeof args.url === 'string' ? args.url : ''));
+    if (!/^https?:\/\//.test(url)) return undefined;
+    const body = typeof o.text === 'string' ? o.text : cut;
+    const title = body ? htmlTitle(body) : undefined;
+    return { read: title ? { url, title } : { url } };
+  }
+  if (['scrape', 'extract', 'ask', 'screenshot'].includes(tool)) {
+    const url = typeof args.url === 'string' ? args.url : '';
+    return /^https?:\/\//.test(url) ? { read: { url } } : undefined;
+  }
+  return undefined;
 }

@@ -20,6 +20,7 @@ import {
   type ScreenItem,
   type StepItem,
   type UsagePart,
+  type WebLink,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -31,12 +32,14 @@ import {
   CornerDownRightIcon,
   CrosshairIcon,
   FileTextIcon,
+  GlobeIcon,
   LightbulbIcon,
   ListPlusIcon,
   MonitorIcon,
   PencilIcon,
   PlusIcon,
   ReceiptIcon,
+  SearchIcon,
   SparklesIcon,
   SquareIcon,
   TriangleAlertIcon,
@@ -540,6 +543,7 @@ function Items({
           return (
             <div key={t.from} data-slot="assistant-turn" className="group/turn flex flex-col gap-3">
               <Items items={t.items} onSettle={onSettle} busy={busy} />
+              {!open && <WebSources items={t.items as ChatItem[]} />}
               {!open && (
                 <div className="-mt-2 flex justify-end opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                   <IconButton
@@ -759,7 +763,140 @@ const Rule = ({ children }: { children: ReactNode }) => (
   </p>
 );
 
+/** A page's host without `www.`, or the address when it has none. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+/** A page's path after its host, for a read's line. */
+function pathOf(url: string): string {
+  try {
+    const u = new URL(url);
+    const p = decodeURIComponent(u.pathname).replace(/\/$/, '');
+    return p.split('/').pop() || '';
+  } catch {
+    return '';
+  }
+}
+
+/** A web step: a search, its results folded under it, or one page read. */
+function WebStep({ step, live }: { step: StepItem; live: boolean }) {
+  const web = step.web ?? {};
+  const results = web.results ?? [];
+  const icon = live ? (
+    <Spinner className="size-3" />
+  ) : !step.ok ? (
+    <CircleAlertIcon className="size-3.5 shrink-0" />
+  ) : web.read ? (
+    <GlobeIcon className="size-3.5 shrink-0" />
+  ) : (
+    <SearchIcon className="size-3.5 shrink-0" />
+  );
+  const line = (
+    <>
+      {icon}
+      {web.read ? (
+        <span className="truncate" title={web.read.title ?? web.read.url}>
+          Read <span className="text-foreground">{hostOf(web.read.url)}</span>
+          {pathOf(web.read.url) && ` · ${pathOf(web.read.url)}`}
+        </span>
+      ) : (
+        <span className="truncate" title={web.query}>
+          Searched the web{web.query ? ': ' : ''}
+          {web.query && <span className="text-foreground">{web.query}</span>}
+        </span>
+      )}
+      {!live && !web.read && step.ok && (
+        <span className="ml-auto shrink-0 tabular-nums">
+          {results.length} result{results.length === 1 ? '' : 's'}
+        </span>
+      )}
+      {step.error && <span className="truncate">· {step.error}</span>}
+    </>
+  );
+  const cls = cn(
+    'flex min-w-0 items-center gap-1.5 text-xs',
+    step.ok ? 'text-muted-foreground' : 'text-loss',
+  );
+  if (!results.length) return <p className={cls}>{line}</p>;
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className={cn(cls, 'group/web w-full text-left')}>
+        {line}
+        <ChevronRightIcon className="size-3.5 shrink-0 transition-transform group-data-[state=open]/web:rotate-90" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="mt-1 ml-1.5 flex flex-col gap-0.5 border-l pl-3 text-muted-foreground text-xs">
+          {results.map((r) => (
+            <li key={r.url} className="min-w-0 truncate">
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={r.url}
+                className="hover:underline"
+              >
+                <span className="text-foreground">{r.title || hostOf(r.url)}</span> ·{' '}
+                {hostOf(r.url)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/** The pages a turn read, once each, in the order read: the numbers its answer cites. */
+function turnPages(items: readonly ChatItem[]): WebLink[] {
+  const pages: WebLink[] = [];
+  const walk = (list: readonly ChatItem[]) => {
+    for (const i of list) {
+      if (i.kind === 'handoff') walk(i.items);
+      else if (i.kind === 'step' && i.web?.read && !pages.some((p) => p.url === i.web?.read?.url))
+        pages.push(i.web.read);
+    }
+  };
+  walk(items);
+  return pages;
+}
+
+/** The pages a turn read, as numbered chips under its answer; each opens in a new tab. */
+function WebSources({ items }: { items: readonly ChatItem[] }) {
+  const pages = turnPages(items);
+  if (!pages.length) return null;
+  return (
+    <ol aria-label="Sources" className="flex min-w-0 flex-wrap gap-1.5">
+      {pages.map((p, n) => (
+        <li key={p.url} className="min-w-0 max-w-full">
+          <a
+            href={p.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={p.title ? `${p.title} · ${p.url}` : p.url}
+            className="flex h-6 min-w-0 items-center gap-1.5 rounded-full border pr-2.5 pl-1 text-xs hover:bg-muted"
+          >
+            <span className="grid size-4 shrink-0 place-items-center rounded-full bg-primary/15 font-medium text-primary text-xs tabular-nums">
+              {n + 1}
+            </span>
+            <span className="truncate">{hostOf(p.url)}</span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function Step({ step, live }: { step: StepItem; live: boolean }) {
+  if (step.web) return <WebStep step={step} live={live} />;
+  return <ToolStep step={step} live={live} />;
+}
+
+function ToolStep({ step, live }: { step: StepItem; live: boolean }) {
   const undo = useContext(UndoWrite);
   const [undoing, setUndoing] = useState(false);
   const w = step.write;
