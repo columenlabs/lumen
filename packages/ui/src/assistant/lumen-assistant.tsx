@@ -799,7 +799,11 @@ function WebStep({ step, live }: { step: StepItem; live: boolean }) {
   const line = (
     <>
       {icon}
-      {web.read ? (
+      {web.tried ? (
+        <span className="truncate" title={web.tried.url}>
+          Could not open <span className="text-foreground">{hostOf(web.tried.url)}</span>
+        </span>
+      ) : web.read ? (
         <span className="truncate" title={web.read.title ?? web.read.url}>
           Read <span className="text-foreground">{hostOf(web.read.url)}</span>
           {pathOf(web.read.url) && ` · ${pathOf(web.read.url)}`}
@@ -810,7 +814,7 @@ function WebStep({ step, live }: { step: StepItem; live: boolean }) {
           {web.query && <span className="text-foreground">{web.query}</span>}
         </span>
       )}
-      {!live && !web.read && step.ok && (
+      {!live && !web.read && !web.tried && step.ok && (
         <span className="ml-auto shrink-0 tabular-nums">
           {results.length} result{results.length === 1 ? '' : 's'}
         </span>

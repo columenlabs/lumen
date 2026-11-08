@@ -225,8 +225,8 @@ function htmlTitle(text: string): string | undefined {
 /**
  * What a finished web tool call shows the person, or undefined for any other tool: a search's
  * words and the pages it listed, or the page a read opened (`web__fetch` after redirects; ScrapeQL's
- * `scrape`, `extract`, `ask` and `screenshot` by the address they were given). A failed read is no
- * page.
+ * `scrape`, `extract`, `ask` and `screenshot` by the address they were given). A failed read names
+ * the page it tried, never a page read.
  */
 export function webStep(
   name: string,
@@ -249,7 +249,10 @@ export function webStep(
     }
     return { ...(query ? { query } : {}), results };
   }
-  if (failed) return undefined;
+  if (failed) {
+    const url = typeof args.url === 'string' ? args.url : '';
+    return /^https?:\/\//.test(url) ? { tried: { url } } : undefined;
+  }
   if (tool === 'fetch') {
     // A long answer reaches the model cut, as text: read its fields from that text.
     const cut = typeof output === 'string' ? output : '';

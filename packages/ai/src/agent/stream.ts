@@ -93,7 +93,7 @@ function settledCall(
   }
   const error = out.error ?? (o && typeof o.error === 'string' ? o.error : undefined);
   const rows = rowCount(o && 'result' in o ? o.result : out.output);
-  const web = webStep(c.name, c.input, out.output, !!error);
+  const web = webStep(c.name, c.input, out.output, !!error || obj(out.output)?.ok === false);
   const step: StepItem = {
     kind: 'step',
     id,

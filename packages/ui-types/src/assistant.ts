@@ -101,6 +101,8 @@ export interface StepWeb {
   query?: string;
   results?: WebLink[];
   read?: WebLink;
+  /** A read that failed: the page it could not open (the step's `error` says why). */
+  tried?: WebLink;
 }
 
 /** A change the assistant drafted: nothing happens until the person presses Save. */
