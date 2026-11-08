@@ -1,5 +1,358 @@
 [
   {
+    "tag": "v0.1.216",
+    "date": "2026-11-08T22:34:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Steer a running answer",
+        "body": "In `LumenAssistant`, pressing Enter while an answer is running now steers your message into that answer, using `LumenAgent.steer(message)` from @columenlabs/lumen-ai, and the panel shows the line marked Steered."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Queue follow-up messages",
+        "body": "In `LumenAssistant`, Alt+Enter queues a message, and `useAssistantChat` from @columenlabs/lumen-ui now returns `queue`, `steerQueued` and `unqueue` so you can build your own queue UI."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Steer route on the adapter",
+        "body": "The new optional `AssistantAdapter.steer` calls `POST /chats/:id/steer` with `{message}` and expects `{steered}` back, and an app whose server answers 404, 405 or 410 gets a Queue-only panel."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Unread steers are not lost",
+        "body": "If an answer ends before reading a steer, it comes back as an `unsteered` event and goes first in the queue, and you can set `plan.steer: false` on a model to turn steering off for it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "New chat types",
+        "body": "From @columenlabs/lumen-ui-types, `AssistantEvent` gains `steered` and `unsteered`, and the user `ChatItem` gains an optional `steered` flag. The existing `queued` event is unchanged, so current code keeps working."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.215",
+    "date": "2026-11-08T20:06:04Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Two-finger scroll no longer zooms chat images",
+        "body": "In `@columenlabs/lumen-ui`, `ChatImage` now zooms only on a pinch (or Ctrl + wheel, which is how browsers report a pinch), so a trackpad two-finger scroll no longer changes the zoom level."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Two-finger pan on a zoomed image",
+        "body": "`ChatImage` now turns on `trackPadPanning`, so you can pan a zoomed-in image in any direction with two fingers, while at fit in the chat panel two fingers still scroll the chat."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Always-on pan in the lightbox",
+        "body": "In the `ChatImage` lightbox, the new `panAtFit` behavior lets two fingers pan the image even when it is shown at fit."
+      },
+      {
+        "kinds": [],
+        "title": "Mouse wheel now pans instead of zooming",
+        "body": "A plain mouse wheel over `ChatImage` now pans the image, so if your app or its help text tells people to zoom with the wheel, change that to Ctrl + wheel, the zoom buttons or a double-click."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.214",
+    "date": "2026-11-08T18:56:52Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "`@` now points at things and `#` picks the tier",
+        "body": "In `LumenAssistant` from `@columenlabs/lumen-ui`, the composer opens the point-at list (sources, This page, Point at…, Selected text) on `@` and the tier list on `#`, the reverse of before. No props or types changed, so your app only needs the version bump, but update any help text, docs or onboarding that tells people to type `#` to point at something or `@` to choose a tier."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Chips match their trigger key",
+        "body": "In `LumenAssistant`, a pointed thing now shows an `@` chip and a chosen tier shows a `#` chip, both in the composer and on messages already sent."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Placeholder hint shows the new keys",
+        "body": "The `LumenAssistant` composer placeholder now ends with `(/ @ #)`, listing `@` always and `#` only when your app offers more than one tier."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.213",
+    "date": "2026-11-08T18:46:48Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant chats by scope",
+        "body": "In `LumenAssistant`, the new `chatScope` prop (`{ current, label, name? }`) makes the Chats menu list only the current scope's chats, with a switch named `label` at the top to show all of them."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Zoom and pan for chat images",
+        "body": "Images passed to `LumenAssistant` through `images` now open full width in the panel with wheel, pinch, drag and double-click zoom and pan, and a Full screen button opens them in a 90% lightbox."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Scope on saved chats",
+        "body": "From `@columenlabs/lumen-ui-types`, `AssistantChatRow` has a new optional `scope` field, so you can record where a chat was started (an app's workspace, project or record) and feed it to `chatScope`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.212",
+    "date": "2026-11-08T18:43:40Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Unpickable selector rows now show why",
+        "body": "In `LumenSelector` and `LumenSelectorList` from @columenlabs/lumen-ui, an option with `disabled: 'Added'` now renders dimmed with a small ✓ chip showing that string, instead of looking like a normal row that ignores clicks."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Keyboard navigation skips rows that can't be picked",
+        "body": "In `LumenSelectorList`, the arrow keys and the default (Tab) row now pass over options with `disabled` set, and the Tab hint follows the highlighted row."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The reason is visible without hovering",
+        "body": "In the `LumenSelector` combobox, the reason chip replaces the old tooltip wrapper, so a string passed to `LumenOption`'s `disabled` is readable at a glance. No API change: `disabled` is still `boolean | string`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.211",
+    "date": "2026-11-07T07:55:51Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Paste or drop images into assistant chats",
+        "body": "In `@columenlabs/lumen-ui`, set the new `images` prop on `LumenAssistant` or `LumenComposer` (off by default) and users can paste (Cmd/Ctrl+V) or drop images on the box, see them as removable thumbnail chips, and send them with their next message."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Send images to the agent",
+        "body": "From `@columenlabs/lumen-ai/agent`, `AskInput` now accepts `images`, which are checked for type, count and size and passed to the model as file parts alongside the message."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Image types and limits",
+        "body": "From `@columenlabs/lumen-ui-types/assistant`, use `AssistantImage`, `AssistantMessage.images`, and the bounds `ASSISTANT_IMAGE_TYPES`, `ASSISTANT_IMAGES_MAX` and `ASSISTANT_IMAGE_CHARS` to type and validate image attachments in your own chat code."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.210",
+    "date": "2026-11-07T07:41:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Usage history per person",
+        "body": "In `@columenlabs/lumen-ai`, `State.addUsage` and `State.usage` keep one `usage:YYYY-MM` document per person, with one entry per chat or run (title, first and last use, calls, tokens in, cache read and out, USD, and parts per tier and model), and the newest 300 entries are kept."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Name your background runs and chats",
+        "body": "In `@columenlabs/lumen-ai`, `complete(caller, { run: { id, title } })` adds every call with the same run id into one line, `complete` now also returns `usage`, and `agentTurn(caller, { chat })` records the turn under `chat:<id>`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Read a month of usage over HTTP",
+        "body": "`assistantRoutes` now serves `GET /usage?month=YYYY-MM`, which returns the caller's own total, spend rows, entries and months with history, and answers 400 for a bad month."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Spend per model and provider",
+        "body": "In `@columenlabs/lumen-ui-types`, `UsagePart` has a new optional `model` field that `Meter.part()` fills with the model id, so spend rows and history can be summed per model and provider."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "\"This month\" total in the assistant panel",
+        "body": "In `@columenlabs/lumen-ui`, `AssistantAdapter` has a new optional `usage` method, and the panel footer now shows a This month total instead of only the open chat's cost."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.209",
+    "date": "2026-11-07T07:02:53Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Longer answers from `complete()`",
+        "body": "In `@columenlabs/lumen-ai`, `Assistant.complete()` now accepts a `maxTokens` up to the new `COMPLETE_MAX_TOKENS` export (32,000, thinking included), so an app can generate a long file in one call instead of hitting the old 8,000 cap."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Know when an answer was cut",
+        "body": "The result of `Assistant.complete()` now has a `cut: boolean` field that is `true` when the model stopped at the token limit, so an app can retry or continue instead of saving a half-written answer."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Streamed answers keep long requests alive",
+        "body": "`Assistant.complete()` now streams the answer from every supported provider, so a long answer keeps its connection and no longer fails as one unstreamed request."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.208",
+    "date": "2026-11-07T00:42:08Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "xAI is now an assistant provider",
+        "body": "In `@columenlabs/lumen-ai`, add `XAI_MODELS` (Grok 4.3, Grok 4.6 and Grok 4.7) to the `models` list your app passes in, and Grok models become available for completions and agent turns."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Provider type includes xAI",
+        "body": "From `@columenlabs/lumen-ui-types/assistant`, `ASSISTANT_PROVIDERS` now includes `'xai'`, so provider-aware code and types can handle it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Key-only xAI setup",
+        "body": "`PROVIDERS.xai` in `@columenlabs/lumen-ai` (label xAI, key prefix `xai-`, link to the xAI console) lets users connect Grok by pasting an API key, with no sign-in flow."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.207",
+    "date": "2026-11-06T19:40:23Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tools used earlier in a chat stay available",
+        "body": "In @columenlabs/lumen-ai, with lazy tools on (more than `LAZY_AT` tools), a short follow-up like \"yes\" no longer fails with `AI_NoSuchToolError` when the model calls the write tool it used on the previous turn."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Lazy tools remember the conversation",
+        "body": "The new `usedTools(messages)` reads the `tool-call` parts and `tool_search` results in a chat history, and `lazyTools(tools, core, groupOf, start)` switches on the latest 8 of those tools that still exist from the first step, so the model no longer has to run `tool_search` again."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Prompt growth is capped at 8 tool schemas",
+        "body": "The prompt only grows by the schemas of tools the chat has already touched, and never by more than 8, so large tool sets stay lazy."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.206",
+    "date": "2026-11-05T01:49:35Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Smaller font payload in every app build",
+        "body": "The `theme.css` stylesheet in `@columenlabs/lumen-ui` now declares its four font families for Latin and Latin Extended only, so an app that imports it ships 8 font files instead of 23."
+      },
+      {
+        "kinds": [],
+        "title": "Cyrillic, Greek and Vietnamese text now uses the system font",
+        "body": "If your app renders those scripts, add your own `@font-face` rules after importing `@columenlabs/lumen-ui`'s `theme.css`, or accept the system font. Latin text is unchanged."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Fonts now ship inside the kit",
+        "body": "`@columenlabs/lumen-ui` bundles the font files, with each family's license, so `theme.css` no longer relies on the separate font packages, which are dropped as dependencies."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.205",
+    "date": "2026-11-04T22:10:13Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Resized columns keep numbers on the right",
+        "body": "In `LumenView` from @columenlabs/lumen-ui, a column you drag to a new width with `resizable` now keeps its numeric and other non-text cells on the right edge instead of jumping to the left."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Units no longer disappear after a resize",
+        "body": "In `LumenView`, a `UnitValue` in a dragged column now keeps its unit visible, where before the unit could be clipped until you double-clicked to reset the width."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Capped units columns leave room for the unit",
+        "body": "In `LumenView`, the width cap on a resized column that shows units now reserves space for `--unit-slot`, so the number and its unit fit together."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.204",
     "date": "2026-11-04T18:54:49Z",
     "takeaways": [

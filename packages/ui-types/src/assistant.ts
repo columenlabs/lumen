@@ -83,6 +83,26 @@ export interface StepItem {
   error?: string;
   /** A change it made at once (its group is on Read + write), with whether it can be undone. */
   write?: { undo: boolean; status: 'done' | 'undone' | 'failed'; error?: string };
+  /** A web tool's call: what a search found, or the page it read. */
+  web?: StepWeb;
+}
+
+/** A page on the web: its address and, when known, its title. */
+export interface WebLink {
+  url: string;
+  title?: string;
+}
+
+/**
+ * What a web step did: a search (its words and the pages it found) or a read of one page. The
+ * panel folds a search's results under its line and numbers each page read under the answer.
+ */
+export interface StepWeb {
+  query?: string;
+  results?: WebLink[];
+  read?: WebLink;
+  /** A read that failed: the page it could not open (the step's `error` says why). */
+  tried?: WebLink;
 }
 
 /** A change the assistant drafted: nothing happens until the person presses Save. */
