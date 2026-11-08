@@ -137,6 +137,13 @@ export interface LumenAssistantProps {
   onSettings?: () => void;
   /** Days chats are kept, for the Chats menu's line. */
   keepDays?: number;
+  /**
+   * Chats belong to a place in the app (a workspace, a project): the Chats menu lists the
+   * `current` one's chats (rows whose `scope` matches) and a switch named `label` shows them all,
+   * each with its place's `name`. The switch is kept on this device. A row with no `scope` shows
+   * only with the switch on.
+   */
+  chatScope?: { current: string; label: string; name?: (scope: string) => string | undefined };
   /** Closes the panel (its ✕). */
   onClose?: () => void;
   /** An outside chat state (the dock shares one between the button and the panel). */
@@ -175,6 +182,7 @@ export function LumenAssistant({
   context,
   onSettings,
   keepDays = 30,
+  chatScope,
   onClose,
   chat: outside,
   commands = [],
@@ -185,6 +193,7 @@ export function LumenAssistant({
   const chat = outside ?? own;
   const qc = useQueryClient();
   const status = useAssistantStatus(client);
+  const [allScopes, setAllScopes] = useAllScopes(client.key);
   const chats = useQuery({
     queryKey: ['lumen-assistant', client.key, 'chats'],
     queryFn: () => client.chats(),
@@ -331,13 +340,17 @@ export function LumenAssistant({
         )}
         <LumenAssistantChats
           chats={
-            chats.data?.map((c) => ({
-              id: c.id,
-              title: c.title,
-              updated_at: new Date(c.at).toISOString(),
-            })) ?? (chats.isFetched ? [] : null)
+            chats.data
+              ?.filter((c) => !chatScope || allScopes || c.scope === chatScope.current)
+              .map((c) => ({
+                id: c.id,
+                title: c.title,
+                updated_at: new Date(c.at).toISOString(),
+                ...(chatScope && allScopes && c.scope ? { where: chatScope.name?.(c.scope) } : {}),
+              })) ?? (chats.isFetched ? [] : null)
           }
           value={chat.chatId ?? undefined}
+          toggle={chatScope && { label: chatScope.label, on: allScopes, onChange: setAllScopes }}
           note={`Chats are kept ${keepDays} days after their last message.`}
           onRefresh={() => void chats.refetch()}
           onOpen={(c) => void chat.open(c.id)}
@@ -1800,4 +1813,24 @@ export function useLumenAssistantDock(
       </LumenAssistantPanel>
     ),
   };
+}
+
+/** The Chats menu's All switch (`chatScope`), kept on this device per assistant. */
+function useAllScopes(key: string): [boolean, (on: boolean) => void] {
+  const name = `lumen-assistant:${key}:all-scopes`;
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(name) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const set = (v: boolean) => {
+    setOn(v);
+    try {
+      if (v) localStorage.setItem(name, '1');
+      else localStorage.removeItem(name);
+    } catch {}
+  };
+  return [on, set];
 }

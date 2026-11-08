@@ -198,6 +198,11 @@ export interface AssistantChatRow {
   id: string;
   title: string;
   at: number;
+  /**
+   * Where the chat was started: the app's id of a workspace, project or record. `LumenAssistant`
+   * `chatScope` lists the current one's chats first and the rest behind a switch.
+   */
+  scope?: string;
 }
 
 /**
