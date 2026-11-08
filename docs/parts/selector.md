@@ -36,6 +36,7 @@ import { Select, SelectContent } from '@columenlabs/lumen-ui/ui/select';
 
 - ✗ A `DropdownMenu` of one or two actions behind ⋯. ✓ The actions as `IconButton`s on the row.
 - ✓ A long `detail` is fine: the name keeps up to two thirds of the row and the detail truncates first, its full text on hover. ✗ Shortening a detail to save the name.
+- ✓ A row that can't be picked says why: `disabled: 'Added'` dims it and shows a ✓ chip with the words in place of its detail; arrows and Tab skip it. ✗ A disabled row with no reason, or hiding a row the person already picked.
 - ✗ Capping the list's height without its footer. ✓ Leave sizing to the kit.
 
 ## Checked by
