@@ -115,7 +115,7 @@ export interface AgentTurnPlan {
   left?: number;
   /** The person lets the assistant move their screen: the `screen` tool joins when the browser sent its map. */
   screen?: boolean;
-  /** Most model calls in one answer; 8. */
+  /** Most model calls in one answer (`MAX_STEPS`, 8); the last one answers in words, with no tools. */
   maxSteps?: number;
   /**
    * A message sent while the answer runs joins it at its next step (Steer); on unless `false`,
@@ -143,6 +143,13 @@ export interface AgentTurnEnd {
 
 export const CAP_NOTE =
   'The spend cap for this month is reached: answer now from what you have, in a sentence or two. You can call no more tools.';
+
+/** The last call of an answer: no tools, so the answer never ends on a tool's result with nothing said. */
+export const LAST_STEP_NOTE =
+  "This is the answer's last call and you can call no more tools: answer now from what you found. If the task is not finished, say what is done, what is left and that you can carry on when asked.";
+
+/** Most model calls in one answer when the plan names none. */
+export const MAX_STEPS = 8;
 
 /** Put before a message the person steered into a running answer, for the model only. */
 export const STEER_NOTE =
@@ -839,7 +846,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       tools,
       ...(lazy ? { activeTools: lazy.active() } : {}),
       ...(plan.first ? { toolChoice: { type: 'tool', toolName: plan.first } } : {}),
-      maxSteps: plan.maxSteps ?? 8,
+      maxSteps: plan.maxSteps ?? MAX_STEPS,
       ...turnSettings(plan.model, {
         effort: plan.effort ?? 'default',
         ...(plan.out ? { out: plan.out } : {}),
@@ -862,6 +869,17 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         instructions: `${t.system}\n\n${CAP_NOTE}`,
       };
       return capped as StepConfig;
+    }
+    // The last call answers in words: past it the loop stops, so a tool call there would end the
+    // answer on a tool's result with nothing said.
+    if (ctx.stepNumber >= (t.plan.maxSteps ?? MAX_STEPS) - 1) {
+      const last: Record<string, unknown> = {
+        ...messages,
+        activeTools: [],
+        toolChoice: 'none',
+        instructions: `${t.system}\n\n${LAST_STEP_NOTE}`,
+      };
+      return last as StepConfig;
     }
     // A forced first call is for the first step only; tools a search found join each step.
     const auto = t.plan.first && ctx.stepNumber > 0;
