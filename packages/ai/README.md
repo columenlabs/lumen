@@ -245,6 +245,8 @@ Drafts and writes are cards in the chat's own storage (`lumen_cards` in the agen
 
 **Steer and queue.** While an answer runs, the panel's box stays open: Enter steers the message into the answer (`steer(message)` on the agent; the app routes `POST /chats/:id/steer` `{ message }` to it and answers `{ steered }`), Alt+Enter queues it for after. A steer joins at the answer's next step, after the tool it is on, with `STEER_NOTE` before it for the model; the panel shows it there marked Steered (event `steered`), and `view()` keeps it in place (`SteerNote`, under the message the answer is to). A steer the answer ends before reading comes back as `unsteered` and goes first in the queue. `plan.steer: false` turns it off for a model; an app without the route (404) shows Queue only. Queued messages each go as their own message when the answer before them ends; each has Steer now, Edit and Remove.
 
+**Retry.** A turn that ended in an error shows a Retry icon (⟳) beside Copy, always visible, while no answer runs and someone can pay (`status.wait` unset; hidden otherwise, never disabled). It sends the turn's words, `@` parts, `#` tier and images again as a new message (`chat.retry(at, user, extra)` in `useAssistantChat`), marked Retry above the bubble; the old error turns grey (`retried` on the error item) and stops offering Retry. Nothing changes on the server: the retried message is an ordinary message.
+
 ```ts
 class Chat extends LumenAgent<Env> {
   #settle?: (end: AgentTurnEnd) => Promise<void>;

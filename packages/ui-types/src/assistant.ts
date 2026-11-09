@@ -194,6 +194,8 @@ export type ChatItem =
       tier?: string;
       /** Sent while an answer ran and read by it at its next step (Steer). */
       steered?: boolean;
+      /** Sent again from a failed turn's Retry. */
+      retried?: boolean;
     }
   | { kind: 'text'; text: string }
   | StepItem
@@ -203,7 +205,8 @@ export type ChatItem =
   | { kind: 'advice'; tier: string; label: string; error?: string }
   | { kind: 'compacted' }
   | { kind: 'stopped'; reason?: 'cap' }
-  | { kind: 'error'; text: string; code?: string };
+  /** `retried`: its turn was sent again (Retry), so it no longer offers one. */
+  | { kind: 'error'; text: string; code?: string; retried?: boolean };
 
 /** A chat as the panel reads it. */
 export interface AssistantChat {
