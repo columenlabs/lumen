@@ -350,8 +350,11 @@ function mockAdapter(
     status?: Partial<AssistantStatus>;
     chat?: AssistantChat;
     requests?: AllowanceRequest[];
+    /** The first message fails as if the person's own keys were at their cap (Retry). */
+    failFirst?: boolean;
   } = {},
 ): AssistantAdapter {
+  let fails = o.failFirst ? 1 : 0;
   let status: AssistantStatus = { ...STATUS, ...o.status };
   const requests = structuredClone(o.requests ?? []);
   const chat = structuredClone(o.chat ?? CHAT);
@@ -530,6 +533,22 @@ function mockAdapter(
     },
     async send(msg, on, signal) {
       on({ event: 'chat', data: { id: chat.id, title: chat.title } });
+      if (fails > 0) {
+        fails--;
+        await wait(300);
+        on({
+          event: 'error',
+          data: {
+            message:
+              'Your own keys reached their monthly cap. Raise it in Settings ▸ Model providers.',
+          },
+        });
+        on({
+          event: 'done',
+          data: { id: chat.id, usage: CHAT.usage as NonNullable<AssistantChat['usage']> },
+        });
+        return;
+      }
       running = true;
       try {
         for (const e of SCRIPT) {
@@ -682,6 +701,14 @@ export default meta;
 export const Chat: StoryObj = {
   render: () => {
     const [adapter] = useState(() => mockAdapter());
+    return <Docked adapter={adapter} openChat />;
+  },
+};
+
+/** Retry: the first message fails (own keys at their cap); ⟳ on the failed turn sends it again. */
+export const Retry: StoryObj = {
+  render: () => {
+    const [adapter] = useState(() => mockAdapter({ failFirst: true }));
     return <Docked adapter={adapter} openChat />;
   },
 };

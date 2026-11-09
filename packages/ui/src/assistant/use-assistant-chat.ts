@@ -3,6 +3,7 @@
 // starting anew.
 import type {
   AssistantEvent,
+  AssistantImage,
   AssistantMessage,
   AssistantScreenOutcome,
   ChatItem,
@@ -82,6 +83,11 @@ export interface AssistantChatState {
    * next step, else queued for after it.
    */
   send: (message: string, extra?: Extra, how?: 'steer' | 'queue') => void;
+  /**
+   * Sends a failed turn again (Retry): `user` is the turn's message, `at` the error it ended in, which
+   * then stops offering Retry. Its words, parts, tier and images go again, with `extra` from now.
+   */
+  retry: (at: number, user: Extract<ChatItem, { kind: 'user' }>, extra?: Extra) => void;
   /** A queued message steered into the running answer now. */
   steerQueued: (id: string) => void;
   /** Takes a queued message out; its words and extras come back (Edit puts them in the box). */
@@ -241,7 +247,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   }, []);
 
   const run = useCallback(
-    async (message: string, extra?: Extra) => {
+    async (message: string, extra?: Extra, retried?: boolean) => {
       const ctl = new AbortController();
       abort.current = ctl;
       setBusy(true);
@@ -255,6 +261,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             ...(extra?.context ? { context: extra.context.label } : {}),
             ...(extra?.refs?.length ? { refs: extra.refs } : {}),
             ...(extra?.tier ? { tier: extra.tier } : {}),
+            ...(retried ? { retried: true } : {}),
             ...(extra?.images?.length
               ? { images: extra.images.map((i) => `data:${i.media_type};base64,${i.data}`) }
               : {}),
@@ -357,6 +364,30 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       if (steer) void steerIn(m);
     },
     [run, canSteer, steerIn],
+  );
+
+  const retry = useCallback(
+    (at: number, user: Extract<ChatItem, { kind: 'user' }>, extra?: Extra) => {
+      if (abort.current) return;
+      setItems((p) =>
+        p.map((x, i) => (i === at && x.kind === 'error' ? { ...x, retried: true } : x)),
+      );
+      const images = (user.images ?? []).flatMap((src) => {
+        const m = /^data:([^;]+);base64,(.*)$/.exec(src);
+        return m ? [{ media_type: m[1], data: m[2] } as AssistantImage] : [];
+      });
+      void run(
+        user.text,
+        {
+          ...extra,
+          ...(user.refs?.length ? { refs: user.refs } : {}),
+          ...(user.tier ? { tier: user.tier } : {}),
+          ...(images.length ? { images } : {}),
+        },
+        true,
+      );
+    },
+    [run],
   );
 
   const steerQueued = useCallback(
@@ -479,6 +510,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     canSteer,
     loading,
     send,
+    retry,
     steerQueued,
     unqueue,
     stop,

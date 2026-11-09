@@ -39,6 +39,7 @@ import {
   PencilIcon,
   PlusIcon,
   ReceiptIcon,
+  RefreshCwIcon,
   SearchIcon,
   SparklesIcon,
   SquareIcon,
@@ -383,7 +384,12 @@ export function LumenAssistant({
       </div>
       <AssistantName.Provider value={name}>
         <Screen.Provider value={controls}>
-          <Messages chat={chat} status={s} onSettings={onSettings} />
+          <Messages
+            chat={chat}
+            status={s}
+            onSettings={onSettings}
+            onRetry={(at, user) => chat.retry(at, user, extra())}
+          />
         </Screen.Provider>
       </AssistantName.Provider>
       <LumenComposer
@@ -412,10 +418,12 @@ function Messages({
   chat,
   status,
   onSettings,
+  onRetry,
 }: {
   chat: AssistantChatState;
   status: AssistantStatus | undefined;
   onSettings?: () => void;
+  onRetry: RetryFn;
 }) {
   const end = useRef<HTMLDivElement>(null);
   const count = JSON.stringify(chat.items).length;
@@ -471,7 +479,10 @@ function Messages({
       ) : (
         <TierNames.Provider value={(id) => status?.tiers.find((t) => t.id === id)?.label ?? id}>
           <UndoWrite.Provider value={chat.undo}>
-            <Items items={chat.items} onSettle={chat.settle} busy={chat.busy} turns />
+            {/* Retry waits while an answer runs or nobody can pay: hidden then, never disabled. */}
+            <RetryTurn.Provider value={chat.busy || status?.wait ? null : onRetry}>
+              <Items items={chat.items} onSettle={chat.settle} busy={chat.busy} turns />
+            </RetryTurn.Provider>
           </UndoWrite.Provider>
         </TierNames.Provider>
       )}
@@ -521,6 +532,20 @@ const AssistantName = createContext('Assistant');
 const TierNames = createContext<(id: string) => string>((id) => id);
 /** Takes back a change made at once (Undo on its line). */
 const UndoWrite = createContext<((s: StepItem) => Promise<void>) | null>(null);
+type UserItem = Extract<ChatItem, { kind: 'user' }>;
+type RetryFn = (at: number, user: UserItem) => void;
+/** Sends a failed turn again; null while it can't (an answer runs, nobody can pay). */
+const RetryTurn = createContext<RetryFn | null>(null);
+
+/** Where a turn's unretried error sits in the chat, when the turn starts with a message. */
+function failedAt(t: { from: number; items: (ChatItem | LiveItem)[] }): number | null {
+  if (t.items[0]?.kind !== 'user') return null;
+  for (let i = t.items.length - 1; i > 0; i--) {
+    const it = t.items[i];
+    if (it?.kind === 'error') return it.retried ? null : t.from + i;
+  }
+  return null;
+}
 
 function Items({
   items,
@@ -535,23 +560,38 @@ function Items({
   turns?: boolean;
 }) {
   const name = useContext(AssistantName);
+  const retry = useContext(RetryTurn);
   if (turns)
     return (
       <div className="flex flex-col gap-3">
         {chatTurns(items).map((t) => {
           const open = busy && t.from + t.items.length === items.length;
+          const failed = retry && !open ? failedAt(t) : null;
           return (
             <div key={t.from} data-slot="assistant-turn" className="group/turn flex flex-col gap-3">
               <Items items={t.items} onSettle={onSettle} busy={busy} />
               {!open && <WebSources items={t.items as ChatItem[]} />}
               {!open && (
-                <div className="-mt-2 flex justify-end opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-                  <IconButton
-                    icon={CopyIcon}
-                    label="Copy this turn"
-                    className="size-6 text-muted-foreground"
-                    onClick={() => copyMarkdown(turnMarkdown(t.items as ChatItem[], name), 'Turn')}
-                  />
+                <div className="-mt-2 flex justify-end gap-0.5">
+                  {/* A failed turn always shows Retry; Copy shows on hover (always on touch). */}
+                  {retry && failed !== null && (
+                    <IconButton
+                      icon={RefreshCwIcon}
+                      label="Retry"
+                      className="size-6"
+                      onClick={() => retry(failed, t.items[0] as UserItem)}
+                    />
+                  )}
+                  <div className="flex opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                    <IconButton
+                      icon={CopyIcon}
+                      label="Copy this turn"
+                      className="size-6 text-muted-foreground"
+                      onClick={() =>
+                        copyMarkdown(turnMarkdown(t.items as ChatItem[], name), 'Turn')
+                      }
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -593,7 +633,7 @@ function Item({
 }) {
   const tierName = useContext(TierNames);
   switch (item.kind) {
-    case 'user':
+    case 'user': {
       if (item.steered)
         return (
           <div className="ml-8 flex flex-col items-end gap-0.5 self-end">
@@ -606,7 +646,7 @@ function Item({
             </div>
           </div>
         );
-      return (
+      const bubble = (
         <div className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap has-[[data-slot=chat-image]]:ml-0 has-[[data-slot=chat-image]]:w-full">
           {(item.tier || item.refs?.length) && (
             <span className="mb-1 flex flex-wrap gap-1">
@@ -629,6 +669,17 @@ function Item({
           )}
         </div>
       );
+      if (!item.retried) return bubble;
+      return (
+        <div className="flex flex-col items-end gap-0.5 self-end">
+          <span className="flex items-center gap-1 text-primary text-xs">
+            <RefreshCwIcon className="size-3" />
+            Retry
+          </span>
+          {bubble}
+        </div>
+      );
+    }
     case 'text':
       return (
         <div className="prose-sm text-sm leading-relaxed [&_code]:font-code [&_code]:text-xs [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1.5 [&_ul]:list-disc">
@@ -663,7 +714,13 @@ function Item({
       return <Rule>{item.reason === 'cap' ? "Stopped at this month's spend cap" : 'Stopped'}</Rule>;
     case 'error':
       return (
-        <p role="alert" className="flex items-start gap-1.5 text-loss text-sm">
+        <p
+          role={item.retried ? undefined : 'alert'}
+          className={cn(
+            'flex items-start gap-1.5 text-sm',
+            item.retried ? 'text-muted-foreground' : 'text-loss',
+          )}
+        >
           <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
           {item.text}
         </p>
