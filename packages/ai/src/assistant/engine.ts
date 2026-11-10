@@ -112,6 +112,11 @@ export interface AllowanceOptions {
   approver?: (caller: Caller) => boolean;
   /** Hears each request and each decision: tell the approvers, then the person. */
   notify?: (n: AllowanceNotice) => void | Promise<void>;
+  /**
+   * Units a month for one person (`period: 'month'`): their plan's allowance or an admin's override.
+   * Nothing (or a throw) falls back to the admin's cap in Settings.
+   */
+  cap?: (id: string) => number | null | undefined | Promise<number | null | undefined>;
 }
 
 /** A request made, or decided. */
@@ -427,6 +432,7 @@ export class Assistant {
               usd: unit.usd,
               period: al.period ?? 'month',
               starter: al.starter ?? DEFAULT_CAP / unit.usd,
+              ...(al.cap ? { cap: al.cap } : {}),
             },
           }
         : {}),
@@ -965,7 +971,7 @@ export class Assistant {
     const base =
       this.state.allowanceConfig?.period === 'once'
         ? (this.state.allowanceConfig?.starter ?? total)
-        : (await this.state.appCap()) / u.usd;
+        : (await this.state.capFor(caller.id)) / u.usd;
     const waiting = approver
       ? (await this.state.requests()).rows.filter((r) => r.status === 'open').length
       : undefined;
