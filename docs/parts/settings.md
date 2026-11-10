@@ -65,7 +65,7 @@ Rules:
   Passed                                       ↺  ✓  footer: a word or two, then icons
 ```
 
-- `description` is one plain line of 64 characters or less; nothing else under the title.
+- `description` is one plain line of 64 characters or less, drawn beside the title (`Email | How the app sends mail`) and under it on a phone; nothing else under the title.
 - Every row starts collapsed and shows its name, its one-line `meta` beside it, and its `status`. Opening one closes the others.
 - The footer's status is a word or two ("Passed", "Test to save"). Actions are icons.
 

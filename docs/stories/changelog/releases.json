@@ -1,5 +1,100 @@
 [
   {
+    "tag": "v0.1.219",
+    "date": "2026-11-09T05:42:35Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Retry a failed assistant turn with one icon",
+        "body": "In `LumenAssistant` from `@columenlabs/lumen-ui`, a turn that ended in an error now shows a Retry icon (tooltip and `aria-label` \"Retry\") in its action row beside Copy, so users can resend it without retyping."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Resend programmatically with `retry`",
+        "body": "`useAssistantChat()` now returns `retry(at, user, extra)`, which sends the failed turn's words, `@` refs, `#` tier and images again as a new message, using your app's current `extra()` for context and screen."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Retried turns are marked in the thread",
+        "body": "The new message is labeled \"Retry\", and the old error turns grey and stops offering Retry, so the history shows which attempt is current."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Types carry the retried state",
+        "body": "In `@columenlabs/lumen-ui-types`, the `user` and `error` chat items gain an optional `retried` field, an additive change that needs no migration."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.218",
+    "date": "2026-11-09T01:51:58Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "An agent answer no longer ends on a tool call",
+        "body": "In `LumenAgent` from `@columenlabs/lumen-ai/agent`, the last allowed step (by default the 8th model call, set with `plan.maxSteps`) now runs with no tools, so the agent answers in words from what it found and says what is left."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New `LAST_STEP_NOTE` and `MAX_STEPS` exports",
+        "body": "From `@columenlabs/lumen-ai/agent`, you can import `LAST_STEP_NOTE`, the text added to the instructions on the final step, and `MAX_STEPS`, the default step limit of 8, instead of hard-coding them in your app."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer docs for `plan.maxSteps`",
+        "body": "The `plan.maxSteps` description in `@columenlabs/lumen-ai` now says the last call has no tools, and the README has a short **Steps** paragraph on how the limit works."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.217",
+    "date": "2026-11-08T22:52:42Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant shows what it found on the web",
+        "body": "In `LumenAssistant` from @columenlabs/lumen-ui, web search steps now read \"Searched the web: <query> · N results\" and fold open to show linked results, with no new prop to set."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Numbered Sources chips on every turn",
+        "body": "At the end of each `LumenAssistant` turn, a **Sources** row shows one numbered chip per page the assistant read, and each chip opens that page in a new tab."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Web steps in the view model",
+        "body": "From @columenlabs/lumen-ui-types/assistant, `StepItem` has an optional `web` field (`StepWeb`) holding a search's `query` and `results`, a page `read`, or a failed read as `tried`, so custom renderers can show web activity too."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Web steps are filled in for live and stored chats",
+        "body": "In @columenlabs/lumen-ai, the new `webStep()` populates `step.web` for `web__*` tools, so streamed answers and saved chats carry the same data, even when an answer is cut off."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.216",
     "date": "2026-11-08T22:34:16Z",
     "takeaways": [
