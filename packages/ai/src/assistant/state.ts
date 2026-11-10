@@ -98,6 +98,8 @@ export interface AllowanceConfig {
   period: 'month' | 'once';
   /** Units each person starts with (once); a month's cap is the admin's cap in Settings. */
   starter: number;
+  /** Units a month for one person (their plan, an override); nothing falls back to the admin's cap. */
+  cap?: (id: string) => number | null | undefined | Promise<number | null | undefined>;
 }
 
 export interface AllowanceDoc {
@@ -241,7 +243,15 @@ export class State {
     const granted = d.grants
       .filter((g) => monthIn(this.o.timeZone, new Date(g.at)) === month)
       .reduce((a, g) => a + g.amount, 0);
-    return { total: (await this.appCap()) + granted * al.usd, used };
+    return { total: (await this.capFor(id)) + granted * al.usd, used };
+  }
+
+  /** USD a month this person may spend on the app's keys: their own cap when the app names one,
+   *  else the admin's. A cap that cannot be read falls back too, so an answer never waits on it. */
+  async capFor(id: string) {
+    const al = this.o.allowance;
+    const own = al?.cap ? await Promise.resolve(al.cap(id)).catch(() => null) : null;
+    return typeof own === 'number' && own >= 0 ? own * al!.usd : this.appCap();
   }
 
   /** USD a month when nobody set a cap. */
