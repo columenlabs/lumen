@@ -47,6 +47,7 @@ Rules:
 7. **A section's pill** is `health` on its `SettingsSectionDef`: `sectionHealth(items)`, the worst thing wins. The Settings list shows it as a dot.
 8. **A row with only an `end`** (a switch or a status pill, no control) gives its label the whole row, so a short name never cuts off on a phone. A row with a control keeps the fixed label column (8rem, 6rem on a phone).
 9. **A form that saves together** keeps label beside field (`SettingField`), and its Test result sits in its footer, not a row of its own.
+10. **A section's header is one line, centred**: icon, title, a divider, then the one-line description, all on the same middle line (never baseline aligned, which drops the description under the title's line). On a phone the description goes under the title. The Settings panel draws it; an app never builds its own section header.
 
 ### Built on the slots
 - `LumenConnection` (a key, a sign-in, a relay): one row per way to connect, its value with Replace or Sign in again inside. One way: its last test, Test and Remove sit in the action bar. Several ways: a Use row picks the one that runs, and each way's row ends in its own status, Test and Remove (on a phone the label and those sit above the value).
