@@ -430,12 +430,13 @@ export function LumenSettings({
   );
 
   const header = (s: SettingsSectionDef, slot: (el: HTMLDivElement | null) => void) => (
-    // Actions sit at the bottom right, in line with the description.
-    <div className="flex items-end gap-2">
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+    // Title, then its description beside it on one line ("Billing | Stripe keys and checkout");
+    // on a phone the description drops under the title. Actions sit at the right.
+    <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
         <h3
           id={`settings-${s.id}-title`}
-          className="flex items-center gap-2 text-base font-semibold"
+          className="flex shrink-0 items-center gap-2 text-base font-semibold"
         >
           <s.icon className="size-4 text-muted-foreground" />
           {s.title}
@@ -444,7 +445,7 @@ export function LumenSettings({
         {/* One line, never wrapped; scripts/check-settings-copy.sh keeps it short. */}
         {s.description && (
           <p
-            className="truncate text-sm text-muted-foreground"
+            className="min-w-0 truncate text-sm text-muted-foreground sm:border-l sm:pl-3"
             title={typeof s.description === 'string' ? s.description : undefined}
           >
             {s.description}
