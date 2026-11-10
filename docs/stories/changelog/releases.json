@@ -1,5 +1,59 @@
 [
   {
+    "tag": "v0.1.224",
+    "date": "2026-11-10T22:40:18Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Per-call effort for completions",
+        "body": "In `@columenlabs/lumen-ai`, `assistant.complete(caller, { effort })` now accepts an optional `effort`, so you can set how hard the model thinks for that one call."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Effort now reaches every provider",
+        "body": "Models that previously never got an effort from `assistant.complete()` now receive your `effort` as the request's `reasoning.effort`, and `max` is sent as `high`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Call effort beats saved tier effort",
+        "body": "For models that read the person's saved tier effort (`output_config.effort`), the `effort` you pass to `assistant.complete(caller, { effort })` now wins for that call, so you can compare models at the same effort on one background job."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.223",
+    "date": "2026-11-10T22:35:33Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Settings section headers line up",
+        "body": "In the Settings panel from `@columenlabs/lumen-ui`, a section's description is now vertically centred with its title (`sm:items-center`) at the `sm` breakpoint and wider, instead of sitting lower than the title's icon row."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Phone layout and API unchanged",
+        "body": "On phones the Settings section description still sits under the title, and no props or options changed, so an app needs no code changes to pick this up."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Settings header rule documented",
+        "body": "The Settings part guide now says a section's header is one centred line drawn by the panel, so an app can rely on the panel for the header's alignment."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.222",
     "date": "2026-11-10T21:15:10Z",
     "takeaways": [
