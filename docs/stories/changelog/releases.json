@@ -1,5 +1,72 @@
 [
   {
+    "tag": "v0.1.222",
+    "date": "2026-11-10T21:15:10Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Per-person monthly cap for the assistant",
+        "body": "In `@columenlabs/lumen-ai`, `createAssistant({ allowance: { cap } })` now accepts an optional `cap(id)` function that returns the units one person may spend per month on the shared keys, such as their plan's allowance or an admin's override."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A failing cap lookup never blocks an answer",
+        "body": "If your `cap(id)` returns nothing, returns a negative number or throws, `createAssistant` falls back to the admin's cap in Settings, so you can read plans or overrides from a database without risking the assistant's reply."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "No migration for existing apps",
+        "body": "Apps that don't pass `allowance.cap` keep the admin's cap exactly as before, and `period: 'once'` allowances are unchanged."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.221",
+    "date": "2026-11-10T20:57:22Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Give each AI provider its own shared-key section",
+        "body": "In `@columenlabs/lumen-ui/assistant`, `assistantAdminSections` now takes an optional `providers: { id, label }[]`, so the admin Settings menu lists one sub-section per provider holding that provider's shared key instead of a single Shared model keys section."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Allowance is now its own section",
+        "body": "When you pass `providers` to `assistantAdminSections`, the cap input moves into a new `assistant-shared-allowance` section that sits above the per-provider key sections."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Predictable ids for the new sections",
+        "body": "Each provider's section from `assistantAdminSections` has the id `assistant-shared-key-<id>` (using the `id` you passed in `providers`) and is marked `sub: true`, so you can find or target it like any other Settings section."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.220",
+    "date": "2026-11-10T20:45:12Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Settings section descriptions sit beside the title",
+        "body": "In `@columenlabs/lumen-ui`, `LumenSettings` now draws a section's `description` on the same baseline as its title (`Email | How the app sends mail`) from the `sm` breakpoint up, so desktop section headers are one line shorter and no prop changes are needed."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.219",
     "date": "2026-11-09T05:42:35Z",
     "takeaways": [
