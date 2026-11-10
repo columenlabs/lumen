@@ -28,6 +28,7 @@ export {
   type Paying,
   type PersonDoc,
   type SpendDoc,
+  type TaskSpend,
   State,
   type TokenDoc,
   waitText,

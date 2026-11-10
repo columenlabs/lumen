@@ -117,8 +117,30 @@ export interface RequestsDoc {
 const REQUESTS_KEPT = 300;
 
 export type SpendRow = UsagePart & { payer: AssistantPayer };
+/**
+ * One task's use of one model this month: what a kind of work cost (a chat answer, a background
+ * task), beside `rows`, which stay per tier and payer.
+ */
+export interface TaskSpend {
+  /** The task's id (`chat`, or a `complete` call's `tag` or `task`). */
+  task: string;
+  /** The model's id. */
+  model: string;
+  /** Answers: chat turns, or `complete` calls. */
+  runs: number;
+  /** Model calls. */
+  calls: number;
+  in: number;
+  read: number;
+  out: number;
+  usd: number;
+  /** Time the answers took in all, in ms (`ms / runs` is the average). */
+  ms: number;
+}
 export interface SpendDoc {
   rows: SpendRow[];
+  /** Per task and model, counted since the kit began tagging (older spend is only in `rows`). */
+  tasks?: TaskSpend[];
 }
 
 /** Chats and runs kept in one month's usage history: the newest this many. */
@@ -366,11 +388,44 @@ export class State {
     return this.docs.read<SpendDoc>(id, `spend:${month}`).then((d) => d ?? { rows: [] });
   }
 
-  /** Adds an answer's use to this month's spend, by label and payer. */
-  async addSpend(id: string, payer: AssistantPayer, parts: UsagePart[]) {
+  /**
+   * Adds an answer's use to this month's spend, by label and payer. `at` names the task the answer
+   * was for and how long it took, so the month also adds up per task and model (`tasks`).
+   */
+  async addSpend(
+    id: string,
+    payer: AssistantPayer,
+    parts: UsagePart[],
+    at?: { task: string; ms?: number },
+  ) {
     if (!parts.some((p) => p.calls)) return;
     await this.docs.update<SpendDoc>(id, `spend:${this.month()}`, (d) => {
       const rows = [...(d?.rows ?? [])];
+      const tasks = [...(d?.tasks ?? [])];
+      if (at) {
+        // The answer and its time count once, on its first model.
+        let first = true;
+        for (const p of parts) {
+          if (!p.calls) continue;
+          const model = p.model ?? p.label;
+          const i = tasks.findIndex((t) => t.task === at.task && t.model === model);
+          const prev = i >= 0 ? tasks[i] : undefined;
+          const row: TaskSpend = {
+            task: at.task,
+            model,
+            runs: (prev?.runs ?? 0) + (first ? 1 : 0),
+            calls: (prev?.calls ?? 0) + p.calls,
+            in: (prev?.in ?? 0) + p.in,
+            read: (prev?.read ?? 0) + p.read,
+            out: (prev?.out ?? 0) + p.out,
+            usd: (prev?.usd ?? 0) + p.usd,
+            ms: (prev?.ms ?? 0) + (first ? (at.ms ?? 0) : 0),
+          };
+          first = false;
+          if (i >= 0) tasks[i] = row;
+          else tasks.push(row);
+        }
+      }
       for (const p of parts) {
         if (!p.calls) continue;
         const i = rows.findIndex((r) => r.label === p.label && r.payer === payer);
@@ -388,7 +443,7 @@ export class State {
         if (i >= 0) rows[i] = row;
         else rows.push(row);
       }
-      return { rows };
+      return tasks.length ? { rows, tasks } : { rows };
     });
     if (payer === 'app' && this.o.allowance?.period === 'once') {
       const usd = parts.reduce((a, p) => a + p.usd, 0);

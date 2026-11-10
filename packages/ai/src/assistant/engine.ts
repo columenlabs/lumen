@@ -651,7 +651,9 @@ export class Assistant {
           : {},
     };
     const settle = async (end: AgentTurnEnd) => {
-      await this.state.addSpend(caller.id, paying.payer, end.parts).catch(() => undefined);
+      await this.state
+        .addSpend(caller.id, paying.payer, end.parts, { task: 'chat', ms: end.ms })
+        .catch(() => undefined);
       if (input.chat)
         await this.state
           .addUsage(
@@ -1352,8 +1354,14 @@ export class Assistant {
        * that day share one line named after the task.
        */
       run?: { id: string; title: string };
+      /**
+       * What this call counts as in the month's spend per task (`spend:YYYY-MM` `tasks`), when one
+       * task does more than one kind of work (a first try, a repair). Left out, it is the task.
+       */
+      tag?: string;
     },
   ): Promise<{ text: string; usd: number; model: string; cut: boolean; usage: UsagePart }> {
+    const began = Date.now();
     const s = await this.session(caller, await this.mainTier(caller, o.task));
     const { paying, wait } = await this.state.paying(caller.id, s.model.provider);
     if (!paying) {
@@ -1429,7 +1437,10 @@ export class Assistant {
       );
     } finally {
       const part = s.meter.part();
-      await this.state.addSpend(caller.id, paying.payer, [part]);
+      await this.state.addSpend(caller.id, paying.payer, [part], {
+        task: o.tag ?? o.task,
+        ms: Date.now() - began,
+      });
       const task = this.tasks.find((t) => t.id === o.task);
       await this.state
         .addUsage(
