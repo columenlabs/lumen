@@ -370,9 +370,28 @@ function SharedProviderKey({ client, p }: { client: AssistantAdapter; p: Assista
   );
 }
 
+const adminOnly = <p className="text-muted-foreground text-sm">Only an admin can change these.</p>;
+
+/** What each person may spend on the shared keys. A one-off allowance has no monthly cap: starter and grants set it. */
+function SharedCap({ client, s }: { client: AssistantAdapter; s: AssistantStatus }) {
+  const { apply } = useApply(client);
+  if (s.allowance?.period === 'once') return null;
+  return (
+    <Row
+      label="Each person may spend"
+      info="A month on the shared keys, every provider together. Past it, a person's own key pays."
+    >
+      <CapInput
+        label="Allowance per person"
+        value={s.caps.app}
+        onSave={(n) => void apply('cap', () => client.appCap(n))}
+      />
+    </Row>
+  );
+}
+
 /** Admins only: the app's shared keys and what each person may spend on them. */
 function SharedKeys({ client }: { client: AssistantAdapter }) {
-  const { apply } = useApply(client);
   return (
     <WithStatus client={client}>
       {(s) =>
@@ -383,24 +402,39 @@ function SharedKeys({ client }: { client: AssistantAdapter }) {
                 <SharedProviderKey key={p.id} client={client} p={p} />
               ))}
             </LumenExpandList>
-            {/* A one-off allowance has no monthly cap: starter and grants set it. */}
-            {s.allowance?.period !== 'once' && (
-              <Row
-                label="Each person may spend"
-                info="A month on the shared keys, every provider together. Past it, a person's own key pays."
-              >
-                <CapInput
-                  label="Allowance per person"
-                  value={s.caps.app}
-                  onSave={(n) => void apply('cap', () => client.appCap(n))}
-                />
-              </Row>
-            )}
+            <SharedCap client={client} s={s} />
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm">Only an admin can change these.</p>
+          adminOnly
         )
       }
+    </WithStatus>
+  );
+}
+
+/** Admins only: one provider's shared key on a section of its own, open. */
+function SharedKey({ client, id }: { client: AssistantAdapter; id: string }) {
+  return (
+    <WithStatus client={client}>
+      {(s) => {
+        const p = s.providers.find((x) => x.id === id);
+        if (!s.admin) return adminOnly;
+        if (!p) return null;
+        return (
+          <LumenExpandList defaultOpen={p.id}>
+            <SharedProviderKey client={client} p={p} />
+          </LumenExpandList>
+        );
+      }}
+    </WithStatus>
+  );
+}
+
+/** Admins only: the allowance alone, for apps that give each provider its own section. */
+function SharedAllowance({ client }: { client: AssistantAdapter }) {
+  return (
+    <WithStatus client={client}>
+      {(s) => (s.admin ? <SharedCap client={client} s={s} /> : adminOnly)}
     </WithStatus>
   );
 }
@@ -902,19 +936,44 @@ function AllowanceRequests({ client }: { client: AssistantAdapter }) {
 export function assistantAdminSections({
   client,
   allowance = false,
+  providers,
 }: {
   client: AssistantAdapter;
   /** Add Allowance requests (the app set `allowance` on the server). */
   allowance?: boolean;
+  /** Give each provider's shared key a section of its own (listed under Allowance) instead of one
+   *  Shared model keys section: the app's providers, in order. */
+  providers?: { id: string; label: string }[];
 }): SettingsSectionDef[] {
+  const keys: SettingsSectionDef[] = providers
+    ? [
+        {
+          id: 'assistant-shared-allowance',
+          title: 'Allowance',
+          icon: CoinsIcon,
+          description: 'What each person may spend on the shared keys',
+          content: <SharedAllowance client={client} />,
+        },
+        ...providers.map((p) => ({
+          id: `assistant-shared-key-${p.id}`,
+          title: p.label,
+          icon: KeyRoundIcon,
+          description: "The key everyone's answers run on",
+          sub: true,
+          content: <SharedKey client={client} id={p.id} />,
+        })),
+      ]
+    : [
+        {
+          id: 'assistant-shared-keys',
+          title: 'Shared model keys',
+          icon: KeyRoundIcon,
+          description: "Keys everyone's answers run on, and the allowance",
+          content: <SharedKeys client={client} />,
+        },
+      ];
   return [
-    {
-      id: 'assistant-shared-keys',
-      title: 'Shared model keys',
-      icon: KeyRoundIcon,
-      description: "Keys everyone's answers run on, and the allowance",
-      content: <SharedKeys client={client} />,
-    },
+    ...keys,
     ...(allowance
       ? [
           {
