@@ -1240,6 +1240,7 @@ export class Assistant {
     max: number,
     signal?: AbortSignal,
     images?: CompleteImage[],
+    effort?: AssistantEffort,
   ): Promise<{ text: string; cut: boolean }> {
     // xAI's API is OpenAI's Responses API at another address.
     const xai = s.model.provider === 'xai';
@@ -1271,6 +1272,8 @@ export class Assistant {
           store: false,
           stream: true,
           ...(plan ? {} : { max_output_tokens: max }),
+          ...(effort &&
+            effort !== 'default' && { reasoning: { effort: effort === 'max' ? 'high' : effort } }),
         } as OpenAI.Responses.ResponseCreateParamsStreaming,
         signal ? { signal } : {},
       );
@@ -1336,6 +1339,12 @@ export class Assistant {
       images?: CompleteImage[];
       /** The answer's token cap, thinking included (default 1,000, at most COMPLETE_MAX_TOKENS). */
       maxTokens?: number;
+      /**
+       * How hard the model thinks on this one call, whatever the person saved for the tier. On an
+       * OpenAI or xAI model it is the request's reasoning effort (`max` asks for `high`); left out,
+       * those models run at their own default.
+       */
+      effort?: AssistantEffort;
       signal?: AbortSignal;
       /**
        * The run this call belongs to, as one line of the person's usage history (`GET /usage`):
@@ -1369,6 +1378,7 @@ export class Assistant {
           max,
           o.signal,
           o.images,
+          o.effort,
         ));
       } else if (clients.anthropic) {
         // Streamed and read whole: a long answer (minutes at a high cap) keeps its connection alive,
@@ -1397,7 +1407,7 @@ export class Assistant {
                     : o.prompt,
                 },
               ],
-              ...effortParams(s.effort),
+              ...effortParams(o.effort ?? s.effort),
             },
             o.signal ? { signal: o.signal } : undefined,
           )
