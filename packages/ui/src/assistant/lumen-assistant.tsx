@@ -37,6 +37,7 @@ import {
   LightbulbIcon,
   ListPlusIcon,
   MonitorIcon,
+  PaperclipIcon,
   PencilIcon,
   PlusIcon,
   ReceiptIcon,
@@ -1347,10 +1348,10 @@ function QuoteLine({ quote, onRemove }: { quote: AssistantQuote; onRemove?: () =
 const IMAGE_EDGE = 1568;
 
 /**
- * A pasted or dropped image, ready to send: scaled to `IMAGE_EDGE` on a canvas and saved as JPEG
+ * A pasted, dropped or picked image, ready to send: scaled to `IMAGE_EDGE` on a canvas and saved as JPEG
  * (PNG when it has few pixels to lose), as base64. `null` when the browser cannot read it.
  */
-async function readImage(file: File): Promise<AssistantImage | null> {
+export async function readAssistantImage(file: File): Promise<AssistantImage | null> {
   try {
     const bmp = await createImageBitmap(file);
     const k = Math.min(1, IMAGE_EDGE / Math.max(bmp.width, bmp.height));
@@ -1432,6 +1433,7 @@ export function LumenComposer({
   const [quote, setQuote] = useState<AssistantQuote | null>(null);
   const list = useRef<LumenSelectorListHandle>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const filePick = useRef<HTMLInputElement>(null);
   const selection = usePageSelection();
   // An app's compose request (`composeAssistant`): its chips and text, ready to finish.
   const [request, take] = useComposeRequest();
@@ -1480,7 +1482,7 @@ export function LumenComposer({
     const picked = [...files].filter((f) => f.type.startsWith('image/'));
     if (!canAttach || !picked.length) return false;
     void (async () => {
-      const read = (await Promise.all(picked.map(readImage))).filter(
+      const read = (await Promise.all(picked.map(readAssistantImage))).filter(
         (x): x is AssistantImage => !!x,
       );
       if (read.length < picked.length)
@@ -1801,6 +1803,7 @@ export function LumenComposer({
           className={cn(
             'max-h-48 min-h-11 resize-none',
             busy && text.trim() && canSteer ? 'pr-18' : 'pr-11',
+            canAttach && 'pb-9',
           )}
           value={text}
           disabled={disabled}
@@ -1829,6 +1832,28 @@ export function LumenComposer({
             }
           }}
         />
+        {canAttach && (
+          <div className="absolute bottom-1.5 left-1.5">
+            <IconButton
+              icon={PaperclipIcon}
+              label="Attach images"
+              size="icon-xs"
+              disabled={disabled}
+              onClick={() => filePick.current?.click()}
+            />
+            <input
+              ref={filePick}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                if (e.target.files) attach(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </div>
+        )}
         <div className="absolute right-1.5 bottom-1.5">
           {busy && !text.trim() ? (
             <IconButton

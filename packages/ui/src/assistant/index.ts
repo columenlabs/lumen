@@ -9,6 +9,7 @@ export {
   type LumenAssistantProps,
   LumenComposer,
   assistantStatusKey,
+  readAssistantImage,
   useAssistantStatus,
   useLumenAssistantDock,
 } from './lumen-assistant';
