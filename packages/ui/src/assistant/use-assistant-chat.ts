@@ -260,6 +260,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             at: Date.now(),
             ...(extra?.context ? { context: extra.context.label } : {}),
             ...(extra?.refs?.length ? { refs: extra.refs } : {}),
+            ...(extra?.quote ? { quote: extra.quote } : {}),
             ...(extra?.tier ? { tier: extra.tier } : {}),
             ...(retried ? { retried: true } : {}),
             ...(extra?.images?.length
@@ -381,6 +382,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         {
           ...extra,
           ...(user.refs?.length ? { refs: user.refs } : {}),
+          ...(user.quote ? { quote: user.quote } : {}),
           ...(user.tier ? { tier: user.tier } : {}),
           ...(images.length ? { images } : {}),
         },

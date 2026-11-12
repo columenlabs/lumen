@@ -68,6 +68,18 @@ export interface AssistantRefNote {
   [key: string]: unknown;
 }
 
+/**
+ * A piece of the chat the person replies to: the text they selected and whose message it came
+ * from. It shows above their message and goes to the model with it.
+ */
+export interface AssistantQuote {
+  text: string;
+  from: 'assistant' | 'user';
+}
+
+/** The longest quote a message carries; a longer selection is cut to it. */
+export const ASSISTANT_QUOTE_MAX = 2000;
+
 /** One tool call the assistant made. */
 export interface StepItem {
   kind: 'step';
@@ -191,6 +203,8 @@ export type ChatItem =
       images?: string[];
       context?: string;
       refs?: AssistantRefNote[];
+      /** The piece of the chat this message replies to. */
+      quote?: AssistantQuote;
       tier?: string;
       /** Sent while an answer ran and read by it at its next step (Steer). */
       steered?: boolean;
@@ -283,6 +297,8 @@ export interface AssistantMessage {
   /** The page the person is on: a label and a short note of what it shows. */
   context?: { label: string; note?: unknown };
   refs?: AssistantRefNote[];
+  /** The piece of the chat this message replies to (Reply on selected text). */
+  quote?: AssistantQuote;
   /** The tier the person picked for this message (`#`): a higher one takes it as a task, the same or a lower one answers it. */
   tier?: string;
   /** The browser's IANA zone, for the assistant's bearings (the time now where the person is). */

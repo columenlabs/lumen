@@ -10,6 +10,7 @@ import {
   type AllowanceUnit,
   type AssistantImage,
   type AssistantMessage,
+  type AssistantQuote,
   type AssistantRefNote,
   type AssistantScreenMove,
   type AssistantStatus,
@@ -36,10 +37,12 @@ import {
   LightbulbIcon,
   ListPlusIcon,
   MonitorIcon,
+  PaperclipIcon,
   PencilIcon,
   PlusIcon,
   ReceiptIcon,
   RefreshCwIcon,
+  ReplyIcon,
   SearchIcon,
   SparklesIcon,
   SquareIcon,
@@ -98,6 +101,7 @@ import { Textarea } from '../ui/textarea';
 import { ChatImage } from './chat-image';
 import type { AssistantAdapter } from './client';
 import { chatMarkdown, chatTurns, copyMarkdown, turnMarkdown } from './copy';
+import { ReplyToSelection } from './reply-selection';
 import {
   type AssistantSource,
   composeAssistant,
@@ -426,6 +430,7 @@ function Messages({
   onRetry: RetryFn;
 }) {
   const end = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const count = JSON.stringify(chat.items).length;
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll to the end as the chat grows
   useEffect(() => {
@@ -435,7 +440,8 @@ function Messages({
   const shellSettings = useOpenSettings();
   const settings = onSettings ? (_section: string) => onSettings() : shellSettings;
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+    <div ref={box} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <ReplyToSelection box={box} />
       {status?.wait && (
         <Alert className="mb-3">
           <CircleAlertIcon />
@@ -647,7 +653,11 @@ function Item({
           </div>
         );
       const bubble = (
-        <div className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap has-[[data-slot=chat-image]]:ml-0 has-[[data-slot=chat-image]]:w-full">
+        <div
+          data-chat-from="user"
+          className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap has-[[data-slot=chat-image]]:ml-0 has-[[data-slot=chat-image]]:w-full"
+        >
+          {item.quote && <QuoteLine quote={item.quote} />}
           {(item.tier || item.refs?.length) && (
             <span className="mb-1 flex flex-wrap gap-1">
               {item.tier && <ComposerChip sign={TIER} label={tierName(item.tier)} />}
@@ -682,7 +692,10 @@ function Item({
     }
     case 'text':
       return (
-        <div className="prose-sm text-sm leading-relaxed [&_code]:font-code [&_code]:text-xs [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1.5 [&_ul]:list-disc">
+        <div
+          data-chat-from="assistant"
+          className="prose-sm text-sm leading-relaxed [&_code]:font-code [&_code]:text-xs [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1.5 [&_ul]:list-disc"
+        >
           <ChatMarkdown>{item.text}</ChatMarkdown>
           {item.live && (
             <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-foreground/60 align-middle" />
@@ -1303,16 +1316,42 @@ export interface ComposerExtra {
   tier?: string;
   refs?: AssistantRefNote[];
   images?: AssistantImage[];
+  quote?: AssistantQuote;
+}
+
+/**
+ * A quote a message replies to: the reply icon and the quoted words. Over the box it is one line
+ * with an × (`onRemove`); in a sent message up to two lines. The whole text is in its hover.
+ */
+function QuoteLine({ quote, onRemove }: { quote: AssistantQuote; onRemove?: () => void }) {
+  return (
+    <span
+      data-slot="chat-quote"
+      className={cn(
+        'flex min-w-0 items-start gap-1.5 rounded-md bg-background/60 px-2 py-1 text-muted-foreground text-xs whitespace-normal',
+        onRemove ? 'mb-2 items-center bg-muted py-0.5 pr-0.5' : 'mb-1.5',
+      )}
+      title={quote.text}
+    >
+      <ReplyIcon className={cn('size-3.5 shrink-0', !onRemove && 'mt-0.5')} aria-hidden />
+      <span className={cn('min-w-0 flex-1', onRemove ? 'truncate' : 'line-clamp-2 break-words')}>
+        {quote.text}
+      </span>
+      {onRemove && (
+        <IconButton icon={XIcon} label="Remove quote" size="icon-xs" onClick={onRemove} />
+      )}
+    </span>
+  );
 }
 
 /** The longest edge an image is sent at (what the models read best; larger only costs more). */
 const IMAGE_EDGE = 1568;
 
 /**
- * A pasted or dropped image, ready to send: scaled to `IMAGE_EDGE` on a canvas and saved as JPEG
+ * A pasted, dropped or picked image, ready to send: scaled to `IMAGE_EDGE` on a canvas and saved as JPEG
  * (PNG when it has few pixels to lose), as base64. `null` when the browser cannot read it.
  */
-async function readImage(file: File): Promise<AssistantImage | null> {
+export async function readAssistantImage(file: File): Promise<AssistantImage | null> {
   try {
     const bmp = await createImageBitmap(file);
     const k = Math.min(1, IMAGE_EDGE / Math.max(bmp.width, bmp.height));
@@ -1391,8 +1430,10 @@ export function LumenComposer({
   const [tier, setTier] = useState<string | null>(null);
   const [refs, setRefs] = useState<AssistantRefNote[]>([]);
   const [images, setImages] = useState<AssistantImage[]>([]);
+  const [quote, setQuote] = useState<AssistantQuote | null>(null);
   const list = useRef<LumenSelectorListHandle>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const filePick = useRef<HTMLInputElement>(null);
   const selection = usePageSelection();
   // An app's compose request (`composeAssistant`): its chips and text, ready to finish.
   const [request, take] = useComposeRequest();
@@ -1402,6 +1443,7 @@ export function LumenComposer({
     take();
     if (request.refs?.length) setRefs((p) => [...p, ...(request.refs ?? [])]);
     if (request.tier) setTier(request.tier);
+    if (request.quote) setQuote(request.quote);
     if (request.text !== undefined) {
       setText(request.text);
       setCaret(request.text.length);
@@ -1425,6 +1467,7 @@ export function LumenComposer({
     ...(tier ? { tier } : {}),
     ...(refs.length ? { refs } : {}),
     ...(images.length ? { images } : {}),
+    ...(quote ? { quote } : {}),
   });
   const clear = () => {
     setText('');
@@ -1432,13 +1475,14 @@ export function LumenComposer({
     setTier(null);
     setRefs([]);
     setImages([]);
+    setQuote(null);
   };
   /** Adds the image files among `files`; says so when one is left out. Returns whether any was an image. */
   const attach = (files: FileList | File[]): boolean => {
     const picked = [...files].filter((f) => f.type.startsWith('image/'));
     if (!canAttach || !picked.length) return false;
     void (async () => {
-      const read = (await Promise.all(picked.map(readImage))).filter(
+      const read = (await Promise.all(picked.map(readAssistantImage))).filter(
         (x): x is AssistantImage => !!x,
       );
       if (read.length < picked.length)
@@ -1491,6 +1535,7 @@ export function LumenComposer({
     if (q.extra?.tier) setTier(q.extra.tier);
     if (q.extra?.refs?.length) setRefs(q.extra.refs);
     if (q.extra?.images?.length) setImages(q.extra.images);
+    if (q.extra?.quote) setQuote(q.extra.quote);
     requestAnimationFrame(() => box.current?.focus());
   };
   const waiting = queue ?? (queued ? [{ id: 'queued', message: queued }] : []);
@@ -1713,6 +1758,7 @@ export function LumenComposer({
           onClose={() => setClosed(`${text}|${caret}`)}
         />
       )}
+      {quote && <QuoteLine quote={quote} onRemove={() => setQuote(null)} />}
       {images.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Images going with your message">
           {images.map((img, i) => (
@@ -1757,6 +1803,7 @@ export function LumenComposer({
           className={cn(
             'max-h-48 min-h-11 resize-none',
             busy && text.trim() && canSteer ? 'pr-18' : 'pr-11',
+            canAttach && 'pb-9',
           )}
           value={text}
           disabled={disabled}
@@ -1785,6 +1832,28 @@ export function LumenComposer({
             }
           }}
         />
+        {canAttach && (
+          <div className="absolute bottom-1.5 left-1.5">
+            <IconButton
+              icon={PaperclipIcon}
+              label="Attach images"
+              size="icon-xs"
+              disabled={disabled}
+              onClick={() => filePick.current?.click()}
+            />
+            <input
+              ref={filePick}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                if (e.target.files) attach(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </div>
+        )}
         <div className="absolute right-1.5 bottom-1.5">
           {busy && !text.trim() ? (
             <IconButton

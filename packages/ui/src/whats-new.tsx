@@ -65,12 +65,18 @@ export function WhatsNew({
   api,
   apps,
   everyone = 'Global',
+  label = null,
 }: {
   api: string;
   /** Each app's chip label by id, in the order groups list them; left out: no app chips. */
   apps?: Record<string, ReactNode>;
   /** The chip of a takeaway about no one app. */
   everyone?: string;
+  /**
+   * Status-bar text that opens the notes (the app's version): no spark and no "What's new" words;
+   * the tooltip and aria-label still say What's new. Left out: the spark and those words.
+   */
+  label?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const { timeZone } = usePrefs();
@@ -83,26 +89,40 @@ export function WhatsNew({
     staleTime: 30 * 60_000,
     retry: false,
   });
-  // Hidden while loading, on an error, and when the host has no releases API (404).
-  if (!q.data || q.data.pages[0] === null) return null;
-  const releases = q.data.pages.flatMap((p) => p ?? []);
+  // Hidden while loading, on an error, and when the host has no releases API (404). A label (the
+  // app's version) stays on the bar through that and opens the notes once they load.
+  const ready = !!q.data && q.data.pages[0] !== null;
+  if (!ready && label == null) return null;
+  const releases = ready ? (q.data?.pages.flatMap((p) => p ?? []) ?? []) : [];
   const latest = releases[0];
   const day = (at: string) =>
     new Date(at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone });
   return (
     <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 gap-1 px-1.5 text-muted-foreground text-xs"
-        onClick={() => setOpen(true)}
-        title={latest ? `What's new · ${latest.tag}` : "What's new"}
-        aria-label="What's new"
-      >
-        {/* The version and its build name live in the drawer (each release's title), not the bar. */}
-        <SparklesIcon className="size-3.5" />
-        <span className="max-md:hidden">What's new</span>
-      </Button>
+      {label != null ? (
+        <button
+          type="button"
+          className="-mx-1 flex-none rounded px-1 tabular-nums hover:bg-muted hover:text-foreground"
+          onClick={() => ready && setOpen(true)}
+          title="What's new"
+          aria-label="What's new"
+        >
+          {label}
+        </button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1 px-1.5 text-muted-foreground text-xs"
+          onClick={() => setOpen(true)}
+          title={latest ? `What's new · ${latest.tag}` : "What's new"}
+          aria-label="What's new"
+        >
+          {/* The version and its build name live in the drawer (each release's title), not the bar. */}
+          <SparklesIcon className="size-3.5" />
+          <span className="max-md:hidden">What's new</span>
+        </Button>
+      )}
       <LumenDrawer
         open={open}
         onClose={() => setOpen(false)}
