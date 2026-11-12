@@ -1,7 +1,11 @@
 // What the person can point the assistant at with `@` in the composer: each source is a group in
 // the list (On this page, Stories), its items what it holds now. An app passes its standing sources
 // to the assistant (`sources`); a page adds its own while it is shown (`useAssistantSource`).
-import type { AssistantQuote, AssistantRefNote } from '@columenlabs/lumen-ui-types/assistant';
+import type {
+  AssistantImage,
+  AssistantQuote,
+  AssistantRefNote,
+} from '@columenlabs/lumen-ui-types/assistant';
 import { type ComponentType, useEffect, useRef, useSyncExternalStore } from 'react';
 
 /** One thing a source holds: a row in the `@` list, sent with the message as `ref`. */
@@ -88,6 +92,12 @@ export interface ComposeRequest {
   tier?: string;
   /** A piece of the chat to reply to: it shows above the box with an ×. */
   quote?: AssistantQuote;
+  /** Images to send with the message (an image card's Use as reference). */
+  images?: AssistantImage[];
+  /** A composer mode to turn on (`LumenAssistant` `modes`), by id. */
+  use?: string;
+  /** Send at once with `text`, leaving the box as it is (an image card's Make another). */
+  send?: boolean;
 }
 
 let composing: ComposeRequest | null = null;

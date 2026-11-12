@@ -5,6 +5,7 @@ export { type AssistantAdapter, assistantClient } from './client';
 export { ChatImage } from './chat-image';
 export {
   type AssistantCommand,
+  type AssistantMode,
   type ComposerExtra,
   LumenAssistant,
   type LumenAssistantProps,
