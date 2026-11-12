@@ -48,7 +48,13 @@ function itemMarkdown(i: ChatItem, depth: number, name: string): string {
       const refs = i.refs?.length
         ? `\n\nPointing at: ${i.refs.map((r) => r.label).join(', ')}`
         : '';
-      return `${h} You\n\n${i.text}${refs}`;
+      const quote = i.quote
+        ? `${i.quote.text
+            .split('\n')
+            .map((l) => `> ${l}`)
+            .join('\n')}\n\n`
+        : '';
+      return `${h} You\n\n${quote}${i.text}${refs}`;
     }
     case 'text':
       return `${h} ${name}\n\n${i.text}`;

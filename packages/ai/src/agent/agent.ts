@@ -28,10 +28,12 @@ import {
   ASSISTANT_IMAGES_MAX,
   ASSISTANT_IMAGE_CHARS,
   ASSISTANT_IMAGE_TYPES,
+  ASSISTANT_QUOTE_MAX,
   type AssistantChat,
   type AssistantEffort,
   type AssistantEvent,
   type AssistantImage,
+  type AssistantQuote,
   type AssistantRefNote,
   type AssistantScreenMap,
   type AssistantScreenOutcome,
@@ -239,12 +241,36 @@ export interface AskInput {
   images?: AssistantImage[];
   context?: { label: string; note?: unknown };
   refs?: AssistantRefNote[];
+  /** The piece of the chat this message replies to (Reply on selected text). */
+  quote?: AssistantQuote;
   tier?: string;
   time_zone?: string;
   /** What the browser can show (Screen on): the `screen` tool and its rules join the turn. */
   screen?: AssistantScreenMap;
   /** How earlier screen calls ended in the browser. */
   outcomes?: AssistantScreenOutcome[];
+}
+
+/** A quote as sent, checked: its text cut to `ASSISTANT_QUOTE_MAX`, and whose message it came from. */
+export function quoteOf(q: unknown): AssistantQuote | undefined {
+  const o = q as Partial<AssistantQuote> | null;
+  const text = typeof o?.text === 'string' ? o.text.trim().slice(0, ASSISTANT_QUOTE_MAX) : '';
+  if (!text) return undefined;
+  return { text, from: o?.from === 'user' ? 'user' : 'assistant' };
+}
+
+/**
+ * The words the model reads before a message that replies to a quote: which message it came from
+ * and the quote itself. It is the message's first text part; the panel shows the quote from the
+ * message's metadata instead, so `itemsOf` leaves this part out.
+ */
+export function quoteLead(q: AssistantQuote): string {
+  const whose = q.from === 'user' ? 'their own earlier message' : 'your earlier answer';
+  const lines = q.text
+    .split('\n')
+    .map((l) => `> ${l}`)
+    .join('\n');
+  return `The person replies to this part of ${whose}:\n${lines}\n\n`;
 }
 
 /**
@@ -432,10 +458,12 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     this.#put('at', at);
     await sink.event({ event: 'chat', data: { id: this.name, title } });
     this.#outcomes(screenOutcomesOf(input.outcomes));
+    const quote = quoteOf(input.quote);
     const meta: AskMeta = {
       at,
       ...(input.context ? { context: { label: input.context.label } } : {}),
       ...(input.refs?.length ? { refs: input.refs } : {}),
+      ...(quote ? { quote } : {}),
       ...(input.tier ? { tier: input.tier } : {}),
     };
     const toEvents = chunkEvents({
@@ -460,7 +488,11 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         {
           id: userId,
           role: 'user',
-          parts: [{ type: 'text', text: input.message }, ...imageParts(input.images)],
+          parts: [
+            ...(quote ? [{ type: 'text' as const, text: quoteLead(quote) }] : []),
+            { type: 'text', text: input.message },
+            ...imageParts(input.images),
+          ],
           metadata: meta,
         },
         {

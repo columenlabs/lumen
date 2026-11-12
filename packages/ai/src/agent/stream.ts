@@ -5,6 +5,7 @@
  */
 import type {
   AssistantEvent,
+  AssistantQuote,
   AssistantRefNote,
   ChatItem,
   DraftItem,
@@ -201,6 +202,8 @@ export interface AskMeta {
   at?: number;
   context?: { label: string };
   refs?: AssistantRefNote[];
+  /** The piece of the chat the message replies to; its words to the model are the first text part. */
+  quote?: AssistantQuote;
   tier?: string;
 }
 
@@ -224,11 +227,12 @@ export function itemsOf(
   for (const m of messages) {
     if (m.role === 'user') {
       asked = m.id;
+      const meta = (obj(m.metadata) ?? {}) as AskMeta;
       const text = m.parts
         .filter((p) => p.type === 'text')
+        .slice(meta.quote ? 1 : 0)
         .map((p) => String(p.text ?? ''))
         .join('');
-      const meta = (obj(m.metadata) ?? {}) as AskMeta;
       const images = m.parts
         .filter(
           (p) => p.type === 'file' && typeof p.url === 'string' && p.url.startsWith('data:image/'),
@@ -241,6 +245,7 @@ export function itemsOf(
         ...(images.length ? { images } : {}),
         ...(meta.context?.label ? { context: meta.context.label } : {}),
         ...(meta.refs?.length ? { refs: meta.refs } : {}),
+        ...(meta.quote ? { quote: meta.quote } : {}),
         ...(meta.tier ? { tier: meta.tier } : {}),
       });
       continue;
