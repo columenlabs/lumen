@@ -94,11 +94,7 @@ export function ImageCard({
           />
         </div>
       </div>
-      {image.cost && (
-        <span className="text-muted-foreground text-xs">
-          Image · {image.cost}
-        </span>
-      )}
+      {image.cost && <span className="text-muted-foreground text-xs">Image · {image.cost}</span>}
       <ImageLightbox src={image.url} alt={alt} open={zoom} onOpenChange={setZoom} />
     </div>
   );
