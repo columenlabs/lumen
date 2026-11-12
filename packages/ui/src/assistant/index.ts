@@ -2,6 +2,7 @@
 // routes of `@columenlabs/lumen-ai/assistant`; the shapes both share are
 // `@columenlabs/lumen-ui-types/assistant`.
 export { type AssistantAdapter, assistantClient } from './client';
+export { ChatImage } from './chat-image';
 export {
   type AssistantCommand,
   type ComposerExtra,
