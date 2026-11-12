@@ -11,6 +11,7 @@ import type {
   DraftItem,
   HandOffWhy,
   ScreenItem,
+  StepImage,
   StepItem,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
@@ -41,6 +42,18 @@ interface Called {
 
 const obj = (v: unknown): Record<string, unknown> | null =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+/** A tool's `image` output as the panel's card: a same-site path or an https address only. */
+function stepImage(v: unknown): StepImage | undefined {
+  const i = obj(v);
+  const url = typeof i?.url === 'string' ? i.url : '';
+  if (!/^(\/[^/\\]|https:\/\/)/.test(url)) return undefined;
+  return {
+    url,
+    ...(typeof i?.alt === 'string' ? { alt: i.alt.slice(0, 300) } : {}),
+    ...(typeof i?.cost === 'string' ? { cost: i.cost.slice(0, 40) } : {}),
+  };
+}
 
 /** What one finished tool call shows as: a line, a card, a hand-off section or nothing. */
 function settledCall(
@@ -94,6 +107,7 @@ function settledCall(
   }
   const error = out.error ?? (o && typeof o.error === 'string' ? o.error : undefined);
   const rows = rowCount(o && 'result' in o ? o.result : out.output);
+  const image = stepImage(o?.image);
   const web = webStep(c.name, c.input, out.output, !!error || obj(out.output)?.ok === false);
   const step: StepItem = {
     kind: 'step',
@@ -108,6 +122,7 @@ function settledCall(
       ? { write: { undo: true, status: card?.status === 'undone' ? 'undone' : 'done' } }
       : {}),
     ...(web ? { web } : {}),
+    ...(image && !error ? { image } : {}),
   };
   return [{ event: 'step', data: step }];
 }

@@ -97,6 +97,17 @@ export interface StepItem {
   write?: { undo: boolean; status: 'done' | 'undone' | 'failed'; error?: string };
   /** A web tool's call: what a search found, or the page it read. */
   web?: StepWeb;
+  /** An image the tool made (its output's `image`): the panel shows it as a card. */
+  image?: StepImage;
+}
+
+/** An image a tool made: where the browser reads it, its words for a screen reader, and what it cost. */
+export interface StepImage {
+  /** A same-site path (`/api/…`) or an https address. */
+  url: string;
+  alt?: string;
+  /** What it cost, as the app says it ("4 credits"). */
+  cost?: string;
 }
 
 /** A page on the web: its address and, when known, its title. */
@@ -299,6 +310,8 @@ export interface AssistantMessage {
   refs?: AssistantRefNote[];
   /** The piece of the chat this message replies to (Reply on selected text). */
   quote?: AssistantQuote;
+  /** A composer mode the person turned on for this message (`LumenAssistant` `modes`), by id. */
+  use?: string;
   /** The tier the person picked for this message (`#`): a higher one takes it as a task, the same or a lower one answers it. */
   tier?: string;
   /** The browser's IANA zone, for the assistant's bearings (the time now where the person is). */

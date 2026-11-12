@@ -243,6 +243,8 @@ export interface AskInput {
   refs?: AssistantRefNote[];
   /** The piece of the chat this message replies to (Reply on selected text). */
   quote?: AssistantQuote;
+  /** A composer mode the person turned on for this message, by id; the app's plan reads it. */
+  use?: string;
   tier?: string;
   time_zone?: string;
   /** What the browser can show (Screen on): the `screen` tool and its rules join the turn. */

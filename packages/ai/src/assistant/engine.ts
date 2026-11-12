@@ -28,7 +28,7 @@ import type {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
 import { type ToolSet, generateText, jsonSchema, stepCountIs, tool } from 'ai';
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
 import { type ModelKey, aiModel, turnSettings } from '../agent/models';
 import type { OpenedTools, SourceAt } from '../agent/tools';
@@ -80,6 +80,12 @@ export interface AssistantCommandDef {
 
 /** Who is asking: their id (the store's scope for their things) and whether they are an admin. */
 /** A photo `complete` reads with its prompt: base64 bytes and their media type (`image/jpeg`). */
+/**
+ * The model `image` runs and its list price per million tokens (OpenAI, gpt-image-2: text in $5,
+ * image in $8, image out $30). `fallbackUsd` is a medium square image, for an answer with no usage.
+ */
+export const IMAGE_MODEL = { id: 'gpt-image-2', text: 5, image: 8, out: 30, fallbackUsd: 0.06 };
+
 export interface CompleteImage {
   mediaType: string;
   data: string;
@@ -1456,6 +1462,114 @@ export class Assistant {
         .catch(() => undefined);
     }
     return { text, usd: s.meter.usd, model: s.model.id, cut, usage: s.meter.part() };
+  }
+
+  // ---------------------------------------------------------------- images
+
+  /**
+   * One image made as the person, on the payer's OpenAI key (a plan sign-in cannot make one),
+   * billed and capped like `complete`: the price is the model's list price per token, read from the
+   * answer's usage. With `images` the model works from them (a reference, a sketch). Throws
+   * `AssistantError` with `not_connected`, `app_cap` or `own_cap` when nobody can pay, or `upstream`
+   * when the model fails. Returns the PNG as base64.
+   */
+  async image(
+    caller: Caller,
+    o: {
+      task: string;
+      prompt: string;
+      images?: CompleteImage[];
+      /** Wide, tall or square (default). */
+      size?: '1024x1024' | '1536x1024' | '1024x1536';
+      quality?: 'low' | 'medium' | 'high';
+      signal?: AbortSignal;
+      run?: { id: string; title: string };
+    },
+  ): Promise<{ data: string; mediaType: 'image/png'; usd: number; model: string }> {
+    const began = Date.now();
+    const { paying, wait } = await this.state.paying(caller.id, 'openai');
+    if (!paying) {
+      const code = wait ?? 'not_connected';
+      throw new AssistantError(waitText(code, 'openai', !!this.o.allowance), code, 402);
+    }
+    const key = paying.keys.openai;
+    if (!key || paying.plans.openai)
+      throw new AssistantError(waitText('not_connected', 'openai'), 'not_connected', 402);
+    const m = IMAGE_MODEL;
+    const client = this.openai(key);
+    const common = {
+      model: m.id,
+      prompt: o.prompt.slice(0, 4000),
+      size: o.size ?? '1024x1024',
+      quality: o.quality ?? 'medium',
+      n: 1,
+    } as const;
+    let usd = 0;
+    let tokens = { in: 0, out: 0 };
+    try {
+      const refs = (o.images ?? []).slice(0, 4);
+      const res = refs.length
+        ? await client.images.edit(
+            {
+              ...common,
+              image: await Promise.all(
+                refs.map((r, i) =>
+                  toFile(
+                    Uint8Array.from(atob(r.data), (c) => c.charCodeAt(0)),
+                    `ref-${i + 1}.${r.mediaType.split('/')[1] ?? 'png'}`,
+                    { type: r.mediaType },
+                  ),
+                ),
+              ),
+            },
+            o.signal ? { signal: o.signal } : undefined,
+          )
+        : await client.images.generate(common, o.signal ? { signal: o.signal } : undefined);
+      const u = res.usage;
+      if (u) {
+        const text = u.input_tokens_details?.text_tokens ?? u.input_tokens;
+        const pics = u.input_tokens_details?.image_tokens ?? 0;
+        tokens = { in: u.input_tokens, out: u.output_tokens };
+        usd = (text * m.text + pics * m.image + u.output_tokens * m.out) / 1e6;
+      } else usd = m.fallbackUsd;
+      const data = res.data?.[0]?.b64_json;
+      if (!data) throw new AssistantError('The image model sent no image.', 'upstream', 502);
+      return { data, mediaType: 'image/png', usd, model: m.id };
+    } catch (e) {
+      if (e instanceof AssistantError) throw e;
+      throw new AssistantError(
+        `The image model did not answer: ${String((e as Error)?.message ?? e).slice(0, 200)}`,
+        'upstream',
+        502,
+      );
+    } finally {
+      const part: UsagePart = {
+        label: 'Image',
+        calls: 1,
+        in: tokens.in,
+        read: 0,
+        out: tokens.out,
+        usd,
+        model: m.id,
+      };
+      await this.state.addSpend(caller.id, paying.payer, [part], {
+        task: o.task,
+        ms: Date.now() - began,
+      });
+      const task = this.tasks.find((t) => t.id === o.task);
+      await this.state
+        .addUsage(
+          caller.id,
+          {
+            id: `task:${o.task}:${o.run?.id ?? new Date().toISOString().slice(0, 10)}`,
+            kind: 'task',
+            task: o.task,
+            title: o.run?.title ?? task?.label ?? o.task,
+          },
+          [part],
+        )
+        .catch(() => undefined);
+    }
   }
 
   // ---------------------------------------------------------------- keys

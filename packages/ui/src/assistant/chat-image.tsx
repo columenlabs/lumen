@@ -146,31 +146,48 @@ export function ChatImage({ src, alt }: { src: string; alt: string }) {
           />
         </Zoomable>
       </div>
-      <Dialog open={full} onOpenChange={setFull}>
-        <DialogContent
-          showCloseButton={false}
-          aria-describedby={undefined}
-          // Focus the box, not its first button: a focused button shows its tooltip, which would take
-          // the first Esc.
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            (e.currentTarget as HTMLElement).focus();
-          }}
-          className={cn(
-            'h-[90vh] w-[90vw] max-w-none overflow-hidden p-0 sm:max-w-none',
-            'max-md:h-full max-md:w-full',
-          )}
-        >
-          <DialogTitle className="sr-only">{alt}</DialogTitle>
-          <div className="relative size-full">
-            <Zoomable src={src} alt={alt} panAtFit>
-              <DialogClose asChild>
-                <IconButton icon={XIcon} label="Close" />
-              </DialogClose>
-            </Zoomable>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ImageLightbox src={src} alt={alt} open={full} onOpenChange={setFull} />
     </>
+  );
+}
+
+/** An image over 90% of the screen with zoom and pan (the kit's Dialog: Esc, × or a click outside closes it). */
+export function ImageLightbox({
+  src,
+  alt,
+  open,
+  onOpenChange,
+}: {
+  src: string;
+  alt: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        // Focus the box, not its first button: a focused button shows its tooltip, which would take
+        // the first Esc.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).focus();
+        }}
+        className={cn(
+          'h-[90vh] w-[90vw] max-w-none overflow-hidden p-0 sm:max-w-none',
+          'max-md:h-full max-md:w-full',
+        )}
+      >
+        <DialogTitle className="sr-only">{alt}</DialogTitle>
+        <div className="relative size-full">
+          <Zoomable src={src} alt={alt} panAtFit>
+            <DialogClose asChild>
+              <IconButton icon={XIcon} label="Close" />
+            </DialogClose>
+          </Zoomable>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

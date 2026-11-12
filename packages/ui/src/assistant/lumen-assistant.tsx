@@ -36,6 +36,7 @@ import {
   GlobeIcon,
   LightbulbIcon,
   ListPlusIcon,
+  type LucideIcon,
   MonitorIcon,
   PaperclipIcon,
   PencilIcon,
@@ -101,6 +102,7 @@ import { Textarea } from '../ui/textarea';
 import { ChatImage } from './chat-image';
 import type { AssistantAdapter } from './client';
 import { chatMarkdown, chatTurns, copyMarkdown, turnMarkdown } from './copy';
+import { ImageCard, ImagePending, toolIs } from './image-card';
 import { ReplyToSelection } from './reply-selection';
 import {
   type AssistantSource,
@@ -175,6 +177,23 @@ export interface LumenAssistantProps {
    * until it is sent. Turn it on when the app's chat route passes `images` on to the agent.
    */
   images?: boolean;
+  /**
+   * Toggles beside the paperclip, one per mode ("Make an image"): one turned on goes with the next
+   * message as its `use`, and the app's plan reads it (call the tool that makes an image).
+   */
+  modes?: AssistantMode[];
+  /**
+   * The app's tool that makes images: while it runs its line is a "Making the image" box, and its
+   * card's Make another sends again with `mode` on.
+   */
+  imageTool?: { tool: string; mode?: string };
+}
+
+/** A composer mode: its toggle's icon and label (also its tooltip and aria-label). */
+export interface AssistantMode {
+  id: string;
+  icon: LucideIcon;
+  label: string;
 }
 
 /** A slash command: typing `/` in the composer lists them. */
@@ -203,6 +222,8 @@ export function LumenAssistant({
   commands = [],
   sources = [],
   images = false,
+  modes = [],
+  imageTool,
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
@@ -388,12 +409,14 @@ export function LumenAssistant({
       </div>
       <AssistantName.Provider value={name}>
         <Screen.Provider value={controls}>
-          <Messages
-            chat={chat}
-            status={s}
-            onSettings={onSettings}
-            onRetry={(at, user) => chat.retry(at, user, extra())}
-          />
+          <ImageTool.Provider value={imageTool ?? null}>
+            <Messages
+              chat={chat}
+              status={s}
+              onSettings={onSettings}
+              onRetry={(at, user) => chat.retry(at, user, extra())}
+            />
+          </ImageTool.Provider>
         </Screen.Provider>
       </AssistantName.Provider>
       <LumenComposer
@@ -410,6 +433,7 @@ export function LumenAssistant({
         sources={allSources}
         page={context?.label}
         images={images}
+        modes={modes}
         onSend={(text, more, how) => chat.send(text, { ...extra(), ...more }, how)}
         onStop={chat.stop}
       />
@@ -537,6 +561,8 @@ const AssistantName = createContext('Assistant');
 /** A tier's name for a message's `#` chip. */
 const TierNames = createContext<(id: string) => string>((id) => id);
 /** Takes back a change made at once (Undo on its line). */
+/** The app's image tool (`LumenAssistant` `imageTool`). */
+const ImageTool = createContext<{ tool: string; mode?: string } | null>(null);
 const UndoWrite = createContext<((s: StepItem) => Promise<void>) | null>(null);
 type UserItem = Extract<ChatItem, { kind: 'user' }>;
 type RetryFn = (at: number, user: UserItem) => void;
@@ -966,6 +992,9 @@ function WebSources({ items }: { items: readonly ChatItem[] }) {
 }
 
 function Step({ step, live }: { step: StepItem; live: boolean }) {
+  const images = useContext(ImageTool);
+  if (step.image) return <ImageCard step={step} image={step.image} mode={images?.mode} />;
+  if (live && images && toolIs(step.tool, images.tool)) return <ImagePending />;
   if (step.web) return <WebStep step={step} live={live} />;
   return <ToolStep step={step} live={live} />;
 }
@@ -1317,6 +1346,7 @@ export interface ComposerExtra {
   refs?: AssistantRefNote[];
   images?: AssistantImage[];
   quote?: AssistantQuote;
+  use?: string;
 }
 
 /**
@@ -1398,9 +1428,12 @@ export function LumenComposer({
   sources = [],
   page,
   images: canAttach = false,
+  modes = [],
   onSend,
   onStop,
 }: {
+  /** Toggles beside the paperclip (`LumenAssistant` `modes`). */
+  modes?: AssistantMode[];
   name: string;
   /** Images can be pasted or dropped on the box (`LumenAssistant` `images`). */
   images?: boolean;
@@ -1431,6 +1464,7 @@ export function LumenComposer({
   const [refs, setRefs] = useState<AssistantRefNote[]>([]);
   const [images, setImages] = useState<AssistantImage[]>([]);
   const [quote, setQuote] = useState<AssistantQuote | null>(null);
+  const [use, setUse] = useState<string | null>(null);
   const list = useRef<LumenSelectorListHandle>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const filePick = useRef<HTMLInputElement>(null);
@@ -1441,6 +1475,17 @@ export function LumenComposer({
   useEffect(() => {
     if (!request) return;
     take();
+    // Make another: sent at once, the box left as it is.
+    if (request.send && request.text) {
+      onSend(request.text, {
+        ...(request.images?.length ? { images: request.images } : {}),
+        ...(request.use ? { use: request.use } : {}),
+      });
+      return;
+    }
+    if (request.images?.length)
+      setImages((p) => [...p, ...(request.images ?? [])].slice(0, ASSISTANT_IMAGES_MAX));
+    if (request.use) setUse(request.use);
     if (request.refs?.length) setRefs((p) => [...p, ...(request.refs ?? [])]);
     if (request.tier) setTier(request.tier);
     if (request.quote) setQuote(request.quote);
@@ -1468,6 +1513,7 @@ export function LumenComposer({
     ...(refs.length ? { refs } : {}),
     ...(images.length ? { images } : {}),
     ...(quote ? { quote } : {}),
+    ...(use ? { use } : {}),
   });
   const clear = () => {
     setText('');
@@ -1476,6 +1522,7 @@ export function LumenComposer({
     setRefs([]);
     setImages([]);
     setQuote(null);
+    setUse(null);
   };
   /** Adds the image files among `files`; says so when one is left out. Returns whether any was an image. */
   const attach = (files: FileList | File[]): boolean => {
@@ -1536,6 +1583,7 @@ export function LumenComposer({
     if (q.extra?.refs?.length) setRefs(q.extra.refs);
     if (q.extra?.images?.length) setImages(q.extra.images);
     if (q.extra?.quote) setQuote(q.extra.quote);
+    if (q.extra?.use) setUse(q.extra.use);
     requestAnimationFrame(() => box.current?.focus());
   };
   const waiting = queue ?? (queued ? [{ id: 'queued', message: queued }] : []);
@@ -1803,7 +1851,7 @@ export function LumenComposer({
           className={cn(
             'max-h-48 min-h-11 resize-none',
             busy && text.trim() && canSteer ? 'pr-18' : 'pr-11',
-            canAttach && 'pb-9',
+            (canAttach || modes.length > 0) && 'pb-9',
           )}
           value={text}
           disabled={disabled}
@@ -1832,26 +1880,43 @@ export function LumenComposer({
             }
           }}
         />
-        {canAttach && (
-          <div className="absolute bottom-1.5 left-1.5">
-            <IconButton
-              icon={PaperclipIcon}
-              label="Attach images"
-              size="icon-xs"
-              disabled={disabled}
-              onClick={() => filePick.current?.click()}
-            />
-            <input
-              ref={filePick}
-              type="file"
-              accept="image/*"
-              multiple
-              hidden
-              onChange={(e) => {
-                if (e.target.files) attach(e.target.files);
-                e.target.value = '';
-              }}
-            />
+        {(canAttach || modes.length > 0) && (
+          <div className="absolute bottom-1.5 left-1.5 flex items-center gap-0.5">
+            {canAttach && (
+              <>
+                <IconButton
+                  icon={PaperclipIcon}
+                  label="Attach images"
+                  size="icon-xs"
+                  disabled={disabled}
+                  onClick={() => filePick.current?.click()}
+                />
+                <input
+                  ref={filePick}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    if (e.target.files) attach(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </>
+            )}
+            {modes.map((md) => (
+              <IconButton
+                key={md.id}
+                icon={md.icon}
+                label={md.label}
+                size="icon-xs"
+                variant={use === md.id ? 'secondary' : 'ghost'}
+                aria-pressed={use === md.id}
+                className={cn(use === md.id && 'text-primary')}
+                disabled={disabled}
+                onClick={() => setUse((u) => (u === md.id ? null : md.id))}
+              />
+            ))}
           </div>
         )}
         <div className="absolute right-1.5 bottom-1.5">
