@@ -8,6 +8,7 @@ import { DetailsTable } from '../details-table';
 import { IconButton } from '../icon-button';
 import { InfoLabel } from '../info-tip';
 import { cn } from '../lib/utils';
+import { SettingField } from '../setting-parts';
 import { Label } from '../ui/label';
 import { Spinner } from '../ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
@@ -216,29 +217,29 @@ export function OwnKeyUsage({ client, always }: { client: AssistantAdapter; alwa
     .sort((a, b) => b.at - a.at);
   const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0);
   return (
-    <div data-slot="setting-row" className="flex flex-col gap-2 border-b py-3 last:border-b-0">
-      <div className="flex items-center gap-4">
-        <Label className="min-w-0 flex-1">
-          <InfoLabel info="Each chat and run your own key or plan paid for, by its last use.">
-            Spent on your keys
-          </InfoLabel>
-        </Label>
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          size="sm"
-          spacing={0}
-          value={range}
-          aria-label="Range"
-          onValueChange={(v) => v && setRange(v as OwnRange)}
-        >
-          {OWN_RANGES.map((r) => (
-            <ToggleGroupItem key={r.id} value={r.id} aria-label={`Last ${r.id}`}>
-              {r.id}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
+    <div className="flex flex-col gap-2 border-t border-border/60 pb-3 first:border-t-0">
+      <SettingField
+        label="Spent on your keys"
+        info="Each chat and run your own key or plan paid for, by its last use."
+        className="border-t-0"
+        end={
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            spacing={0}
+            value={range}
+            aria-label="Range"
+            onValueChange={(v) => v && setRange(v as OwnRange)}
+          >
+            {OWN_RANGES.map((r) => (
+              <ToggleGroupItem key={r.id} value={r.id} aria-label={`Last ${r.id}`}>
+                {r.id}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        }
+      />
       {sessions.length ? (
         <DetailsTable
           head={[

@@ -309,7 +309,7 @@ function ScreenProvider({ children }: { children: ReactNode }) {
         const row = await waitFor(() =>
           [
             ...document.querySelectorAll<HTMLElement>(
-              '[data-slot="settings"] [data-slot="setting-row"]',
+              '[data-slot="settings"] [data-slot="setting-field"]',
             ),
           ].find((el) =>
             el.querySelector('label')?.textContent?.trim().toLowerCase().includes(want),

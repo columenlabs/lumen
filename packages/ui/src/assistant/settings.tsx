@@ -43,6 +43,7 @@ import { InfoLabel } from '../info-tip';
 import { errorText } from '../integrations';
 import { LumenSelector } from '../lumen-selector';
 import { lumenToast } from '../lumen-toast';
+import { SettingField } from '../setting-parts';
 import type { SettingsSectionDef } from '../settings';
 import { ShareMeter } from '../share-meter';
 import { Badge } from '../ui/badge';
@@ -114,19 +115,6 @@ function WithStatus({
 }
 
 /** One setting: its label (with an (i) when `info` says more) and its control. */
-function Row({ label, info, children }: { label: string; info?: ReactNode; children: ReactNode }) {
-  return (
-    <div
-      data-slot="setting-row"
-      className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-3 last:border-b-0"
-    >
-      <Label className="min-w-0 flex-1">
-        <InfoLabel info={info}>{label}</InfoLabel>
-      </Label>
-      <div className="shrink-0">{children}</div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------- the assistant
 
@@ -139,7 +127,7 @@ function General({ client }: { client: AssistantAdapter }) {
         const above = s.tiers.slice(s.tiers.findIndex((t) => t.id === s.tier) + 1);
         return (
           <div className="flex flex-col">
-            <Row label="Tier">
+            <SettingField label="Tier">
               <LumenSelector
                 label="Tier"
                 size="sm"
@@ -152,9 +140,9 @@ function General({ client }: { client: AssistantAdapter }) {
                 }))}
                 onChange={(tier) => void set({ tier })}
               />
-            </Row>
+            </SettingField>
             {s.tiers.length > 1 && (
-              <Row
+              <SettingField
                 label="Hand off the work"
                 info="On its own, a higher tier takes one task in its own section of the chat and sends back a memo. It costs more."
               >
@@ -166,10 +154,10 @@ function General({ client }: { client: AssistantAdapter }) {
                   options={HAND_OFF}
                   onChange={(hand_off) => void set({ hand_off })}
                 />
-              </Row>
+              </SettingField>
             )}
             {s.tiers.length > 1 && (
-              <Row
+              <SettingField
                 label="Ask for advice"
                 info="A bigger tier reads the chat and sends a plan before hard questions. It runs no tools, at most twice an answer."
               >
@@ -187,9 +175,9 @@ function General({ client }: { client: AssistantAdapter }) {
                   ]}
                   onChange={(advice) => void set({ advice })}
                 />
-              </Row>
+              </SettingField>
             )}
-            <Row
+            <SettingField
               label="Screen"
               info="Takes you to a page, a Settings row, a chart or a card when you ask. Each move has an Undo; nothing is saved."
             >
@@ -204,7 +192,7 @@ function General({ client }: { client: AssistantAdapter }) {
                 ]}
                 onChange={(screen) => void set({ screen: screen as 'off' | 'move' })}
               />
-            </Row>
+            </SettingField>
           </div>
         );
       }}
@@ -340,7 +328,7 @@ function Providers({ client }: { client: AssistantAdapter }) {
               ))}
             </LumenExpandList>
             {ownSet && (
-              <Row
+              <SettingField
                 label="Answers run on"
                 info="Your own key or plan first, with the shared credits behind it; or the shared credits first."
               >
@@ -357,16 +345,19 @@ function Providers({ client }: { client: AssistantAdapter }) {
                     void apply('pay', () => client.settings({ pay: pay as AssistantPayer }))
                   }
                 />
-              </Row>
+              </SettingField>
             )}
             {ownSet && (
-              <Row label="Your keys may spend" info="On your keys, every provider together.">
+              <SettingField
+                label="Your keys may spend"
+                info="On your keys, every provider together."
+              >
                 <CapInput
                   label="Your monthly cap"
                   value={s.caps.own}
                   onSave={(n) => void apply('own', () => client.ownCap(n))}
                 />
-              </Row>
+              </SettingField>
             )}
             <OwnKeyUsage client={client} always={ownSet} />
           </div>
@@ -419,7 +410,7 @@ function SharedCap({ client, s }: { client: AssistantAdapter; s: AssistantStatus
   const { apply } = useApply(client);
   if (s.allowance?.period === 'once') return null;
   return (
-    <Row
+    <SettingField
       label="Each person may spend"
       info="A month on the shared keys, every provider together. Past it, a person's own key pays."
     >
@@ -428,7 +419,7 @@ function SharedCap({ client, s }: { client: AssistantAdapter; s: AssistantStatus
         value={s.caps.app}
         onSave={(n) => void apply('cap', () => client.appCap(n))}
       />
-    </Row>
+    </SettingField>
   );
 }
 
@@ -498,7 +489,7 @@ function Models({ client }: { client: AssistantAdapter }) {
               const p = s.providers.find((x) => x.id === t.provider);
               const keyless = p && !p.app.set && !p.app.from_env && !p.own.set && !p.plan?.set;
               return (
-                <Row key={t.id} label={t.label} info={t.about}>
+                <SettingField key={t.id} label={t.label} info={t.about}>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {keyless && <Badge variant="outline">No {p.label} key</Badge>}
                     <LumenSelector
@@ -518,12 +509,12 @@ function Models({ client }: { client: AssistantAdapter }) {
                       onChange={(effort) => set({ tiers: { [t.id]: { effort } } })}
                     />
                   </div>
-                </Row>
+                </SettingField>
               );
             })}
             {s.tasks.length > 1 &&
               s.tasks.map((task) => (
-                <Row key={task.id} label={`${task.label} starts on`}>
+                <SettingField key={task.id} label={`${task.label} starts on`}>
                   <LumenSelector
                     label={`${task.label} starts on`}
                     size="sm"
@@ -532,7 +523,7 @@ function Models({ client }: { client: AssistantAdapter }) {
                     options={tiers}
                     onChange={(tier) => set({ tasks: { [task.id]: tier } })}
                   />
-                </Row>
+                </SettingField>
               ))}
           </div>
         );
@@ -551,7 +542,7 @@ function Tools({ client }: { client: AssistantAdapter }) {
         s.groups.length ? (
           <div className="flex flex-col">
             {s.groups.map((g) => (
-              <Row key={g.id} label={g.label} info={g.about}>
+              <SettingField key={g.id} label={g.label} info={g.about}>
                 <ToggleGroup
                   type="single"
                   variant="outline"
@@ -574,7 +565,7 @@ function Tools({ client }: { client: AssistantAdapter }) {
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
-              </Row>
+              </SettingField>
             ))}
           </div>
         ) : (
@@ -666,7 +657,7 @@ function Web({ client }: { client: AssistantAdapter }) {
     <WithStatus client={client}>
       {(s) => (
         <div className="flex flex-col">
-          <Row
+          <SettingField
             label="Read the web"
             info="A plain fetch of public pages and APIs from the server, never the app's own pages."
           >
@@ -677,7 +668,7 @@ function Web({ client }: { client: AssistantAdapter }) {
                 void apply('web', () => client.settings({ web: { fetch } }))
               }
             />
-          </Row>
+          </SettingField>
           <ScrapeqlBlock client={client} s={s} />
         </div>
       )}
@@ -793,14 +784,17 @@ function Allowance({ client }: { client: AssistantAdapter }) {
               <ShareMeter value={a.total > 0 ? a.used / a.total : 1} wide />
             </div>
             {r && (
-              <Row label={`Asked for ${n(r.amount)} · ${day(r.at)}`} info={r.why || undefined}>
+              <SettingField
+                label={`Asked for ${n(r.amount)} · ${day(r.at)}`}
+                info={r.why || undefined}
+              >
                 <div className="flex items-center gap-2 text-sm">
                   {r.status === 'granted' && r.granted !== undefined && (
                     <span className="tabular-nums">+{n(r.granted)}</span>
                   )}
                   <RequestBadge r={r} />
                 </div>
-              </Row>
+              </SettingField>
             )}
             {r?.status === 'open' ? (
               <p className="pt-3 text-muted-foreground text-sm">
