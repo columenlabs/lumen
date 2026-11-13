@@ -23,8 +23,6 @@ interface Jwk {
   [field: string]: unknown;
 }
 
-type FetchFn = (input: string) => Promise<Response>;
-
 const b64urlToBytes = (s: string): Uint8Array<ArrayBuffer> => {
   const b64 = s
     .replace(/-/g, '+')
@@ -43,43 +41,85 @@ export const ACCESS_HEADER = 'cf-access-jwt-assertion';
 /** A request's Access token, if it has one. */
 export const accessToken = (request: Request) => request.headers.get(ACCESS_HEADER) ?? undefined;
 
+type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
+
+/** How long the signing keys are trusted before they are fetched again (ms). */
+const KEYS_MS = 60 * 60_000;
+/**
+ * How long a fetch of the signing keys may take (ms). A key fetch sits in front of every request, so
+ * one that hangs (an Access or network incident) must never hold them: past this it fails, and the
+ * keys already held keep verifying.
+ */
+export const ACCESS_CERTS_MS = 3_000;
+/** A token naming a key id we do not hold refetches at most this often (ms), so bad tokens cannot flood the endpoint. */
+const UNKNOWN_KID_MS = 10_000;
+
 /**
  * Verifies Access tokens against the team's signing keys (fetched from
  * `https://<teamDomain>/cdn-cgi/access/certs`, kept an hour, fetched again for an unknown key id):
  * RS256 only, the audience one of `aud`, the issuer the team, not expired and not before its time.
  * Keep one per isolate so the keys are fetched once.
+ *
+ * The key fetch never holds a request for long: it gives up after `ACCESS_CERTS_MS`, only one runs at
+ * a time (every request waiting shares it), and when the hour is up the keys already held keep
+ * verifying while new ones load in the background. Only a token signed by a key never seen waits for
+ * a fetch, and fails (null) if that fetch fails.
  */
 export class AccessVerifier {
   private keys: { at: number; keys: Map<string, CryptoKey> } | undefined;
+  private loading: Promise<void> | undefined;
+  private tried = 0;
 
   constructor(
     private readonly cfg: AccessConfig,
-    private readonly fetchImpl: FetchFn = (u) => fetch(u),
+    private readonly fetchImpl: FetchFn = (u, init) => fetch(u, init),
     private readonly now: () => number = Date.now,
   ) {}
 
-  private async keyFor(kid: string): Promise<CryptoKey | undefined> {
-    const fresh = this.keys && this.now() - this.keys.at < 60 * 60_000;
-    if (!fresh || !this.keys?.keys.has(kid)) {
-      const res = await this.fetchImpl(`https://${this.cfg.teamDomain}/cdn-cgi/access/certs`);
-      if (!res.ok) throw new Error(`access certs ${res.status}`);
-      const { keys } = (await res.json()) as { keys: Jwk[] };
-      const map = new Map<string, CryptoKey>();
-      for (const k of keys) {
-        map.set(
-          k.kid,
-          await crypto.subtle.importKey(
-            'jwk',
-            // JWK from Access's certs endpoint; the lib's JsonWebKey type isn't in scope here.
-            k as never,
-            { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-            false,
-            ['verify'],
-          ),
-        );
+  /** Fetches the keys once for everyone waiting; bounded by ACCESS_CERTS_MS. */
+  private load(): Promise<void> {
+    this.tried = this.now();
+    this.loading ??= (async () => {
+      try {
+        const res = await this.fetchImpl(`https://${this.cfg.teamDomain}/cdn-cgi/access/certs`, {
+          signal: AbortSignal.timeout(ACCESS_CERTS_MS),
+        });
+        if (!res.ok) throw new Error(`access certs ${res.status}`);
+        const { keys } = (await res.json()) as { keys: Jwk[] };
+        const map = new Map<string, CryptoKey>();
+        for (const k of keys) {
+          map.set(
+            k.kid,
+            await crypto.subtle.importKey(
+              'jwk',
+              // JWK from Access's certs endpoint; the lib's JsonWebKey type isn't in scope here.
+              k as never,
+              { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+              false,
+              ['verify'],
+            ),
+          );
+        }
+        this.keys = { at: this.now(), keys: map };
+      } finally {
+        this.loading = undefined;
       }
-      this.keys = { at: this.now(), keys: map };
+    })();
+    return this.loading;
+  }
+
+  private async keyFor(kid: string): Promise<CryptoKey | undefined> {
+    const held = this.keys?.keys.get(kid);
+    if (held) {
+      // Past the hour: keep verifying with the key held while fresh ones load (a failed refresh is
+      // tried again on a later request).
+      if (this.keys && this.now() - this.keys.at >= KEYS_MS && !this.loading)
+        this.load().catch(() => {});
+      return held;
     }
+    // A key never seen: wait for a fetch (shared, bounded), unless one just failed to name it.
+    if (this.keys && !this.loading && this.now() - this.tried < UNKNOWN_KID_MS) return undefined;
+    await this.load();
     return this.keys?.keys.get(kid);
   }
 
