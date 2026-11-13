@@ -87,7 +87,15 @@ const assistant = createAssistant({
   sealer, // the app's own sealing: keys and chats are stored sealed
   // A provider's key when none is set in Settings.
   appKey: async (provider) => (provider === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY),
+  // Bring your own AI, per caller (a feature flag, a person's plan): which own ways Settings offers
+  // and the routes accept, whether their own key falls back to the shared one, and who finishes a
+  // turn when a ChatGPT plan runs out ('shared': the same model on the app's key, shared spend).
+  // ownWays: async (caller) => ({ openai: ['key', 'plan'] }),
+  // ownFallback: async (caller) => true,
+  // planFallback: 'shared',
 });
+// A check the app always runs on its own key, whoever pays the person's answers:
+// await assistant.complete(caller, { task: 'scope', system, prompt, payer: 'app' });
 
 const routes = assistantRoutes(assistant, {
   base: '/api/assistant',

@@ -359,6 +359,11 @@ export interface AssistantProviderRow {
   plan?: KeyState;
   /** Which of their own runs when both are set: the one they picked, else the one set. */
   use?: AssistantOwnWay;
+  /**
+   * The own ways the app lets this person use here (the app's `ownWays`); left out, every way. An
+   * empty list: none, so Settings shows no row of their own for this provider.
+   */
+  own_ways?: AssistantOwnWay[];
 }
 
 /** A person's own way to a provider: their API key or their plan sign-in. */

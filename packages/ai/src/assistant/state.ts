@@ -117,6 +117,19 @@ export interface RequestsDoc {
 const REQUESTS_KEPT = 300;
 
 export type SpendRow = UsagePart & { payer: AssistantPayer };
+
+/** The ways of their own a person may pay with, per provider; a provider left out has none. */
+export type OwnWays = Partial<Record<AssistantProvider, AssistantOwnWay[]>>;
+
+/** How `paying` may choose: the app's limits on a person's own keys, and one payer only. */
+export interface PayingRules {
+  /** The own ways this person may use (`AssistantOptions.ownWays`); left out, every way. */
+  ways?: OwnWays;
+  /** False: a person who pays with their own key first never moves to the shared key. */
+  fallback?: boolean;
+  /** Only this payer: an app's own check always runs on the shared key (`complete({ payer })`). */
+  only?: AssistantPayer;
+}
 /**
  * One task's use of one model this month: what a kind of work cost (a chat answer, a background
  * task), beside `rows`, which stay per tier and payer.
@@ -353,7 +366,9 @@ export class State {
     }
   }
   /** The person's own key or plan, the one in use first, the other when that one fails. */
-  async ownApiKey(id: string, provider: AssistantProvider) {
+  async ownApiKey(id: string, provider: AssistantProvider, ways?: OwnWays) {
+    const allowed = ways ? (ways[provider] ?? []) : null;
+    if (allowed && !allowed.length) return null;
     const use = await this.ownUse(id, provider);
     if (!use) return null;
     const key = async () => {
@@ -364,7 +379,12 @@ export class State {
       const t = await this.planToken(id, provider);
       return t ? { key: t, plan: true } : null;
     };
-    return use === 'key' ? ((await key()) ?? (await plan())) : ((await plan()) ?? (await key()));
+    const may = (w: AssistantOwnWay) => !allowed || allowed.includes(w);
+    const tryKey = async () => (may('key') ? key() : null);
+    const tryPlan = async () => (may('plan') ? plan() : null);
+    return use === 'key'
+      ? ((await tryKey()) ?? (await tryPlan()))
+      : ((await tryPlan()) ?? (await tryKey()));
   }
   /** USD a month on the person's own keys. */
   async ownCap(id: string) {
@@ -508,13 +528,13 @@ export class State {
   }
 
   /** The payer's key of each provider, those set, and which are plan sign-ins. */
-  async keysOf(id: string, payer: AssistantPayer) {
+  async keysOf(id: string, payer: AssistantPayer, ways?: OwnWays) {
     const ids = Object.keys(PROVIDERS) as AssistantProvider[];
     const found = await Promise.all(
       ids.map((p) =>
         payer === 'app'
           ? this.appApiKey(p).then((k) => (k ? { key: k.key, plan: false } : null))
-          : this.ownApiKey(id, p),
+          : this.ownApiKey(id, p, ways),
       ),
     );
     const keys: Partial<Record<AssistantProvider, string>> = {};
@@ -531,11 +551,12 @@ export class State {
   async paying(
     id: string,
     provider: AssistantProvider,
+    rules: PayingRules = {},
   ): Promise<{ paying: Paying | null; wait: AssistantWait | null }> {
     const [person, appKeys, ownKeys, spend, ownCap] = await Promise.all([
       this.person(id),
       this.keysOf(id, 'app'),
-      this.keysOf(id, 'own'),
+      this.keysOf(id, 'own', rules.ways),
       this.spend(id),
       this.ownCap(id),
     ]);
@@ -564,8 +585,15 @@ export class State {
           }
         : null,
     };
-    const first = person.pay ?? 'app';
-    const order: AssistantPayer[] = first === 'own' ? ['own', 'app'] : ['app', 'own'];
+    const first = rules.only ?? person.pay ?? 'app';
+    const order: AssistantPayer[] = rules.only
+      ? [rules.only]
+      : first === 'own'
+        ? rules.fallback === false && sources.own
+          ? ['own']
+          : ['own', 'app']
+        : ['app', 'own'];
+    if (rules.only) sources[rules.only === 'app' ? 'own' : 'app'] = null;
     for (const p of order) {
       const s = sources[p];
       if (s && s.left > 0) return { paying: s, wait: null };
