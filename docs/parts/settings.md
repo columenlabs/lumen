@@ -94,7 +94,8 @@ description: 'Pick a relay. Mail goes out through the relay you choose; a localh
 ```
 
 - ✗ `h-full` on a card in a section: Settings scrolls, the card clips at one screen.
-- ✗ A grey line under a row's fields. ✓ An `InfoTip` on the one label that needs it; `SettingRow`'s `description` draws one.
+- ✗ A grey line under a row's fields. ✓ An `InfoTip` on the one label that needs it; `SettingField`'s `info` draws one.
+- ✗ `SettingRow` or a row of your own. ✓ `SettingField`: every setting row in the kit is one (`SettingRow` is a deprecated name for it), and Settings' search hides a `SettingField` whose label and info miss the query.
 - ✗ A Settings page of the app's own (a `/settings` route or nav item). ✓ A section in the app's group of the one dialog, opened from anywhere with `?settings=<section>`.
 
 ## Checked by

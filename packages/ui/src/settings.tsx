@@ -38,7 +38,13 @@ import {
   setPref,
   usePrefs,
 } from './prefs';
-import { type SettingHealth, SettingStatus } from './setting-parts';
+import {
+  SettingField,
+  type SettingHealth,
+  SettingStatus,
+  SettingsSearch,
+  settingMatches as matches,
+} from './setting-parts';
 import { TimeZoneSelect } from './status';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group';
@@ -87,9 +93,6 @@ export interface SettingsGroupDef {
 }
 
 /** The Settings search text; rows that do not match it hide. */
-const SearchContext = createContext('');
-const matches = (query: string, ...texts: ReactNode[]) =>
-  texts.some((t) => typeof t === 'string' && t.toLowerCase().includes(query.toLowerCase()));
 
 /** The open section's header slot for its actions (Add and Resync sit by the
  *  title, not on a sub-header). Each section gets its own, so search results keep theirs apart. */
@@ -127,7 +130,11 @@ function ActionsScope({
   );
 }
 
-/** One setting: title and description on the left, its control on the right. */
+/**
+ * One setting: the kit's `SettingField` (docs/parts/settings.md), with `description` behind its (i).
+ * Kept so older call sites build; it draws nothing of its own. New code uses `SettingField`.
+ * @deprecated Use `SettingField`.
+ */
 export function SettingRow({
   label,
   description,
@@ -139,19 +146,10 @@ export function SettingRow({
   htmlFor?: string;
   children: ReactNode;
 }) {
-  const query = useContext(SearchContext);
-  if (query && !matches(query, label, description)) return null;
   return (
-    <div data-slot="setting-row" className="flex items-center gap-4 border-b py-3 last:border-b-0">
-      {/* The row's details sit behind an (i), never in a grey line under it (docs/parts/settings.md). */}
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <Label htmlFor={htmlFor} className="truncate">
-          {label}
-        </Label>
-        {description && <InfoTip label={`About ${label}`}>{description}</InfoTip>}
-      </div>
-      <div className="shrink-0">{children}</div>
-    </div>
+    <SettingField label={label} info={description} htmlFor={htmlFor}>
+      {children}
+    </SettingField>
   );
 }
 
@@ -380,7 +378,7 @@ export function LumenSettings({
   useLayoutEffect(() => {
     if (!q) return;
     const ids = [...(pane.current?.querySelectorAll<HTMLElement>('[data-settings-section]') ?? [])]
-      .filter((el) => el.dataset.whole === 'true' || el.querySelector('[data-slot=setting-row]'))
+      .filter((el) => el.dataset.whole === 'true' || el.querySelector('[data-slot=setting-field]'))
       .map((el) => el.dataset.settingsSection ?? '');
     setFound((f) => (f.join() === ids.join() ? f : ids));
   });
@@ -559,14 +557,14 @@ export function LumenSettings({
                       className={
                         whole
                           ? 'flex flex-col gap-3'
-                          : 'hidden flex-col gap-3 has-[[data-slot=setting-row]]:flex'
+                          : 'hidden flex-col gap-3 has-[[data-slot=setting-field]]:flex'
                       }
                     >
                       {header(s, slot)}
                       <Separator />
-                      <SearchContext.Provider value={whole ? '' : q}>
+                      <SettingsSearch.Provider value={whole ? '' : q}>
                         {s.content}
-                      </SearchContext.Provider>
+                      </SettingsSearch.Provider>
                     </div>
                   )}
                 </ActionsScope>

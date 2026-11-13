@@ -13,7 +13,7 @@ import {
   RefreshCwIcon,
   Trash2Icon,
 } from 'lucide-react';
-import { type ComponentType, type ReactNode, useState } from 'react';
+import { type ComponentType, type ReactNode, createContext, useContext, useState } from 'react';
 import { LumenConfirm } from './confirm';
 import { IconButton } from './icon-button';
 import { InfoTip } from './info-tip';
@@ -22,6 +22,11 @@ import { cn } from './lib/utils';
 import { Badge } from './ui/badge';
 import { InputGroup, InputGroupAddon, InputGroupButton } from './ui/input-group';
 import { Label } from './ui/label';
+
+/** What Settings' search box holds: a `SettingField` whose label or info misses it hides. */
+export const SettingsSearch = createContext('');
+export const settingMatches = (query: string, ...texts: ReactNode[]) =>
+  texts.some((t) => typeof t === 'string' && t.toLowerCase().includes(query.toLowerCase()));
 
 /** One setting inside an item: its label, then its control group, then an optional switch at the end. */
 export function SettingField({
@@ -46,6 +51,8 @@ export function SettingField({
   /** The control: an input, a picker, a `SettingValue`, a ToggleGroup. Its own buttons sit inside it. */
   children?: ReactNode;
 }) {
+  const query = useContext(SettingsSearch);
+  if (query && !settingMatches(query, label, info)) return null;
   return (
     <div
       data-slot="setting-field"
