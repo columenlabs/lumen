@@ -194,6 +194,16 @@ export function assistantRoutes(
     if (keyRoute && !provider) return fail(`This app runs no ${asked} models.`, 404);
     const prov = provider ?? 'anthropic';
     const docName = keyDocName(prov);
+    // Adding a way of their own the app does not let this person use (`ownWays`); removing one
+    // always works.
+    const addsOwn =
+      route === 'PUT /my-key'
+        ? 'key'
+        : route === 'POST /my-signin' || route === 'POST /my-signin/finish'
+          ? 'plan'
+          : null;
+    if (addsOwn && !(await a.mayOwn(caller, prov, addsOwn)))
+      return fail("That isn't available on your account.", 403, 'forbidden');
 
     try {
       switch (route) {

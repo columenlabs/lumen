@@ -18,6 +18,7 @@ import type {
   AssistantEffort,
   AssistantMessage,
   AssistantOwnWay,
+  AssistantPayer,
   AssistantProvider,
   AssistantStatus,
   ChatItem,
@@ -55,7 +56,9 @@ import {
 import {
   DEFAULT_CAP,
   type KeyDoc,
+  type OwnWays,
   type Paying,
+  type PayingRules,
   State,
   keyDocName,
   keyState,
@@ -257,6 +260,23 @@ export interface AssistantOptions {
   keepDays?: number;
   /** The fetch the model providers and ScrapeQL calls go through. */
   fetch?: typeof fetch;
+  /**
+   * Which of their own ways (an API key, a plan sign-in) a person may pay with, per provider: a
+   * provider left out has none, and Settings shows only these. Left out, every way of every
+   * provider (feature flags or a person's plan decide it per caller).
+   */
+  ownWays?: (caller: Caller) => OwnWays | Promise<OwnWays>;
+  /**
+   * Whether a person who pays with their own key first moves to the shared key when theirs is at
+   * its cap or their plan is used up. True by default.
+   */
+  ownFallback?: (caller: Caller) => boolean | Promise<boolean>;
+  /**
+   * Who answers when a ChatGPT plan reaches its usage limit mid-turn. 'claude' (default): the
+   * app's smallest Claude on the same payer's Anthropic key. 'shared': the same model on the app's
+   * shared key, counted as shared spend (only when `ownFallback` allows it).
+   */
+  planFallback?: 'claude' | 'shared';
   onStep?: (s: StepRecord) => void | Promise<void>;
 }
 
@@ -542,6 +562,26 @@ export class Assistant {
     return this.groups.find((g) => g.id === id);
   }
 
+  /** The own ways the app lets this person pay with (`ownWays`); undefined is every way. */
+  async ownWaysOf(caller: Caller): Promise<OwnWays | undefined> {
+    return this.o.ownWays ? await this.o.ownWays(caller) : undefined;
+  }
+
+  /** Whether this person may use `way` of their own on `provider`. */
+  async mayOwn(caller: Caller, provider: AssistantProvider, way: AssistantOwnWay) {
+    const ways = await this.ownWaysOf(caller);
+    return !ways || !!ways[provider]?.includes(way);
+  }
+
+  /** The app's rules for who pays this person's answers (own ways, fallback). */
+  private async payingRules(caller: Caller, only?: AssistantPayer): Promise<PayingRules> {
+    const [ways, fallback] = await Promise.all([
+      this.ownWaysOf(caller),
+      this.o.ownFallback ? this.o.ownFallback(caller) : true,
+    ]);
+    return { ...(ways ? { ways } : {}), fallback, ...(only ? { only } : {}) };
+  }
+
   // ---------------------------------------------------------------- a turn on Think
 
   /**
@@ -564,7 +604,8 @@ export class Assistant {
         ? this.tierById(input.tier)
         : undefined;
     const main = await this.session(caller, lower ?? picked);
-    const { paying, wait } = await this.state.paying(caller.id, main.model.provider);
+    const rules = await this.payingRules(caller);
+    const { paying, wait } = await this.state.paying(caller.id, main.model.provider, rules);
     if (!paying) {
       const code = wait ?? 'not_connected';
       throw new AssistantError(waitText(code, main.model.provider, !!this.o.allowance), code, 402);
@@ -574,14 +615,26 @@ export class Assistant {
       return apiKey ? { apiKey, ...(paying.plans[provider] ? { plan: true } : {}) } : null;
     };
     const key = keyOf(main.model.provider) ?? { apiKey: paying.apiKey };
-    // A ChatGPT plan used up for now: the app's first Claude (its smallest) answers instead, on
-    // the same payer's Anthropic key, rather than the turn ending in the limit's error.
-    const claude = key.plan ? this.models.find((m) => m.provider === 'anthropic') : undefined;
-    const claudeKey = claude ? keyOf('anthropic') : null;
-    const fallback =
-      claude && claudeKey
-        ? { model: claude, key: claudeKey, label: `${main.tier.label} · ${claude.label}` }
-        : undefined;
+    // A ChatGPT plan used up for now: rather than the turn ending in the limit's error, the same
+    // model on the app's shared key ('shared'), or the app's first Claude (its smallest) on the
+    // same payer's Anthropic key.
+    let fallback: { model: ModelDef; key: ModelKey; label: string } | undefined;
+    let sharedLabel: string | undefined;
+    if (key.plan && this.o.planFallback === 'shared') {
+      const shared =
+        rules.fallback !== false
+          ? (await this.state.paying(caller.id, main.model.provider, { only: 'app' })).paying
+          : null;
+      if (shared) {
+        sharedLabel = `${main.meter.label} · shared key`;
+        fallback = { model: main.model, key: { apiKey: shared.apiKey }, label: sharedLabel };
+      }
+    } else if (key.plan) {
+      const claude = this.models.find((m) => m.provider === 'anthropic');
+      const claudeKey = claude ? keyOf('anthropic') : null;
+      if (claude && claudeKey)
+        fallback = { model: claude, key: claudeKey, label: `${main.tier.label} · ${claude.label}` };
+    }
     const p = await this.state.person(caller.id);
     const policy: HandOffPolicy = p.hand_off ?? 'next';
     const advisor = await this.advisorFor(caller, p.advice, main);
@@ -671,9 +724,16 @@ export class Assistant {
           : {},
     };
     const settle = async (end: AgentTurnEnd) => {
+      // What the shared key answered after a plan ran out is the app's spend, not the person's.
+      const onShared = sharedLabel ? end.parts.filter((x) => x.label === sharedLabel) : [];
+      const onPayer = onShared.length ? end.parts.filter((x) => !onShared.includes(x)) : end.parts;
       await this.state
-        .addSpend(caller.id, paying.payer, end.parts, { task: 'chat', ms: end.ms })
+        .addSpend(caller.id, paying.payer, onPayer, { task: 'chat', ms: end.ms })
         .catch(() => undefined);
+      if (onShared.length)
+        await this.state
+          .addSpend(caller.id, 'app', onShared, { task: 'chat' })
+          .catch(() => undefined);
       if (input.chat)
         await this.state
           .addUsage(
@@ -856,6 +916,7 @@ export class Assistant {
     const mainModel = (await this.pick(caller, main)).model;
     // The binding's last test has no token doc to sit in; it is read beside the rest.
     const linkTest = this.o.web?.scrapeql?.fetch ? this.state.scrapeqlLink() : null;
+    const ownWays = await this.ownWaysOf(caller);
     const [p, providers, scrapeql, spend, appCap, ownCap, { paying, wait }] = await Promise.all([
       this.state.person(caller.id),
       Promise.all(
@@ -882,6 +943,7 @@ export class Assistant {
               ? { plan: keyState(plan?.doc ?? null, (d) => (d as { api_key: string }).api_key) }
               : {}),
             ...(use ? { use } : {}),
+            ...(ownWays ? { own_ways: ownWays[id] ?? [] } : {}),
           };
         }),
       ),
@@ -889,7 +951,7 @@ export class Assistant {
       this.state.spend(caller.id),
       this.state.appCap(),
       this.state.ownCap(caller.id),
-      this.state.paying(caller.id, mainModel.provider),
+      this.payingRules(caller).then((r) => this.state.paying(caller.id, mainModel.provider, r)),
     ]);
     const link = await linkTest;
     const tiers = await Promise.all(
@@ -1382,11 +1444,20 @@ export class Assistant {
        * task does more than one kind of work (a first try, a repair). Left out, it is the task.
        */
       tag?: string;
+      /**
+       * Only this payer: 'app' runs the call on the shared key whatever the person pays with (a
+       * check the app always runs on its own key). Left out, whoever pays the person's answers.
+       */
+      payer?: AssistantPayer;
     },
   ): Promise<{ text: string; usd: number; model: string; cut: boolean; usage: UsagePart }> {
     const began = Date.now();
     const s = await this.session(caller, await this.mainTier(caller, o.task));
-    const { paying, wait } = await this.state.paying(caller.id, s.model.provider);
+    const { paying, wait } = await this.state.paying(
+      caller.id,
+      s.model.provider,
+      await this.payingRules(caller, o.payer),
+    );
     if (!paying) {
       const code = wait ?? 'not_connected';
       throw new AssistantError(waitText(code, s.model.provider, !!this.o.allowance), code, 402);
@@ -1504,7 +1575,11 @@ export class Assistant {
     },
   ): Promise<{ data: string; mediaType: 'image/png'; usd: number; model: string }> {
     const began = Date.now();
-    const { paying, wait } = await this.state.paying(caller.id, 'openai');
+    const { paying, wait } = await this.state.paying(
+      caller.id,
+      'openai',
+      await this.payingRules(caller),
+    );
     if (!paying) {
       const code = wait ?? 'not_connected';
       throw new AssistantError(waitText(code, 'openai', !!this.o.allowance), code, 402);

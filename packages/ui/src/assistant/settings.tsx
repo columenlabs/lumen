@@ -9,6 +9,7 @@ import type {
   AssistantAccess,
   AssistantEffort,
   AssistantOwnWay,
+  AssistantPayer,
   AssistantProviderRow,
   AssistantSettingsPatch,
   AssistantStatus,
@@ -261,7 +262,8 @@ const mark = (label: string) => <ConnectionLogo text={label.charAt(0)} />;
 function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
   const { apply, refresh } = useApply(client);
   const ways: ConnectionWay[] = [];
-  if (p.signin === 'chatgpt')
+  const may = (w: AssistantOwnWay) => !p.own_ways || p.own_ways.includes(w);
+  if (p.signin === 'chatgpt' && (may('plan') || p.plan?.set))
     ways.push({
       id: 'plan',
       label: 'ChatGPT plan',
@@ -278,21 +280,22 @@ function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantP
       removeText: 'Your API key, if you set one, runs from then on.',
       removeLabel: 'Sign out',
     });
-  ways.push({
-    id: 'key',
-    label: 'API key',
-    icon: KeyRoundIcon,
-    info: `Your own ${p.label} key, billed by ${p.label}.`,
-    set: p.own.set,
-    ident: p.own.hint,
-    test: wayTest(p.own),
-    fields: [{ id: 'key', label: `${p.label} API key`, secret: true, prefix: p.prefix }],
-    getUrl: p.keys_url,
-    onSave: (v) => apply(`own:${p.id}`, () => client.ownKey(p.id, v.key ?? ''), 'Key saved'),
-    onTest: () => client.testOwnKey(p.id, 'key').finally(refresh),
-    onRemove: () => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed'),
-    removeTitle: `Remove your ${p.label} key?`,
-  });
+  if (may('key') || p.own.set)
+    ways.push({
+      id: 'key',
+      label: 'API key',
+      icon: KeyRoundIcon,
+      info: `Your own ${p.label} key, billed by ${p.label}.`,
+      set: p.own.set,
+      ident: p.own.hint,
+      test: wayTest(p.own),
+      fields: [{ id: 'key', label: `${p.label} API key`, secret: true, prefix: p.prefix }],
+      getUrl: p.keys_url,
+      onSave: (v) => apply(`own:${p.id}`, () => client.ownKey(p.id, v.key ?? ''), 'Key saved'),
+      onTest: () => client.testOwnKey(p.id, 'key').finally(refresh),
+      onRemove: () => apply(`own:${p.id}`, () => client.ownKey(p.id, null), 'Key removed'),
+      removeTitle: `Remove your ${p.label} key?`,
+    });
   return (
     <LumenConnection
       id={p.id}
@@ -312,24 +315,52 @@ function Providers({ client }: { client: AssistantAdapter }) {
   const { apply } = useApply(client);
   return (
     <WithStatus client={client}>
-      {(s) => (
-        <div className="flex flex-col">
-          <LumenExpandList>
-            {s.providers.map((p) => (
-              <OwnProviderKey key={p.id} client={client} p={p} />
-            ))}
-          </LumenExpandList>
-          {s.providers.some((p) => p.own.set || p.plan?.set) && (
-            <Row label="Your keys may spend" info="On your keys, every provider together.">
-              <CapInput
-                label="Your monthly cap"
-                value={s.caps.own}
-                onSave={(n) => void apply('own', () => client.ownCap(n))}
-              />
-            </Row>
-          )}
-        </div>
-      )}
+      {(s) => {
+        // A provider the app gives this person no way of their own on shows no row, unless one is
+        // still set (so it can be removed).
+        const rows = s.providers.filter(
+          (p) => !p.own_ways || p.own_ways.length > 0 || p.own.set || p.plan?.set,
+        );
+        const ownSet = rows.some((p) => p.own.set || p.plan?.set);
+        return (
+          <div className="flex flex-col">
+            <LumenExpandList>
+              {rows.map((p) => (
+                <OwnProviderKey key={p.id} client={client} p={p} />
+              ))}
+            </LumenExpandList>
+            {ownSet && (
+              <Row
+                label="Answers run on"
+                info="Your own key or plan first, with the shared credits behind it; or the shared credits first."
+              >
+                <LumenSelector
+                  label="Answers run on"
+                  size="sm"
+                  className="w-44"
+                  value={s.pay}
+                  options={[
+                    { value: 'own', label: 'Your own first' },
+                    { value: 'app', label: 'Shared credits first' },
+                  ]}
+                  onChange={(pay) =>
+                    void apply('pay', () => client.settings({ pay: pay as AssistantPayer }))
+                  }
+                />
+              </Row>
+            )}
+            {ownSet && (
+              <Row label="Your keys may spend" info="On your keys, every provider together.">
+                <CapInput
+                  label="Your monthly cap"
+                  value={s.caps.own}
+                  onSave={(n) => void apply('own', () => client.ownCap(n))}
+                />
+              </Row>
+            )}
+          </div>
+        );
+      }}
     </WithStatus>
   );
 }
