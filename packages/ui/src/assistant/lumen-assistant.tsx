@@ -187,6 +187,11 @@ export interface LumenAssistantProps {
    * card's Make another sends again with `mode` on.
    */
   imageTool?: { tool: string; mode?: string };
+  /**
+   * Where the server compacts the chat, in tokens (the agent's `compactAt()`), drawn as the tick on
+   * the context bar. 150k by default.
+   */
+  compactAt?: number;
 }
 
 /** A composer mode: its toggle's icon and label (also its tooltip and aria-label). */
@@ -224,6 +229,7 @@ export function LumenAssistant({
   images = false,
   modes = [],
   imageTool,
+  compactAt = COMPACT_AT,
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
@@ -437,7 +443,7 @@ export function LumenAssistant({
         onSend={(text, more, how) => chat.send(text, { ...extra(), ...more }, how)}
         onStop={chat.stop}
       />
-      <UsageLine usage={chat.usage} client={client} spent={s?.spend.usd} />
+      <UsageLine usage={chat.usage} client={client} spent={s?.spend.usd} compactAt={compactAt} />
     </div>
   );
 }
@@ -2166,7 +2172,13 @@ function UsageLine({
   usage,
   client,
   spent,
-}: { usage: ChatUsage | null; client: AssistantAdapter; spent: number | undefined }) {
+  compactAt,
+}: {
+  usage: ChatUsage | null;
+  client: AssistantAdapter;
+  spent: number | undefined;
+  compactAt: number;
+}) {
   const phone = useIsMobile();
   const month = !!client.usage && spent !== undefined && spent > 0;
   if ((!usage || !usage.calls) && !month) return null;
@@ -2231,13 +2243,13 @@ function UsageLine({
             <span
               className={cn(
                 'absolute inset-y-0 left-0',
-                ctx > COMPACT_AT ? 'bg-warning' : 'bg-primary/60',
+                ctx > compactAt ? 'bg-warning' : 'bg-primary/60',
               )}
               style={{ width: `${Math.min(100, (ctx / CONTEXT_MAX) * 100)}%` }}
             />
             <span
               className="absolute inset-y-0 w-px bg-foreground/40"
-              style={{ left: `${(COMPACT_AT / CONTEXT_MAX) * 100}%` }}
+              style={{ left: `${(compactAt / CONTEXT_MAX) * 100}%` }}
             />
           </span>
           <span className="tabular-nums">{tokens(ctx)}</span>
