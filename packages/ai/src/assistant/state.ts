@@ -474,11 +474,12 @@ export class State {
 
   /**
    * Adds one answer's use to a chat or run in this month's history (`usage:YYYY-MM`): one entry a
-   * chat or run, its parts merged, the newest `USAGE_KEPT` kept. `title` names a new entry only.
+   * chat or run, its parts merged, the newest `USAGE_KEPT` kept. `title` names a new entry only;
+   * `own_usd` is what of this answer the person's own key or plan paid, added to the entry's.
    */
   async addUsage(
     id: string,
-    e: { id: string; kind: UsageEntry['kind']; task?: string; title: string },
+    e: { id: string; kind: UsageEntry['kind']; task?: string; title: string; own_usd?: number },
     parts: UsagePart[],
   ) {
     if (!parts.some((p) => p.calls)) return;
@@ -490,6 +491,7 @@ export class State {
       const merged = mergeParts(prev?.parts ?? [], parts);
       const sum = (k: 'calls' | 'in' | 'read' | 'out' | 'usd') =>
         merged.reduce((a, p) => a + p[k], 0);
+      const own = (prev?.own_usd ?? 0) + (e.own_usd ?? 0);
       entries.unshift({
         id: e.id,
         kind: e.kind,
@@ -502,6 +504,7 @@ export class State {
         read: sum('read'),
         out: sum('out'),
         usd: sum('usd'),
+        ...(own > 0 ? { own_usd: own } : {}),
         parts: merged,
       });
       return { entries: entries.slice(0, USAGE_KEPT) };

@@ -4,9 +4,13 @@ import type { UsageEntry, UsageHistory, UsagePart } from '@columenlabs/lumen-ui-
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeftIcon, ChevronRightIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
 import { Fragment, useState } from 'react';
+import { DetailsTable } from '../details-table';
 import { IconButton } from '../icon-button';
+import { InfoLabel } from '../info-tip';
 import { cn } from '../lib/utils';
+import { Label } from '../ui/label';
 import { Spinner } from '../ui/spinner';
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import type { AssistantAdapter } from './client';
 
 export const usd = (n: number) =>
@@ -175,6 +179,95 @@ export function UsageHistoryView({
         </ul>
       ) : (
         <p className="text-muted-foreground text-sm">Nothing used this month.</p>
+      )}
+    </div>
+  );
+}
+
+/** The ranges the own-key table offers, in days. */
+const OWN_RANGES = [
+  { id: '1d', days: 1 },
+  { id: '7d', days: 7 },
+  { id: '30d', days: 30 },
+] as const;
+type OwnRange = (typeof OWN_RANGES)[number]['id'];
+
+/**
+ * Spend on the person's own keys and plans over the last 1, 7 or 30 days: one row a chat or run
+ * (Session, Date, Amount), newest first, and a Total of the rows. A session counts in the range its
+ * last use falls in. Shown when `always` (an own key or plan is set) or any session was paid on one.
+ */
+export function OwnKeyUsage({ client, always }: { client: AssistantAdapter; always?: boolean }) {
+  const [range, setRange] = useState<OwnRange>('7d');
+  const now = useAssistantUsage(client).data;
+  // The month before, for a range that reaches back past this month's start.
+  const before = now?.months[now.months.indexOf(now.month) + 1];
+  const prev = useAssistantUsage(client, before, !!before && range === '30d').data;
+  if (!now) return null;
+  const all = [...now.entries, ...(range === '30d' ? (prev?.entries ?? []) : [])].filter(
+    (e) => (e.own_usd ?? 0) > 0,
+  );
+  if (!always && !all.length) return null;
+  const days = OWN_RANGES.find((r) => r.id === range)?.days ?? 7;
+  const since = Date.now() - days * 86_400_000;
+  const seen = new Set<string>();
+  const sessions = all
+    .filter((e) => e.at >= since && !seen.has(e.id) && seen.add(e.id))
+    .sort((a, b) => b.at - a.at);
+  const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0);
+  return (
+    <div data-slot="setting-row" className="flex flex-col gap-2 border-b py-3 last:border-b-0">
+      <div className="flex items-center gap-4">
+        <Label className="min-w-0 flex-1">
+          <InfoLabel info="Each chat and run your own key or plan paid for, by its last use.">
+            Spent on your keys
+          </InfoLabel>
+        </Label>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          spacing={0}
+          value={range}
+          aria-label="Range"
+          onValueChange={(v) => v && setRange(v as OwnRange)}
+        >
+          {OWN_RANGES.map((r) => (
+            <ToggleGroupItem key={r.id} value={r.id} aria-label={`Last ${r.id}`}>
+              {r.id}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+      {sessions.length ? (
+        <DetailsTable
+          head={[
+            { label: 'Session', grow: true },
+            { label: 'Date', hideOnPhone: true },
+            { label: 'Amount', right: true },
+          ]}
+          rows={sessions.map((e) => ({
+            key: e.id,
+            cells: [
+              <span key="n" className="block truncate" title={e.title}>
+                {e.title}
+              </span>,
+              <time
+                key="t"
+                dateTime={new Date(e.at).toISOString()}
+                title={new Date(e.at).toLocaleString()}
+              >
+                {when(e.at)}
+              </time>,
+              usd(e.own_usd ?? 0),
+            ],
+          }))}
+          foot={['Total', <span key="d" className="max-md:hidden" />, usd(total)]}
+        />
+      ) : (
+        <p className="text-muted-foreground text-sm">
+          Nothing spent on your keys in the last {range}.
+        </p>
       )}
     </div>
   );
