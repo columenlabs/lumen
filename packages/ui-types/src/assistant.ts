@@ -418,6 +418,8 @@ export interface UsageEntry {
   read: number;
   out: number;
   usd: number;
+  /** Of `usd`, what the person's own key or plan paid (left out when nothing, and before it was kept). */
+  own_usd?: number;
   parts: UsagePart[];
 }
 

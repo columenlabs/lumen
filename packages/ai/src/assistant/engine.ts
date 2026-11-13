@@ -738,7 +738,12 @@ export class Assistant {
         await this.state
           .addUsage(
             caller.id,
-            { id: `chat:${input.chat}`, kind: 'chat', title: message.split('\n')[0] || 'Chat' },
+            {
+              id: `chat:${input.chat}`,
+              kind: 'chat',
+              title: message.split('\n')[0] || 'Chat',
+              own_usd: paying.payer === 'own' ? onPayer.reduce((a, x) => a + x.usd, 0) : 0,
+            },
             end.parts,
           )
           .catch(() => undefined);
@@ -1544,6 +1549,7 @@ export class Assistant {
             kind: 'task',
             task: o.task,
             title: o.run?.title ?? task?.label ?? o.task,
+            own_usd: paying.payer === 'own' ? part.usd : 0,
           },
           [part],
         )
@@ -1657,6 +1663,7 @@ export class Assistant {
             kind: 'task',
             task: o.task,
             title: o.run?.title ?? task?.label ?? o.task,
+            own_usd: paying.payer === 'own' ? part.usd : 0,
           },
           [part],
         )

@@ -53,7 +53,7 @@ import { Switch } from '../ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import type { AssistantAdapter } from './client';
 import { allowanceAmount, assistantStatusKey, usd, useAssistantStatus } from './lumen-assistant';
-import { UsageHistoryView } from './usage-history';
+import { OwnKeyUsage, UsageHistoryView } from './usage-history';
 
 const EFFORTS: { value: AssistantEffort; label: string }[] = [
   { value: 'default', label: 'Model default' },
@@ -358,6 +358,7 @@ function Providers({ client }: { client: AssistantAdapter }) {
                 />
               </Row>
             )}
+            <OwnKeyUsage client={client} always={ownSet} />
           </div>
         );
       }}
