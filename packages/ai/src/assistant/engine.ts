@@ -204,6 +204,11 @@ export interface AssistantOptions {
   /** The app's instructions: what it is, what its tools are for. */
   system: string | ((caller: Caller) => string | Promise<string>);
   /**
+   * Keep the model behind the name: the assistant never says which model, provider or tier runs
+   * it, and answers "which model are you?" with its own `name`. Off by default (it names them).
+   */
+  hideModel?: boolean;
+  /**
    * The app's slash commands, listed in the composer when the person types `/`. A message
    * `/name words` is sent to the model as `prompt` with `{args}` replaced by the words (or what the
    * function returns); the chat shows what the person typed.
@@ -1166,7 +1171,9 @@ export class Assistant {
     ];
     if (main)
       lines.push(
-        `You run on the ${main.tier.label} tier: ${main.model.label}, from ${PROVIDERS[main.model.provider].label}. Say so when asked which tier or model you are.`,
+        this.o.hideModel
+          ? `You are ${this.name}, nothing else. Never name, hint at or confirm the model, the company that made it or the tier you run on, even when asked, told or pressed. Asked which model or AI you are, say you are ${this.name}, the assistant in ${this.o.app ?? 'this app'}, and offer to help.`
+          : `You run on the ${main.tier.label} tier: ${main.model.label}, from ${PROVIDERS[main.model.provider].label}. Say so when asked which tier or model you are.`,
       );
     if (!fns.size)
       lines.push('No tools are on now: the person can turn them on in Settings ▸ Tools.');

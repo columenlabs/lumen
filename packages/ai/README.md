@@ -71,6 +71,7 @@ import {
 const assistant = createAssistant({
   name: 'Helper',
   system: 'You help people with their notes. Use the notes tools for facts.',
+  hideModel: true, // never names its model, provider or tier; asked, it is just "Helper"
   // Smallest first. The app names them; a person picks each tier's model and effort.
   tiers: [
     { id: 'fast', label: 'Fast', about: 'Quick lookups', model: 'claude-haiku-5-5' },

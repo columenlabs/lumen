@@ -1,5 +1,107 @@
 [
   {
+    "tag": "v0.1.227",
+    "date": "2026-11-12T20:29:22Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Generate images from the server",
+        "body": "In @columenlabs/lumen-ai, `assistant.image(caller, { task, prompt, images?, size?, quality?, run? })` makes one image on the paying user's own key, billed and capped in the allowance like `complete`, and works from the reference `images` when you pass them."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tool images show as a card",
+        "body": "In @columenlabs/lumen-ui-types, the new `StepItem.image` (`{ url, alt?, cost? }`) means a tool output's `image` renders in `LumenAssistant` as a picture card with Zoom, Use as reference, Download and Make another actions."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Composer modes",
+        "body": "`LumenAssistant` has a new `modes` prop that adds toggles beside the paperclip, such as Make an image. The active mode is sent with the message as `use` (`AssistantMessage.use`, `AskInput.use`) so your app's plan can read it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Progress box for slow image tools",
+        "body": "Set `LumenAssistant`'s new `imageTool` prop to your tool's name, and while that tool runs its line shows a \"Making the image · Usually 10 to 20 s\" box instead of a plain step."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.226",
+    "date": "2026-11-12T18:41:11Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Reply to selected chat text",
+        "body": "In `LumenAssistant`, select text inside any single chat message and use the floating Reply bar to quote it above the composer, so the next message is sent as `AssistantMessage.quote` (`{ text, from }`)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Attach images from the composer",
+        "body": "`LumenComposer` now shows a paperclip button when `images` is on, so users can pick files as well as paste or drop them."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "The agent reads the quote",
+        "body": "`LumenAgent.ask` from @columenlabs/lumen-ai keeps the quote in `AskMeta.quote` and gives the model a leading text part, built with the exported `quoteLead` and `quoteOf`, that names whose message was quoted."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Version text that opens the notes",
+        "body": "`WhatsNew` has a new `label` prop that shows the version in the status bar and opens the release notes when clicked."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.225",
+    "date": "2026-11-10T23:08:50Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A month's spend now adds up per task and model",
+        "body": "In `@columenlabs/lumen-ai`, the `spend:YYYY-MM` document gains an optional `tasks` list of `TaskSpend` entries, so an app's admin page can show what each kind of work costs in answers (`runs`), model calls, tokens in, cache reads, tokens out, cost and total time (`ms`)."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Chat and `complete` answers are tagged with their task automatically",
+        "body": "A chat answer is counted as `chat` using its turn's `ms`, and a `complete` call is counted under its `task` and timed around the call, so you don't need to change existing calls to get the per-task tally."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Name a call's work with `complete({ tag })`",
+        "body": "When a task does more than one kind of work, such as a first try and a repair, pass `tag` to `complete` to count that call under a different name in the `tasks` list."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`State.addSpend` takes the task and time",
+        "body": "`State.addSpend(id, payer, parts, at?)` now accepts the task and time for the tally, and the existing `rows` are written exactly as before, so current readers keep working."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.224",
     "date": "2026-11-10T22:40:18Z",
     "takeaways": [
