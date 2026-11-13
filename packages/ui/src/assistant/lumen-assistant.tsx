@@ -294,7 +294,8 @@ export function LumenAssistant({
       }
     : null;
 
-  const tiers = s?.tiers ?? [];
+  // The app picks the tier itself (pick_tier false): no tier menu, `#`, /model or /escalate.
+  const tiers = s?.pick_tier === false ? [] : (s?.tiers ?? []);
   const above = tiers.slice(tiers.findIndex((t) => t.id === s?.tier) + 1);
   // The kit's commands; the app's own (`commands`, then the server's) come first and win a name.
   const builtIns: AssistantCommand[] = [
@@ -370,13 +371,13 @@ export function LumenAssistant({
         <span className="min-w-0 flex-1 truncate font-medium">
           {chat.title || s?.name || 'Assistant'}
         </span>
-        {s && s.tiers.length > 1 && (
+        {s && tiers.length > 1 && (
           <LumenSelector
             trigger="chip"
             size="sm"
             label="Tier"
             value={s.tier}
-            options={s.tiers.map((t) => ({ value: t.id, label: t.label, detail: t.model_label }))}
+            options={tiers.map((t) => ({ value: t.id, label: t.label, detail: t.model_label }))}
             onChange={(t) => void setTier(t)}
           />
         )}
