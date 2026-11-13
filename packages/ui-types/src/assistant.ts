@@ -229,6 +229,11 @@ export type ChatItem =
   | HandOffItem
   | { kind: 'advice'; tier: string; label: string; error?: string }
   | { kind: 'compacted' }
+  /**
+   * The app asks whether the message above starts new work that a fresh chat would answer better
+   * (`LumenAgent.offerFresh`); it was not answered or kept. Gone once the person chooses.
+   */
+  | { kind: 'fresh' }
   | { kind: 'stopped'; reason?: 'cap' }
   /** `retried`: its turn was sent again (Retry), so it no longer offers one. */
   | { kind: 'error'; text: string; code?: string; retried?: boolean };
@@ -272,6 +277,7 @@ export type AssistantEvent =
   | { event: 'advice'; data: { tier: string; label: string } }
   | { event: 'advice_done'; data: { error?: string } }
   | { event: 'compacted'; data: Record<string, never> }
+  | { event: 'fresh'; data: Record<string, never> }
   | { event: 'usage'; data: ChatUsage }
   | { event: 'stopped'; data: { reason?: 'cap' } }
   /** A message steered into the running answer was read by it here. */
@@ -320,6 +326,8 @@ export interface AssistantMessage {
   screen?: AssistantScreenMap;
   /** How earlier screen calls ended since the last message. */
   outcomes?: AssistantScreenOutcome[];
+  /** The person chose to keep this message in this chat: the agent does not offer a fresh one. */
+  stay?: boolean;
 }
 
 /** A tier as the person set it, with what it runs. */

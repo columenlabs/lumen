@@ -100,6 +100,25 @@ export interface AssistantChatState {
   undo: (step: StepItem) => Promise<void>;
   /** A screen call ended in the browser: shown on its chip, and sent with the next message. */
   screenEnded: (outcome: AssistantScreenOutcome) => void;
+  /**
+   * Answers the fresh-chat card (`fresh` item): `new` sends its message in a new chat, `stay`
+   * sends it here again, kept in this chat.
+   */
+  fresh: (choice: 'new' | 'stay', extra?: Extra) => void;
+}
+
+/** What a sent message carried besides its words, to send it again (Retry, a fresh chat). */
+function resendOf(user: Extract<ChatItem, { kind: 'user' }>): Extra {
+  const images = (user.images ?? []).flatMap((src) => {
+    const m = /^data:([^;]+);base64,(.*)$/.exec(src);
+    return m ? [{ media_type: m[1], data: m[2] } as AssistantImage] : [];
+  });
+  return {
+    ...(user.refs?.length ? { refs: user.refs } : {}),
+    ...(user.quote ? { quote: user.quote } : {}),
+    ...(user.tier ? { tier: user.tier } : {}),
+    ...(images.length ? { images } : {}),
+  };
 }
 
 /** Where an event lands: the chat, or the last hand-off section when it came from inside one. */
@@ -183,6 +202,9 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
     }
     case 'compacted':
       items.push({ kind: 'compacted' });
+      break;
+    case 'fresh':
+      items.push({ kind: 'fresh' });
       break;
     case 'stopped':
       items.push({ kind: 'stopped', ...(e.data.reason ? { reason: e.data.reason } : {}) });
@@ -373,21 +395,35 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       setItems((p) =>
         p.map((x, i) => (i === at && x.kind === 'error' ? { ...x, retried: true } : x)),
       );
-      const images = (user.images ?? []).flatMap((src) => {
-        const m = /^data:([^;]+);base64,(.*)$/.exec(src);
-        return m ? [{ media_type: m[1], data: m[2] } as AssistantImage] : [];
-      });
-      void run(
-        user.text,
-        {
-          ...extra,
-          ...(user.refs?.length ? { refs: user.refs } : {}),
-          ...(user.quote ? { quote: user.quote } : {}),
-          ...(user.tier ? { tier: user.tier } : {}),
-          ...(images.length ? { images } : {}),
-        },
-        true,
-      );
+      void run(user.text, { ...extra, ...resendOf(user) }, true);
+    },
+    [run],
+  );
+
+  const itemsRef = useRef<LiveItem[]>([]);
+  itemsRef.current = items;
+  const fresh = useCallback(
+    (choice: 'new' | 'stay', extra?: Extra) => {
+      if (abort.current) return;
+      const list = itemsRef.current;
+      const card = list.findLastIndex((i) => i.kind === 'fresh');
+      const at = list.findLastIndex((i, n) => n < card && i.kind === 'user');
+      const user = list[at];
+      if (card < 0 || user?.kind !== 'user') return;
+      if (choice === 'new') {
+        // A new chat, as New chat makes one, and the message is its first.
+        setQueue([]);
+        setChatId(null);
+        idRef.current = null;
+        setTitle('');
+        setItems([]);
+        setUsage(null);
+        void run(user.text, { ...extra, ...resendOf(user) });
+      } else {
+        // The message goes again in its place, without the card.
+        setItems((p) => p.slice(0, at));
+        void run(user.text, { ...extra, ...resendOf(user), stay: true });
+      }
     },
     [run],
   );
@@ -521,5 +557,6 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     settle,
     undo,
     screenEnded,
+    fresh,
   };
 }

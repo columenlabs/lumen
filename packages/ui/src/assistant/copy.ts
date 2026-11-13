@@ -84,6 +84,8 @@ function itemMarkdown(i: ChatItem, depth: number, name: string): string {
       ].join('\n\n');
     case 'advice':
       return `_${i.error ? 'Could not ask' : 'Asked'} ${i.label} for advice._`;
+    case 'fresh':
+      return '_Offered a fresh chat for this._';
     case 'compacted':
       return '_Compacted._';
     case 'stopped':
