@@ -19,7 +19,8 @@ Pin it to the same exact version as the other Lumen packages.
 ```ts
 import { AccessVerifier, accessToken } from '@columenlabs/lumen-auth';
 
-// One per isolate: the team's signing keys are fetched once and kept an hour.
+// One per isolate: the team's signing keys are fetched once and kept an hour. A key fetch gives up after
+// 3 s (ACCESS_CERTS_MS), only one runs at a time, and keys already held keep verifying while it retries.
 const access = new AccessVerifier({
   teamDomain: 'myteam.cloudflareaccess.com',
   aud: [env.ACCESS_AUD],            // one application's AUD tag, or several (one Worker, several hosts)

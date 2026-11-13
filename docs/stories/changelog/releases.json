@@ -1,5 +1,181 @@
 [
   {
+    "tag": "v0.1.233",
+    "date": "2026-11-13T21:25:11Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "`lumen-ship check parts` flags hand-made key inputs",
+        "body": "The `parts` check has a new `key-input` rule that reports a password `Input` or `InputGroupInput` in an app folder, so copied key and token entry fields show up in the check instead of slipping through."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Conditional password inputs are caught too",
+        "body": "The `key-input` rule also flags an input whose type is chosen at runtime, such as `type={secret ? 'password' : 'text'}`, so a show/hide toggle does not hide a hand-rolled key field from `lumen-ship check parts`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Use `LumenConnection` for keys, tokens and secrets",
+        "body": "From `@columenlabs/lumen-ui`, `LumenConnection` already provides the masked value, Replace, prefix check, status, Test and Remove, and the parts guidance now says to use it for any key, token or secret field in a settings row. When you bump `@columenlabs/lumen-ship`, replace each flagged input with `LumenConnection`, or add one `key-input` line to the app's parts baseline until you do. This is not breaking, because the check only fails when the count rises above the baseline."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.232",
+    "date": "2026-11-13T20:02:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Offer a fresh chat for new work",
+        "body": "In `@columenlabs/lumen-ai`, override the protected `offerFresh(input)` hook on `LumenAgent` and return `true` when a message starts new work in a long chat, and `ask()` will send a `fresh` event followed by `done` without keeping or answering the message."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A fresh-chat card in the assistant",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` now shows a card under the message asking whether to start a fresh chat, with a ＋ button to send it in a new chat and a × button to keep it in the current one."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Keep a message in the current chat",
+        "body": "`AskInput.stay` and `AssistantMessage.stay` mark a message that was kept after the offer, so `offerFresh` is not run again for it, and `useAssistantChat().fresh(choice, extra)` lets you send the user's choice from your own UI."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "New types for the fresh offer",
+        "body": "From `@columenlabs/lumen-ui-types`, the new `{ kind: 'fresh' }` item and the `fresh` event let you handle the offer in a custom assistant view."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.231",
+    "date": "2026-11-13T18:42:54Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose which own AI ways each person may use",
+        "body": "In `@columenlabs/lumen-ai`, the new `AssistantOptions.ownWays(caller)` returns the allowed ways (`key`, `plan`) per provider for that person, and `PUT /my-key` and `POST /my-signin(/finish)` now refuse to add a way that isn't allowed."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Keep own-key payers off the shared key",
+        "body": "In `AssistantOptions`, the new `ownFallback(caller)` lets you return `false` so a person who pays with their own key first never moves to the app's shared key (the default is `true`)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Keep a plan-limited turn on the same model",
+        "body": "Set `AssistantOptions.planFallback: 'shared'` and, when a person's own plan hits its usage limit mid-turn, the same model carries on using the app's shared key and that part is recorded as shared spend (`payer: 'app'`)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Run safety checks on the shared key",
+        "body": "`complete({ payer: 'app' })` in `@columenlabs/lumen-ai` always runs on the shared key, whoever pays for the person's answers."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Settings shows only the ways a person may use",
+        "body": "In `@columenlabs/lumen-ui`, Settings ▸ Model providers lists only the allowed ways and adds an \"Answers run on\" row once an own key or plan is set."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.230",
+    "date": "2026-11-13T18:21:50Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Let the app choose each turn's tier",
+        "body": "In `@columenlabs/lumen-ai`, `createAssistant({ pickTier: false })` makes `agentTurn` run on exactly the `input.tier` you pass, so an app can send chat to a cheap model and edits to a strong one."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Cleaner assistant panel when the app routes",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` now hides the header tier menu and the composer's `#`, `/model` and `/escalate` commands when the status reports `pick_tier: false`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Status tells the UI who picks the tier",
+        "body": "In `@columenlabs/lumen-ui-types`, `AssistantStatus` has a new `pick_tier` field, which is `false` when the app picks the tier, so custom assistant UIs can follow the same rule."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.229",
+    "date": "2026-11-13T17:36:03Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Agents choose where their chat compacts",
+        "body": "In `@columenlabs/lumen-ai`, a `LumenAgent` subclass can now override the protected `compactAt()` method to return the token count past which the older part of the chat is summarized, so an app's agent can keep chats shorter than the 150k default (`COMPACT_AT`)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "The assistant's context bar follows the agent's limit",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` has a new `compactAt` prop (150k by default) that moves the context bar's tick and warning colour to the limit your agent uses."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.228",
+    "date": "2026-11-13T10:13:21Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Keep the model out of assistant answers",
+        "body": "In `@columenlabs/lumen-ai`, `createAssistant` takes a new `hideModel` option (part of `AssistantOptions`) that stops the assistant from naming its model, provider or tier."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No more \"What model are you?\" leaks",
+        "body": "The kit used to add a line telling the assistant to state its tier, model and provider when asked, placed after your own instructions, so an app could not override it. Setting `hideModel: true` in `createAssistant` removes that line."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Safe by default, opt in per app",
+        "body": "`hideModel` is off by default, so existing `createAssistant` calls behave exactly as before and you only change behavior where you set it."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.227",
     "date": "2026-11-12T20:29:22Z",
     "takeaways": [
