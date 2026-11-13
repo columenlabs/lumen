@@ -209,6 +209,12 @@ export interface AssistantOptions {
    */
   hideModel?: boolean;
   /**
+   * Who picks the tier a chat turn runs on. False: the app does, each turn, through
+   * `AgentTurnInput.tier` (any of its tiers; left out, the chat task's tier). The person's saved
+   * tier and task picks are ignored and the panel offers no tier menu. True by default.
+   */
+  pickTier?: boolean;
+  /**
    * The app's slash commands, listed in the composer when the person types `/`. A message
    * `/name words` is sent to the model as `prompt` with `{args}` replaced by the words (or what the
    * function returns); the chat shows what the person typed.
@@ -519,7 +525,7 @@ export class Assistant {
 
   /** The tier the person's chat runs on: their pick, else the chat task's start tier. */
   private async mainTier(caller: Caller, task = 'chat') {
-    const p = await this.state.person(caller.id);
+    const p = this.o.pickTier === false ? {} : await this.state.person(caller.id);
     const startId = p.tasks?.[task] ?? this.tasks.find((t) => t.id === task)?.tier;
     return (
       this.tierById(task === 'chat' ? (p.tier ?? startId) : startId) ?? (this.tiers[0] as TierDef)
@@ -551,8 +557,10 @@ export class Assistant {
   ): Promise<{ plan: AgentTurnPlan; settle: (end: AgentTurnEnd) => Promise<void> }> {
     const message = input.message.trim();
     const picked = await this.mainTier(caller);
+    // The app picks the tier (pickTier: false): any of its tiers, never a hand off.
+    const byApp = this.o.pickTier === false;
     const lower =
-      input.tier && !this.above(picked).some((t) => t.id === input.tier)
+      input.tier && (byApp || !this.above(picked).some((t) => t.id === input.tier))
         ? this.tierById(input.tier)
         : undefined;
     const main = await this.session(caller, lower ?? picked);
@@ -577,7 +585,8 @@ export class Assistant {
     const p = await this.state.person(caller.id);
     const policy: HandOffPolicy = p.hand_off ?? 'next';
     const advisor = await this.advisorFor(caller, p.advice, main);
-    const handTo = input.tier ? this.above(main.tier).find((t) => t.id === input.tier) : undefined;
+    const handTo =
+      input.tier && !byApp ? this.above(main.tier).find((t) => t.id === input.tier) : undefined;
     const appSystem =
       typeof this.o.system === 'string' ? this.o.system : await this.o.system(caller);
     const asked = await this.expand(caller, message);
@@ -909,6 +918,7 @@ export class Assistant {
       admin: caller.admin,
       tier: main.id,
       tiers,
+      ...(this.o.pickTier === false ? { pick_tier: false } : {}),
       models: this.models.map((m) => ({
         id: m.id,
         label: m.label,

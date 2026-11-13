@@ -478,6 +478,11 @@ export interface AssistantStatus {
   admin: boolean;
   tier: string;
   tiers: AssistantTierRow[];
+  /**
+   * False when the app picks each turn's tier itself (`createAssistant` `pickTier: false`): the
+   * panel shows no tier menu, `#` or /model. Left out, the person picks.
+   */
+  pick_tier?: boolean;
   models: AssistantModelRow[];
   tasks: { id: string; label: string; about: string; tier: string }[];
   groups: {
