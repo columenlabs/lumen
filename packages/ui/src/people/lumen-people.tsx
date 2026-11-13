@@ -58,6 +58,7 @@ import {
   peopleView,
   scopeKey,
   statusTone,
+  syncText,
   topScopes,
   usePeopleAction,
   usePeopleQuery,
@@ -313,7 +314,8 @@ function PeopleList({
   const invited = people.filter((p) => p.status === 'invited').length;
   const active = people.filter((p) => p.status === 'active').length;
   const disabled = people.filter((p) => p.status === 'disabled').length;
-  const onlyMe = people.length <= 1;
+  // The first-run note stands in for the table only when it has no row; a lone admin is a row.
+  const none = people.length === 0;
 
   return (
     <>
@@ -338,9 +340,15 @@ function PeopleList({
               {view.sync ? (
                 <Tile
                   label="Sign-in sync"
-                  value={view.sync.ok ? 'Synced' : 'Out of step'}
-                  caption={view.sync.at ? when(view.sync.at) : view.sync.detail}
-                  valueClassName={view.sync.ok ? undefined : 'text-loss'}
+                  value={syncText(view.sync)}
+                  caption={
+                    !view.sync.configured
+                      ? 'Invites don’t reach sign-in'
+                      : view.sync.at
+                        ? when(view.sync.at)
+                        : view.sync.detail
+                  }
+                  valueClassName={!view.sync.configured || view.sync.ok ? undefined : 'text-loss'}
                 />
               ) : (
                 <Tile
@@ -360,7 +368,7 @@ function PeopleList({
         {...layout}
         rows={people}
         load={load}
-        state={onlyMe ? <FirstRun mail={view.mail.configured} onInvite={onInvite} /> : undefined}
+        state={none ? <FirstRun mail={view.mail.configured} onInvite={onInvite} /> : undefined}
         selection={{ keys: picked, onChange: setPicked }}
         rowTitle={(p) => p.name || p.email}
         onOpen={(p) => setOpenId(p.id)}
