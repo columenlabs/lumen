@@ -65,7 +65,9 @@ export function SettingField({
     >
       <div
         className={cn(
-          'flex w-32 shrink-0 items-center gap-1.5 max-sm:w-24',
+          // At least the usual column, wider for a longer name, so a label is never cut; on a phone
+          // it may take up to half the row and wraps there instead of cutting.
+          'flex min-w-32 shrink-0 items-center gap-1.5 max-sm:min-w-24 max-sm:max-w-[50%] max-sm:shrink',
           stack && 'max-sm:w-auto max-sm:flex-1',
           // Nothing beside it but `end`: the label takes the row, so a short name never cuts off.
           children === undefined && 'w-auto min-w-0 flex-1 shrink max-sm:w-auto',
@@ -73,7 +75,7 @@ export function SettingField({
       >
         <Label
           htmlFor={htmlFor}
-          className="truncate font-normal text-muted-foreground"
+          className="whitespace-nowrap font-normal text-muted-foreground max-sm:whitespace-normal max-sm:break-words"
           title={label}
         >
           {label}
