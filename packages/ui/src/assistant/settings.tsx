@@ -258,12 +258,24 @@ const wayTest = (k: KeyState | undefined, plan = false): ConnectionTest | null =
 /** A provider's mark: its initial on a tile. */
 const mark = (label: string) => <ConnectionLogo text={label.charAt(0)} />;
 
+/**
+ * Whether the app lets this person use `w` of their own on `p` (the app's `ownWays`, the same
+ * rule the server pays by). A way it does not allow never shows, even when one is still stored:
+ * the server would not run on it, so Settings never says it works.
+ */
+const mayOwn = (p: AssistantProviderRow, w: AssistantOwnWay) =>
+  !p.own_ways || p.own_ways.includes(w);
+
+/** Whether the person has a way of their own on `p` that the app lets them use. */
+const ownUsable = (p: AssistantProviderRow) =>
+  (mayOwn(p, 'key') && p.own.set) || (mayOwn(p, 'plan') && !!p.plan?.set);
+
 /** One provider, collapsed to a row: the person's own key and, where it has one, their plan sign-in. */
 function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
   const { apply, refresh } = useApply(client);
   const ways: ConnectionWay[] = [];
-  const may = (w: AssistantOwnWay) => !p.own_ways || p.own_ways.includes(w);
-  if (p.signin === 'chatgpt' && (may('plan') || p.plan?.set))
+  const may = (w: AssistantOwnWay) => mayOwn(p, w);
+  if (p.signin === 'chatgpt' && may('plan'))
     ways.push({
       id: 'plan',
       label: 'ChatGPT plan',
@@ -280,7 +292,7 @@ function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantP
       removeText: 'Your API key, if you set one, runs from then on.',
       removeLabel: 'Sign out',
     });
-  if (may('key') || p.own.set)
+  if (may('key'))
     ways.push({
       id: 'key',
       label: 'API key',
@@ -316,12 +328,10 @@ function Providers({ client }: { client: AssistantAdapter }) {
   return (
     <WithStatus client={client}>
       {(s) => {
-        // A provider the app gives this person no way of their own on shows no row, unless one is
-        // still set (so it can be removed).
-        const rows = s.providers.filter(
-          (p) => !p.own_ways || p.own_ways.length > 0 || p.own.set || p.plan?.set,
-        );
-        const ownSet = rows.some((p) => p.own.set || p.plan?.set);
+        // A provider the app gives this person no way of their own on shows no row: what shows here
+        // is exactly what the server may pay with.
+        const rows = s.providers.filter((p) => !p.own_ways || p.own_ways.length > 0);
+        const ownSet = rows.some(ownUsable);
         return (
           <div className="flex flex-col">
             <LumenExpandList>
