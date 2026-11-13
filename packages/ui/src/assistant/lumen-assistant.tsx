@@ -422,6 +422,7 @@ export function LumenAssistant({
               status={s}
               onSettings={onSettings}
               onRetry={(at, user) => chat.retry(at, user, extra())}
+              onFresh={(choice) => chat.fresh(choice, extra())}
             />
           </ImageTool.Provider>
         </Screen.Provider>
@@ -454,11 +455,13 @@ function Messages({
   status,
   onSettings,
   onRetry,
+  onFresh,
 }: {
   chat: AssistantChatState;
   status: AssistantStatus | undefined;
   onSettings?: () => void;
   onRetry: RetryFn;
+  onFresh: (choice: 'new' | 'stay') => void;
 }) {
   const end = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -518,7 +521,9 @@ function Messages({
           <UndoWrite.Provider value={chat.undo}>
             {/* Retry waits while an answer runs or nobody can pay: hidden then, never disabled. */}
             <RetryTurn.Provider value={chat.busy || status?.wait ? null : onRetry}>
-              <Items items={chat.items} onSettle={chat.settle} busy={chat.busy} turns />
+              <FreshChoice.Provider value={chat.busy ? null : onFresh}>
+                <Items items={chat.items} onSettle={chat.settle} busy={chat.busy} turns />
+              </FreshChoice.Provider>
             </RetryTurn.Provider>
           </UndoWrite.Provider>
         </TierNames.Provider>
@@ -573,6 +578,36 @@ const ImageTool = createContext<{ tool: string; mode?: string } | null>(null);
 const UndoWrite = createContext<((s: StepItem) => Promise<void>) | null>(null);
 type UserItem = Extract<ChatItem, { kind: 'user' }>;
 type RetryFn = (at: number, user: UserItem) => void;
+
+/** Answers the fresh-chat card; null while an answer runs. */
+const FreshChoice = createContext<((choice: 'new' | 'stay') => void) | null>(null);
+
+/**
+ * The app asks before answering: the message above starts new work and this chat is long, so a
+ * fresh chat answers it faster and for less. ＋ takes it there, × keeps it here.
+ */
+function FreshCard() {
+  const choose = useContext(FreshChoice);
+  return (
+    <div
+      data-slot="assistant-fresh"
+      className="flex min-w-0 items-center gap-2 rounded-lg border bg-card py-2 pr-2 pl-3 text-sm"
+    >
+      <span className="min-w-0 flex-1">This looks like new work. Start a fresh chat for it?</span>
+      {choose && (
+        <span className="flex shrink-0 gap-1">
+          <IconButton icon={XIcon} label="Keep it in this chat" onClick={() => choose('stay')} />
+          <IconButton
+            icon={PlusIcon}
+            label="New chat with this message"
+            variant="default"
+            onClick={() => choose('new')}
+          />
+        </span>
+      )}
+    </div>
+  );
+}
 /** Sends a failed turn again; null while it can't (an answer runs, nobody can pay). */
 const RetryTurn = createContext<RetryFn | null>(null);
 
@@ -756,6 +791,8 @@ function Item({
       );
     case 'compacted':
       return <Rule>Compacted: earlier messages are sent as a summary</Rule>;
+    case 'fresh':
+      return <FreshCard />;
     case 'stopped':
       return <Rule>{item.reason === 'cap' ? "Stopped at this month's spend cap" : 'Stopped'}</Rule>;
     case 'error':

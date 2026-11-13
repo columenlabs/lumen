@@ -251,6 +251,8 @@ export interface AskInput {
   screen?: AssistantScreenMap;
   /** How earlier screen calls ended in the browser. */
   outcomes?: AssistantScreenOutcome[];
+  /** The person kept this message in this chat after a fresh chat was offered (`offerFresh`). */
+  stay?: boolean;
 }
 
 /** A quote as sent, checked: its text cut to `ASSISTANT_QUOTE_MAX`, and whose message it came from. */
@@ -406,6 +408,16 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     this.sql`INSERT OR REPLACE INTO lumen_chat (k, v) VALUES (${k}, ${JSON.stringify(v)})`;
   }
 
+  /**
+   * Whether to ask the person to take `input` to a fresh chat before answering it: `true` when it
+   * starts new work and this chat is long (the app decides both, e.g. from `usage().context`).
+   * The panel then shows a card: ＋ sends the message in a new chat, × sends it here again with
+   * `stay`. Off (`false`) unless the app overrides it; a throw counts as `false`.
+   */
+  protected async offerFresh(_input: AskInput): Promise<boolean> {
+    return false;
+  }
+
   /** The chat's running use: every answer's parts added up, and the last context size. */
   usage(): ChatUsage {
     return this.#get<ChatUsage>('usage') ?? chatUsage([]);
@@ -459,6 +471,12 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     }
     this.#put('at', at);
     await sink.event({ event: 'chat', data: { id: this.name, title } });
+    // New work in a long chat: the panel asks first, and the message is not kept or answered here.
+    if (!input.stay && (await this.offerFresh(input).catch(() => false))) {
+      await sink.event({ event: 'fresh', data: {} });
+      await sink.event({ event: 'done', data: { id: this.name, usage: this.usage() } });
+      return;
+    }
     this.#outcomes(screenOutcomesOf(input.outcomes));
     const quote = quoteOf(input.quote);
     const meta: AskMeta = {
