@@ -39,6 +39,7 @@ Each page has the same four headings:
 | `text-action` | a `<Button>` whose text starts with an action (Save, Run, Test, Send, Sync, Refresh, Copy, Edit, Delete, Remove, Retry, Reset) |
 | `raw-overlay` | an import of `@columenlabs/lumen-ui/ui/{sheet,dialog,select,command,combobox}` |
 | `tags-text` | tags or labels joined into comma text (`r.tags.join(', ')`) on a line with no `tags: true`: a `tags` field or `TagChips` |
+| `key-input` | a password `Input` in an app: a key, token or secret is a `LumenConnection` field (secret, prefix, Test, Remove), never an `Input` with its own Save button ([settings.md](settings.md)) |
 | `settings-page` | a route, link or nav item (`path`, `to`, `href`) to a page named `settings`: an app's settings are sections of the one Settings dialog |
 
 `lumen-ship check parts --write-baseline <folders>` writes today's counts (only for a first run; lower a count by hand in the change that removes a break).
