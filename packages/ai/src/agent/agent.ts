@@ -733,11 +733,19 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     return cardNews(rows.map(cardOf));
   }
 
-  /** Think compacts the chat past `COMPACT_AT` tokens, on the last turn's model and key. */
+  /**
+   * Past this many tokens Think summarizes the chat's older part, out of sight of the person
+   * (`COMPACT_AT` by default). An app overrides it to keep its chats shorter.
+   */
+  protected compactAt(): number {
+    return COMPACT_AT;
+  }
+
+  /** Think compacts the chat past `compactAt()` tokens, on the last turn's model and key. */
   override configureSession(session: Session) {
     return session
       .onCompaction(createCompactFunction({ summarize: (prompt) => this.#summarize(prompt) }))
-      .compactAfter(COMPACT_AT);
+      .compactAfter(this.compactAt());
   }
 
   async #summarize(prompt: string): Promise<string> {
