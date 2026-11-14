@@ -431,7 +431,50 @@ function shownError(err: unknown): { message: string; code: string } {
       return { message: `${who} is overloaded. Try again shortly.`, code: 'overloaded' };
     return { message: `${who} refused the request (${status ?? 'error'}).`, code: 'model_error' };
   }
+  // The AI SDK's errors (APICallError, and RetryError around its last one) carry the HTTP status as
+  // statusCode: read it, never the body, so a limit or a refused key says so instead of "went wrong".
+  const call = sdkCall(err);
+  if (call) {
+    if (call.limit)
+      return {
+        message: 'The model hit its usage limit. Try again after it resets, or use an API key.',
+        code: 'usage_limit',
+      };
+    if (call.status === 401 || call.status === 403)
+      return { message: 'The model key was refused.', code: 'key_refused' };
+    if (call.status === 429)
+      return {
+        message: 'The model is busy or hit its rate limit. Try again shortly.',
+        code: 'rate_limited',
+      };
+    if ((call.status ?? 0) >= 500)
+      return { message: 'The model is overloaded. Try again shortly.', code: 'overloaded' };
+    if (call.status)
+      return { message: `The model refused the request (${call.status}).`, code: 'model_error' };
+  }
   return { message: 'Something went wrong while answering.', code: 'internal' };
+}
+
+/** An AI SDK call error's status, and whether it names a usage limit, through RetryError's lastError. */
+function sdkCall(err: unknown, depth = 0): { status?: number; limit: boolean } | null {
+  if (!err || typeof err !== 'object' || depth > 3) return null;
+  const e = err as {
+    name?: unknown;
+    statusCode?: unknown;
+    lastError?: unknown;
+    cause?: unknown;
+    message?: unknown;
+  };
+  const name = typeof e.name === 'string' ? e.name : '';
+  if (name === 'AI_RetryError' || name === 'RetryError') return sdkCall(e.lastError, depth + 1);
+  if (name === 'AI_APICallError' || name === 'APICallError' || typeof e.statusCode === 'number') {
+    const msg = typeof e.message === 'string' ? e.message : '';
+    return {
+      ...(typeof e.statusCode === 'number' && { status: e.statusCode }),
+      limit: /usage limit/i.test(msg),
+    };
+  }
+  return e.cause ? sdkCall(e.cause, depth + 1) : null;
 }
 
 /**
