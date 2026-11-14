@@ -292,6 +292,8 @@ export interface LumenShellProps {
   profile?: ReactNode;
   /** Settings ▸ General ▸ Security's content (LumenSignInMethods); no Security section without it. */
   security?: ReactNode;
+  /** The app's own rows (`SettingField`s) added under Settings ▸ General ▸ Preferences. */
+  preferences?: ReactNode;
   /** Reloads the page's data and drops every cached read (TanStack Query `invalidateQueries`);
    *  shows Refresh in the header, which then mounts the page again. */
   onRefresh?: () => Promise<unknown>;
@@ -344,6 +346,7 @@ export function LumenShell({
   signOutUrl,
   profile,
   security,
+  preferences,
   onRefresh,
   hideAmounts = false,
   onLogs,
@@ -384,7 +387,7 @@ export function LumenShell({
   }, [app]);
   // Find lists every Settings section by name.
   const sectionNames = JSON.stringify(
-    allSettings(profile, shared, settings, security, settingsGroups).map((s) => ({
+    allSettings(profile, shared, settings, security, settingsGroups, preferences).map((s) => ({
       id: s.id,
       title: s.title,
     })),
@@ -474,6 +477,7 @@ export function LumenShell({
                           shared={shared}
                           sharedLabel={sharedLabel}
                           groups={settingsGroups}
+                          preferences={preferences}
                         />
                         <Toaster position="bottom-right" />
                       </LumenFinder>

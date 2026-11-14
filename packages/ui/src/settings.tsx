@@ -236,7 +236,7 @@ function Appearance() {
   );
 }
 
-function Preferences() {
+function Preferences({ extra }: { extra?: ReactNode }) {
   const prefs = usePrefs();
   return (
     <div className="flex flex-col">
@@ -254,6 +254,7 @@ function Preferences() {
           onCheckedChange={(v) => setPref('observability', v)}
         />
       </SettingRow>
+      {extra}
     </div>
   );
 }
@@ -271,7 +272,7 @@ const SECURITY: Omit<SettingsSectionDef, 'content'> = {
   icon: ShieldCheckIcon,
   description: 'How you sign in. Changes ask you to confirm it’s you.',
 };
-const GENERAL: SettingsSectionDef[] = [
+const general = (preferences?: ReactNode): SettingsSectionDef[] => [
   {
     id: 'appearance',
     title: 'Appearance',
@@ -284,18 +285,19 @@ const GENERAL: SettingsSectionDef[] = [
     title: 'Preferences',
     icon: SlidersHorizontalIcon,
     description: 'Times and details on every desk, saved in this browser.',
-    content: <Preferences />,
+    content: <Preferences extra={preferences} />,
   },
 ];
 
 function generalSettings(
   profile: ReactNode | undefined,
   security?: ReactNode,
+  preferences?: ReactNode,
 ): SettingsSectionDef[] {
   return [
     ...(profile ? [{ ...PROFILE, content: profile }] : []),
     ...(security ? [{ ...SECURITY, content: security }] : []),
-    ...GENERAL,
+    ...general(preferences),
   ];
 }
 
@@ -306,9 +308,10 @@ export function allSettings(
   sections: SettingsSectionDef[] = [],
   security?: ReactNode,
   groups: SettingsGroupDef[] = [],
+  preferences?: ReactNode,
 ): SettingsSectionDef[] {
   return [
-    ...generalSettings(profile, security),
+    ...generalSettings(profile, security, preferences),
     ...shared,
     ...groups.flatMap((g) => g.sections),
     ...sections,
@@ -327,6 +330,7 @@ export function LumenSettings({
   shared = [],
   sharedLabel = 'All apps',
   groups = [],
+  preferences,
 }: {
   open: boolean;
   /** The section shown; unknown ids show Profile. */
@@ -345,9 +349,12 @@ export function LumenSettings({
   sharedLabel?: string;
   /** More labelled groups (one per app), listed after the shared ones and before the app's own. */
   groups?: SettingsGroupDef[];
+  /** The app's own rows (`SettingField`s), added under General ▸ Preferences after the kit's,
+   *  for a per-device choice that belongs with the rest rather than in a section of its own. */
+  preferences?: ReactNode;
 }) {
-  const all = allSettings(profile, shared, sections, security, groups);
-  const general = generalSettings(profile, security);
+  const all = allSettings(profile, shared, sections, security, groups, preferences);
+  const general = generalSettings(profile, security, preferences);
   const current = all.find((s) => s.id === section) ?? (all[0] as SettingsSectionDef);
   // The assistant opens Settings at a section (it never changes a setting); Undo puts it back as it was.
   useAssistantMoves('settings', {

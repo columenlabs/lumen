@@ -7,6 +7,7 @@ An app's Settings page: one dialog on every host, General first, then a group pe
 - A list of things in a section (providers, channels, accounts, phones): `LumenExpandList` of `LumenExpandRow`s.
 - A few fields that save together: a `LumenForm` (see [form.md](form.md)) in the section's `content`, its Save in `footer`.
 - Shared sections the kit already has: `SchedulesSection`, `NotificationsSettings`, `McpSettings`, `IntegrationRow`, `TimeZoneSelect`. Use them; never rebuild one.
+- One or two per-device choices of the app's own (what scrolling does, a default view): `preferences` on `LumenSettings` or `LumenShell`, `SettingField` rows added under General ▸ Preferences after the kit's. Never a section of its own for a single row.
 - Alerts split from delivery: `NotificationsSettings parts="channels"` in one section (where messages go: email, ntfy, webhooks, set up once) and `parts="events"` in another (what goes where: one line per event, a column per channel). Events with a `group` sit under its label ("Limits", "Watchdog").
 
 ## Three slots (every thing in a section)
@@ -96,6 +97,7 @@ description: 'Pick a relay. Mail goes out through the relay you choose; a localh
 - ✗ `h-full` on a card in a section: Settings scrolls, the card clips at one screen.
 - ✗ A grey line under a row's fields. ✓ An `InfoTip` on the one label that needs it; `SettingField`'s `info` draws one.
 - ✗ `SettingRow` or a row of your own. ✓ `SettingField`: every setting row in the kit is one (`SettingRow` is a deprecated name for it), and Settings' search hides a `SettingField` whose label and info miss the query.
+- ✗ A section holding one per-device row ("Navigation" with just Scroll). ✓ That row in `preferences`, beside Time zone.
 - ✗ A Settings page of the app's own (a `/settings` route or nav item). ✓ A section in the app's group of the one dialog, opened from anywhere with `?settings=<section>`.
 
 ## Checked by
