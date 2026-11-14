@@ -65,6 +65,7 @@ import {
   keyState,
   ownKeyUsd,
   ownPlanCalls,
+  ownPlanUsd,
   planDocName,
   waitText,
   withProvider,
@@ -789,6 +790,7 @@ export class Assistant {
               title: message.split('\n')[0] || 'Chat',
               own_usd: ownKeyUsd(paying, onPayer),
               own_plan_calls: ownPlanCalls(paying, onPayer),
+              own_plan_usd: ownPlanUsd(paying, onPayer),
             },
             end.parts,
           )
@@ -1644,6 +1646,7 @@ export class Assistant {
             title: o.run?.title ?? task?.label ?? o.task,
             own_usd: ownKeyUsd(paying, [part]),
             own_plan_calls: ownPlanCalls(paying, [part]),
+            own_plan_usd: ownPlanUsd(paying, [part]),
           },
           [part],
         )
@@ -1771,6 +1774,7 @@ export class Assistant {
             title: o.run?.title ?? task?.label ?? o.task,
             own_usd: ownKeyUsd(paying, [part]),
             own_plan_calls: ownPlanCalls(paying, [part]),
+            own_plan_usd: ownPlanUsd(paying, [part]),
           },
           [part],
         )

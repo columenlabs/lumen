@@ -412,6 +412,11 @@ export interface SpendState {
     way?: AssistantOwnWay;
     /** The provider the row ran on, when the server could tell. */
     provider?: AssistantProvider;
+    /**
+     * Of a $0 row (a plan sign-in's calls): what its tokens would cost at the model's API rates,
+     * an estimate. Left out when the model's price is unknown, and by older servers.
+     */
+    list_usd?: number;
   })[];
   /**
    * USD of this month's own spend that counts toward the own cap: key calls on providers the
@@ -443,6 +448,8 @@ export interface UsageEntry {
   own_usd?: number;
   /** Calls the person's plan sign-in answered (free to them; left out when none, and before it was kept). */
   own_plan_calls?: number;
+  /** Those plan calls at the models' API rates, an estimate (the plan itself charged $0). */
+  own_plan_usd?: number;
   parts: UsagePart[];
 }
 
