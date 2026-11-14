@@ -7,12 +7,14 @@
 import type {
   AllowanceRequest,
   AssistantAccess,
+  AssistantConnector,
   AssistantEffort,
   AssistantOwnWay,
   AssistantPayer,
   AssistantProviderRow,
   AssistantSettingsPatch,
   AssistantStatus,
+  ConnectorAccess,
   HandOffPolicy,
   KeyState,
 } from '@columenlabs/lumen-ui-types/assistant';
@@ -26,6 +28,7 @@ import {
   LayersIcon,
   Link2Icon,
   LogInIcon,
+  PlugIcon,
   ReceiptIcon,
   SendIcon,
   SparklesIcon,
@@ -718,6 +721,176 @@ function Web({ client }: { client: AssistantAdapter }) {
   );
 }
 
+// ---------------------------------------------------------------- connectors
+
+const CONNECTOR_ACCESS_LABELS: { value: ConnectorAccess; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'read', label: 'Read' },
+  { value: 'draft', label: 'Read + draft' },
+];
+
+/** Name, address and up to two sign-in headers; a pair left empty is not sent. */
+const headerFields = (prefix = '') => [
+  { id: `${prefix}h1`, label: 'Header', placeholder: 'CF-Access-Client-Id' },
+  { id: `${prefix}v1`, label: 'Value', secret: true },
+  { id: `${prefix}h2`, label: 'Header', placeholder: 'CF-Access-Client-Secret' },
+  { id: `${prefix}v2`, label: 'Value', secret: true },
+];
+const headersOf = (v: Record<string, string>) => {
+  const out: Record<string, string> = {};
+  for (const i of [1, 2]) {
+    const k = v[`h${i}`]?.trim();
+    const val = v[`v${i}`]?.trim();
+    if (k && val) out[k] = val;
+  }
+  return out;
+};
+
+function ConnectorRow({ client, c }: { client: AssistantAdapter; c: AssistantConnector }) {
+  const { apply, refresh } = useApply(client);
+  const reads = c.tools.filter((t) => t.read).length;
+  const access = (v: ConnectorAccess) =>
+    apply('connector', () =>
+      (client.saveConnector as NonNullable<AssistantAdapter['saveConnector']>)(c.id, {
+        name: c.name,
+        url: c.url,
+        access: v,
+      }),
+    );
+  return (
+    <LumenConnection
+      id={c.id}
+      name={c.name}
+      logo={<ConnectionLogo icon={PlugIcon} />}
+      meta={`${c.tools.length} tool${c.tools.length === 1 ? '' : 's'}${c.access === 'off' ? ' · off' : ''}`}
+      ways={[
+        {
+          id: 'headers',
+          label: 'Sign-in headers',
+          icon: KeyRoundIcon,
+          info: 'Sent with every call to this server, such as a Cloudflare Access service token. Kept sealed on the server and never shown again.',
+          set: true,
+          ident: c.headers.length ? c.headers.join(', ') : 'None',
+          test: c.test
+            ? {
+                at: c.test.at,
+                ok: c.test.ok,
+                detail: c.test.detail,
+                error: c.test.ok ? null : c.test.detail,
+              }
+            : null,
+          fields: [{ id: 'url', label: 'Address', placeholder: c.url }, ...headerFields()],
+          addLabel: 'Replace',
+          onSave: (v) =>
+            apply(
+              'connector',
+              () =>
+                (client.saveConnector as NonNullable<AssistantAdapter['saveConnector']>)(c.id, {
+                  name: c.name,
+                  url: v.url?.trim() || c.url,
+                  headers: headersOf(v),
+                }),
+              'Connector saved',
+            ),
+          ...(client.testConnector
+            ? {
+                onTest: () =>
+                  (client.testConnector as (id: string) => Promise<unknown>)(c.id).finally(refresh),
+              }
+            : {}),
+          onRemove: () =>
+            apply(
+              'connector',
+              () => (client.removeConnector as (id: string) => Promise<AssistantStatus>)(c.id),
+              'Connector removed',
+            ),
+          removeTitle: `Remove ${c.name}?`,
+          removeText: 'The assistant stops using its tools.',
+        },
+      ]}
+      lines={[
+        { label: 'Address', value: c.url, mono: true },
+        {
+          label: 'Tools',
+          info: 'The assistant finds these only when it needs them, so they cost nothing until used.',
+          value: c.tools.length
+            ? `${c.tools.map((t) => t.title ?? t.name).join(', ')} (${reads} read-only)`
+            : 'None listed',
+        },
+      ]}
+    >
+      <SettingField
+        label="Use"
+        info="Read uses the tools the server marks read-only. Read + draft also lets the others make a card the person saves or dismisses."
+      >
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          spacing={0}
+          value={c.access}
+          aria-label={`Use ${c.name}`}
+          onValueChange={(v) => v && void access(v as ConnectorAccess)}
+        >
+          {CONNECTOR_ACCESS_LABELS.map((a) => (
+            <ToggleGroupItem key={a.value} value={a.value}>
+              {a.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </SettingField>
+    </LumenConnection>
+  );
+}
+
+/** Admin: the app's connectors, each an MCP server, and a row to add one. */
+function Connectors({ client }: { client: AssistantAdapter }) {
+  const { apply } = useApply(client);
+  return (
+    <WithStatus client={client}>
+      {(s) => (
+        <LumenExpandList>
+          {(s.connectors ?? []).map((c) => (
+            <ConnectorRow key={c.id} client={client} c={c} />
+          ))}
+          <LumenConnection
+            id="connector-new"
+            name="Add connector"
+            logo={<ConnectionLogo icon={PlugIcon} />}
+            meta="Any MCP server over HTTP"
+            ways={[
+              {
+                id: 'new',
+                label: 'MCP server',
+                icon: PlugIcon,
+                info: 'Its address (Streamable HTTP) and the headers it signs in with. It is tested before it is kept.',
+                set: false,
+                fields: [
+                  { id: 'name', label: 'Name', placeholder: 'Web search' },
+                  { id: 'url', label: 'Address', placeholder: 'https://example.com/mcp' },
+                  ...headerFields(),
+                ],
+                addLabel: 'Add connector',
+                onSave: (v) =>
+                  apply(
+                    'connector',
+                    () =>
+                      (client.addConnector as NonNullable<AssistantAdapter['addConnector']>)({
+                        name: v.name?.trim() ?? '',
+                        url: v.url?.trim() ?? '',
+                        headers: headersOf(v),
+                      }),
+                    'Connector added',
+                  ),
+              },
+            ]}
+          />
+        </LumenExpandList>
+      )}
+    </WithStatus>
+  );
+}
+
 // ---------------------------------------------------------------- spend
 
 function Spend({ client }: { client: AssistantAdapter }) {
@@ -1015,10 +1188,13 @@ export function assistantAdminSections({
   client,
   allowance = false,
   providers,
+  connectors = false,
 }: {
   client: AssistantAdapter;
   /** Add Allowance requests (the app set `allowance` on the server). */
   allowance?: boolean;
+  /** Add Connectors: outside MCP servers the assistant may use (the app set `connectors` on the server). */
+  connectors?: boolean;
   /** Give each provider's shared key a section of its own (listed under Allowance) instead of one
    *  Shared model keys section: the app's providers, in order. */
   providers?: { id: string; label: string }[];
@@ -1060,6 +1236,17 @@ export function assistantAdminSections({
             icon: InboxIcon,
             description: 'Grant or decline asks for more allowance',
             content: <AllowanceRequests client={client} />,
+          },
+        ]
+      : []),
+    ...(connectors
+      ? [
+          {
+            id: 'assistant-connectors',
+            title: 'Connectors',
+            icon: PlugIcon,
+            description: 'Outside services the assistant may use',
+            content: <Connectors client={client} />,
           },
         ]
       : []),

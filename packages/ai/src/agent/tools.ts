@@ -14,6 +14,13 @@ export interface SourceAt {
   source: ToolSource;
   /** The group runs writes at once on Read + write; else a write drafts. */
   writes?: boolean;
+  /**
+   * Its tools stay off the model's prompt until it finds them with `tool_search` (a connector's),
+   * however few tools the turn has.
+   */
+  lazy?: boolean;
+  /** The group's name in the lazy catalog ("ScrapeQL"). */
+  label?: string;
 }
 
 /** A write the model asked for while its group drafts: the card's content. */
@@ -44,6 +51,8 @@ export interface ToolInfo {
   find: boolean;
   /** The tool's own title, in words a person reads ("Read the design guide"). */
   title?: string;
+  /** Off the prompt until `tool_search` finds it (`SourceAt.lazy`). */
+  lazy?: boolean;
 }
 
 /** Tools open for one answer, as the AI SDK's set, and how to let them go. */
@@ -53,6 +62,8 @@ export interface OpenedTools {
   reads: string[];
   /** Each tool offered: its name, group, kind and whether it is an app's find. */
   info: ToolInfo[];
+  /** Each labelled group's name (`SourceAt.label`), for the lazy catalog. */
+  labels?: Record<string, string>;
   failed: number;
   close(): Promise<void>;
 }
@@ -101,7 +112,9 @@ export async function openAiTools(
         group: s.group,
         kind,
         find: !!def.find,
-        ...(def.title ? { title: def.title } : {}),
+        // A lazy group's titles come from an outside server: never shown as a step's words.
+        ...(def.title && !s.lazy ? { title: def.title } : {}),
+        ...(s.lazy ? { lazy: true } : {}),
       });
       tools[name] = tool({
         description: describe(def, kind),
@@ -138,6 +151,7 @@ export async function openAiTools(
     tools,
     reads,
     info,
+    labels: Object.fromEntries(opened.flatMap(({ s }) => (s.label ? [[s.group, s.label]] : []))),
     failed: results.filter((r) => r.status === 'rejected').length,
     close: async () => {
       await Promise.all(opened.map((x) => x.open.close().catch(() => undefined)));

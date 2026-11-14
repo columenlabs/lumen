@@ -550,6 +550,11 @@ export interface AssistantStatus {
     /** Null when the app has no ScrapeQL; `bound` when it is reached over a service binding (no token). */
     scrapeql: (KeyState & { tools?: string[]; bound?: boolean }) | null;
   };
+  /**
+   * The app's connectors (outside MCP servers), for admins; absent for everyone else and in an
+   * app that has none (`createAssistant` `connectors`).
+   */
+  connectors?: AssistantConnector[];
   /** The providers the app's models run on, each with its keys. */
   providers: AssistantProviderRow[];
   /** USD a month: what each person may spend on the app's keys, and on their own keys. */
@@ -573,4 +578,41 @@ export interface AssistantSettingsPatch {
   pay?: AssistantPayer;
   /** Which of their own runs on each provider, their key or their plan. */
   own_use?: Partial<Record<AssistantProvider, AssistantOwnWay>>;
+}
+
+/** What an admin may give a connector: Off, Read (its read-only tools), or Read + draft (its other tools make a card). */
+export const CONNECTOR_ACCESS = ['off', 'read', 'draft'] as const;
+export type ConnectorAccess = (typeof CONNECTOR_ACCESS)[number];
+
+/** One tool a connector offers, as its last test listed it. */
+export interface AssistantConnectorTool {
+  name: string;
+  title?: string;
+  /** Marked read-only by the server; the rest only ever draft. */
+  read: boolean;
+}
+
+/**
+ * An outside MCP server (Streamable HTTP) the assistant may use, set by an admin: its address, the
+ * headers it signs in with (names only, values never leave the server), what the assistant may do
+ * with it, and the tools its last test listed. Its tools stay off the model's prompt until the
+ * assistant searches for them.
+ */
+export interface AssistantConnector {
+  id: string;
+  name: string;
+  url: string;
+  /** Names of the headers sent with each call; their values are write-only. */
+  headers: string[];
+  access: ConnectorAccess;
+  tools: AssistantConnectorTool[];
+  test: { at: number; ok: boolean; detail: string } | null;
+}
+
+/** What an admin sends to add or change a connector. Leave `headers` out to keep the ones saved. */
+export interface AssistantConnectorInput {
+  name: string;
+  url: string;
+  headers?: Record<string, string>;
+  access?: ConnectorAccess;
 }

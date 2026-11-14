@@ -234,8 +234,11 @@ export function webStep(
   output: unknown,
   failed: boolean,
 ): StepWeb | undefined {
-  if (!name.startsWith('web__')) return undefined;
-  const tool = name.slice(5);
+  // The kit's own web tools, and a connector's tools (`ext_<id>__…`) that search or read pages.
+  const ext = /^ext_[A-Za-z0-9_-]*?__/.exec(name);
+  if (!name.startsWith('web__') && !ext) return undefined;
+  const tool = ext ? name.slice(ext[0].length) : name.slice(5);
+  if (ext && tool === 'lookup') return undefined;
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (tool === 'search') {
     const query = typeof args.query === 'string' ? args.query.slice(0, 300) : undefined;
