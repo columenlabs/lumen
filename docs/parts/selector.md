@@ -38,6 +38,7 @@ import { Select, SelectContent } from '@columenlabs/lumen-ui/ui/select';
 - ✓ A long `detail` is fine: the name keeps up to two thirds of the row and the detail truncates first, its full text on hover. ✗ Shortening a detail to save the name.
 - ✓ A row that can't be picked says why: `disabled: 'Added'` dims it and shows a ✓ chip with the words in place of its detail; arrows and Tab skip it. ✗ A disabled row with no reason, or hiding a row the person already picked.
 - ✗ Capping the list's height without its footer. ✓ Leave sizing to the kit.
+- ✓ A check box or check mark only on a multi-select. A single-select (`LumenSelector`, `Select`, a single `Combobox`, `DropdownMenuRadioItem`) marks the picked row with a muted fill and nothing else. ✗ A ✓ beside the one value of a single-select.
 
 ## Checked by
 

@@ -1,5 +1,107 @@
 [
   {
+    "tag": "v0.1.248",
+    "date": "2026-11-14T05:06:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Plain tool lines in the assistant chat",
+        "body": "Call `LumenAgent.plainSteps()` in `@columenlabs/lumen-ai` to turn on plain mode, which shows friendly wording for tool lines, hides row counts, says \"didn't work\" for failures, and labels hand-offs \"Take a closer look\" with no tier or task."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tool titles on chat lines",
+        "body": "A chat line now shows the tool's own `ToolInfo.title` (from an MCP or plain tool), the titles are saved with the chat so a reloaded chat reads the same, and tools without a title still show their name."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Failed calls go to your logs",
+        "body": "`LumenAgent.stepFailed({ tool, error, ms })` is called for every failed tool call with the whole error, so you can keep raw errors off the screen and in your logs."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "More detail in `called` and `onStep`",
+        "body": "Both now carry `error` and `caller`, and a failed `escalate` reports its raw error through `onStep` with `handoff: true`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Cleaner hand-off sections in the chat UI",
+        "body": "The chat hides a hand-off section's task when it is empty, and Copy chat leaves it out too."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.247",
+    "date": "2026-11-14T03:14:32Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Know when a running tool is writing",
+        "body": "In `@columenlabs/lumen-ai`, `chunkEvents` now sets `write: true` on `step_start` for write tools, and in `useAssistantChat` from `@columenlabs/lumen-ui` the running `LiveItem` carries `writing`, so your app can stop showing a pending change as ready while the assistant is still rewriting it."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Own cap counts only API-key spend",
+        "body": "In the `@columenlabs/lumen-ai` `State`, the own cap (`paying`, via `ownCapUsed`) now counts only spend paid by an API key on a provider the person can still pay with, and plan sign-in calls count $0."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Cap meter fits its row",
+        "body": "In `@columenlabs/lumen-ui`, `ShareMeter` with `capped` no longer renders the spill slot, so the bar stops at its percentage and the amount sits on the line below."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer own-key usage",
+        "body": "`OwnKeyUsage` in `@columenlabs/lumen-ui` now leaves plan rows out and lists spend on a provider that is no longer usable as its own row, \"Key not in use now, not counted\"."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.246",
+    "date": "2026-11-14T03:11:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Long messages no longer run under the chat tools",
+        "body": "In `LumenComposer` (used inside `LumenAssistant` from @columenlabs/lumen-ui), text that grows until the box scrolls now stays clear of the paperclip, image icons and send button, so the last line is always readable."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Chat tools sit on their own row",
+        "body": "In `LumenComposer`, the paperclip, the `modes` toggles and Send/Stop/Queue now share one row under the text, with no prop changes needed in your app."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One border and focus ring around text and tools",
+        "body": "`LumenComposer` is now built from the kit's `InputGroup` with `InputGroupTextarea` and `InputGroupAddon align=\"block-end\"` instead of a `Textarea` with floating tools, so apps get the fix by upgrading @columenlabs/lumen-ui."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.245",
     "date": "2026-11-14T01:48:01Z",
     "takeaways": [
