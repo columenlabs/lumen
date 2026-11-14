@@ -228,6 +228,9 @@ const cardOf = (r: CardRow): AgentCard => ({
   at: r.at,
 });
 
+/** The panel's command that compacts the chat now (the kit's slash command). */
+export const COMPACT_COMMAND = '/compact';
+
 /** The messages with `lead` put before the newest message the person wrote. */
 export function withLead(messages: ModelMessage[], lead: string | undefined): ModelMessage[] {
   if (!lead) return messages;
@@ -245,60 +248,6 @@ function leadAt(messages: ModelMessage[], i: number, lead: string): ModelMessage
       ? `${lead}${m.content}`
       : [{ type: 'text' as const, text: lead }, ...m.content];
   return [...messages.slice(0, i), { ...m, content }, ...messages.slice(i + 1)];
-}
-
-/** A lead a past turn put before one of the person's messages, kept so later turns send it again. */
-export interface KeptLead {
-  /** The message's place among the person's messages and a hash of what it says. */
-  k: string;
-  lead: string;
-}
-
-/** Leads kept for the newest messages; older ones fall out of the chat's prompt cache anyway. */
-export const LEADS_KEPT = 40;
-
-/** A short, stable hash of a message's content (FNV-1a), to know the same message again. */
-function contentKey(n: number, m: ModelMessage): string {
-  const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return `${n}:${(h >>> 0).toString(36)}:${text.length}`;
-}
-
-/**
- * The messages with this turn's `lead` before the newest message the person wrote, and every lead
- * an earlier turn put before an earlier message put back where it was. A lead that is sent once
- * and then dropped changes the chat's beginning on the next turn, so the provider's prompt cache
- * misses from that message on and the whole earlier turn (its tool calls and results) is paid for
- * again at the full price. Sent again, every turn's prompt starts with the last turn's prompt.
- * Returns the leads to keep (this one included), newest last.
- */
-export function withLeads(
-  messages: ModelMessage[],
-  lead: string | undefined,
-  kept: readonly KeptLead[],
-): { messages: ModelMessage[]; kept: KeptLead[] } {
-  const users: number[] = [];
-  messages.forEach((m, i) => {
-    if (m.role === 'user') users.push(i);
-  });
-  const newest = users.at(-1);
-  const byKey = new Map(kept.map((l) => [l.k, l.lead]));
-  let out = messages;
-  users.forEach((at, n) => {
-    if (at === newest) return;
-    const l = byKey.get(contentKey(n, messages[at] as ModelMessage));
-    if (l) out = leadAt(out, at, l);
-  });
-  if (newest === undefined || !lead) return { messages: out, kept: [...kept] };
-  const k = contentKey(users.length - 1, messages[newest] as ModelMessage);
-  return {
-    messages: leadAt(out, newest, lead),
-    kept: [...kept.filter((l) => l.k !== k), { k, lead }].slice(-LEADS_KEPT),
-  };
 }
 
 /** One message the person sent, with the page, refs and tier the composer added. */
@@ -610,6 +559,11 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     }
     this.#put('at', at);
     await sink.event({ event: 'chat', data: { id: this.name, title } });
+    if (input.message.trim() === COMPACT_COMMAND) {
+      await this.#compactNow(input, sink);
+      await sink.event({ event: 'done', data: { id: this.name, usage: this.usage() } });
+      return;
+    }
     // New work in a long chat: the panel asks first, and the message is not kept or answered here.
     if (!input.stay && (await this.offerFresh(input).catch(() => false))) {
       await sink.event({ event: 'fresh', data: {} });
@@ -907,6 +861,37 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       .compactAfter(this.compactAt());
   }
 
+  /**
+   * /compact: the chat's older part summarized now, as Think does past `compactAt()`, on the last
+   * turn's model and key (planned afresh when this object has not answered yet). Never a message
+   * to the model, and nothing to answer.
+   */
+  async #compactNow(input: AskInput, sink: AskSink): Promise<void> {
+    try {
+      if (!this.#last) {
+        this.#input = { ...input, message: '' };
+        try {
+          this.#last = { plan: await this.plan({ messages: [] } as unknown as TurnContext) };
+        } finally {
+          this.#input = null;
+        }
+      }
+      const r = await this.session.compact();
+      if (r) await sink.event({ event: 'compacted', data: {} });
+      else
+        await sink.event({
+          event: 'text',
+          data: { delta: 'This chat is already short: nothing to compact yet.' },
+        });
+    } catch (err) {
+      console.error(JSON.stringify({ event: 'assistant_compact_failed', error: String(err) }));
+      await sink.event({
+        event: 'error',
+        data: { message: 'The chat could not be compacted. Try again, or start a new chat.' },
+      });
+    }
+  }
+
   async #summarize(prompt: string): Promise<string> {
     const last = this.#last;
     if (!last) throw new Error('No model to compact with until the next answer.');
@@ -1044,13 +1029,12 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       this.#turn.lazy = lazy;
     }
     const turn = this.#turn;
-    const led = withLeads(
-      ctx.messages,
-      `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`,
-      this.#get<KeptLead[]>('leads') ?? [],
+    // The lead goes before the newest message only. Kept on every earlier message it grew the chat
+    // by a whole lead (an app's page, often thousands of tokens) each turn.
+    const cached = cachedTurn(
+      system,
+      withLead(ctx.messages, `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`),
     );
-    this.#put('leads', led.kept);
-    const cached = cachedTurn(system, led.messages);
     return {
       model: this.#model(plan, () => {
         const fb = plan.fallback;
