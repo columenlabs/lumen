@@ -116,7 +116,9 @@ export interface RequestsDoc {
 /** Requests kept for approvers: the newest this many. */
 const REQUESTS_KEPT = 300;
 
-export type SpendRow = UsagePart & { payer: AssistantPayer };
+/** `free`: run on the app's key for a job the app does not count against the person's allowance
+ *  (`AssistantOptions.credits`). Kept apart so the admin still sees what it cost. */
+export type SpendRow = UsagePart & { payer: AssistantPayer; free?: true };
 
 /** The ways of their own a person may pay with, per provider; a provider left out has none. */
 export type OwnWays = Partial<Record<AssistantProvider, AssistantOwnWay[]>>;
@@ -129,6 +131,8 @@ export interface PayingRules {
   fallback?: boolean;
   /** Only this payer: an app's own check always runs on the shared key (`complete({ payer })`). */
   only?: AssistantPayer;
+  /** The app's key, not counted against the person's allowance and never stopped by it. */
+  free?: boolean;
 }
 /**
  * One task's use of one model this month: what a kind of work cost (a chat answer, a background
@@ -267,7 +271,9 @@ export class State {
     const al = this.o.allowance;
     const used =
       spentThisMonth ??
-      (await this.spend(id)).rows.filter((r) => r.payer === 'app').reduce((a, r) => a + r.usd, 0);
+      (await this.spend(id)).rows
+        .filter((r) => r.payer === 'app' && !r.free)
+        .reduce((a, r) => a + r.usd, 0);
     if (!al) return { total: await this.appCap(), used };
     const d = await this.allowance(id);
     if (al.period === 'once') {
@@ -417,6 +423,7 @@ export class State {
     payer: AssistantPayer,
     parts: UsagePart[],
     at?: { task: string; ms?: number },
+    free = false,
   ) {
     if (!parts.some((p) => p.calls)) return;
     await this.docs.update<SpendDoc>(id, `spend:${this.month()}`, (d) => {
@@ -448,7 +455,9 @@ export class State {
       }
       for (const p of parts) {
         if (!p.calls) continue;
-        const i = rows.findIndex((r) => r.label === p.label && r.payer === payer);
+        const i = rows.findIndex(
+          (r) => r.label === p.label && r.payer === payer && !!r.free === free,
+        );
         const prev = i >= 0 ? rows[i] : undefined;
         const row: SpendRow = prev
           ? {
@@ -459,13 +468,13 @@ export class State {
               out: prev.out + p.out,
               usd: prev.usd + p.usd,
             }
-          : { ...p, payer };
+          : { ...p, payer, ...(free ? { free: true as const } : {}) };
         if (i >= 0) rows[i] = row;
         else rows.push(row);
       }
       return tasks.length ? { rows, tasks } : { rows };
     });
-    if (payer === 'app' && this.o.allowance?.period === 'once') {
+    if (payer === 'app' && !free && this.o.allowance?.period === 'once') {
       const usd = parts.reduce((a, p) => a + p.usd, 0);
       if (usd > 0)
         await this.setAllowance(id, (d) => ({ ...d, spent_usd: (d.spent_usd ?? 0) + usd }));
@@ -564,7 +573,7 @@ export class State {
       this.ownCap(id),
     ]);
     const spent = (p: AssistantPayer) =>
-      spend.rows.filter((r) => r.payer === p).reduce((a, r) => a + r.usd, 0);
+      spend.rows.filter((r) => r.payer === p && !r.free).reduce((a, r) => a + r.usd, 0);
     const budget = await this.appBudget(id, spent('app'));
     const app = appKeys.keys[provider];
     const own = ownKeys.keys[provider];
@@ -575,7 +584,8 @@ export class State {
             apiKey: app,
             ...appKeys,
             cap: budget.total,
-            left: budget.total - budget.used,
+            // A free job runs on the app's key whatever the person's allowance holds.
+            left: rules.free ? Number.POSITIVE_INFINITY : budget.total - budget.used,
           }
         : null,
       own: own
