@@ -15,7 +15,7 @@ export {
   useAssistantStatus,
   useLumenAssistantDock,
 } from './lumen-assistant';
-export { assistantAdminSections, assistantSettingsSections } from './settings';
+export { AutoCompactField, assistantAdminSections, assistantSettingsSections } from './settings';
 export {
   AssistantChatCost,
   AssistantUsageTable,

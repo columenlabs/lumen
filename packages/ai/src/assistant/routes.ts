@@ -44,6 +44,7 @@ import {
   ASSISTANT_SCREEN,
   type AssistantProvider,
   type AssistantSettingsPatch,
+  COMPACT_CHOICES,
   HAND_OFF_POLICIES,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { connectorId } from '../agent/connectors';
@@ -121,6 +122,12 @@ function settingsChange(a: Assistant, groups: string[], b: Record<string, unknow
     }
   }
   if (p.hand_off !== undefined && !oneOf(HAND_OFF_POLICIES, p.hand_off)) return 'No such hand off.';
+  if (
+    p.compact_at !== undefined &&
+    p.compact_at !== null &&
+    !(COMPACT_CHOICES as readonly number[]).includes(p.compact_at)
+  )
+    return `compact_at is one of ${COMPACT_CHOICES.join(', ')}, or null.`;
   if (p.advice !== undefined && p.advice !== 'off' && !tierIds.has(p.advice))
     return 'Advice is off or a tier.';
   if (p.screen !== undefined && !oneOf(ASSISTANT_SCREEN, p.screen)) return 'screen is off or move.';
@@ -154,6 +161,7 @@ function settingsChange(a: Assistant, groups: string[], b: Record<string, unknow
       ...(p.tiers !== undefined ? { tiers } : {}),
       ...(p.tasks !== undefined ? { tasks: { ...(d.tasks ?? {}), ...p.tasks } } : {}),
       ...(p.hand_off !== undefined ? { hand_off: p.hand_off } : {}),
+      ...(p.compact_at !== undefined ? { compact_at: p.compact_at ?? undefined } : {}),
       ...(p.advice !== undefined ? { advice: p.advice } : {}),
       ...(p.screen !== undefined ? { screen: p.screen } : {}),
       ...(p.access !== undefined ? { access: { ...(d.access ?? {}), ...p.access } } : {}),

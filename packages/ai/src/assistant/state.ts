@@ -80,6 +80,8 @@ export interface PersonDoc {
   tiers?: Record<string, { model: string; effort: AssistantEffort }>;
   tasks?: Record<string, string>;
   hand_off?: HandOffPolicy;
+  /** Tokens past which their chats compact; the app's own when unset. */
+  compact_at?: number;
   advice?: string;
   /** Whether the assistant may move the screen; Move when unset. */
   screen?: AssistantScreenSetting;

@@ -195,6 +195,11 @@ export interface AssistantScreenMap {
   rows?: string[];
 }
 
+/** Tokens past which a chat is summarized out of sight, unless the app or the person sets another. */
+export const COMPACT_AT = 150_000;
+/** The context sizes a person may pick for Auto-compact (Settings). */
+export const COMPACT_CHOICES = [50_000, 75_000, 100_000, 125_000, 150_000] as const;
+
 /** Whether the assistant may move the person's screen (Settings): never, or with an Undo. */
 export const ASSISTANT_SCREEN = ['off', 'move'] as const;
 export type AssistantScreenSetting = (typeof ASSISTANT_SCREEN)[number];
@@ -548,6 +553,8 @@ export interface AssistantStatus {
     writes: boolean;
   }[];
   hand_off: HandOffPolicy;
+  /** Tokens past which this person's chats compact: their pick, else the app's (`createAssistant` `compactAt`); unset, `COMPACT_AT`. */
+  compact_at?: number;
   /** The tier asked for advice, or off. */
   advice: string;
   /** Whether the assistant may move the screen. */
@@ -578,6 +585,8 @@ export interface AssistantSettingsPatch {
   tiers?: Record<string, { model?: string; effort?: AssistantEffort }>;
   tasks?: Record<string, string>;
   hand_off?: HandOffPolicy;
+  /** One of `COMPACT_CHOICES`, or null for the app's own. */
+  compact_at?: number | null;
   advice?: string;
   screen?: AssistantScreenSetting;
   access?: Record<string, AssistantAccess>;
