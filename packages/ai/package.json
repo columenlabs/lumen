@@ -20,6 +20,7 @@
     "@ai-sdk/anthropic": "4.0.96",
     "@ai-sdk/openai": "4.0.108",
     "@anthropic-ai/sdk": "0.133.0",
+    "@cloudflare/computer": "0.8.0",
     "@cloudflare/think": "0.23.0",
     "@columenlabs/lumen-ops": "workspace:*",
     "@columenlabs/lumen-ui-types": "workspace:*",
