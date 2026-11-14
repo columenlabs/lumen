@@ -1190,9 +1190,11 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       capped: false,
       t0: Date.now(),
     };
+    // Think adds the agent's own file tools (read, ls, find, grep, …) to every turn by itself.
+    const files = createAITools({ workspace: this.workspace });
     const more = plan.more?.({
       opened,
-      files: createAITools({ workspace: this.workspace }),
+      files,
       over: () => plan.left !== undefined && this.#spent() >= plan.left,
       meter: (model, label, f = free) => {
         const m = new UsageMeter(model, label, f);
@@ -1238,6 +1240,9 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
             ]
           : Object.keys(tools))
       ).filter((n) => !offPrompt.has(n));
+      // The file tools are never in `tools` (Think adds them), so they would be left off the active
+      // list and hidden from the model: a lazy turn then had no read (live 2026-11-14).
+      for (const n of Object.keys(files)) if (!core.includes(n)) core.push(n);
       if (plan.first && !core.includes(plan.first)) core.push(plan.first);
       lazy = lazyTools(
         tools,
