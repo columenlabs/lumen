@@ -14,12 +14,46 @@ const TIMEOUT_MS = 10_000;
 const MAX_BYTES = 2_000_000;
 
 const DESCRIPTION = `Plain HTTP GET of one URL from the server, no browser: fast and cheap, so use it first for APIs, JSON, CSV, RSS and plain HTML. Returns {ok, status, url (after redirects), content_type, json (when the body is JSON) or text, truncated}; a failed fetch (refused, timed out, not 2xx) returns ok false with status and error. Bodies over ${MAX_BYTES / 1_000_000} MB are cut; ${TIMEOUT_MS / 1000} s per fetch. Use the browser tools (scrape, extract, ask) only for pages built by JavaScript, bot walls, or after fetch fails.`;
+/** The description when a turned-away page goes to a real browser by itself. */
+const DESCRIPTION_ESCALATES = DESCRIPTION.replace(
+  /Use the browser tools.*$/,
+  'A page that turns the server away (a bot wall, 403) is read again in a real browser by itself and comes back with via "browser": no need to retry it with another tool.',
+);
 
 export interface WebFetchOptions {
   /** Hosts never fetched (the app's own, behind sign-in), each with its subdomains. */
   blockHosts?: string[];
   userAgent?: string;
   fetch?: typeof fetch;
+  /**
+   * Reads a page another way (a real browser) when the plain GET is turned away: refused (401, 403,
+   * 429, 503), never answered, or an HTML page with almost no text or a bot check. Text, or null.
+   */
+  escalate?: (url: string) => Promise<string | null>;
+}
+
+/** Statuses a site answers a bot with, where a real browser often gets the page. */
+const TURNED_AWAY = new Set([401, 403, 406, 429, 451, 503]);
+const BOT_CHECK =
+  /captcha|are you a (?:human|robot)|access denied|just a moment|enable javascript|verify you are human|unusual traffic/i;
+
+/** Whether a plain GET's answer was a wall rather than the page. */
+export function walled(r: {
+  ok: boolean;
+  status: number;
+  error?: string;
+  content_type?: string;
+  text?: string;
+}): boolean {
+  if (r.error?.startsWith('refused:') || r.error?.startsWith('not a full URL')) return false;
+  if (!r.ok) return r.status === 0 || TURNED_AWAY.has(r.status);
+  if (!/html/i.test(r.content_type ?? '') || typeof r.text !== 'string') return false;
+  const words = r.text
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return words.length < 400 || (words.length < 5000 && BOT_CHECK.test(words));
 }
 
 /** Why a URL is refused, or null. */
@@ -131,7 +165,7 @@ export function webFetchTools(o: WebFetchOptions = {}): ToolSource {
       {
         name: 'fetch',
         title: 'Read a web page',
-        description: DESCRIPTION,
+        description: o.escalate ? DESCRIPTION_ESCALATES : DESCRIPTION,
         read: true,
         inputSchema: {
           type: 'object',
@@ -159,7 +193,17 @@ export function webFetchTools(o: WebFetchOptions = {}): ToolSource {
                     ]),
                   )
                 : {};
-            return await webFetch(String(a.url ?? ''), headers, o);
+            const url = String(a.url ?? '');
+            const r = await webFetch(url, headers, o);
+            if (!o.escalate || !walled(r)) return r;
+            // Turned away: the same page through a real browser, with no question to anyone.
+            const text = await o.escalate(url).catch(() => null);
+            return text
+              ? { ok: true, status: 200, url, via: 'browser', text, truncated: false }
+              : {
+                  ...r,
+                  error: `${r.error ?? 'a bot check'}; a real browser could not read it either`,
+                };
           } finally {
             running--;
             waiting.shift()?.();

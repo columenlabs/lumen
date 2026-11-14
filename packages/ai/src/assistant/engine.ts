@@ -260,6 +260,12 @@ export interface AssistantOptions {
      * pages never reach the model. Needs `scrapeql`; without it the web is off.
      */
     lookup?: boolean | WebLookupOptions;
+    /**
+     * Where `fetch` goes when a site turns it away (a 403, a bot check, a page with no text): a
+     * connector's page-reading tool, called with only `{ url }` plus `args`. The answer comes back
+     * as the fetch's own, so the model never has to retry. Off while that connector is off.
+     */
+    escalate?: { connector: string; tool: string; args?: Record<string, unknown> };
   };
   store: AssistantStore;
   sealer?: Sealer;
@@ -1334,7 +1340,10 @@ export class Assistant {
           sources.push({
             group: 'web',
             access: 'read',
-            source: webFetchTools(this.o.web?.fetch || {}),
+            source: webFetchTools({
+              ...(this.o.web?.fetch || {}),
+              ...(await this.escalation()),
+            }),
           });
         if (scrapeql) sources.push({ group: 'web', access: 'read', source: scrapeql });
       }
@@ -1355,6 +1364,36 @@ export class Assistant {
   }
 
   // ---------------------------------------------------------------- connectors
+
+  /** `fetch`'s second try, through the connector `web.escalate` names, when it is on. */
+  private async escalation(): Promise<{ escalate?: (url: string) => Promise<string | null> }> {
+    const e = this.o.web?.escalate;
+    if (!e) return {};
+    const c = (await this.connectorDocs()).find((d) => d.id === e.connector);
+    if (!c || c.access === 'off' || !c.catalog.some((t) => t.name === e.tool)) return {};
+    return {
+      escalate: async (url) => {
+        const open = await catalogTools(c, this.o.fetch)();
+        try {
+          const out = await open.call(e.tool, { ...e.args, url });
+          const text = typeof out === 'string' ? out : JSON.stringify(out);
+          return text.trim() ? text : null;
+        } catch (err) {
+          console.error(
+            JSON.stringify({
+              event: 'assistant_fetch_escalate',
+              connector: c.id,
+              url: url.slice(0, 300),
+              error: String((err as Error)?.message ?? err).slice(0, 300),
+            }),
+          );
+          return null;
+        } finally {
+          await open.close().catch(() => undefined);
+        }
+      },
+    };
+  }
 
   /** The app's connectors, as stored; none when the app has them off. */
   async connectorDocs(): Promise<ConnectorDoc[]> {
