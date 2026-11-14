@@ -436,14 +436,33 @@ function shownError(err: unknown): { message: string; code: string } {
 
 /**
  * A plain sentence for an error OpenAI sends inside the answer's stream (an `error` event, or a
- * failed response): what happened and what to do, by its code. The code is shown when it is not
- * one we know; OpenAI's own message is only logged.
+ * failed response): what happened and what to do, by its code, with OpenAI's code in brackets so
+ * the person and the logs see the real reason. A plan's usage limit and a per-minute rate limit are
+ * different things: the first waits for the plan to reset, the second only a minute. OpenAI's own
+ * message is logged (one `assistant_upstream_error` line), never shown.
  */
-function openaiStreamError(code: string, plan: boolean): string {
-  if (/usage_limit|usage_unavailable|insufficient_quota|rate_limit/.test(code))
+function openaiStreamError(
+  er: { code?: unknown; type?: unknown; message?: unknown },
+  plan: boolean,
+): string {
+  const code = String(er.code || er.type || '');
+  console.error(
+    JSON.stringify({
+      event: 'assistant_upstream_error',
+      provider: 'openai',
+      plan,
+      code: er.code ?? null,
+      type: er.type ?? null,
+      message: typeof er.message === 'string' ? er.message.slice(0, 500) : null,
+    }),
+  );
+  const tag = code ? ` (${code})` : '';
+  if (/usage_limit|usage_unavailable|insufficient_quota/.test(code))
     return plan
-      ? 'Your ChatGPT plan reached its usage limit for now: try again later, or pick another model.'
-      : 'OpenAI says the key is out of quota or rate limited. Try again shortly.';
+      ? `Your ChatGPT plan reached its usage limit for now${tag}: try again later, or pick another model.`
+      : `OpenAI says the key is out of quota${tag}. Add credit to the key, or pick another model.`;
+  if (/rate_limit/.test(code))
+    return `OpenAI is rate limiting these requests${tag}: try again in a minute.`;
   if (/context_length|too_long|max_tokens/.test(code))
     return 'This chat is too long for the model. Start a new chat, or type /compact.';
   if (/model_not_found|model_not_supported|invalid_model|unsupported_model/.test(code))
@@ -451,7 +470,7 @@ function openaiStreamError(code: string, plan: boolean): string {
       ? 'This model is not on your ChatGPT plan. Pick another model for this tier in Settings.'
       : 'OpenAI does not offer this model to the key. Pick another model for this tier in Settings.';
   if (/server_error|overloaded|timeout|unavailable/.test(code))
-    return 'OpenAI is overloaded. Try again shortly.';
+    return `OpenAI is overloaded${tag}. Try again shortly.`;
   if (/content_policy|safety|refus/.test(code)) return 'OpenAI declined to answer this message.';
   return `OpenAI could not answer (${code || 'no reason given'}). It is logged; try again or pick another model.`;
 }
@@ -1583,23 +1602,30 @@ export class Assistant {
         )
           done = e.response as OpenAI.Responses.Response;
         else if (e.type === 'error') {
-          const er = (e.error ?? e) as { code?: string; type?: string };
-          throw new AssistantError(openaiStreamError(er.code || er.type || '', plan), 'upstream');
+          const er = (e.error ?? e) as { code?: string; type?: string; message?: string };
+          throw new AssistantError(openaiStreamError(er, plan), 'upstream');
         }
       }
     } catch (err) {
       // The SDK throws a stream's `error` event as an APIError with no HTTP status.
       if (err instanceof OpenAI.APIError && err.status === undefined) {
-        const er = (err.error ?? {}) as { code?: string; type?: string };
+        const er = (err.error ?? {}) as { code?: string; type?: string; message?: string };
         throw new AssistantError(
-          openaiStreamError(er.code || er.type || err.code || '', plan),
+          openaiStreamError(
+            {
+              ...er,
+              code: er.code || er.type || err.code || '',
+              message: er.message ?? err.message,
+            },
+            plan,
+          ),
           'upstream',
         );
       }
       throw err;
     }
     if (done?.status === 'failed')
-      throw new AssistantError(openaiStreamError(done.error?.code ?? '', plan), 'upstream');
+      throw new AssistantError(openaiStreamError(done.error ?? {}, plan), 'upstream');
     const u = done?.usage;
     if (u) {
       const read = u.input_tokens_details?.cached_tokens ?? 0;
