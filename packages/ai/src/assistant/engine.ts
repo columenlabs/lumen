@@ -1740,6 +1740,11 @@ export class Assistant {
     const xai = s.model.provider === 'xai';
     const client = (xai ? clients.xai : clients.openai) as OpenAI;
     const plan = !xai && !!clients.openaiPlan;
+    // On a ChatGPT plan a message's words go before its pictures: there the cache read stopped at the
+    // first picture (a Rebuild whose first message opens with pictures read 0 of 57k, while plan chats
+    // with words only read 99%, live 2026-11-14). On a key the pictures stay first.
+    const order = <I, T>(pics: I[], words: T[]): (I | T)[] =>
+      plan ? [...words, ...pics] : [...pics, ...words];
     let text = '';
     let done: OpenAI.Responses.Response | undefined;
     try {
@@ -1758,26 +1763,26 @@ export class Assistant {
                   }
                 : {
                     role: 'user' as const,
-                    content: [
-                      ...(t.images ?? []).map((i) => ({
+                    content: order(
+                      (t.images ?? []).map((i) => ({
                         type: 'input_image' as const,
                         image_url: `data:${i.mediaType};base64,${i.data}`,
                         detail: 'auto' as const,
                       })),
-                      { type: 'input_text' as const, text: t.text },
-                    ],
+                      [{ type: 'input_text' as const, text: t.text }],
+                    ),
                   },
             ),
             {
               role: 'user',
-              content: [
-                ...(images ?? []).map((i) => ({
+              content: order(
+                (images ?? []).map((i) => ({
                   type: 'input_image' as const,
                   image_url: `data:${i.mediaType};base64,${i.data}`,
                   detail: 'auto' as const,
                 })),
-                ...input.map((text) => ({ type: 'input_text' as const, text })),
-              ],
+                input.map((text) => ({ type: 'input_text' as const, text })),
+              ),
             },
           ],
           store: false,
