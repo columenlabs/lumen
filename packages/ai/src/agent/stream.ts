@@ -160,7 +160,15 @@ export function chunkEvents(
           return [{ event: 'advice', data: { tier: 'advisor', label: o.advisor ?? 'Advice' } }];
         }
         if (name === 'escalate' || name === 'screen' || o.kindOf?.(name) === 'draft') return [];
-        return [{ event: 'step_start', data: { id, tool: name, title: stepTitle(name) } }];
+        // A tool that makes a change at once says so as it starts, so an app can show that what it
+        // changes is being changed now, before the model has finished writing the call.
+        const write = o.kindOf?.(name) === 'write';
+        return [
+          {
+            event: 'step_start',
+            data: { id, tool: name, title: stepTitle(name), ...(write ? { write } : {}) },
+          },
+        ];
       }
       case 'tool-input-available': {
         const c = calls.get(id) ?? { name: String(chunk.toolName ?? ''), t0: Date.now() };
