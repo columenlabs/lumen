@@ -207,15 +207,26 @@ export function cachedTurn(
   };
 }
 
-/** A tier's effort and output cap as a turn's settings, with Claude's prompt cache on. */
+/**
+ * OpenAI's prompt cache key for one chat or run: calls with the same key go to the same cache, so
+ * a long prompt's start is read from it instead of paid again. A ChatGPT plan sign-in caches
+ * nothing without one. At most 64 characters.
+ */
+export const promptCacheKey = (key: string) => key.slice(0, 64);
+
+/**
+ * A tier's effort and output cap as a turn's settings, with the prompt cache on: Claude's
+ * breakpoint, and OpenAI's cache key when `cacheKey` names the chat.
+ */
 export function turnSettings(
   model: ModelDef,
-  o: { effort: AssistantEffort; out?: number; plan?: boolean },
+  o: { effort: AssistantEffort; out?: number; plan?: boolean; cacheKey?: string },
 ): { maxOutputTokens?: number; providerOptions: Record<string, Record<string, JSONValue>> } {
   const out = o.plan || !o.out ? {} : { maxOutputTokens: o.out };
   const anthropic: Record<string, JSONValue> = { ...CLAUDE_CACHE };
   // A plan keeps nothing, so earlier turns go back as items, not references to stored ones.
   const openai: Record<string, JSONValue> = o.plan ? { store: false } : {};
+  if (o.cacheKey) openai.promptCacheKey = promptCacheKey(o.cacheKey);
   if (o.effort !== 'default') {
     if (model.provider === 'anthropic') anthropic.effort = o.effort;
     else openai.reasoningEffort = o.effort;

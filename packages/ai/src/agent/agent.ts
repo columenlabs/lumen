@@ -233,6 +233,11 @@ export function withLead(messages: ModelMessage[], lead: string | undefined): Mo
   if (!lead) return messages;
   let i = messages.length - 1;
   while (i >= 0 && messages[i]?.role !== 'user') i -= 1;
+  return i < 0 ? messages : leadAt(messages, i, lead);
+}
+
+/** The message at `i` (one the person wrote) with `lead` put before what it says. */
+function leadAt(messages: ModelMessage[], i: number, lead: string): ModelMessage[] {
   const m = messages[i];
   if (!m || m.role !== 'user') return messages;
   const content =
@@ -240,6 +245,60 @@ export function withLead(messages: ModelMessage[], lead: string | undefined): Mo
       ? `${lead}${m.content}`
       : [{ type: 'text' as const, text: lead }, ...m.content];
   return [...messages.slice(0, i), { ...m, content }, ...messages.slice(i + 1)];
+}
+
+/** A lead a past turn put before one of the person's messages, kept so later turns send it again. */
+export interface KeptLead {
+  /** The message's place among the person's messages and a hash of what it says. */
+  k: string;
+  lead: string;
+}
+
+/** Leads kept for the newest messages; older ones fall out of the chat's prompt cache anyway. */
+export const LEADS_KEPT = 40;
+
+/** A short, stable hash of a message's content (FNV-1a), to know the same message again. */
+function contentKey(n: number, m: ModelMessage): string {
+  const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `${n}:${(h >>> 0).toString(36)}:${text.length}`;
+}
+
+/**
+ * The messages with this turn's `lead` before the newest message the person wrote, and every lead
+ * an earlier turn put before an earlier message put back where it was. A lead that is sent once
+ * and then dropped changes the chat's beginning on the next turn, so the provider's prompt cache
+ * misses from that message on and the whole earlier turn (its tool calls and results) is paid for
+ * again at the full price. Sent again, every turn's prompt starts with the last turn's prompt.
+ * Returns the leads to keep (this one included), newest last.
+ */
+export function withLeads(
+  messages: ModelMessage[],
+  lead: string | undefined,
+  kept: readonly KeptLead[],
+): { messages: ModelMessage[]; kept: KeptLead[] } {
+  const users: number[] = [];
+  messages.forEach((m, i) => {
+    if (m.role === 'user') users.push(i);
+  });
+  const newest = users.at(-1);
+  const byKey = new Map(kept.map((l) => [l.k, l.lead]));
+  let out = messages;
+  users.forEach((at, n) => {
+    if (at === newest) return;
+    const l = byKey.get(contentKey(n, messages[at] as ModelMessage));
+    if (l) out = leadAt(out, at, l);
+  });
+  if (newest === undefined || !lead) return { messages: out, kept: [...kept] };
+  const k = contentKey(users.length - 1, messages[newest] as ModelMessage);
+  return {
+    messages: leadAt(out, newest, lead),
+    kept: [...kept.filter((l) => l.k !== k), { k, lead }].slice(-LEADS_KEPT),
+  };
 }
 
 /** One message the person sent, with the page, refs and tier the composer added. */
@@ -985,10 +1044,13 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       this.#turn.lazy = lazy;
     }
     const turn = this.#turn;
-    const cached = cachedTurn(
-      system,
-      withLead(ctx.messages, `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`),
+    const led = withLeads(
+      ctx.messages,
+      `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`,
+      this.#get<KeptLead[]>('leads') ?? [],
     );
+    this.#put('leads', led.kept);
+    const cached = cachedTurn(system, led.messages);
     return {
       model: this.#model(plan, () => {
         const fb = plan.fallback;
@@ -1008,6 +1070,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         effort: plan.effort ?? 'default',
         ...(plan.out ? { out: plan.out } : {}),
         plan: free,
+        cacheKey: this.name,
       }),
     };
   }

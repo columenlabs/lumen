@@ -315,6 +315,21 @@ export interface AssistantOptions {
 }
 
 /** A turn's failure the person can act on. */
+
+/** Claude's prompt cache mark on a block: the prompt up to it is kept for the next call. */
+const CACHE_MARK = { type: 'ephemeral' } as const;
+
+/** OpenAI's prompt cache key for one person's task or run: a short, stable hash of `of`. */
+function cacheKey(of: string): string {
+  let h = 0x811c9dc5;
+  let g = 0x01000193;
+  for (let i = 0; i < of.length; i++) {
+    h = Math.imul(h ^ of.charCodeAt(i), 0x01000193);
+    g = Math.imul(g ^ of.charCodeAt(i), 0x85ebca6b);
+  }
+  return `lumen-${(h >>> 0).toString(36)}${(g >>> 0).toString(36)}`;
+}
+
 export class AssistantError extends Error {
   constructor(
     message: string,
@@ -1478,11 +1493,12 @@ export class Assistant {
     clients: Clients,
     s: Session,
     instructions: string,
-    input: string,
+    input: string[],
     max: number,
     signal?: AbortSignal,
     images?: CompleteImage[],
     effort?: AssistantEffort,
+    cacheKey?: string,
   ): Promise<{ text: string; cut: boolean }> {
     // xAI's API is OpenAI's Responses API at another address.
     const xai = s.model.provider === 'xai';
@@ -1496,22 +1512,22 @@ export class Assistant {
           model: s.model.id,
           instructions,
           // A plan sign-in takes only a list of items, never bare text ("Input must be a list").
+          // Pictures first, then the text in its parts: the cache keeps the longest unchanged start.
           input: [
             {
               role: 'user',
-              content: images?.length
-                ? [
-                    { type: 'input_text', text: input },
-                    ...images.map((i) => ({
-                      type: 'input_image' as const,
-                      image_url: `data:${i.mediaType};base64,${i.data}`,
-                      detail: 'auto' as const,
-                    })),
-                  ]
-                : input,
+              content: [
+                ...(images ?? []).map((i) => ({
+                  type: 'input_image' as const,
+                  image_url: `data:${i.mediaType};base64,${i.data}`,
+                  detail: 'auto' as const,
+                })),
+                ...input.map((text) => ({ type: 'input_text' as const, text })),
+              ],
             },
           ],
           store: false,
+          ...(cacheKey ? { prompt_cache_key: cacheKey } : {}),
           stream: true,
           ...(plan ? {} : { max_output_tokens: max }),
           ...(effort &&
@@ -1576,8 +1592,13 @@ export class Assistant {
     o: {
       task: string;
       system: string;
-      prompt: string;
-      /** Photos read with the prompt (a scanned page, a screenshot). */
+      /**
+       * The prompt, or its parts in order. Every part but the last is kept in the provider's prompt
+       * cache, so a later call that starts with the same parts (the next round of one run, a retry
+       * that adds a line) reads them at a tenth of the price. Put what stays the same first.
+       */
+      prompt: string | string[];
+      /** Photos read with the prompt (a scanned page, a screenshot), sent before it and cached. */
       images?: CompleteImage[];
       /** The answer's token cap, thinking included (default 1,000, at most COMPLETE_MAX_TOKENS). */
       maxTokens?: number;
@@ -1623,6 +1644,7 @@ export class Assistant {
     }
     const clients = this.clients(paying);
     const max = Math.min(o.maxTokens ?? 1000, COMPLETE_MAX_TOKENS);
+    const parts = (typeof o.prompt === 'string' ? [o.prompt] : o.prompt).filter(Boolean);
     let text = '';
     // The answer stopped at `max` before it ended (its thinking counts toward the cap too).
     let cut = false;
@@ -1635,39 +1657,46 @@ export class Assistant {
           clients,
           s,
           o.system,
-          o.prompt,
+          parts,
           max,
           o.signal,
           o.images,
           o.effort,
+          cacheKey(`${caller.id}:${o.task}:${o.run?.id ?? ''}`),
         ));
       } else if (clients.anthropic) {
         // Streamed and read whole: a long answer (minutes at a high cap) keeps its connection alive,
         // and the SDK refuses a long answer as one unstreamed request.
+        // Claude caches only up to a marked block: the instructions, the last picture and the
+        // prompt's parts before its last are marked, so the next call of the run reads them.
+        const images = o.images ?? [];
+        const content: Anthropic.ContentBlockParam[] = [
+          ...images.map(
+            (i, n): Anthropic.ImageBlockParam => ({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: i.mediaType as Anthropic.Base64ImageSource['media_type'],
+                data: i.data,
+              },
+              ...(n === images.length - 1 ? { cache_control: CACHE_MARK } : {}),
+            }),
+          ),
+          ...parts.map(
+            (text, n): Anthropic.TextBlockParam => ({
+              type: 'text',
+              text,
+              ...(n === parts.length - 2 ? { cache_control: CACHE_MARK } : {}),
+            }),
+          ),
+        ];
         const msg = await clients.anthropic.messages
           .stream(
             {
               model: s.model.id,
               max_tokens: max,
-              system: o.system,
-              messages: [
-                {
-                  role: 'user',
-                  content: o.images?.length
-                    ? [
-                        ...o.images.map((i) => ({
-                          type: 'image' as const,
-                          source: {
-                            type: 'base64' as const,
-                            media_type: i.mediaType as Anthropic.Base64ImageSource['media_type'],
-                            data: i.data,
-                          },
-                        })),
-                        { type: 'text' as const, text: o.prompt },
-                      ]
-                    : o.prompt,
-                },
-              ],
+              system: [{ type: 'text', text: o.system, cache_control: CACHE_MARK }],
+              messages: [{ role: 'user', content }],
               ...effortParams(o.effort ?? s.effort),
             },
             o.signal ? { signal: o.signal } : undefined,
