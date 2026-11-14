@@ -412,7 +412,7 @@ interface Ran {
 }
 
 /** A short line of what an error was, never an upstream body. */
-function shownError(err: unknown): { message: string; code: string } {
+function shownError(err: unknown, plan = false): { message: string; code: string } {
   if (err instanceof AssistantError) return { message: err.message, code: err.code };
   const api =
     err instanceof Anthropic.APIError
@@ -435,6 +435,16 @@ function shownError(err: unknown): { message: string; code: string } {
   // The AI SDK's errors (APICallError, and RetryError around its last one) carry the HTTP status as
   // statusCode: say what that status means, never the body; the body goes to the log only.
   const call = sdkCall(err);
+  // OpenAI names the reason in its body (a plan's usage limit answers 500): say that reason.
+  if (call?.code && /openai\.com|chatgpt\.com/.test(call.url))
+    return {
+      message: openaiStreamError({ code: call.code, message: call.message }, plan),
+      code: /usage_limit|insufficient_quota/.test(call.code)
+        ? 'usage_limit'
+        : /rate_limit/.test(call.code)
+          ? 'rate_limited'
+          : 'model_error',
+    };
   if (call) {
     console.error(
       JSON.stringify({
@@ -464,8 +474,14 @@ function shownError(err: unknown): { message: string; code: string } {
   return { message: 'Something went wrong while answering.', code: 'internal' };
 }
 
-/** An AI SDK call error's status and message, through RetryError's lastError and `cause`. */
-function sdkCall(err: unknown, depth = 0): { status?: number; message: string } | null {
+/**
+ * An AI SDK call error's status, message, address and the provider's own error code (from its
+ * body: `error.code`, `error.type` or `detail.code`), through RetryError's lastError and `cause`.
+ */
+function sdkCall(
+  err: unknown,
+  depth = 0,
+): { status?: number; message: string; url: string; code?: string } | null {
   if (!err || typeof err !== 'object' || depth > 3) return null;
   const e = err as {
     name?: unknown;
@@ -473,15 +489,43 @@ function sdkCall(err: unknown, depth = 0): { status?: number; message: string } 
     lastError?: unknown;
     cause?: unknown;
     message?: unknown;
+    url?: unknown;
+    responseBody?: unknown;
+    data?: unknown;
   };
   const name = typeof e.name === 'string' ? e.name : '';
   if (name === 'AI_RetryError' || name === 'RetryError') return sdkCall(e.lastError, depth + 1);
-  if (name === 'AI_APICallError' || name === 'APICallError' || typeof e.statusCode === 'number')
+  if (name === 'AI_APICallError' || name === 'APICallError' || typeof e.statusCode === 'number') {
+    const code = bodyCode(e.data) ?? bodyCode(parseJson(e.responseBody));
     return {
       ...(typeof e.statusCode === 'number' && { status: e.statusCode }),
       message: typeof e.message === 'string' ? e.message : '',
+      url: typeof e.url === 'string' ? e.url : '',
+      ...(code && { code }),
     };
+  }
   return e.cause ? sdkCall(e.cause, depth + 1) : null;
+}
+
+const parseJson = (v: unknown): unknown => {
+  if (typeof v !== 'string') return undefined;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return undefined;
+  }
+};
+
+/** A provider body's error code: `{error: {code | type}}` or `{detail: {code}}`. */
+function bodyCode(v: unknown): string | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as { error?: unknown; detail?: unknown };
+  for (const x of [o.error, o.detail]) {
+    if (!x || typeof x !== 'object') continue;
+    const c = (x as { code?: unknown; type?: unknown }).code ?? (x as { type?: unknown }).type;
+    if (typeof c === 'string' && c) return c.slice(0, 80);
+  }
+  return undefined;
 }
 
 /**
@@ -821,7 +865,7 @@ export class Assistant {
       system: (t) => rulesFor(main, t),
       lead: `${page}${
         handTo && reach.length
-          ? `The person handed this message to ${handTo.label}: call escalate {tier: "${handTo.id}", why: "asked"} now, its task the message with every fact from this chat it needs, then answer from its memo.\n\n`
+          ? `The person handed this message to ${handTo.label}: call escalate {tier: "${handTo.id}", why: "asked"} now, its task the message with every fact from this chat it needs, then answer from its memo. If it answers with an error, do the task yourself with your tools.\n\n`
           : ''
       }${command}`,
       sources: await this.sourcesOf(caller, p),
@@ -1087,7 +1131,9 @@ export class Assistant {
               handoff: true,
             }),
           ).catch(() => undefined);
-          return { error: `${sub.meter.label} failed: ${shownError(err).message}` };
+          return {
+            error: `${sub.meter.label} could not take the task: ${shownError(err, !!key.plan).message} The task is still yours: do it now with your own tools, and tell the person only this reason if you cannot.`,
+          };
         }
       },
     });
