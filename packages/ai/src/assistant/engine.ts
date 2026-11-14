@@ -1476,7 +1476,14 @@ export class Assistant {
        */
       payer?: AssistantPayer;
     },
-  ): Promise<{ text: string; usd: number; model: string; cut: boolean; usage: UsagePart }> {
+  ): Promise<{
+    text: string;
+    usd: number;
+    model: string;
+    cut: boolean;
+    usage: UsagePart;
+    payer: AssistantPayer;
+  }> {
     const began = Date.now();
     const s = await this.session(caller, await this.mainTier(caller, o.task));
     const { rules, free } = await this.rulesFor(caller, s.tier.id, o.payer);
@@ -1576,7 +1583,15 @@ export class Assistant {
         )
         .catch(() => undefined);
     }
-    return { text, usd: s.meter.usd, model: s.model.id, cut, usage: s.meter.part() };
+    // Who paid (the app's key or the person's own), so an app can show a cost on their key as money.
+    return {
+      text,
+      usd: s.meter.usd,
+      model: s.model.id,
+      cut,
+      usage: s.meter.part(),
+      payer: paying.payer,
+    };
   }
 
   // ---------------------------------------------------------------- images
