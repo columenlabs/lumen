@@ -94,6 +94,7 @@ import { Button } from '../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from '../ui/input-group';
 import { Spinner } from '../ui/spinner';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { ChatImage } from './chat-image';
 import type { AssistantAdapter } from './client';
 import { chatMarkdown, chatTurns, copyMarkdown, turnMarkdown } from './copy';
@@ -183,8 +184,8 @@ export interface LumenAssistantProps {
    */
   imageTool?: { tool: string; mode?: string };
   /**
-   * Where the server compacts the chat, in tokens (the agent's `compactAt()`), drawn as the tick on
-   * the context bar. 150k by default.
+   * Where the server compacts the chat, in tokens (the agent's `compactAt()`), named in the context
+   * donut's hover. 150k by default.
    */
   compactAt?: number;
 }
@@ -439,8 +440,8 @@ export function LumenAssistant({
         modes={modes}
         onSend={(text, more, how) => chat.send(text, { ...extra(), ...more }, how)}
         onStop={chat.stop}
+        meter={<ContextDonut usage={chat.usage} compactAt={compactAt} />}
       />
-      <ContextLine usage={chat.usage} compactAt={compactAt} />
     </div>
   );
 }
@@ -1470,7 +1471,10 @@ export function LumenComposer({
   modes = [],
   onSend,
   onStop,
+  meter,
 }: {
+  /** Drawn in the icon row right after the paperclip: `LumenAssistant` puts its context donut here. */
+  meter?: ReactNode;
   /** Toggles beside the paperclip (`LumenAssistant` `modes`). */
   modes?: AssistantMode[];
   name: string;
@@ -1940,6 +1944,7 @@ export function LumenComposer({
               />
             </>
           )}
+          {meter}
           {modes.map((md) => (
             <IconButton
               key={md.id}
@@ -2087,35 +2092,67 @@ const pointedRef = (p: PointedAt): AssistantRefNote =>
       }
     : { kind: p.section.kind, label: p.section.label, id: p.section.id, text: textOf(p.el) };
 
+/** Context tokens from which the donut turns yellow, and red. */
+const CONTEXT_WATCH = 75_000;
+const CONTEXT_ALERT = 100_000;
+
 /**
- * How full the chat's context is (a thin bar with a tick where it compacts). What a chat cost is
- * not shown here: a person reads their use in Settings, not on every answer.
+ * How full the chat's context is, as a small donut in the composer's icon row (after the paperclip):
+ * it fills against `CONTEXT_MAX`, neutral below 75k, yellow from 75k, red from 100k. The hover gives
+ * the tokens used, where the chat compacts, and how much of the last turn came from the prompt cache.
+ * What a chat cost is not shown here: a person reads their use in Settings.
  */
-function ContextLine({ usage, compactAt }: { usage: ChatUsage | null; compactAt: number }) {
+function ContextDonut({ usage, compactAt }: { usage: ChatUsage | null; compactAt: number }) {
   const ctx = usage?.context ?? 0;
   if (ctx <= 0) return null;
+  const share = Math.min(1, ctx / CONTEXT_MAX);
+  const r = 6;
+  const round = 2 * Math.PI * r;
+  const tone =
+    ctx >= CONTEXT_ALERT
+      ? 'text-destructive'
+      : ctx >= CONTEXT_WATCH
+        ? 'text-warning'
+        : 'text-muted-foreground';
+  const cached = usage && usage.in > 0 ? Math.round((usage.read / usage.in) * 100) : null;
+  const said = `Context ${tokens(ctx)} of ${tokens(CONTEXT_MAX)}`;
   return (
-    <div className="flex shrink-0 items-center gap-3 px-3 pb-2 text-muted-foreground text-xs">
-      <span
-        className="ml-auto flex items-center gap-1.5"
-        title={`Context ${tokens(ctx)} of ${tokens(CONTEXT_MAX)}`}
-      >
-        <span className="relative h-1 w-16 overflow-hidden rounded-full bg-muted">
-          <span
-            className={cn(
-              'absolute inset-y-0 left-0',
-              ctx > compactAt ? 'bg-warning' : 'bg-primary/60',
-            )}
-            style={{ width: `${Math.min(100, (ctx / CONTEXT_MAX) * 100)}%` }}
-          />
-          <span
-            className="absolute inset-y-0 w-px bg-foreground/40"
-            style={{ left: `${(compactAt / CONTEXT_MAX) * 100}%` }}
-          />
-        </span>
-        <span className="tabular-nums">{tokens(ctx)}</span>
-      </span>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={said}
+          data-testid="context-donut"
+          className={cn(
+            'grid size-6 place-items-center rounded-md hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+            tone,
+          )}
+        >
+          <svg viewBox="0 0 16 16" className="size-4 -rotate-90" aria-hidden="true">
+            <title>{said}</title>
+            <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2.5" className="stroke-muted" />
+            <circle
+              cx="8"
+              cy="8"
+              r={r}
+              fill="none"
+              strokeWidth="2.5"
+              stroke="currentColor"
+              strokeDasharray={`${share * round} ${round}`}
+            />
+          </svg>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="flex flex-col gap-0.5">
+        <span className="num">{said}</span>
+        <span className="num text-muted-foreground">Compacts at {tokens(compactAt)}</span>
+        {cached !== null && (
+          <span className="num text-muted-foreground">
+            {cached}% of the last turn read from cache
+          </span>
+        )}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
