@@ -135,11 +135,31 @@ export function providerOfPart(p: UsagePart): AssistantProvider | undefined {
   return m?.provider;
 }
 
-/** Spend rows with the provider each ran on, so a page can tell a removed key's spend apart. */
+/**
+ * What a part's tokens cost at its model's API rates: the estimate shown for a plan sign-in's calls,
+ * which cost the person nothing. Cache writes count as plain input. Undefined for an unknown model.
+ */
+export function listUsd(p: UsagePart): number | undefined {
+  const m =
+    KNOWN_MODELS.find((x) => x.id === p.model) ??
+    KNOWN_MODELS.find((x) => p.label === x.label || p.label.endsWith(` · ${x.label}`));
+  if (!m) return undefined;
+  return (Math.max(0, p.in - p.read) * m.in + p.read * m.read + p.out * m.out) / 1e6;
+}
+
+/**
+ * Spend rows with the provider each ran on, so a page can tell a removed key's spend apart, and
+ * a $0 row (a plan's calls) with what it would cost at API rates (`list_usd`).
+ */
 export function withProvider<R extends UsagePart>(rows: R[]) {
   return rows.map((r) => {
     const provider = providerOfPart(r);
-    return provider ? { ...r, provider } : r;
+    const list = r.calls && r.usd < 0.0005 ? listUsd(r) : undefined;
+    return {
+      ...r,
+      ...(provider ? { provider } : {}),
+      ...(list !== undefined ? { list_usd: list } : {}),
+    };
   });
 }
 
@@ -169,6 +189,20 @@ export function ownPlanCalls(
       return !!(prov && paying.plans[prov]);
     })
     .reduce((a, p) => a + p.calls, 0);
+}
+
+/** Those plan calls at the models' API rates: an estimate of what the plan saved the person. */
+export function ownPlanUsd(
+  paying: { payer: AssistantPayer; plans: Paying['plans'] },
+  parts: UsagePart[],
+) {
+  if (paying.payer !== 'own') return 0;
+  return parts
+    .filter((p) => {
+      const prov = providerOfPart(p);
+      return !!(prov && paying.plans[prov]);
+    })
+    .reduce((a, p) => a + (listUsd(p) ?? 0), 0);
 }
 
 /**
@@ -559,7 +593,8 @@ export class State {
    * Adds one answer's use to a chat or run in this month's history (`usage:YYYY-MM`): one entry a
    * chat or run, its parts merged, the newest `USAGE_KEPT` kept. `title` names a new entry only;
    * `own_usd` is what of this answer the person's own key or plan paid, added to the entry's;
-   * `own_plan_calls` the calls their plan sign-in answered (free to them, so counted, not priced).
+   * `own_plan_calls` the calls their plan sign-in answered (free to them, so counted, not priced),
+   * `own_plan_usd` those calls at API rates (an estimate).
    */
   async addUsage(
     id: string,
@@ -570,6 +605,7 @@ export class State {
       title: string;
       own_usd?: number;
       own_plan_calls?: number;
+      own_plan_usd?: number;
     },
     parts: UsagePart[],
   ) {
@@ -584,6 +620,7 @@ export class State {
         merged.reduce((a, p) => a + p[k], 0);
       const own = (prev?.own_usd ?? 0) + (e.own_usd ?? 0);
       const plan = (prev?.own_plan_calls ?? 0) + (e.own_plan_calls ?? 0);
+      const planUsd = (prev?.own_plan_usd ?? 0) + (e.own_plan_usd ?? 0);
       entries.unshift({
         id: e.id,
         kind: e.kind,
@@ -598,6 +635,7 @@ export class State {
         usd: sum('usd'),
         ...(own > 0 ? { own_usd: own } : {}),
         ...(plan > 0 ? { own_plan_calls: plan } : {}),
+        ...(planUsd > 0 ? { own_plan_usd: planUsd } : {}),
         parts: merged,
       });
       return { entries: entries.slice(0, USAGE_KEPT) };

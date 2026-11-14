@@ -242,14 +242,22 @@ export function OwnKeyUsage({
   const left = ownMonth - tagged - removed;
   const untracked = left >= 0.01 ? left : 0;
   const gone = removed >= 0.01 ? removed : 0;
-  const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0) + untracked + gone;
+  // A plan sign-in's calls at API rates (an estimate; the plan charged $0), so plan use counts too.
+  const planRows = now.rows.filter(
+    (r) => r.payer === 'own' && !r.free && (r.way === 'plan' || (!r.way && r.usd < 0.0005)),
+  );
+  const planListMonth = planRows.reduce((a, r) => a + (r.list_usd ?? 0), 0);
+  const planListEarlier = Math.max(
+    0,
+    planListMonth - now.entries.reduce((a, e) => a + (e.own_plan_usd ?? 0), 0),
+  );
+  const keyTotal = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0) + untracked + gone;
+  const planTotal = sessions.reduce((a, e) => a + (e.own_plan_usd ?? 0), 0);
   const earlier = 'Earlier this month, not per chat';
   const removedText = 'Key not in use now, not counted';
   // Calls a plan sign-in paid: free to the person, so listed by count. A $0 own row from before
   // rows recorded their way is a plan's too (a key call always costs something).
-  const planCalls = now.rows
-    .filter((r) => r.payer === 'own' && !r.free && (r.way === 'plan' || (!r.way && r.usd < 0.0005)))
-    .reduce((a, r) => a + r.calls, 0);
+  const planCalls = planRows.reduce((a, r) => a + r.calls, 0);
   const calls = (n: number) => (n === 1 ? '1 call' : `${n} calls`);
   // Plan calls no chat or run carries (made before each entry kept its own count).
   const planEarlier = Math.max(
@@ -259,11 +267,24 @@ export function OwnKeyUsage({
   const planText = `Earlier, ${PLAN_NAME}, ${calls(planEarlier)}`;
   const named = (e: (typeof sessions)[number]) =>
     e.own_plan_calls ? `${e.title} · ${PLAN_NAME}, ${calls(e.own_plan_calls)}` : e.title;
+  const total = keyTotal + planTotal + (planEarlier ? planListEarlier : 0);
+  const anyPlan = planTotal > 0 || (planEarlier > 0 && planListEarlier > 0);
+  // An amount with plan calls in it reads ≈: the plan's part is what API rates would charge.
+  const amount = (key: number, plan: number, title: string) =>
+    plan > 0 ? (
+      <span key="a" title={title}>
+        ≈{usd(key + plan)}
+      </span>
+    ) : (
+      usd(key)
+    );
+  const planTitle = (key: number, plan: number) =>
+    `${key > 0 ? `${usd(key)} on your key + ` : ''}about ${usd(plan)} at API rates on your ${PLAN_NAME}, which charged $0`;
   return (
     <div className="flex flex-col gap-2 border-t border-border/60 pb-3 first:border-t-0">
       <SettingField
         label="Spent on your keys"
-        info="Each chat and run your own key or plan paid for, by its last use."
+        info="Each chat and run your own key or plan paid for, by its last use. A ≈ amount prices plan calls at API rates; the plan charges $0."
         className="border-t-0"
         end={
           <ToggleGroup
@@ -304,7 +325,11 @@ export function OwnKeyUsage({
                 >
                   {when(e.at)}
                 </time>,
-                usd(e.own_usd ?? 0),
+                amount(
+                  e.own_usd ?? 0,
+                  e.own_plan_usd ?? 0,
+                  planTitle(e.own_usd ?? 0, e.own_plan_usd ?? 0),
+                ),
               ],
             })),
             ...(untracked
@@ -356,13 +381,19 @@ export function OwnKeyUsage({
                         {planText}
                       </span>,
                       <span key="t" />,
-                      usd(0),
+                      amount(0, planListEarlier, planTitle(0, planListEarlier)),
                     ],
                   },
                 ]
               : []),
           ]}
-          foot={['Total', <span key="d" className="max-md:hidden" />, usd(total)]}
+          foot={[
+            'Total',
+            <span key="d" className="max-md:hidden" />,
+            anyPlan
+              ? amount(keyTotal, total - keyTotal, planTitle(keyTotal, total - keyTotal))
+              : usd(total),
+          ]}
         />
       ) : (
         <p className="text-muted-foreground text-sm">
