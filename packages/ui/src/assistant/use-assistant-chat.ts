@@ -151,7 +151,14 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
     case 'text_end':
       if (last?.kind === 'text') sink[sink.length - 1] = { kind: 'text', text: last.text };
       break;
-    case 'step_start':
+    case 'step_start': {
+      // A second start for the same call words it again, now that its arguments are in.
+      const at = sink.findIndex((i) => i.kind === 'step' && i.id === e.data.id);
+      const running = at >= 0 ? sink[at] : undefined;
+      if (running?.kind === 'step' && 'live' in running && running.live) {
+        sink[at] = { ...running, title: e.data.title };
+        break;
+      }
       sink.push({
         kind: 'step',
         id: e.data.id,
@@ -163,6 +170,7 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
         ...(e.data.write ? { writing: true } : {}),
       });
       break;
+    }
     case 'step': {
       const { handoff: _h, ...step } = e.data;
       const at = sink.findIndex((i) => i.kind === 'step' && i.id === step.id);

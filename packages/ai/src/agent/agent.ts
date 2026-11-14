@@ -66,6 +66,7 @@ import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools, usedTools } from './se
 import {
   type AskMeta,
   type SteerNote,
+  type StepCall,
   type StepNames,
   chunkEvents,
   itemsOf,
@@ -434,6 +435,27 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     return false;
   }
 
+  /**
+   * A tool call's line in the person's words: a verb and what it acted on, from the call's own
+   * arguments and answer. `running` is present tense ("Editing Lid"), `done` past tense with a short
+   * result when it helps ("Edited Lid: wall 2 → 3 mm"), `failed` says it did not ("Couldn't edit
+   * Lid"). Return `undefined` to keep the tool's title. A plain chat's line names no tool id, model,
+   * engine or code. The kit words its own web lookup; the app words its tools by overriding this
+   * (and may call `super.stepLine(c)` for the kit's). A finished line is kept with the chat, so a
+   * chat read back shows the same words.
+   */
+  protected stepLine(c: StepCall): string | undefined {
+    if (c.tool !== 'web__lookup') return undefined;
+    const q = (c.input as { question?: unknown } | null)?.question;
+    const question = typeof q === 'string' ? q.trim() : '';
+    if (!question) return undefined;
+    return c.state === 'running'
+      ? `Looking up ${question}`
+      : c.state === 'failed'
+        ? `Couldn't look up ${question}`
+        : `Looked up ${question}`;
+  }
+
   /** How this chat words its tool lines: plain or not, with the titles of every tool it offered. */
   #names(): StepNames {
     return {
@@ -441,6 +463,14 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       titleOf: (n) =>
         this.#turn?.tools.info.find((i) => i.name === n)?.title ??
         this.#get<Record<string, string>>('titles')?.[n],
+      lineOf: (c) => {
+        if (c.state === 'running') return this.stepLine(c);
+        const kept = this.#get<string>(`line:${c.id}`);
+        if (kept) return kept;
+        const line = this.stepLine(c);
+        if (line) this.#put(`line:${c.id}`, line.slice(0, 200));
+        return line;
+      },
     };
   }
 
