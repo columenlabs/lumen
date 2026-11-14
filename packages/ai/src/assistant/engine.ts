@@ -1096,7 +1096,7 @@ export class Assistant {
             }),
             instructions: c.system(tt.opened),
             prompt: `${c.message}\n\n${this.name} handed you this task (${WHY_TEXT[shown]}): ${task}\n\nWork it out with the tools, then end with a memo for ${this.name} of at most 200 words: the answer and the facts it rests on. ${this.name} answers the person.`,
-            tools: tt.opened.tools,
+            tools: { ...tt.files, ...tt.opened.tools },
             stopWhen: stepCountIs(MAX_ROUNDS),
             prepareStep: () => (tt.over() ? { activeTools: [] } : undefined),
             onStepFinish: (s) => {

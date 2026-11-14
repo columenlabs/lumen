@@ -13,6 +13,7 @@
  */
 
 import { anthropic } from '@ai-sdk/anthropic';
+import { createAITools } from '@cloudflare/computer/tools/ai-sdk';
 import {
   type ChatResponseResult,
   type PrepareStepContext,
@@ -84,6 +85,11 @@ import { UsageMeter } from './usage';
 /** What a plan's extra tools get: the open tools, a meter of their own and the cap. */
 export interface TurnTools {
   opened: OpenedTools;
+  /**
+   * The agent's own file tools over its workspace (read, list, find, grep and the rest, as Think
+   * gives the main model), so a hand-off reads the same files the app wrote for this turn.
+   */
+  files: ToolSet;
   /** A new part of this answer's usage (a hand off), counted against the cap. */
   meter(model: ModelDef, label: string, free?: boolean): UsageMeter;
   /** Spent this answer reached what the payer has left. */
@@ -972,6 +978,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     };
     const more = plan.more?.({
       opened,
+      files: createAITools({ workspace: this.workspace }),
       over: () => plan.left !== undefined && this.#spent() >= plan.left,
       meter: (model, label, f = free) => {
         const m = new UsageMeter(model, label, f);
