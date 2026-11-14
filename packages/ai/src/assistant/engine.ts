@@ -31,6 +31,7 @@ import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
 import { type ToolSet, generateText, jsonSchema, stepCountIs, tool } from 'ai';
 import OpenAI, { toFile } from 'openai';
 import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
+import { backoffFetch } from '../agent/backoff';
 import { type ModelKey, aiModel, turnSettings } from '../agent/models';
 import type { OpenedTools, SourceAt } from '../agent/tools';
 import { type WebLookupOptions, webLookupTools } from '../subagents/web';
@@ -621,26 +622,26 @@ export class Assistant {
     return view;
   }
 
+  // The SDKs' own retries are off: every call backs off once, the same way (agent/backoff.ts).
   private anthropic(apiKey: string) {
-    const f = this.o.fetch;
-    return new Anthropic({ apiKey, maxRetries: 1, ...(f ? { fetch: f } : {}) });
+    return new Anthropic({ apiKey, maxRetries: 0, fetch: backoffFetch(this.o.fetch ?? fetch) });
   }
-  private openai(apiKey: string, plan = false) {
-    const f = this.o.fetch;
-    // A plan sign-in's calls are not retried: a usage limit is final for now.
-    return new OpenAI({ apiKey, maxRetries: plan ? 0 : 1, ...(f ? { fetch: f } : {}) });
+  private openai(apiKey: string) {
+    return new OpenAI({ apiKey, maxRetries: 0, fetch: backoffFetch(this.o.fetch ?? fetch) });
   }
   private xai(apiKey: string) {
-    const f = this.o.fetch;
-    return new OpenAI({ apiKey, baseURL: XAI_BASE_URL, maxRetries: 1, ...(f ? { fetch: f } : {}) });
+    return new OpenAI({
+      apiKey,
+      baseURL: XAI_BASE_URL,
+      maxRetries: 0,
+      fetch: backoffFetch(this.o.fetch ?? fetch),
+    });
   }
   private clients(paying: Pick<Paying, 'keys' | 'plans'>): Clients {
     const { keys, plans } = paying;
     return {
       ...(keys.anthropic ? { anthropic: this.anthropic(keys.anthropic) } : {}),
-      ...(keys.openai
-        ? { openai: this.openai(keys.openai, !!plans.openai), openaiPlan: !!plans.openai }
-        : {}),
+      ...(keys.openai ? { openai: this.openai(keys.openai), openaiPlan: !!plans.openai } : {}),
       ...(keys.xai ? { xai: this.xai(keys.xai) } : {}),
     };
   }
@@ -1044,6 +1045,7 @@ export class Assistant {
         const t0 = Date.now();
         try {
           const r = await generateText({
+            maxRetries: 0,
             model: aiModel(sub.model, key, {
               ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
               name: this.name,

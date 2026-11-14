@@ -899,6 +899,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     let meter = new UsageMeter(plan.model, `${plan.label} · compact`, !!plan.key.plan);
     this.#owed.push(meter);
     const r = await generateText({
+      maxRetries: 0,
       model: this.#model(plan, () => {
         const fb = plan.fallback;
         if (!fb) return;
