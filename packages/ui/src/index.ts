@@ -571,6 +571,7 @@ export {
   type LumenFinderPageType,
   type LumenFinderRow,
   type LumenFinderScope,
+  LumenFinder,
   LumenFinderButton,
   useLumenFinder,
   useLumenFinderRows,
