@@ -261,7 +261,11 @@ function useShellRows(
   );
 }
 
-/** Find for the shell: ⌘K, the rows apps add and the dialog. LumenShell mounts it. */
+/**
+ * Find: ⌘K, the rows apps add and the dialog. LumenShell mounts it; an app that draws its own frame
+ * (a full-screen editor) mounts it around its screen instead and adds its commands with
+ * `useLumenFinderRows`. No router is needed there: rows run, or follow plain links.
+ */
 export function LumenFinder({
   app,
   settings,
@@ -371,7 +375,9 @@ function FinderDialog({
   groups: LumenOptionGroup[];
 }) {
   const mobile = useIsMobile();
-  const router = useRouter();
+  // Optional: an app without TanStack Router (a single-screen tool) still gets Find; its rows run or
+  // go by plain links.
+  const router = useRouter({ warn: false }) as ReturnType<typeof useRouter> | undefined;
   const list = useRef<LumenSelectorListHandle>(null);
   const input = useRef<HTMLInputElement>(null);
   // Focus without scrolling: on a phone iOS pans the page to a focused field as the keyboard opens,
@@ -390,8 +396,8 @@ function FinderDialog({
     if (r.run) return r.run();
     if (!r.href) return;
     const outside = /^https?:/.test(r.href);
-    if (tab) window.open(outside ? r.href : router.history.createHref(r.href), '_blank');
-    else if (outside) window.location.assign(r.href);
+    if (tab) window.open(outside || !router ? r.href : router.history.createHref(r.href), '_blank');
+    else if (outside || !router) window.location.assign(r.href);
     else void router.navigate({ href: r.href });
   };
   const body = (
