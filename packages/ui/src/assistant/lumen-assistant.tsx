@@ -1473,7 +1473,7 @@ export function LumenComposer({
   onStop,
   meter,
 }: {
-  /** Drawn in the icon row right after the paperclip: `LumenAssistant` puts its context donut here. */
+  /** Drawn in the icon row after the paperclip and the modes: `LumenAssistant` puts its context donut here. */
   meter?: ReactNode;
   /** Toggles beside the paperclip (`LumenAssistant` `modes`). */
   modes?: AssistantMode[];
@@ -1944,7 +1944,6 @@ export function LumenComposer({
               />
             </>
           )}
-          {meter}
           {modes.map((md) => (
             <IconButton
               key={md.id}
@@ -1958,6 +1957,7 @@ export function LumenComposer({
               onClick={() => setUse((u) => (u === md.id ? null : md.id))}
             />
           ))}
+          {meter}
           <div className="ml-auto">
             {busy && !text.trim() ? (
               <IconButton
@@ -2097,7 +2097,7 @@ const CONTEXT_WATCH = 75_000;
 const CONTEXT_ALERT = 100_000;
 
 /**
- * How full the chat's context is, as a small donut in the composer's icon row (after the paperclip):
+ * How full the chat's context is, as a small donut in the composer's icon row (after the paperclip and the modes):
  * it fills against `CONTEXT_MAX`, neutral below 75k, yellow from 75k, red from 100k. The hover gives
  * the tokens used, where the chat compacts, and how much of the last turn came from the prompt cache.
  * What a chat cost is not shown here: a person reads their use in Settings.
@@ -2130,7 +2130,14 @@ function ContextDonut({ usage, compactAt }: { usage: ChatUsage | null; compactAt
         >
           <svg viewBox="0 0 16 16" className="size-4 -rotate-90" aria-hidden="true">
             <title>{said}</title>
-            <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2.5" className="stroke-muted" />
+            <circle
+              cx="8"
+              cy="8"
+              r={r}
+              fill="none"
+              strokeWidth="2.5"
+              className="stroke-muted-foreground/25"
+            />
             <circle
               cx="8"
               cy="8"
@@ -2143,7 +2150,7 @@ function ContextDonut({ usage, compactAt }: { usage: ChatUsage | null; compactAt
           </svg>
         </button>
       </TooltipTrigger>
-      <TooltipContent className="flex flex-col gap-0.5">
+      <TooltipContent className="flex flex-col items-start gap-0.5 text-left">
         <span className="num">{said}</span>
         <span className="num text-muted-foreground">Compacts at {tokens(compactAt)}</span>
         {cached !== null && (
