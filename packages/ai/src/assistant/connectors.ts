@@ -154,6 +154,31 @@ export async function testConnector(
   }
 }
 
+const OPTIONAL = 'Optional: leave it out unless you have a real value; never make one up.';
+
+/**
+ * A tool whose optional fields say so in their descriptions: a model tends to fill every field it
+ * sees, and an invented id (a sign-in, a session) makes the server fail the call.
+ */
+function optionalSaid(t: ToolDef): ToolDef {
+  const s = t.inputSchema as { properties?: Record<string, unknown>; required?: unknown };
+  if (!s?.properties || typeof s.properties !== 'object') return t;
+  const required = new Set(Array.isArray(s.required) ? s.required : []);
+  const properties: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(s.properties)) {
+    const p = v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+    properties[k] =
+      p && !required.has(k)
+        ? {
+            ...p,
+            description:
+              typeof p.description === 'string' ? `${p.description} ${OPTIONAL}` : OPTIONAL,
+          }
+        : v;
+  }
+  return { ...t, inputSchema: { ...s, properties } };
+}
+
 /**
  * A connector's tools from its kept catalog: opening them calls nothing. The server is reached on
  * the first call, and that one connection serves the rest of the answer.
@@ -163,7 +188,7 @@ export function catalogTools(d: ConnectorDoc, f?: typeof fetch): ToolSource {
     let live: Promise<OpenTools> | null = null;
     const remote = remoteMcpTools({ url: d.url, headers: d.headers, ...(f ? { fetch: f } : {}) });
     return {
-      tools: d.catalog,
+      tools: d.catalog.map(optionalSaid),
       call: async (name, args) => {
         live ??= remote();
         try {

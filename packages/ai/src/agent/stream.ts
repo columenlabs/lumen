@@ -79,7 +79,20 @@ export function hiddenStep(name: string, names: StepNames = {}): boolean {
 }
 
 /** What a plain line says when a call failed: the assistant reads the error and goes on. */
-export const PLAIN_FAILED = "didn't work";
+export const PLAIN_FAILED = "couldn't finish";
+/** What a plain line says about why a call failed, in a few plain words, never the raw error. */
+export function plainFailure(error: string): string {
+  if (/\b(401|403|406|451)\b|forbidden|denied|turned away|bot check|captcha/i.test(error))
+    return 'the site turned it away';
+  if (/\b429\b|rate.?limit|too many/i.test(error)) return 'too many requests, try again later';
+  if (/timed? ?out|timeout/i.test(error)) return 'took too long';
+  if (/\b404\b|\b410\b|page not found/i.test(error)) return 'page not found';
+  if (/could not be reached|ENOTFOUND|fetch failed|network/i.test(error))
+    return 'could not be reached';
+  if (/\b5\d\d\b/.test(error)) return 'the service had a problem';
+  return PLAIN_FAILED;
+}
+
 /** A plain hand-off's heading: a closer look, never the tier it went to. */
 export const PLAIN_HANDOFF = 'Take a closer look';
 
@@ -206,7 +219,7 @@ function settledCall(
     ms,
     ...(rows !== undefined && !error && !names.plain ? { rows } : {}),
     ...(error && !(line && names.plain)
-      ? { error: names.plain ? PLAIN_FAILED : error.slice(0, 300) }
+      ? { error: names.plain ? plainFailure(error) : error.slice(0, 300) }
       : {}),
     ...(wrote
       ? { write: { undo: true, status: card?.status === 'undone' ? 'undone' : 'done' } }
