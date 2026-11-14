@@ -109,6 +109,21 @@ export interface CompleteImage {
   data: string;
 }
 
+/**
+ * One earlier message of a `complete` conversation: what was asked (with its own photos) or what the
+ * model answered. Sent as real messages, in order, before the newest prompt: a provider's prompt
+ * cache reuses whole earlier messages, so a conversation that only grows at its end is read from
+ * the cache at a tenth of the price. Text added inside one message is not (OpenAI, checked
+ * 2026-11-14: 0 of 3,889 tokens read when a part was added to the same message, 9,563 of 9,592
+ * when the same words came as a new message).
+ */
+export interface CompleteTurn {
+  role: 'user' | 'assistant';
+  text: string;
+  /** A user message's photos, sent before its text. */
+  images?: CompleteImage[];
+}
+
 export interface Caller {
   id: string;
   admin: boolean;
@@ -325,6 +340,37 @@ export interface AssistantOptions {
 
 /** Claude's prompt cache mark on a block: the prompt up to it is kept for the next call. */
 const CACHE_MARK = { type: 'ephemeral' } as const;
+
+/**
+ * A `complete` conversation's earlier messages for Claude, the last block marked so the next call
+ * reads the whole conversation so far from the cache.
+ */
+function claudeHistory(history: CompleteTurn[]): Anthropic.MessageParam[] {
+  return history.map((t, n) => {
+    const last = n === history.length - 1;
+    if (t.role === 'assistant')
+      return {
+        role: 'assistant',
+        content: [{ type: 'text', text: t.text, ...(last ? { cache_control: CACHE_MARK } : {}) }],
+      };
+    return {
+      role: 'user',
+      content: [
+        ...(t.images ?? []).map(
+          (i): Anthropic.ImageBlockParam => ({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: i.mediaType as Anthropic.Base64ImageSource['media_type'],
+              data: i.data,
+            },
+          }),
+        ),
+        { type: 'text', text: t.text, ...(last ? { cache_control: CACHE_MARK } : {}) },
+      ],
+    };
+  });
+}
 
 /** OpenAI's prompt cache key for one person's task or run: a short, stable hash of `of`. */
 function cacheKey(of: string): string {
@@ -1654,6 +1700,7 @@ export class Assistant {
     images?: CompleteImage[],
     effort?: AssistantEffort,
     cacheKey?: string,
+    history: CompleteTurn[] = [],
   ): Promise<{ text: string; cut: boolean }> {
     // xAI's API is OpenAI's Responses API at another address.
     const xai = s.model.provider === 'xai';
@@ -1667,8 +1714,26 @@ export class Assistant {
           model: s.model.id,
           instructions,
           // A plan sign-in takes only a list of items, never bare text ("Input must be a list").
-          // Pictures first, then the text in its parts: the cache keeps the longest unchanged start.
+          // The earlier messages as they were, then the newest: pictures first, then its text parts.
           input: [
+            ...history.map((t) =>
+              t.role === 'assistant'
+                ? {
+                    role: 'assistant' as const,
+                    content: [{ type: 'output_text' as const, text: t.text }],
+                  }
+                : {
+                    role: 'user' as const,
+                    content: [
+                      ...(t.images ?? []).map((i) => ({
+                        type: 'input_image' as const,
+                        image_url: `data:${i.mediaType};base64,${i.data}`,
+                        detail: 'auto' as const,
+                      })),
+                      { type: 'input_text' as const, text: t.text },
+                    ],
+                  },
+            ),
             {
               role: 'user',
               content: [
@@ -1762,6 +1827,13 @@ export class Assistant {
       prompt: string | string[];
       /** Photos read with the prompt (a scanned page, a screenshot), sent before it and cached. */
       images?: CompleteImage[];
+      /**
+       * The conversation so far, oldest first, alternating user and assistant and ending with the
+       * model's answer; `prompt` and `images` are the newest message. Each earlier message is read
+       * from the prompt cache on the next call, so a multi-step job (a study that asks for more
+       * pictures, then a build) re-pays only what is new.
+       */
+      history?: CompleteTurn[];
       /** The answer's token cap, thinking included (default 1,000, at most COMPLETE_MAX_TOKENS). */
       maxTokens?: number;
       /**
@@ -1799,6 +1871,7 @@ export class Assistant {
     const began = Date.now();
     const s = await this.session(caller, await this.mainTier(caller, o.task));
     const { rules, free } = await this.rulesFor(caller, s.tier.id, o.payer);
+    s.meter.ctx = { task: o.task, ...(o.run && { run: o.run.id }) };
     const { paying, wait } = await this.state.paying(caller.id, s.model.provider, rules);
     if (!paying) {
       const code = wait ?? 'not_connected';
@@ -1825,6 +1898,7 @@ export class Assistant {
           o.images,
           o.effort,
           cacheKey(`${caller.id}:${o.task}:${o.run?.id ?? ''}`),
+          o.history,
         ));
       } else if (clients.anthropic) {
         // Streamed and read whole: a long answer (minutes at a high cap) keeps its connection alive,
@@ -1858,7 +1932,7 @@ export class Assistant {
               model: s.model.id,
               max_tokens: max,
               system: [{ type: 'text', text: o.system, cache_control: CACHE_MARK }],
-              messages: [{ role: 'user', content }],
+              messages: [...claudeHistory(o.history ?? []), { role: 'user', content }],
               ...effortParams(o.effort ?? s.effort),
             },
             o.signal ? { signal: o.signal } : undefined,

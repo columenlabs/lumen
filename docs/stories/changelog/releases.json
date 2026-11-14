@@ -1,5 +1,271 @@
 [
   {
+    "tag": "v0.1.274",
+    "date": "2026-11-14T11:14:38Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A hand-off can read the agent's workspace",
+        "body": "In @columenlabs/lumen-ai, `escalate` now passes the hand-off `{ ...tt.files, ...tt.opened.tools }`, so a higher-tier hand-off can read, list, find and grep the records written for the turn instead of answering that it cannot reach the source."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`TurnTools.files` exposes the agent's file tools",
+        "body": "In @columenlabs/lumen-ai, the new `TurnTools.files` holds the same file tools the main model uses over the agent's workspace, so you can spread it next to `tt.opened.tools` in any tool set you build for a sub-call."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A hung publish no longer leaves a half-released version",
+        "body": "The release workflow now stops each package publish after 3 minutes and tries up to 3 times, so all six @columenlabs packages reach the same version and get tagged in one run."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.273",
+    "date": "2026-11-14T11:07:45Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A failed hand-off now shows the provider's real reason",
+        "body": "In the `@columenlabs/lumen-ai` assistant engine, `shownError(err, plan)` no longer turns a 500 into \"overloaded\" when the provider's body carries an error code, so a plan's usage limit now reads as a usage limit, with its code."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A failed hand-off gives the task back to the main model",
+        "body": "In the `@columenlabs/lumen-ai` assistant engine, the escalate tool's error now says the task is still the main model's to do with its own tools, so it no longer does nothing and ends the turn."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The main model can only give the reason the error stated",
+        "body": "In the `@columenlabs/lumen-ai` assistant engine, the escalate tool's error and the forced hand-off lead now say that only the reason in the error may be given to the person, so the model stops inventing reasons."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Provider error codes are read from more places",
+        "body": "In the `@columenlabs/lumen-ai` assistant engine, `sdkCall` now also records the call's `url` and the provider's error code (`error.code`, `error.type` or `detail.code`, read from `data` or `responseBody`), so error messages can name the real cause."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.271",
+    "date": "2026-11-14T10:09:58Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Context donut sits after the image toggle",
+        "body": "In the composer from `@columenlabs/lumen-ui`, the `{meter}` context donut is now drawn after the composer's modes, so it appears right after the image icon instead of between the paperclip and the image toggle."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Visible donut track",
+        "body": "The context donut's track in `@columenlabs/lumen-ui` now uses `stroke-muted-foreground/25`, so the unfilled ring stays distinct from the button behind it."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Left-aligned hover details",
+        "body": "In the composer's `{meter}` hover, the lines of text are now left-aligned instead of centered, so they are easier to scan."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.270",
+    "date": "2026-11-14T09:53:18Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Rate-limited hand-offs now wait and retry",
+        "body": "In @columenlabs/lumen-ai, a hand-off refused with a limit no longer fails after 3 retries in 9 seconds, because it now waits for the provider's `retry-after-ms` or `retry-after` value (seconds or a date) before trying again."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One retry policy for every model call",
+        "body": "`aiModel` now sends all provider calls, including plan sign-ins, through a single `backoffFetch` policy that retries up to 4 times within 30 seconds of total waiting."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "No more retrying twice over",
+        "body": "The assistant engine's provider clients, the hand-off and compact now set `maxRetries: 0`, so the SDK's own retries no longer stack on top of Lumen's policy."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.269",
+    "date": "2026-11-14T09:48:29Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "AI SDK call failures no longer show a generic error",
+        "body": "In `@columenlabs/lumen-ai`, the assistant engine's `shownError` now understands failed AI SDK calls, including a `RetryError` wrapping an API call error, so your app shows the real cause instead of \"Something went wrong while answering.\""
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Usage limits are named",
+        "body": "When a model call fails because a subscription usage limit was hit, `shownError` returns \"The model hit its usage limit. Try again after it resets, or use an API key.\" with the `usage_limit` code, so the model stops inventing its own reason."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Status codes map to clear messages",
+        "body": "`shownError` reads the AI SDK error's `statusCode` (through `RetryError.lastError` and `cause`) and returns a key-refused message for 401/403, rate-limited for 429, overloaded for 5xx, and a refused message with the status for any other code."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.268",
+    "date": "2026-11-14T09:45:15Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Context meter is now a donut",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` now shows chat context use as a small `ContextDonut` that fills against 200k, so you can see how full the context is at a glance."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Color shifts as context fills",
+        "body": "`ContextDonut` stays neutral below 75k, switches to the `warning` color from 75k and to `destructive` from 100k, so an app's users get an early cue before the chat compacts."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Hover shows the numbers",
+        "body": "Hovering `ContextDonut` shows used tokens out of 200k, the point where the chat compacts, and the last turn's cache-read percentage."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New `meter` slot on the composer",
+        "body": "`LumenComposer` now accepts a `meter` prop that is drawn right after the paperclip in the icon row, so you can place your own meter there; `LumenAssistant` fills it with the donut."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.267",
+    "date": "2026-11-14T09:29:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A rate limit is no longer reported as a used-up plan",
+        "body": "In `@columenlabs/lumen-ai`, `Assistant.complete` now gives `rate_limit*` stream errors their own message (\"try again in a minute\"), and only `usage_limit*`, `usage_unavailable` and `insufficient_quota` say the plan or key is out of quota."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Stream errors are now logged",
+        "body": "`Assistant.complete` writes one `assistant_upstream_error` JSON log line per stream error, with the provider, plan, the provider's `code` and `type`, and the first 500 characters of its message, so you can find the real cause of a failure."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The provider's error code appears in the shown message",
+        "body": "The sentence `Assistant.complete` returns for a stream error now carries the provider's `code` in brackets, so an app's own reason mapping and the person using the app can both see it."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.266",
+    "date": "2026-11-14T09:05:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Chat context stays flat from turn to turn",
+        "body": "In `@columenlabs/lumen-ai` chats, the per-turn lead (an app's page note or bearings) is now placed before the newest message only, so a trivial turn like \"hi\" no longer adds 15-30k tokens of context."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "`/compact` now compacts the chat",
+        "body": "Sending `/compact` (`COMPACT_COMMAND`) in a `@columenlabs/lumen-ai` chat now runs compaction and shows the panel's Compacted line instead of reaching the model as an ordinary message."
+      },
+      {
+        "kinds": [],
+        "title": "`withLeads` and the `leads` store are removed",
+        "body": "If your app imports `withLeads` or reads the `leads` store from `@columenlabs/lumen-ai`, delete those uses. Nothing replaces them, because the lead is now attached to the newest message automatically."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.265",
+    "date": "2026-11-14T08:43:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Agent usage parts now carry the model id",
+        "body": "In `@columenlabs/lumen-ai`, `UsageMeter.part()` now fills `UsagePart.model`, so the `parts` on `AgentTurnEnd` tell you which model produced each agent answer, as the assistant's meter already did."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.264",
+    "date": "2026-11-14T08:39:42Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "Assistant header no longer shows chat cost",
+        "body": "`LumenAssistant` from `@columenlabs/lumen-ui` no longer renders `AssistantChatCost` in its header, so if your app relied on seeing cost there, import `AssistantChatCost` (still exported) and place it yourself, or send people to `AssistantUsageTable`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Chat foot shows only the context meter",
+        "body": "In `LumenAssistant`, the chat foot's `UsageLine` (chat cost, tokens, cache % and This month total) is now `ContextLine`, which shows only the context meter."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Hand-off items carry no cost",
+        "body": "In `LumenAssistant`, hand-off items no longer show a per-operation cost, so the panel shows no cost anywhere and usage is read in `AssistantUsageTable` under Settings ▸ Usage."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.263",
     "date": "2026-11-14T08:36:15Z",
     "takeaways": [
