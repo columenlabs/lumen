@@ -41,7 +41,6 @@ import {
   PaperclipIcon,
   PencilIcon,
   PlusIcon,
-  ReceiptIcon,
   RefreshCwIcon,
   ReplyIcon,
   SearchIcon,
@@ -51,7 +50,6 @@ import {
   Undo2Icon,
   WrenchIcon,
   XIcon,
-  ZapIcon,
 } from 'lucide-react';
 import {
   Fragment,
@@ -70,7 +68,6 @@ import {
   useAssistantHotkey,
 } from '../assistant-panel';
 import { type ScreenApi, screenMapFor, useAssistantScreen } from '../assistant-screen';
-import { useIsMobile } from '../hooks/use-mobile';
 import { IconButton } from '../icon-button';
 import { errorText } from '../integrations';
 import { lazyPart } from '../lazy-part';
@@ -96,8 +93,6 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from '../ui/input-group';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
 import { Spinner } from '../ui/spinner';
 import { ChatImage } from './chat-image';
 import type { AssistantAdapter } from './client';
@@ -112,7 +107,7 @@ import {
   usePageSelection,
   useShownAssistantSources,
 } from './sources';
-import { AssistantChatCost, UsageHistoryView, tokens, usd } from './usage-history';
+import { tokens, usd } from './usage-history';
 import {
   type AssistantChatState,
   type LiveItem,
@@ -381,7 +376,6 @@ export function LumenAssistant({
             onChange={(t) => void setTier(t)}
           />
         )}
-        <AssistantChatCost client={client} chatId={chat.chatId} busy={chat.busy} />
         <LumenAssistantChats
           chats={
             chats.data
@@ -446,7 +440,7 @@ export function LumenAssistant({
         onSend={(text, more, how) => chat.send(text, { ...extra(), ...more }, how)}
         onStop={chat.stop}
       />
-      <UsageLine usage={chat.usage} client={client} spent={s?.spend.usd} compactAt={compactAt} />
+      <ContextLine usage={chat.usage} compactAt={compactAt} />
     </div>
   );
 }
@@ -1346,9 +1340,6 @@ function HandOff({
         <CornerDownRightIcon className="size-3.5 text-muted-foreground" />
         <span className="font-medium">{item.label}</span>
         <span className="text-muted-foreground">· {WHY[item.why]}</span>
-        {item.usage && (
-          <span className="ml-auto text-muted-foreground tabular-nums">{usd(item.usage.usd)}</span>
-        )}
       </p>
       {item.task && <p className="text-muted-foreground text-xs">{item.task}</p>}
       <Items items={item.items} onSettle={onSettle} busy={busy} />
@@ -2096,204 +2087,34 @@ const pointedRef = (p: PointedAt): AssistantRefNote =>
       }
     : { kind: p.section.kind, label: p.section.label, id: p.section.id, text: textOf(p.el) };
 
-/** Share of `in` read from the prompt cache, as a whole percent. */
-const hitPct = (p: { in: number; read: number }) => (p.in ? Math.round((p.read / p.in) * 100) : 0);
-
 /**
- * A part's row name: its tier (the label's first piece; the whole label is the hover) and what it
- * was: the main model, `×N` hand-offs to a higher tier, advice or a compaction.
+ * How full the chat's context is (a thin bar with a tick where it compacts). What a chat cost is
+ * not shown here: a person reads their use in Settings, not on every answer.
  */
-function partRow(p: UsagePart, i: number) {
-  const bits = p.label.split(' · ');
-  const last = bits[bits.length - 1] ?? '';
-  const kind = p.runs
-    ? `×${p.runs}`
-    : last === 'advice' || last === 'compact'
-      ? last
-      : i === 0
-        ? 'main'
-        : '';
-  return { tier: bits[0] ?? p.label, kind };
-}
-
-/** The chat's use per part: cost, tokens in with the cache %, out, calls; then the total. */
-function UsageTable({ usage }: { usage: ChatUsage }) {
-  const total = 'mt-1 border-t pt-1';
-  return (
-    <div className="grid grid-cols-[auto_auto_auto_auto_auto_auto] gap-x-3 gap-y-0.5 whitespace-nowrap text-xs">
-      <span />
-      <span />
-      <span className="text-right text-muted-foreground">Cost</span>
-      <span className="text-right text-muted-foreground">In (cached)</span>
-      <span className="text-right text-muted-foreground">Out</span>
-      <span className="text-right text-muted-foreground">Calls</span>
-      {usage.parts.map((p, i) => {
-        const r = partRow(p, i);
-        return (
-          <Fragment key={p.label}>
-            <span className="truncate font-medium" title={p.label}>
-              {r.tier}
-            </span>
-            <span className="text-muted-foreground">{r.kind}</span>
-            <span className="num text-right">{usd(p.usd)}</span>
-            <span className="num text-right">
-              {tokens(p.in)} ({hitPct(p)}%)
-            </span>
-            <span className="num text-right">{tokens(p.out)}</span>
-            <span className="num text-right">{p.calls}</span>
-          </Fragment>
-        );
-      })}
-      <span className={cn(total, 'font-semibold')}>Total</span>
-      <span className={total} />
-      <span className={cn(total, 'num text-right font-semibold')}>{usd(usage.usd)}</span>
-      <span className={cn(total, 'num text-right')}>
-        {tokens(usage.in)} ({hitPct(usage)}%)
-      </span>
-      <span className={cn(total, 'num text-right')}>{tokens(usage.out)}</span>
-      <span className={cn(total, 'num text-right')}>{usage.calls}</span>
-    </div>
-  );
-}
-
-/**
- * This month's total of every chat and run; it opens the month's history (each model, chat and
- * run), a sheet on a phone.
- */
-function MonthTotal({
-  client,
-  spent,
-  phone,
-  className,
-}: { client: AssistantAdapter; spent: number; phone: boolean; className?: string }) {
-  const trigger = (
-    <button
-      type="button"
-      className={cn(
-        'flex shrink-0 items-center gap-1 tabular-nums hover:text-foreground',
-        className,
-      )}
-      aria-label="Usage this month"
-      title="Usage this month: every chat and run"
-    >
-      <ReceiptIcon className="size-3" aria-hidden />
-      <span>
-        This month <span className="num">{usd(spent)}</span>
-      </span>
-    </button>
-  );
-  return phone ? (
-    <Sheet>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom">
-        <SheetHeader>
-          <SheetTitle>Usage</SheetTitle>
-        </SheetHeader>
-        <UsageHistoryView client={client} className="px-4 pb-6" />
-      </SheetContent>
-    </Sheet>
-  ) : (
-    <Popover>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="end" className="w-md max-w-[92vw] p-3">
-        <UsageHistoryView client={client} />
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/**
- * The chat's cost, tokens in and out and cache hit (a pop-up splits them per part, a sheet on a
- * phone), how full the context is, and this month's total (`MonthTotal`).
- */
-function UsageLine({
-  usage,
-  client,
-  spent,
-  compactAt,
-}: {
-  usage: ChatUsage | null;
-  client: AssistantAdapter;
-  spent: number | undefined;
-  compactAt: number;
-}) {
-  const phone = useIsMobile();
-  const month = !!client.usage && spent !== undefined && spent > 0;
-  if ((!usage || !usage.calls) && !month) return null;
+function ContextLine({ usage, compactAt }: { usage: ChatUsage | null; compactAt: number }) {
   const ctx = usage?.context ?? 0;
-  const total = month ? (
-    <MonthTotal
-      client={client}
-      spent={spent ?? 0}
-      phone={phone}
-      className={ctx > 0 ? '' : 'ml-auto'}
-    />
-  ) : null;
-  if (!usage || !usage.calls)
-    return (
-      <div className="flex shrink-0 items-center gap-3 px-3 pb-2 text-muted-foreground text-xs">
-        {total}
-      </div>
-    );
-  const trigger = (
-    <button
-      type="button"
-      className="flex min-w-0 items-center gap-2 tabular-nums hover:text-foreground"
-      aria-label="This chat's usage"
-    >
-      <span className="num truncate">
-        {usd(usage.usd)} · ↑{tokens(usage.in)} ↓{tokens(usage.out)}
-      </span>
-      <span className="num flex shrink-0 items-center gap-0.5" title="Read from cache">
-        <ZapIcon className="size-3" aria-hidden />
-        {hitPct(usage)}%
-      </span>
-    </button>
-  );
+  if (ctx <= 0) return null;
   return (
     <div className="flex shrink-0 items-center gap-3 px-3 pb-2 text-muted-foreground text-xs">
-      {phone ? (
-        <Sheet>
-          <SheetTrigger asChild>{trigger}</SheetTrigger>
-          <SheetContent side="bottom">
-            <SheetHeader>
-              <SheetTitle>This chat's usage</SheetTitle>
-            </SheetHeader>
-            <div className="overflow-x-auto px-4 pb-6">
-              <UsageTable usage={usage} />
-            </div>
-          </SheetContent>
-        </Sheet>
-      ) : (
-        <Popover>
-          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-          <PopoverContent align="start" className="w-auto p-2">
-            <UsageTable usage={usage} />
-          </PopoverContent>
-        </Popover>
-      )}
-      {ctx > 0 && (
-        <span
-          className="ml-auto flex items-center gap-1.5"
-          title={`Context ${tokens(ctx)} of ${tokens(CONTEXT_MAX)}`}
-        >
-          <span className="relative h-1 w-16 overflow-hidden rounded-full bg-muted">
-            <span
-              className={cn(
-                'absolute inset-y-0 left-0',
-                ctx > compactAt ? 'bg-warning' : 'bg-primary/60',
-              )}
-              style={{ width: `${Math.min(100, (ctx / CONTEXT_MAX) * 100)}%` }}
-            />
-            <span
-              className="absolute inset-y-0 w-px bg-foreground/40"
-              style={{ left: `${(compactAt / CONTEXT_MAX) * 100}%` }}
-            />
-          </span>
-          <span className="tabular-nums">{tokens(ctx)}</span>
+      <span
+        className="ml-auto flex items-center gap-1.5"
+        title={`Context ${tokens(ctx)} of ${tokens(CONTEXT_MAX)}`}
+      >
+        <span className="relative h-1 w-16 overflow-hidden rounded-full bg-muted">
+          <span
+            className={cn(
+              'absolute inset-y-0 left-0',
+              ctx > compactAt ? 'bg-warning' : 'bg-primary/60',
+            )}
+            style={{ width: `${Math.min(100, (ctx / CONTEXT_MAX) * 100)}%` }}
+          />
+          <span
+            className="absolute inset-y-0 w-px bg-foreground/40"
+            style={{ left: `${(compactAt / CONTEXT_MAX) * 100}%` }}
+          />
         </span>
-      )}
-      {total}
+        <span className="tabular-nums">{tokens(ctx)}</span>
+      </span>
     </div>
   );
 }
