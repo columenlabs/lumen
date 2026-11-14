@@ -85,7 +85,7 @@ export function SettingField({
       {children !== undefined && (
         <div
           className={cn(
-            // Label on the left, control flush to the row's right edge (Bikram, 2026-11-14).
+            // Label on the left, control flush to the row's right edge.
             'ml-auto flex min-w-0 max-w-md flex-1 items-center justify-end gap-2',
             stack && 'max-sm:order-2 max-sm:max-w-none max-sm:basis-full max-sm:justify-start',
           )}

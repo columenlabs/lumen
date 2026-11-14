@@ -1,5 +1,215 @@
 [
   {
+    "tag": "v0.1.240",
+    "date": "2026-11-14T00:22:25Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Keep a tier off people's allowance",
+        "body": "In `@columenlabs/lumen-ai`, the new `AssistantOptions.credits` option takes `(tier) => boolean`, and when it returns false for a tier, that tier's `complete()` and `agentTurn()` calls run on the app's key and are never stopped at `app_cap`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Free-tier spend stays visible but uncounted",
+        "body": "In `@columenlabs/lumen-ai`, spend from a tier where `credits` returns false is recorded as `SpendRow.free`, so you can still see it while it is left out of `appBudget` and the payer sums."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "No false \"out of allowance\" banner",
+        "body": "In `@columenlabs/lumen-ai`, `status` now works out `wait` with the main tier's rules, so a free tier no longer shows an \"out of allowance\" banner."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.239",
+    "date": "2026-11-13T23:55:01Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Long SettingField labels are no longer cut on desktop",
+        "body": "In `@columenlabs/lumen-ui`, the `SettingField` label column still starts at 8rem but now widens to fit a longer name, so you no longer need to shorten or rename labels to avoid a trailing \"…\"."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "SettingField labels wrap on a phone",
+        "body": "On a phone, `SettingField` now caps the label column at half the row and wraps longer labels onto more lines instead of cutting them. The column still starts at 6rem."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Short labels still line up, with no per-label tuning",
+        "body": "`SettingField` sizes the label column automatically, so rows with short labels stay aligned and you pass no new prop or width."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.238",
+    "date": "2026-11-13T23:51:41Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A lone admin now shows up in the People list",
+        "body": "In `@columenlabs/lumen-ui`, `LumenPeople` now shows its first-run note (\"It's just you so far\") only when `people` is empty, so an app with a single admin gets a table with that one row instead."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "\"Not set up\" no longer reads as a failed sync",
+        "body": "In `LumenPeople`, the sign-in sync tile and the person drawer now show \"Not set up\" when `sync.configured` is `false`, instead of a red \"Out of step\"."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer sync states",
+        "body": "`LumenPeople` now reads Not set up, Synced or Out of step, and red is kept for a configured sync that failed, so you can tell a missing setup from a real failure."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.237",
+    "date": "2026-11-13T23:35:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Every Settings row is now a `SettingField`",
+        "body": "In `@columenlabs/lumen-ui`, the rows in `assistantSettingsSections` (your own keys, tier, models, tools, web, spend, allowance), `OwnKeyUsage`, General (Appearance and Preferences) and `LumenSecurity` all use `SettingField`, so a settings screen has one row layout."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`SettingRow` is deprecated",
+        "body": "`SettingRow` now renders a `SettingField` and maps its `description` prop to `info`, so existing apps still build, but you should switch to `SettingField` and `info`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Settings search lives in `SettingField`",
+        "body": "Through the `SettingsSearch` context, any `SettingField` you place in a settings screen is now found by settings search, with no separate row component needed."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "The assistant's screen tool finds rows by `setting-field`",
+        "body": "The assistant now locates settings rows by their `setting-field` slot, because the old `setting-row` slot is no longer drawn. If your own code or tests select `data-slot=\"setting-row\"`, change them to `setting-field`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.236",
+    "date": "2026-11-13T22:52:21Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Own keys only show ways the app allows",
+        "body": "In `@columenlabs/lumen-ui`, the Model providers section of `assistantSettingsSections` (`Providers` and `OwnProviderKey`) now shows a provider row, a key way or a plan way only when the app's `ownWays` (status `own_ways`) allows it, so a person no longer sees a key marked \"Works\" that the server will not use."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Summary lines follow the app's allowed ways",
+        "body": "In the same section, \"Answers run on\" and \"Your keys may spend\" now appear only when a way the app allows is set."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Disallowed keys are hidden, not removed",
+        "body": "A stored key or sign-in the app does not allow stays saved but hidden and unused, and it shows again if you later allow that way in `ownWays`. Apps that leave out `own_ways` see no change."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.235",
+    "date": "2026-11-13T22:24:27Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "See what your own key or plan paid, per session",
+        "body": "In `@columenlabs/lumen-ui`, the new `OwnKeyUsage` component appears at the end of the Providers section in Settings ▸ Model providers, so a person who brings their own key or plan can see what it paid for each session, with a Total row and a 1d / 7d / 30d range."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Record own-key spend as you track usage",
+        "body": "In `@columenlabs/lumen-ai`, `State.addUsage` now takes `own_usd` and adds it to the session's entry, so your engine can record how much of each session's cost the person's own key or plan paid."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Own-key share on usage entries",
+        "body": "From `@columenlabs/lumen-ui-types`, `UsageEntry` has a new optional `own_usd` field holding the part of `usd` that the person's own key or plan paid, so your views can show it next to total spend."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.234",
+    "date": "2026-11-13T21:41:30Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Access key fetch no longer hangs requests",
+        "body": "In `@columenlabs/lumen-auth`, `AccessVerifier` now gives up fetching its signing keys after `ACCESS_CERTS_MS` (3 seconds, exported), so a stalled key endpoint can no longer leave your routes waiting until the browser times out."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "One shared key fetch at a time",
+        "body": "`AccessVerifier` now runs a single key fetch at once and every request that needs keys waits on that one, so a slow endpoint no longer piles up unbounded fetches."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Held keys keep verifying during a refresh",
+        "body": "Once the cached keys in `AccessVerifier` are past an hour old, they keep verifying tokens while fresh keys load in the background, so sign-in checks no longer wait on the refetch."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Unknown key ids can't flood the key endpoint",
+        "body": "When a token names a key id `AccessVerifier` doesn't know, it waits for a bounded fetch and refetches at most once every 10 seconds, so a stream of bad tokens can't hammer the endpoint."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`fetchImpl` now receives `init`",
+        "body": "The `fetchImpl` option on `AccessVerifier` is now called with the request `init` as a second argument so you can pass its abort signal through, and existing one-argument fetch functions keep working."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.233",
     "date": "2026-11-13T21:25:11Z",
     "takeaways": [
