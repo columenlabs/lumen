@@ -18,6 +18,7 @@ import type {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ChartColumnIcon,
   CoinsIcon,
   GlobeIcon,
   InboxIcon,
@@ -54,7 +55,7 @@ import { Switch } from '../ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import type { AssistantAdapter } from './client';
 import { allowanceAmount, assistantStatusKey, usd, useAssistantStatus } from './lumen-assistant';
-import { OwnKeyUsage, UsageHistoryView } from './usage-history';
+import { AssistantUsageTable, OwnKeyUsage, UsageHistoryView } from './usage-history';
 
 const EFFORTS: { value: AssistantEffort; label: string }[] = [
   { value: 'default', label: 'Model default' },
@@ -309,7 +310,7 @@ function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantP
 }
 
 /** A person's own keys, one row a provider, and what they may spend on them. */
-function Providers({ client }: { client: AssistantAdapter }) {
+function Providers({ client, usage }: { client: AssistantAdapter; usage?: boolean }) {
   const { apply } = useApply(client);
   return (
     <WithStatus client={client}>
@@ -359,11 +360,13 @@ function Providers({ client }: { client: AssistantAdapter }) {
               </SettingField>
             )}
             {ownSet && <OwnCapUse s={s} />}
-            <OwnKeyUsage
-              client={client}
-              always={ownSet}
-              usable={rows.filter(ownUsable).map((p) => p.id)}
-            />
+            {!usage && (
+              <OwnKeyUsage
+                client={client}
+                always={ownSet}
+                usable={rows.filter(ownUsable).map((p) => p.id)}
+              />
+            )}
           </div>
         );
       }}
@@ -1072,6 +1075,7 @@ export function assistantSettingsSections({
   name,
   web = true,
   allowance = false,
+  usage = false,
 }: {
   client: AssistantAdapter;
   /** The assistant's name, the parent section's title. */
@@ -1080,6 +1084,9 @@ export function assistantSettingsSections({
   web?: boolean;
   /** Show Allowance: what is left on the shared keys, and Request more (`allowance` on the server). */
   allowance?: boolean;
+  /** Show Usage: this month's chats and runs by who paid (key, sign-in or credits); Model
+   *  providers then leaves out its own spend table. */
+  usage?: boolean;
 }): SettingsSectionDef[] {
   return [
     {
@@ -1095,7 +1102,7 @@ export function assistantSettingsSections({
       icon: KeyRoundIcon,
       sub: true,
       description: 'Your own key for each provider',
-      content: <Providers client={client} />,
+      content: <Providers client={client} usage={usage} />,
     },
     {
       id: 'assistant-models',
@@ -1133,6 +1140,18 @@ export function assistantSettingsSections({
       description: 'What each model, chat and run cost',
       content: <Spend client={client} />,
     },
+    ...(usage
+      ? [
+          {
+            id: 'assistant-usage',
+            title: 'Usage',
+            icon: ChartColumnIcon,
+            sub: true,
+            description: 'Every chat and run this month, and who paid',
+            content: <AssistantUsageTable client={client} />,
+          },
+        ]
+      : []),
     ...(allowance
       ? [
           {
