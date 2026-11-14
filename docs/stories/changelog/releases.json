@@ -1,5 +1,120 @@
 [
   {
+    "tag": "v0.1.252",
+    "date": "2026-11-14T05:44:45Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Web lookup subagent",
+        "body": "From `@columenlabs/lumen-ai/subagents`, `webLookupTools(source, { pages, answerTokens, blockHosts })` gives your assistant one `web__lookup` tool that answers a question from the web and returns about 1k tokens of `{ question, sources: [{ url, title, answer }], failed }` instead of whole pages."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One-switch web mode in the engine",
+        "body": "In the engine options, the new `web.lookup` option (`true` or an options object) swaps the web tool group for just `web__lookup`, with its own rule about citing sources, so the assistant no longer sees raw fetch or scraping tools."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Lookups show up in the panel",
+        "body": "`StepWeb` now has optional `lookup` and `reads` fields, filled in by `webStep`, so the panel shows \"Looked up: …  N sources\", folds the pages beneath it, and numbers them as Sources chips."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.251",
+    "date": "2026-11-14T05:41:09Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Plan sign-in calls show up in Spent on your keys",
+        "body": "In `OwnKeyUsage` from @columenlabs/lumen-ui, each chat or run answered through a person's plan sign-in now gets its own row at $0, with the plan and call count in its name."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Usage entries count plan calls",
+        "body": "In @columenlabs/lumen-ai, usage entries now keep `own_plan_calls` (filled through `ownPlanCalls`) next to `own_usd`, so you can see how many calls a plan sign-in answered."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Earlier plan calls are grouped into one row",
+        "body": "`OwnKeyUsage` now shows plan calls that no entry carries as a single \"Earlier\" row with the call count, so the total still adds up."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Optional field on `UsageEntry`",
+        "body": "From @columenlabs/lumen-ui-types, `UsageEntry` has a new optional `own_plan_calls` field. It is additive, so existing code keeps compiling."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.250",
+    "date": "2026-11-14T05:36:59Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Hand-offs work on a plan sign-in",
+        "body": "In `@columenlabs/lumen-ai`, `planFetch` now sends every model call as streamed and turns the events back into the single JSON response your code expects, so the `escalate` tool (\"Take a closer look\") no longer fails with `400 Stream must be set to true`."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Compaction works on a plan sign-in",
+        "body": "`LumenAgent` compaction makes calls that aren't streamed, and because they now go through `planFetch` they succeed instead of failing with the same 400."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Hand-offs have a time limit",
+        "body": "The `escalate` tool in `@columenlabs/lumen-ai` now gives up after `HAND_OFF_MS` (240 s, newly exported), so a chat turn can no longer wait on a hand-off forever."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.249",
+    "date": "2026-11-14T05:29:51Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Single-select `Select` marks the picked row with a fill, not a check",
+        "body": "In `@columenlabs/lumen-ui`, `SelectItem` no longer renders a check mark, and the picked row gets a muted background (the same fill `DropdownMenuRadioItem` uses), so a single-select `Select` needs no changes in your app beyond expecting the new look."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`Combobox` shows checks only when `multiple`",
+        "body": "In `@columenlabs/lumen-ui`, `ComboboxItem` now highlights the picked row with a muted fill and draws the check only inside a list with `aria-multiselectable=\"true\"`, which `ComboboxList` sets when you pass `multiple`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One rule for check marks across pickers",
+        "body": "A check box or check mark now appears only on multi-select pickers, and `LumenSelector` already follows this by drawing its box only when `multiple` is set, so it behaves the same as before."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.248",
     "date": "2026-11-14T05:06:00Z",
     "takeaways": [

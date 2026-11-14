@@ -19,6 +19,7 @@ import { rowCount } from '../assistant/tools';
 import { webStep } from '../assistant/web';
 import type { AgentCard } from './agent';
 import type { ScreenCall } from './screen';
+import { TOOL_SEARCH } from './search';
 
 /** A tool's name as a line's title: `notes__find_notes` → `find notes`. */
 export function stepTitle(name: string): string {
@@ -35,6 +36,46 @@ export interface StepNames {
   plain?: boolean;
   /** The tool's own title, when it has one. */
   titleOf?: (name: string) => string | undefined;
+  /**
+   * A line that says what this call did and to what (`LumenAgent.stepLine`): present tense while it
+   * runs, past tense with a short result when it answered, "Couldn't …" when it failed. Left out
+   * (or `undefined`), the line reads the tool's title.
+   */
+  lineOf?: (c: StepCall) => string | undefined;
+}
+
+/** One tool call as its line is worded: its name, arguments, answer and where it stands. */
+export interface StepCall {
+  id: string;
+  /** The tool's name as the model called it (`group__tool`). */
+  tool: string;
+  input?: unknown;
+  /** Its answer, once it answered. */
+  output?: unknown;
+  state: 'running' | 'done' | 'failed';
+}
+
+/** A line's text kept to one short line. */
+const oneLine = (t: string | undefined) => {
+  const s = (t ?? '').replace(/\s+/g, ' ').trim();
+  return s ? s.slice(0, 120) : undefined;
+};
+
+/** The line the app gave for this call, when it gave one; never throws. */
+function lineFor(names: StepNames, c: StepCall): string | undefined {
+  try {
+    return oneLine(names.lineOf?.(c));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a call shows no line at all: in a plain chat, the tool search that turns more tools on is
+ * the assistant finding its own tools, not something it did for the person.
+ */
+export function hiddenStep(name: string, names: StepNames = {}): boolean {
+  return !!names.plain && name === TOOL_SEARCH;
 }
 
 /** What a plain line says when a call failed: the assistant reads the error and goes on. */
@@ -146,15 +187,27 @@ function settledCall(
   const image = stepImage(o?.image);
   const web = webStep(c.name, c.input, out.output, !!error || obj(out.output)?.ok === false);
   const wrote = card?.kind === 'write' || (o && typeof o.change === 'string');
+  // The app's own line says what the call did; a failed one already says it did not ("Couldn't …").
+  const line = lineFor(names, {
+    id,
+    tool: c.name,
+    input: c.input,
+    ...(error
+      ? {}
+      : { output: o && 'result' in o && o.change !== undefined ? o.result : out.output }),
+    state: error ? 'failed' : 'done',
+  });
   const step: StepItem = {
     kind: 'step',
     id,
     tool: c.name,
-    title: shownTitle(c.name, names, wrote ? 'write' : 'read'),
+    title: line ?? shownTitle(c.name, names, wrote ? 'write' : 'read'),
     ok: !error,
     ms,
     ...(rows !== undefined && !error && !names.plain ? { rows } : {}),
-    ...(error ? { error: names.plain ? PLAIN_FAILED : error.slice(0, 300) } : {}),
+    ...(error && !(line && names.plain)
+      ? { error: names.plain ? PLAIN_FAILED : error.slice(0, 300) }
+      : {}),
     ...(wrote
       ? { write: { undo: true, status: card?.status === 'undone' ? 'undone' : 'done' } }
       : {}),
@@ -201,7 +254,13 @@ export function chunkEvents(
           advising = true;
           return [{ event: 'advice', data: { tier: 'advisor', label: o.advisor ?? 'Advice' } }];
         }
-        if (name === 'escalate' || name === 'screen' || o.kindOf?.(name) === 'draft') return [];
+        if (
+          name === 'escalate' ||
+          name === 'screen' ||
+          o.kindOf?.(name) === 'draft' ||
+          hiddenStep(name, names)
+        )
+          return [];
         // A tool that makes a change at once says so as it starts, so an app can show that what it
         // changes is being changed now, before the model has finished writing the call.
         const kind = o.kindOf?.(name);
@@ -221,7 +280,24 @@ export function chunkEvents(
       case 'tool-input-available': {
         const c = calls.get(id) ?? { name: String(chunk.toolName ?? ''), t0: Date.now() };
         calls.set(id, { ...c, input: chunk.input });
-        return [];
+        // Its arguments are in: the running line can say what it is doing and to what.
+        if (
+          c.name === 'advisor' ||
+          c.name === 'escalate' ||
+          c.name === 'screen' ||
+          o.kindOf?.(c.name) === 'draft' ||
+          hiddenStep(c.name, names)
+        )
+          return [];
+        const line = lineFor(names, { id, tool: c.name, input: chunk.input, state: 'running' });
+        if (!line) return [];
+        const write = o.kindOf?.(c.name) === 'write';
+        return [
+          {
+            event: 'step_start',
+            data: { id, tool: c.name, title: line, ...(write ? { write } : {}) },
+          },
+        ];
       }
       case 'tool-output-available':
       case 'tool-output-error': {
@@ -235,6 +311,7 @@ export function chunkEvents(
           return [{ event: 'advice_done', data: error ? { error } : {} }];
         }
         const ms = Date.now() - c.t0;
+        if (hiddenStep(c.name, names)) return [];
         const out = obj(chunk.output);
         const said = error ?? (out && typeof out.error === 'string' ? out.error : undefined);
         if (said !== undefined) {
@@ -366,6 +443,7 @@ export function itemsOf(
         items.push({ kind: 'advice', tier: 'advisor', label: 'Advice' });
         continue;
       }
+      if (hiddenStep(tool, names)) continue;
       const ended =
         p.state === 'output-available'
           ? { output: p.output }
