@@ -95,10 +95,10 @@ import {
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+import { InputGroup, InputGroupAddon, InputGroupTextarea } from '../ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
 import { Spinner } from '../ui/spinner';
-import { Textarea } from '../ui/textarea';
 import { ChatImage } from './chat-image';
 import type { AssistantAdapter } from './client';
 import { chatMarkdown, chatTurns, copyMarkdown, turnMarkdown } from './copy';
@@ -1887,16 +1887,14 @@ export function LumenComposer({
           ))}
         </div>
       )}
-      <div className="relative">
-        <Textarea
+      {/* The box and its tools are one InputGroup: the tools sit on their own row under the text,
+          so a long message never runs under them (a scrolled box hides any padding kept for them). */}
+      <InputGroup>
+        <InputGroupTextarea
           ref={box}
           aria-label={`Message ${name}`}
           placeholder={`Ask ${name}…${hints.length ? ` (${hints.join(' ')})` : ''}`}
-          className={cn(
-            'max-h-48 min-h-11 resize-none',
-            busy && text.trim() && canSteer ? 'pr-18' : 'pr-11',
-            (canAttach || modes.length > 0) && 'pb-9',
-          )}
+          className="max-h-48 min-h-11"
           value={text}
           disabled={disabled}
           onChange={(e) => {
@@ -1924,87 +1922,85 @@ export function LumenComposer({
             }
           }}
         />
-        {(canAttach || modes.length > 0) && (
-          <div className="absolute bottom-1.5 left-1.5 flex items-center gap-0.5">
-            {canAttach && (
-              <>
-                <IconButton
-                  icon={PaperclipIcon}
-                  label="Attach images"
-                  size="icon-xs"
-                  disabled={disabled}
-                  onClick={() => filePick.current?.click()}
-                />
-                <input
-                  ref={filePick}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  hidden
-                  onChange={(e) => {
-                    if (e.target.files) attach(e.target.files);
-                    e.target.value = '';
-                  }}
-                />
-              </>
-            )}
-            {modes.map((md) => (
+        <InputGroupAddon align="block-end" className="gap-0.5 px-1.5 pb-1.5">
+          {canAttach && (
+            <>
               <IconButton
-                key={md.id}
-                icon={md.icon}
-                label={md.label}
-                size="icon-xs"
-                variant={use === md.id ? 'secondary' : 'ghost'}
-                aria-pressed={use === md.id}
-                className={cn(use === md.id && 'text-primary')}
-                disabled={disabled}
-                onClick={() => setUse((u) => (u === md.id ? null : md.id))}
-              />
-            ))}
-          </div>
-        )}
-        <div className="absolute right-1.5 bottom-1.5">
-          {busy && !text.trim() ? (
-            <IconButton
-              icon={SquareIcon}
-              label="Stop"
-              variant="outline"
-              size="icon-xs"
-              onClick={onStop}
-            />
-          ) : busy ? (
-            <span className="flex gap-1">
-              <IconButton
-                icon={ListPlusIcon}
-                label={canSteer ? 'Queue for after (⌥↩)' : 'Queue for after (↩)'}
-                variant={canSteer ? 'outline' : 'default'}
+                icon={PaperclipIcon}
+                label="Attach images"
                 size="icon-xs"
                 disabled={disabled}
-                onClick={() => send('queue')}
+                onClick={() => filePick.current?.click()}
               />
-              {canSteer && (
-                <IconButton
-                  icon={CornerDownRightIcon}
-                  label="Steer now (↩)"
-                  variant="default"
-                  size="icon-xs"
-                  disabled={disabled}
-                  onClick={() => send('steer')}
-                />
-              )}
-            </span>
-          ) : (
-            <IconButton
-              icon={ArrowUpIcon}
-              label="Send"
-              variant="default"
-              size="icon-xs"
-              disabled={!text.trim() || disabled}
-              onClick={() => send()}
-            />
+              <input
+                ref={filePick}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) attach(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+            </>
           )}
-        </div>
-      </div>
+          {modes.map((md) => (
+            <IconButton
+              key={md.id}
+              icon={md.icon}
+              label={md.label}
+              size="icon-xs"
+              variant={use === md.id ? 'secondary' : 'ghost'}
+              aria-pressed={use === md.id}
+              className={cn(use === md.id && 'text-primary')}
+              disabled={disabled}
+              onClick={() => setUse((u) => (u === md.id ? null : md.id))}
+            />
+          ))}
+          <div className="ml-auto">
+            {busy && !text.trim() ? (
+              <IconButton
+                icon={SquareIcon}
+                label="Stop"
+                variant="outline"
+                size="icon-xs"
+                onClick={onStop}
+              />
+            ) : busy ? (
+              <span className="flex gap-1">
+                <IconButton
+                  icon={ListPlusIcon}
+                  label={canSteer ? 'Queue for after (⌥↩)' : 'Queue for after (↩)'}
+                  variant={canSteer ? 'outline' : 'default'}
+                  size="icon-xs"
+                  disabled={disabled}
+                  onClick={() => send('queue')}
+                />
+                {canSteer && (
+                  <IconButton
+                    icon={CornerDownRightIcon}
+                    label="Steer now (↩)"
+                    variant="default"
+                    size="icon-xs"
+                    disabled={disabled}
+                    onClick={() => send('steer')}
+                  />
+                )}
+              </span>
+            ) : (
+              <IconButton
+                icon={ArrowUpIcon}
+                label="Send"
+                variant="default"
+                size="icon-xs"
+                disabled={!text.trim() || disabled}
+                onClick={() => send()}
+              />
+            )}
+          </div>
+        </InputGroupAddon>
+      </InputGroup>
     </div>
   );
 }

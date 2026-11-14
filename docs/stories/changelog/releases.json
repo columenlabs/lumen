@@ -1,5 +1,113 @@
 [
   {
+    "tag": "v0.1.245",
+    "date": "2026-11-14T01:48:01Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Pick who pays first with a segmented control",
+        "body": "In the assistant settings in `@columenlabs/lumen-ui`, the **Answers run on** setting is now a two-option `ToggleGroup` (\"Your own first\" | \"Credits first\") in place of the `LumenSelector`, so users see both choices at once and use the same control as the 1d/7d/30d range."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No more letter box on provider rows",
+        "body": "In the assistant settings in `@columenlabs/lumen-ui`, provider rows for your own and shared keys no longer draw the `ConnectionLogo` letter fallback (`text`), so each row starts with the provider name."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.244",
+    "date": "2026-11-14T01:45:05Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Mount ⌘K Find on any screen",
+        "body": "From `@columenlabs/lumen-ui`, `LumenFinder` is now exported, so an app that draws its own frame (a full-screen editor with no `LumenShell`) can wrap its screen in `LumenFinder` to get the ⌘K Find dialog."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Add your own Find commands outside the shell",
+        "body": "Inside `LumenFinder`, `useLumenFinderRows` lets you register rows with a `run` callback, for example a command that switches between mouse and trackpad navigation."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Find no longer needs a router",
+        "body": "`LumenFinder` now works in an app with no router, where each row either calls its `run` function or follows a plain link, and inside `LumenShell` nothing changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.243",
+    "date": "2026-11-14T01:35:19Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Know who paid for an AI answer",
+        "body": "In @columenlabs/lumen-ai, `Assistant.complete()` now also returns `payer` (`app` or `own`), so an app can show cost on the person's own key as money and everything else as credits."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "See the monthly cap being used",
+        "body": "In the own-AI section of assistant settings (Providers), a new \"Used this month\" row, built from `SettingField` and `ShareMeter`, shows spend against the person's monthly cap, for example \"$30.06 of $30\"."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Earlier spend no longer shows as \"Nothing spent\"",
+        "body": "In `OwnKeyUsage` (\"Spent on your keys\"), this month's own spend that no chat carries now appears as an \"Earlier this month, not per chat\" row, even when the cap is already full."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Free rows are typed",
+        "body": "In @columenlabs/lumen-ui-types, `SpendState.rows` and `UsageHistory.rows` now declare `free?: true`, so you can read the flag the engine already sends. Free rows count toward neither the used nor the cap number."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.241",
+    "date": "2026-11-14T00:41:39Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Settings controls line up on the right",
+        "body": "In `@columenlabs/lumen-ui`, every `SettingField` row now puts its label on the left and its control flush to the right edge, so you no longer need per-field spacing tweaks to align a Settings section."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Stacked rows keep their control on the left on phones",
+        "body": "When you use `SettingField` with the `stack` layout on a phone-width screen, the control stays at the left under its label instead of jumping to the right edge."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Label column unchanged",
+        "body": "`SettingField` labels keep the uncut label column from the previous release, so right-aligning the control does not clip or shift your label text."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.240",
     "date": "2026-11-14T00:22:25Z",
     "takeaways": [

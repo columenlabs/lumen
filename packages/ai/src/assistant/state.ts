@@ -35,7 +35,7 @@ import type {
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { type ChatgptTokens, refreshChatgpt, staleChatgpt } from './chatgpt';
-import { PROVIDERS, keyHint } from './models';
+import { ALL_MODELS, PROVIDERS, XAI_MODELS, keyHint } from './models';
 import { APP_SCOPE, type Docs } from './store';
 
 export interface KeyTest {
@@ -118,7 +118,59 @@ const REQUESTS_KEPT = 300;
 
 /** `free`: run on the app's key for a job the app does not count against the person's allowance
  *  (`AssistantOptions.credits`). Kept apart so the admin still sees what it cost. */
-export type SpendRow = UsagePart & { payer: AssistantPayer; free?: true };
+export type SpendRow = UsagePart & {
+  payer: AssistantPayer;
+  free?: true;
+  /** Of an own row: paid by the person's API key or their plan sign-in (a plan costs them $0). */
+  way?: AssistantOwnWay;
+};
+
+const KNOWN_MODELS = [...ALL_MODELS, ...XAI_MODELS];
+
+/** The provider a part ran on: by its model id, else by the model's name at the end of its label. */
+export function providerOfPart(p: UsagePart): AssistantProvider | undefined {
+  const m =
+    KNOWN_MODELS.find((x) => x.id === p.model) ??
+    KNOWN_MODELS.find((x) => p.label === x.label || p.label.endsWith(` · ${x.label}`));
+  return m?.provider;
+}
+
+/** Spend rows with the provider each ran on, so a page can tell a removed key's spend apart. */
+export function withProvider<R extends UsagePart>(rows: R[]) {
+  return rows.map((r) => {
+    const provider = providerOfPart(r);
+    return provider ? { ...r, provider } : r;
+  });
+}
+
+/** USD of `parts` the person's own API keys paid: a provider signed in with a plan costs $0. */
+export function ownKeyUsd(
+  paying: { payer: AssistantPayer; plans: Paying['plans'] },
+  parts: UsagePart[],
+) {
+  if (paying.payer !== 'own') return 0;
+  return parts
+    .filter((p) => {
+      const prov = providerOfPart(p);
+      return !(prov && paying.plans[prov]);
+    })
+    .reduce((a, p) => a + p.usd, 0);
+}
+
+/**
+ * What counts toward the person's own cap: own rows paid by an API key (a plan sign-in costs
+ * nothing per call), on a provider they can still pay with. A row from before ways were recorded
+ * counts unless its provider has no own way left (an old key since removed).
+ */
+export function ownCapUsed(rows: SpendRow[], usable: Partial<Record<AssistantProvider, unknown>>) {
+  return rows
+    .filter((r) => r.payer === 'own' && !r.free && r.way !== 'plan')
+    .filter((r) => {
+      const prov = providerOfPart(r);
+      return !prov || !!usable[prov];
+    })
+    .reduce((a, r) => a + r.usd, 0);
+}
 
 /** The ways of their own a person may pay with, per provider; a provider left out has none. */
 export type OwnWays = Partial<Record<AssistantProvider, AssistantOwnWay[]>>;
@@ -424,8 +476,15 @@ export class State {
     parts: UsagePart[],
     at?: { task: string; ms?: number },
     free = false,
+    plans?: Partial<Record<AssistantProvider, boolean>>,
   ) {
     if (!parts.some((p) => p.calls)) return;
+    // Which own way paid each part: a plan sign-in or a key, by the part's provider.
+    const wayOf = (p: UsagePart): AssistantOwnWay | undefined => {
+      if (payer !== 'own' || !plans) return undefined;
+      const prov = providerOfPart(p);
+      return prov && plans[prov] ? 'plan' : 'key';
+    };
     await this.docs.update<SpendDoc>(id, `spend:${this.month()}`, (d) => {
       const rows = [...(d?.rows ?? [])];
       const tasks = [...(d?.tasks ?? [])];
@@ -455,8 +514,9 @@ export class State {
       }
       for (const p of parts) {
         if (!p.calls) continue;
+        const way = wayOf(p);
         const i = rows.findIndex(
-          (r) => r.label === p.label && r.payer === payer && !!r.free === free,
+          (r) => r.label === p.label && r.payer === payer && !!r.free === free && r.way === way,
         );
         const prev = i >= 0 ? rows[i] : undefined;
         const row: SpendRow = prev
@@ -468,7 +528,7 @@ export class State {
               out: prev.out + p.out,
               usd: prev.usd + p.usd,
             }
-          : { ...p, payer, ...(free ? { free: true as const } : {}) };
+          : { ...p, payer, ...(free ? { free: true as const } : {}), ...(way ? { way } : {}) };
         if (i >= 0) rows[i] = row;
         else rows.push(row);
       }
@@ -534,7 +594,7 @@ export class State {
       month,
       months,
       usd: spend.rows.reduce((a, r) => a + r.usd, 0),
-      rows: spend.rows,
+      rows: withProvider(spend.rows),
       entries: doc?.entries ?? [],
     };
   }
@@ -557,6 +617,12 @@ export class State {
       if (k?.plan) plans[p] = true;
     });
     return { keys, plans };
+  }
+
+  /** USD of this month's own spend that counts toward the person's own cap (`ownCapUsed`). */
+  async ownUsed(id: string, ways?: OwnWays) {
+    const [{ keys }, spend] = await Promise.all([this.keysOf(id, 'own', ways), this.spend(id)]);
+    return ownCapUsed(spend.rows, keys);
   }
 
   /** Who pays the person's next answer on `provider`'s model, or why nobody can. */
@@ -594,7 +660,7 @@ export class State {
             apiKey: own,
             ...ownKeys,
             cap: ownCap,
-            left: ownCap - spent('own'),
+            left: ownCap - ownCapUsed(spend.rows, ownKeys.keys),
           }
         : null,
     };

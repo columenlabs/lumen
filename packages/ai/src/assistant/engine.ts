@@ -62,8 +62,10 @@ import {
   State,
   keyDocName,
   keyState,
+  ownKeyUsd,
   planDocName,
   waitText,
+  withProvider,
 } from './state';
 import { type AssistantStore, Docs, type Sealer } from './store';
 import { type ToolSource, toolName, withDeadline } from './tools';
@@ -751,7 +753,14 @@ export class Assistant {
       const onShared = sharedLabel ? end.parts.filter((x) => x.label === sharedLabel) : [];
       const onPayer = onShared.length ? end.parts.filter((x) => !onShared.includes(x)) : end.parts;
       await this.state
-        .addSpend(caller.id, paying.payer, onPayer, { task: 'chat', ms: end.ms }, free)
+        .addSpend(
+          caller.id,
+          paying.payer,
+          onPayer,
+          { task: 'chat', ms: end.ms },
+          free,
+          paying.plans,
+        )
         .catch(() => undefined);
       if (onShared.length)
         await this.state
@@ -765,7 +774,7 @@ export class Assistant {
               id: `chat:${input.chat}`,
               kind: 'chat',
               title: message.split('\n')[0] || 'Chat',
-              own_usd: paying.payer === 'own' ? onPayer.reduce((a, x) => a + x.usd, 0) : 0,
+              own_usd: ownKeyUsd(paying, onPayer),
             },
             end.parts,
           )
@@ -959,44 +968,46 @@ export class Assistant {
     // The binding's last test has no token doc to sit in; it is read beside the rest.
     const linkTest = this.o.web?.scrapeql?.fetch ? this.state.scrapeqlLink() : null;
     const ownWays = await this.ownWaysOf(caller);
-    const [p, providers, scrapeql, spend, appCap, ownCap, { paying, wait }] = await Promise.all([
-      this.state.person(caller.id),
-      Promise.all(
-        this.providers.map(async (id) => {
-          const [doc, key, own, plan, use] = await Promise.all([
-            this.state.appKey(id),
-            this.state.appApiKey(id),
-            this.state.ownKey(caller.id, id),
-            PROVIDERS[id].signin ? this.state.ownPlan(caller.id, id) : Promise.resolve(null),
-            this.state.ownUse(caller.id, id),
-          ]);
-          const app = caller.admin
-            ? keyState(doc, (d) => (d as { api_key: string }).api_key)
-            : { set: !!key };
-          return {
-            id,
-            label: PROVIDERS[id].label,
-            prefix: PROVIDERS[id].prefix,
-            keys_url: PROVIDERS[id].keysUrl,
-            ...(PROVIDERS[id].signin ? { signin: PROVIDERS[id].signin } : {}),
-            app: { ...app, ...(key?.fromEnv ? { from_env: true } : {}) },
-            own: keyState(own, (d) => (d as { api_key: string }).api_key),
-            ...(PROVIDERS[id].signin
-              ? { plan: keyState(plan?.doc ?? null, (d) => (d as { api_key: string }).api_key) }
-              : {}),
-            ...(use ? { use } : {}),
-            ...(ownWays ? { own_ways: ownWays[id] ?? [] } : {}),
-          };
-        }),
-      ),
-      this.o.web?.scrapeql ? this.state.scrapeql() : Promise.resolve(null),
-      this.state.spend(caller.id),
-      this.state.appCap(),
-      this.state.ownCap(caller.id),
-      this.rulesFor(caller, main.id).then(({ rules }) =>
-        this.state.paying(caller.id, mainModel.provider, rules),
-      ),
-    ]);
+    const [p, providers, scrapeql, spend, appCap, ownCap, { paying, wait }, ownUsed] =
+      await Promise.all([
+        this.state.person(caller.id),
+        Promise.all(
+          this.providers.map(async (id) => {
+            const [doc, key, own, plan, use] = await Promise.all([
+              this.state.appKey(id),
+              this.state.appApiKey(id),
+              this.state.ownKey(caller.id, id),
+              PROVIDERS[id].signin ? this.state.ownPlan(caller.id, id) : Promise.resolve(null),
+              this.state.ownUse(caller.id, id),
+            ]);
+            const app = caller.admin
+              ? keyState(doc, (d) => (d as { api_key: string }).api_key)
+              : { set: !!key };
+            return {
+              id,
+              label: PROVIDERS[id].label,
+              prefix: PROVIDERS[id].prefix,
+              keys_url: PROVIDERS[id].keysUrl,
+              ...(PROVIDERS[id].signin ? { signin: PROVIDERS[id].signin } : {}),
+              app: { ...app, ...(key?.fromEnv ? { from_env: true } : {}) },
+              own: keyState(own, (d) => (d as { api_key: string }).api_key),
+              ...(PROVIDERS[id].signin
+                ? { plan: keyState(plan?.doc ?? null, (d) => (d as { api_key: string }).api_key) }
+                : {}),
+              ...(use ? { use } : {}),
+              ...(ownWays ? { own_ways: ownWays[id] ?? [] } : {}),
+            };
+          }),
+        ),
+        this.o.web?.scrapeql ? this.state.scrapeql() : Promise.resolve(null),
+        this.state.spend(caller.id),
+        this.state.appCap(),
+        this.state.ownCap(caller.id),
+        this.rulesFor(caller, main.id).then(({ rules }) =>
+          this.state.paying(caller.id, mainModel.provider, rules),
+        ),
+        this.state.ownUsed(caller.id, ownWays),
+      ]);
     const link = await linkTest;
     const tiers = await Promise.all(
       this.tiers.map(async (t) => {
@@ -1070,7 +1081,8 @@ export class Assistant {
         usd: spend.rows.reduce((a, r) => a + r.usd, 0),
         cap: paying?.cap ?? null,
         payer: paying?.payer ?? null,
-        rows: spend.rows,
+        rows: withProvider(spend.rows),
+        own_used: ownUsed,
       },
       ...(this.o.allowance ? { allowance: await this.allowanceState(caller) } : {}),
     };
@@ -1585,6 +1597,7 @@ export class Assistant {
         [part],
         { task: o.tag ?? o.task, ms: Date.now() - began },
         free,
+        paying.plans,
       );
       const task = this.tasks.find((t) => t.id === o.task);
       await this.state
@@ -1595,7 +1608,7 @@ export class Assistant {
             kind: 'task',
             task: o.task,
             title: o.run?.title ?? task?.label ?? o.task,
-            own_usd: paying.payer === 'own' ? part.usd : 0,
+            own_usd: ownKeyUsd(paying, [part]),
           },
           [part],
         )
@@ -1704,10 +1717,14 @@ export class Assistant {
         usd,
         model: m.id,
       };
-      await this.state.addSpend(caller.id, paying.payer, [part], {
-        task: o.task,
-        ms: Date.now() - began,
-      });
+      await this.state.addSpend(
+        caller.id,
+        paying.payer,
+        [part],
+        { task: o.task, ms: Date.now() - began },
+        false,
+        paying.plans,
+      );
       const task = this.tasks.find((t) => t.id === o.task);
       await this.state
         .addUsage(
@@ -1717,7 +1734,7 @@ export class Assistant {
             kind: 'task',
             task: o.task,
             title: o.run?.title ?? task?.label ?? o.task,
-            own_usd: paying.payer === 'own' ? part.usd : 0,
+            own_usd: ownKeyUsd(paying, [part]),
           },
           [part],
         )

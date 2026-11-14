@@ -46,8 +46,11 @@ function keepOutcomes(m: Map<string, AssistantScreenOutcome>) {
   } catch {}
 }
 
-/** An item as the panel draws it: a text still streaming, a step still running. */
-export type LiveItem = ChatItem & { live?: boolean };
+/**
+ * An item as the panel draws it: a text still streaming, a step still running. `writing` marks a
+ * running step whose tool makes a change at once, so an app can show what it changes as changing.
+ */
+export type LiveItem = ChatItem & { live?: boolean; writing?: boolean };
 
 type Extra = Omit<AssistantMessage, 'message' | 'chat_id'>;
 
@@ -157,6 +160,7 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
         ok: true,
         ms: 0,
         live: true,
+        ...(e.data.write ? { writing: true } : {}),
       });
       break;
     case 'step': {
@@ -228,7 +232,7 @@ const settled = (items: LiveItem[]): LiveItem[] =>
   items.map((i) => {
     if (i.kind === 'handoff') return { ...i, items: settled(i.items as LiveItem[]) };
     if (!i.live || i.kind === 'screen') return i;
-    const { live: _l, ...rest } = i;
+    const { live: _l, writing: _w, ...rest } = i;
     return rest as LiveItem;
   });
 

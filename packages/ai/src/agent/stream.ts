@@ -202,10 +202,19 @@ export function chunkEvents(
           return [{ event: 'advice', data: { tier: 'advisor', label: o.advisor ?? 'Advice' } }];
         }
         if (name === 'escalate' || name === 'screen' || o.kindOf?.(name) === 'draft') return [];
+        // A tool that makes a change at once says so as it starts, so an app can show that what it
+        // changes is being changed now, before the model has finished writing the call.
+        const kind = o.kindOf?.(name);
+        const write = kind === 'write';
         return [
           {
             event: 'step_start',
-            data: { id, tool: name, title: shownTitle(name, names, o.kindOf?.(name)) },
+            data: {
+              id,
+              tool: name,
+              title: shownTitle(name, names, kind),
+              ...(write ? { write } : {}),
+            },
           },
         ];
       }
