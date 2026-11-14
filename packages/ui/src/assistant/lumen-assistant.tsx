@@ -112,7 +112,7 @@ import {
   usePageSelection,
   useShownAssistantSources,
 } from './sources';
-import { UsageHistoryView, tokens, usd } from './usage-history';
+import { AssistantChatCost, UsageHistoryView, tokens, usd } from './usage-history';
 import {
   type AssistantChatState,
   type LiveItem,
@@ -381,6 +381,7 @@ export function LumenAssistant({
             onChange={(t) => void setTier(t)}
           />
         )}
+        <AssistantChatCost client={client} chatId={chat.chatId} busy={chat.busy} />
         <LumenAssistantChats
           chats={
             chats.data

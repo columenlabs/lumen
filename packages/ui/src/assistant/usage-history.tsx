@@ -3,15 +3,17 @@
 import type { UsageEntry, UsageHistory, UsagePart } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeftIcon, ChevronRightIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { DetailsTable } from '../details-table';
 import { IconButton } from '../icon-button';
 import { InfoLabel } from '../info-tip';
 import { cn } from '../lib/utils';
 import { SettingField } from '../setting-parts';
+import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Spinner } from '../ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import type { AssistantAdapter } from './client';
 
 export const usd = (n: number) =>
@@ -401,5 +403,66 @@ export function OwnKeyUsage({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * What one chat has cost so far, as a chip for the assistant's header: what was charged (credits or
+ * the person's key) plus a plan sign-in's calls at API rates, shown ≈ when the plan's part is in it.
+ * Nothing while the chat has no history line. The hover splits it.
+ */
+export function AssistantChatCost({
+  client,
+  chatId,
+  busy,
+}: {
+  client: AssistantAdapter;
+  chatId: string | null | undefined;
+  /** The chat is answering: the chip reads its history again when the answer ends. */
+  busy?: boolean;
+}) {
+  const q = useAssistantUsage(client, undefined, !!chatId);
+  const { refetch } = q;
+  // Read again once an answer ends, so the chip follows the chat.
+  useEffect(() => {
+    if (!busy && chatId) void refetch();
+  }, [busy, chatId, refetch]);
+  const e = chatId ? q.data?.entries.find((x) => x.id === `chat:${chatId}`) : undefined;
+  if (!e) return null;
+  const plan = e.own_plan_usd ?? 0;
+  const charged = e.usd;
+  const total = charged + plan;
+  if (total < 0.005 && !e.own_plan_calls) return null;
+  const own = e.own_usd ?? 0;
+  const lines = [
+    own > 0 ? `${usd(own)} on your key` : null,
+    charged - own >= 0.005 ? `${usd(charged - own)} on credits` : null,
+    e.own_plan_calls
+      ? `${e.own_plan_calls === 1 ? '1 call' : `${e.own_plan_calls} calls`} on your ${PLAN_NAME}: ≈${usd(plan)} at API rates (charged $0)`
+      : null,
+  ].filter(Boolean) as string[];
+  const text = `${plan > 0 ? '≈' : ''}${usd(total)}`;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={`This chat cost ${text}`}
+          className="shrink-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <Badge variant="outline" className="num whitespace-nowrap">
+            {text}
+          </Badge>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium">This chat</span>
+          {lines.map((l) => (
+            <span key={l}>{l}</span>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 }

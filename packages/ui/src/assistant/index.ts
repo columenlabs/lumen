@@ -17,6 +17,7 @@ export {
 } from './lumen-assistant';
 export { assistantAdminSections, assistantSettingsSections } from './settings';
 export {
+  AssistantChatCost,
   UsageHistoryView,
   assistantUsageKey,
   tokens as formatTokens,
