@@ -432,31 +432,39 @@ function shownError(err: unknown): { message: string; code: string } {
     return { message: `${who} refused the request (${status ?? 'error'}).`, code: 'model_error' };
   }
   // The AI SDK's errors (APICallError, and RetryError around its last one) carry the HTTP status as
-  // statusCode: read it, never the body, so a limit or a refused key says so instead of "went wrong".
+  // statusCode: say what that status means, never the body; the body goes to the log only.
   const call = sdkCall(err);
   if (call) {
-    if (call.limit)
-      return {
-        message: 'The model hit its usage limit. Try again after it resets, or use an API key.',
-        code: 'usage_limit',
-      };
+    console.error(
+      JSON.stringify({
+        event: 'assistant_upstream_error',
+        provider: 'ai-sdk',
+        status: call.status ?? null,
+        message: call.message.slice(0, 500),
+      }),
+    );
     if (call.status === 401 || call.status === 403)
-      return { message: 'The model key was refused.', code: 'key_refused' };
+      return { message: `The model key was refused (${call.status}).`, code: 'key_refused' };
     if (call.status === 429)
       return {
-        message: 'The model is busy or hit its rate limit. Try again shortly.',
+        message: 'The model is busy or hit a rate limit (429). Try again shortly.',
         code: 'rate_limited',
       };
     if ((call.status ?? 0) >= 500)
-      return { message: 'The model is overloaded. Try again shortly.', code: 'overloaded' };
-    if (call.status)
-      return { message: `The model refused the request (${call.status}).`, code: 'model_error' };
+      return {
+        message: `The model is overloaded (${call.status}). Try again shortly.`,
+        code: 'overloaded',
+      };
+    return {
+      message: `The model refused the request (${call.status ?? 'error'}).`,
+      code: 'model_error',
+    };
   }
   return { message: 'Something went wrong while answering.', code: 'internal' };
 }
 
-/** An AI SDK call error's status, and whether it names a usage limit, through RetryError's lastError. */
-function sdkCall(err: unknown, depth = 0): { status?: number; limit: boolean } | null {
+/** An AI SDK call error's status and message, through RetryError's lastError and `cause`. */
+function sdkCall(err: unknown, depth = 0): { status?: number; message: string } | null {
   if (!err || typeof err !== 'object' || depth > 3) return null;
   const e = err as {
     name?: unknown;
@@ -467,13 +475,11 @@ function sdkCall(err: unknown, depth = 0): { status?: number; limit: boolean } |
   };
   const name = typeof e.name === 'string' ? e.name : '';
   if (name === 'AI_RetryError' || name === 'RetryError') return sdkCall(e.lastError, depth + 1);
-  if (name === 'AI_APICallError' || name === 'APICallError' || typeof e.statusCode === 'number') {
-    const msg = typeof e.message === 'string' ? e.message : '';
+  if (name === 'AI_APICallError' || name === 'APICallError' || typeof e.statusCode === 'number')
     return {
       ...(typeof e.statusCode === 'number' && { status: e.statusCode }),
-      limit: /usage limit/i.test(msg),
+      message: typeof e.message === 'string' ? e.message : '',
     };
-  }
   return e.cause ? sdkCall(e.cause, depth + 1) : null;
 }
 
