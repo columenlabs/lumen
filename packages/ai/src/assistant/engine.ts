@@ -302,6 +302,12 @@ export interface AssistantOptions {
   bearings?: (b: BearingsNow, caller: Caller) => ReturnType<BearingsExtra>;
   /** Chats are deleted this many days after their last message (`purge`); 30. */
   keepDays?: number;
+  /**
+   * Tokens past which a chat compacts unless the person picks another in Settings (Auto-compact);
+   * the agent's `compactAt()` when unset. Give the same number as the agent so Settings and the
+   * panel's context donut name it.
+   */
+  compactAt?: number;
   /** The fetch the model providers and ScrapeQL calls go through. */
   fetch?: typeof fetch;
   /**
@@ -920,6 +926,9 @@ export class Assistant {
       ...(fallback ? { fallback } : {}),
       left: paying.left,
       maxSteps: MAX_ROUNDS,
+      ...((p.compact_at ?? this.o.compactAt)
+        ? { compactAt: p.compact_at ?? this.o.compactAt }
+        : {}),
       screen: (p.screen ?? 'move') === 'move',
       ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
       ...(handTo && reach.length ? { first: 'escalate' } : {}),
@@ -1287,6 +1296,9 @@ export class Assistant {
         writes: !!g.writes && !g.readOnly,
       })),
       hand_off: p.hand_off ?? 'next',
+      ...((p.compact_at ?? this.o.compactAt)
+        ? { compact_at: p.compact_at ?? this.o.compactAt }
+        : {}),
       advice: p.advice && (p.advice === 'off' || this.tierById(p.advice)) ? p.advice : 'off',
       screen: p.screen ?? 'move',
       web: {

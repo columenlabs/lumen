@@ -38,6 +38,7 @@ import {
   type AssistantRefNote,
   type AssistantScreenMap,
   type AssistantScreenOutcome,
+  COMPACT_AT,
   type ChatUsage,
   type UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
@@ -140,6 +141,8 @@ export interface AgentTurnPlan {
   screen?: boolean;
   /** Most model calls in one answer (`MAX_STEPS`, 8); the last one answers in words, with no tools. */
   maxSteps?: number;
+  /** Tokens past which this chat compacts (the person's Auto-compact); `compactAt()` when unset. */
+  compactAt?: number;
   /**
    * A message sent while the answer runs joins it at its next step (Steer); on unless `false`,
    * for a model that should not read a new message between its calls. Refused steers are queued.
@@ -193,7 +196,7 @@ export interface AgentCard {
 }
 
 /** Past this many tokens in the chat Think summarizes its older part. */
-export const COMPACT_AT = 150_000;
+export { COMPACT_AT };
 
 const CARD_NOTE =
   "A card is on the person's screen; nothing has changed yet. Say what it will do when they save it. The next message tells you how it ended.";
@@ -1026,6 +1029,8 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     await this.#close();
     const plan = await this.plan(ctx);
     this.#last = { plan };
+    // The person's Auto-compact, read each turn, so a change in Settings holds from the next message.
+    this.session.compactAfter(plan.compactAt ?? this.compactAt());
     const linked = (plan.connectors ?? []).filter((c) => c.access !== 'off');
     if (linked.length) await this.mcp.waitForConnections({ timeout: 1500 }).catch(() => undefined);
     const client = this.#connectorClient();

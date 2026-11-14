@@ -14,6 +14,7 @@ import {
   type AssistantRefNote,
   type AssistantScreenMove,
   type AssistantStatus,
+  COMPACT_AT,
   type ChatItem,
   type ChatUsage,
   type DraftItem,
@@ -126,7 +127,6 @@ const ChatMarkdown = lazyPart(
 
 /** The main model's context drawn full (tokens); the mark sits where the assistant compacts. */
 const CONTEXT_MAX = 200_000;
-const COMPACT_AT = 150_000;
 
 export const assistantStatusKey = (client: AssistantAdapter) => [
   'lumen-assistant',
@@ -184,8 +184,8 @@ export interface LumenAssistantProps {
    */
   imageTool?: { tool: string; mode?: string };
   /**
-   * Where the server compacts the chat, in tokens (the agent's `compactAt()`), named in the context
-   * donut's hover. 150k by default.
+   * Where the server compacts the chat, in tokens (the agent's `compactAt()`): the context donut turns
+   * yellow at 75% of it and red at it. The person's Auto-compact (status `compact_at`) wins; 150k by default.
    */
   compactAt?: number;
 }
@@ -440,7 +440,13 @@ export function LumenAssistant({
         modes={modes}
         onSend={(text, more, how) => chat.send(text, { ...extra(), ...more }, how)}
         onStop={chat.stop}
-        meter={<ContextDonut usage={chat.usage} compactAt={compactAt} />}
+        meter={
+          <ContextDonut
+            usage={chat.usage}
+            compactAt={s?.compact_at ?? compactAt}
+            items={chat.items}
+          />
+        }
       />
     </div>
   );
@@ -2092,37 +2098,81 @@ const pointedRef = (p: PointedAt): AssistantRefNote =>
       }
     : { kind: p.section.kind, label: p.section.label, id: p.section.id, text: textOf(p.el) };
 
-/** Context tokens from which the donut turns yellow, and red. */
-const CONTEXT_WATCH = 75_000;
-const CONTEXT_ALERT = 100_000;
+/** Share of the compact point from which the donut turns yellow; red at the compact point itself. */
+const CONTEXT_WATCH = 0.75;
+
+/** What the context pop-up counts from the chat: its turns, and the images and pointed-at things sent. */
+function chatCounts(items: ChatItem[]) {
+  let turns = 0;
+  let attached = 0;
+  for (const i of items) {
+    if (i.kind !== 'user' || i.steered) continue;
+    turns += 1;
+    attached += (i.images?.length ?? 0) + (i.refs?.length ?? 0);
+  }
+  return { turns, attached };
+}
 
 /**
- * How full the chat's context is, as a small donut in the composer's icon row (after the paperclip and the modes):
- * it fills against `CONTEXT_MAX`, neutral below 75k, yellow from 75k, red from 100k. The hover gives
- * the tokens used, where the chat compacts, and how much of the last turn came from the prompt cache.
- * What a chat cost is not shown here: a person reads their use in Settings.
+ * How full the chat's context is, as a small donut in the composer's icon row (after the paperclip and
+ * the modes). It fills against `CONTEXT_MAX`: neutral, yellow from 75% of the compact point, red at it
+ * (75k and 100k when chats compact at 100k). Hover, focus or a tap (touch has no hover) opens its pop-up:
+ * context used of the most with a bar, that the chat compacts on its own, its turns, the images and
+ * attachments sent, and how much of the last turn came from the prompt cache. No price: a person reads
+ * their use in Settings.
  */
-function ContextDonut({ usage, compactAt }: { usage: ChatUsage | null; compactAt: number }) {
+function ContextDonut({
+  usage,
+  compactAt,
+  items,
+}: {
+  usage: ChatUsage | null;
+  compactAt: number;
+  items: ChatItem[];
+}) {
+  const [open, setOpen] = useState(false);
+  const touch = useRef(false);
+  const wasOpen = useRef(false);
   const ctx = usage?.context ?? 0;
   if (ctx <= 0) return null;
   const share = Math.min(1, ctx / CONTEXT_MAX);
   const r = 6;
   const round = 2 * Math.PI * r;
+  const level = ctx >= compactAt ? 'alert' : ctx >= compactAt * CONTEXT_WATCH ? 'watch' : 'ok';
   const tone =
-    ctx >= CONTEXT_ALERT
+    level === 'alert'
       ? 'text-destructive'
-      : ctx >= CONTEXT_WATCH
+      : level === 'watch'
         ? 'text-warning'
         : 'text-muted-foreground';
   const cached = usage && usage.in > 0 ? Math.round((usage.read / usage.in) * 100) : null;
+  const { turns, attached } = chatCounts(items);
   const said = `Context ${tokens(ctx)} of ${tokens(CONTEXT_MAX)}`;
+  const rows: [string, string][] = [
+    ['This chat', `${turns} ${turns === 1 ? 'turn' : 'turns'}`],
+    ['Images and attachments', String(attached)],
+    ...(cached !== null ? ([['Cache read', `${cached}%`]] as [string, string][]) : []),
+  ];
   return (
-    <Tooltip>
+    <Tooltip open={open} onOpenChange={setOpen}>
       <TooltipTrigger asChild>
         <button
           type="button"
           aria-label={said}
+          aria-expanded={open}
           data-testid="context-donut"
+          data-level={level}
+          // A tap opens or closes the pop-up (touch has no hover); a mouse click leaves it open.
+          // The press itself counts as outside the pop-up and closes it, so the tap reads the state before.
+          onPointerDown={(e) => {
+            touch.current = e.pointerType !== 'mouse';
+            wasOpen.current = open;
+            e.preventDefault();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            setOpen(touch.current ? !wasOpen.current : true);
+          }}
           className={cn(
             'grid size-6 place-items-center rounded-md hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
             tone,
@@ -2150,14 +2200,37 @@ function ContextDonut({ usage, compactAt }: { usage: ChatUsage | null; compactAt
           </svg>
         </button>
       </TooltipTrigger>
-      <TooltipContent className="flex flex-col items-start gap-0.5 text-left">
-        <span className="num">{said}</span>
-        <span className="num text-muted-foreground">Compacts at {tokens(compactAt)}</span>
-        {cached !== null && (
-          <span className="num text-muted-foreground">
-            {cached}% of the last turn read from cache
+      <TooltipContent
+        data-testid="context-popup"
+        className="flex w-56 flex-col items-stretch gap-1.5 px-3 py-2.5 text-left font-sans tabular-nums"
+      >
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="font-medium">Context</span>
+          <span className="whitespace-nowrap">
+            {tokens(ctx)} <span className="text-muted-foreground">/ {tokens(CONTEXT_MAX)}</span>
           </span>
-        )}
+        </div>
+        <div className="h-1 overflow-hidden rounded-full bg-muted-foreground/20">
+          <div
+            className={cn(
+              'h-full rounded-full',
+              level === 'alert'
+                ? 'bg-destructive'
+                : level === 'watch'
+                  ? 'bg-warning'
+                  : 'bg-foreground/60',
+            )}
+            style={{ width: `${Math.max(2, share * 100)}%` }}
+          />
+        </div>
+        <span className="text-muted-foreground">Auto-compacts as needed</span>
+        <div className="my-0.5 border-t" />
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex items-baseline justify-between gap-3">
+            <span className="truncate text-muted-foreground">{k}</span>
+            <span className="whitespace-nowrap">{v}</span>
+          </div>
+        ))}
       </TooltipContent>
     </Tooltip>
   );

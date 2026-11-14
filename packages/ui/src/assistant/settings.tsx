@@ -18,6 +18,7 @@ import type {
   HandOffPolicy,
   KeyState,
 } from '@columenlabs/lumen-ui-types/assistant';
+import { COMPACT_AT, COMPACT_CHOICES } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChartColumnIcon,
@@ -58,7 +59,7 @@ import { Switch } from '../ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import type { AssistantAdapter } from './client';
 import { allowanceAmount, assistantStatusKey, usd, useAssistantStatus } from './lumen-assistant';
-import { AssistantUsageTable, OwnKeyUsage, UsageHistoryView } from './usage-history';
+import { AssistantUsageTable, OwnKeyUsage, UsageHistoryView, tokens } from './usage-history';
 
 const EFFORTS: { value: AssistantEffort; label: string }[] = [
   { value: 'default', label: 'Model default' },
@@ -181,6 +182,7 @@ function General({ client }: { client: AssistantAdapter }) {
                 />
               </SettingField>
             )}
+            <AutoCompactField client={client} />
             <SettingField
               label="Screen"
               info="Takes you to a page, a Settings row, a chart or a card when you ask. Each move has an Undo; nothing is saved."
@@ -201,6 +203,37 @@ function General({ client }: { client: AssistantAdapter }) {
         );
       }}
     </WithStatus>
+  );
+}
+
+/**
+ * Settings: the context size past which a chat is summarized out of sight (Auto-compact), the
+ * person's own; the app's default until they pick. An app that shows only some of the kit's
+ * sections puts this row in its own.
+ */
+export function AutoCompactField({ client }: { client: AssistantAdapter }) {
+  const { apply } = useApply(client);
+  const s = useAssistantStatus(client).data;
+  if (!s) return null;
+  const now = s.compact_at ?? COMPACT_AT;
+  const choices: number[] = [...COMPACT_CHOICES];
+  if (!choices.includes(now)) choices.push(now);
+  return (
+    <SettingField
+      label="Auto-compact"
+      info="Past this much context, the chat's older part is summarized out of sight, so long chats stay quick."
+    >
+      <LumenSelector
+        label="Auto-compact"
+        size="sm"
+        className="w-44"
+        value={String(now)}
+        options={choices
+          .sort((a, b) => a - b)
+          .map((n) => ({ value: String(n), label: `At ${tokens(n)}` }))}
+        onChange={(v) => void apply('settings', () => client.settings({ compact_at: Number(v) }))}
+      />
+    </SettingField>
   );
 }
 
