@@ -7,6 +7,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { AssistantEffort } from '@columenlabs/lumen-ui-types/assistant';
 import type { JSONValue, LanguageModel, ModelMessage, SystemModelMessage } from 'ai';
+import { Stream } from 'openai/core/streaming';
 import { type ModelDef, XAI_BASE_URL } from '../assistant/models';
 
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
@@ -27,9 +28,11 @@ export interface AiModelOptions {
  * forced call is the one tool offered with any call required (developers.openai.com/siwc, Preview
  * limitations). It also keeps nothing (`store: false`, so earlier reasoning rides along encrypted)
  * and takes the system prompt as `instructions`, as the assistant's own OpenAI loop sends it (the
- * AI SDK's request without these came back 400 Bad Request on a plan, 2026-11-04). This fetch
- * rewrites each Responses request to those rules, so the AI SDK's OpenAI provider runs on a plan
- * unchanged.
+ * AI SDK's request without these came back 400 Bad Request on a plan, 2026-11-04). A plan also
+ * answers only streamed requests ("Stream must be set to true", 400): a call that is not streamed
+ * (`generateText`: a hand-off, a compaction) is sent streamed and its events are put back together
+ * into the one response it asked for. This fetch rewrites each Responses request to those rules, so
+ * the AI SDK's OpenAI provider runs on a plan unchanged.
  */
 export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeof fetch {
   return async (input, init) => {
@@ -72,6 +75,8 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
         ...rest,
         { type: 'namespace', name: 'app', description: `${name}'s tools`, tools: fns },
       ];
+    const streamed = body.stream === true;
+    body.stream = true;
     const res = await base(input, { ...init, body: JSON.stringify(body) });
     // A refusal is logged with OpenAI's own reason; the person sees a plain sentence.
     if (!res.ok)
@@ -82,8 +87,52 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
           body: (await res.clone().text()).slice(0, 500),
         }),
       );
-    return res;
+    return res.ok && !streamed ? whole(res, init?.signal) : res;
   };
+}
+
+/**
+ * A streamed Responses answer as the one JSON response a request that was not streamed expects:
+ * the final `response.completed` (or `response.incomplete`), with the items from each
+ * `response.output_item.done` when the final event leaves its output empty. A failed answer comes
+ * back as an error response with OpenAI's own error, so the caller fails as it would have.
+ */
+async function whole(res: Response, signal?: AbortSignal | null): Promise<Response> {
+  const controller = new AbortController();
+  if (signal) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  }
+  const failed = (error: unknown) =>
+    new Response(JSON.stringify({ error: error ?? { message: 'The answer failed.' } }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    });
+  const items: unknown[] = [];
+  let done: Record<string, unknown> | undefined;
+  try {
+    const events = Stream.fromSSEResponse<{ type?: string; item?: unknown; response?: unknown }>(
+      res,
+      controller,
+    );
+    for await (const e of events) {
+      if (e.type === 'response.output_item.done' && e.item) items.push(e.item);
+      else if (e.type === 'response.completed' || e.type === 'response.incomplete')
+        done = e.response as Record<string, unknown>;
+      else if (e.type === 'response.failed')
+        return failed((e.response as { error?: unknown } | undefined)?.error);
+    }
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    const e = err as { error?: unknown; message?: string };
+    return failed(e.error ?? { message: e.message ?? String(err) });
+  }
+  if (!done) return failed({ message: 'The answer ended before it was complete.' });
+  const output = Array.isArray(done.output) && done.output.length ? done.output : items;
+  return new Response(JSON.stringify({ ...done, output }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 /** A message's text, whether a string or a list of text parts. */
