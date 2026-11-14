@@ -95,6 +95,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from '../ui/input-group';
 import { Spinner } from '../ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { VoiceButton } from '../voice-input';
 import { ChatImage } from './chat-image';
 import type { AssistantAdapter } from './client';
 import { chatMarkdown, chatTurns, copyMarkdown, turnMarkdown } from './copy';
@@ -1472,7 +1473,10 @@ export function LumenComposer({
   onSend,
   onStop,
   meter,
+  voice = true,
 }: {
+  /** A mic beside Send that types what the person says (`VoiceButton`); hidden where the browser can't. */
+  voice?: boolean;
   /** Drawn in the icon row after the paperclip and the modes: `LumenAssistant` puts its context donut here. */
   meter?: ReactNode;
   /** Toggles beside the paperclip (`LumenAssistant` `modes`). */
@@ -1958,7 +1962,10 @@ export function LumenComposer({
             />
           ))}
           {meter}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-0.5">
+            {voice && (
+              <VoiceButton value={text} onChange={setText} size="icon-xs" disabled={disabled} />
+            )}
             {busy && !text.trim() ? (
               <IconButton
                 icon={SquareIcon}

@@ -369,6 +369,13 @@ export { type TasksConfig, TasksButton, TasksProvider, useTaskFor, useTasks } fr
 export { type McpServer, McpSettings } from './mcp-settings';
 export { lumenToast } from './lumen-toast';
 export {
+  useVoiceInput,
+  VoiceButton,
+  type VoiceButtonProps,
+  type VoiceInputOptions,
+  voiceSupported,
+} from './voice-input';
+export {
   LumenShell,
   type LumenShellProps,
   type ShellUser,
