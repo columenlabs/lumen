@@ -427,6 +427,8 @@ interface ToolsSummary {
   reads: boolean;
   batch: boolean;
   web: boolean;
+  /** The web is the one lookup tool (`web__lookup`). */
+  lookup: boolean;
 }
 
 /** What a Think turn calls this turn: what one turn asks besides the message itself. */
@@ -458,6 +460,7 @@ function openedSummary(t: OpenedTools): ToolsSummary {
     reads: t.reads.length > 0,
     batch: true,
     web: t.info.some((i) => i.group === 'web'),
+    lookup: t.info.some((i) => i.name === 'web__lookup'),
   };
 }
 
@@ -1270,35 +1273,32 @@ export class Assistant {
       for (const source of Array.isArray(s) ? s : [s])
         sources.push({ group: g.id, access, source, ...(g.writes ? { writes: true } : {}) });
     }
-    const lookup = this.o.web?.lookup;
-    const blockHosts = this.o.web?.fetch ? this.o.web.fetch.blockHosts : undefined;
-    if ((p.web ?? true) && lookup) {
+    if (p.web ?? true) {
       const sq = this.o.web?.scrapeql;
       const token = sq && !sq.fetch ? await this.state.scrapeql() : null;
-      if (sq && (sq.fetch || token))
+      const scrapeql =
+        sq && (sq.fetch || token) ? scrapeqlTools(sq.url, token, sq.fetch ?? this.o.fetch) : null;
+      const lookup = this.o.web?.lookup;
+      if (lookup && scrapeql) {
+        // The one lookup tool. Without ScrapeQL (no binding, no token yet) the web falls back to fetch.
+        const blockHosts = this.o.web?.fetch ? this.o.web.fetch.blockHosts : undefined;
         sources.push({
           group: 'web',
           access: 'read',
-          source: webLookupTools(scrapeqlTools(sq.url, token, sq.fetch ?? this.o.fetch), {
+          source: webLookupTools(scrapeql, {
             ...(blockHosts ? { blockHosts } : {}),
             ...(typeof lookup === 'object' ? lookup : {}),
           }),
         });
-    } else if (p.web ?? true) {
-      if (this.o.web?.fetch !== false)
-        sources.push({
-          group: 'web',
-          access: 'read',
-          source: webFetchTools(this.o.web?.fetch || {}),
-        });
-      const sq = this.o.web?.scrapeql;
-      const token = sq && !sq.fetch ? await this.state.scrapeql() : null;
-      if (sq && (sq.fetch || token))
-        sources.push({
-          group: 'web',
-          access: 'read',
-          source: scrapeqlTools(sq.url, token, sq.fetch ?? this.o.fetch),
-        });
+      } else {
+        if (this.o.web?.fetch !== false)
+          sources.push({
+            group: 'web',
+            access: 'read',
+            source: webFetchTools(this.o.web?.fetch || {}),
+          });
+        if (scrapeql) sources.push({ group: 'web', access: 'read', source: scrapeql });
+      }
     }
     return sources;
   }
@@ -1339,7 +1339,7 @@ export class Assistant {
       lines.push('No tools are on now: the person can turn them on in Settings ▸ Tools.');
     if (failed)
       lines.push(`${failed} tool source${failed === 1 ? '' : 's'} could not be reached this turn.`);
-    if (fns.web && this.o.web?.lookup)
+    if (fns.lookup)
       lines.push(
         "Web: web__lookup answers one question from the web: give the full question (and urls when you already know the pages); it returns a short answer from each page it read. Look up again with a sharper question rather than asking for whole pages. The person sees each page a lookup read numbered under your answer, in the order returned (the first lookup's sources first, a later lookup's after them): mark a fact with its number, like [1], and never cite a page that is not among the sources.",
       );
