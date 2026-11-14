@@ -1,5 +1,168 @@
 [
   {
+    "tag": "v0.1.263",
+    "date": "2026-11-14T08:36:15Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Fetch can fall back to a connector's browser",
+        "body": "In the assistant's `web` config in @columenlabs/lumen-ai, the new `escalate: { connector, tool, args? }` option sends a URL to that connector's page-reading tool when a site turns `fetch` away, and the page comes back as the fetch's own answer with `via: \"browser\"`."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Models stop inventing connector ids",
+        "body": "Optional connector fields in @columenlabs/lumen-ai now tell the model to leave them out unless it has a real value, so calls no longer fail on made-up ids such as a placeholder session id."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Failed steps say why in plain words",
+        "body": "In a plain chat, a failed step now reads \"the site turned it away\", \"took too long\", \"page not found\" or \"could not be reached\", and falls back to \"couldn't finish\" instead of the raw error."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.262",
+    "date": "2026-11-14T08:14:55Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One usage row per session",
+        "body": "`AssistantUsageTable` in `@columenlabs/lumen-ui` now merges runs into sessions, so a chat, or every run of one task on one thing, shows as a single row with summed calls, tokens and amounts."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Hide internal tasks from usage",
+        "body": "In `@columenlabs/lumen-ai`, set the new optional `TaskDef.internal` on an app's own background calls, and `GET /usage` tags their runs as `UsageEntry.internal` so `AssistantUsageTable` leaves them out of the rows."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Prompt caching now works in `complete()` and chat",
+        "body": "In `@columenlabs/lumen-ai`, `complete()` accepts `prompt` as a `string[]` (put the parts that stay the same first), and chats send a cache key through `turnSettings({ cacheKey })`, so repeat calls reuse cached input instead of paying for it again."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Count chips and relative dates",
+        "body": "`LumenTable` group and sub-group headings now show their row count as a `Badge` chip, and `AssistantUsageTable` groups by Today, Yesterday, This week and This month, with a Date column that reads the same way."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No more invented connector values",
+        "body": "The outside-tools rule in `@columenlabs/lumen-ai` now tells the model to leave out an optional field it has no real value for, so connectors no longer receive made-up ids, sessions or tokens."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.260",
+    "date": "2026-11-14T07:37:21Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Connect any MCP server as assistant tools",
+        "body": "In `@columenlabs/lumen-ai`, `createAssistant({ connectors: true })` adds the admin routes `POST /connectors`, `PUT|DELETE /connectors/:id` and `POST /connectors/:id/test`, so you can attach any MCP server over Streamable HTTP with a name, an address and the headers it signs in with."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Connector tools are lazy by default",
+        "body": "A connector's tools now cost one catalog line each (`ext_<id>: Name (search, ask, …)`), and the model only sees the tools after it finds them with `tool_search`. The server is not called until a tool runs."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose what a connector may do",
+        "body": "Each connector's access is Off, Read (tools the server marks read-only) or Read + draft. In Read + draft, other tools produce a Save/Dismiss card, and `runDraft` saves the card through the connector."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Connector headers are sealed",
+        "body": "Sign-in headers are stored sealed in the app's doc `connectors`, and the connector routes only ever return their names, never their values."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.259",
+    "date": "2026-11-14T07:21:08Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant usage table",
+        "body": "From `@columenlabs/lumen-ui/assistant`, the new `AssistantUsageTable` shows this month's chats and runs, one row each, with Session, Type, Date, Calls and Amount columns, a Group control (Type, None or Date), and `type:` filter tokens."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Usage section in assistant settings",
+        "body": "`assistantSettingsSections({ usage: true })` now adds a **Usage** section (`assistant-usage`) to your settings, and Model providers then leaves out its own spend table."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Cost hover details",
+        "body": "In `AssistantUsageTable`, hovering any cell shows Input, Cache read (with its % of input), Output, and Cost, Credits or Estimate depending on the row type."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Plain amounts, clearer estimates",
+        "body": "`OwnKeyUsage` and `AssistantChatCost` no longer put ≈ before amounts, and their hover and info text now call the plan's part an estimate."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.258",
+    "date": "2026-11-14T07:08:15Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Record model and cost on an ops event",
+        "body": "In `@columenlabs/lumen-ops`, the `EventPoint` type from `/events` now takes an optional `ai: { model, in, out, read, usd }`, so an event that asked a model can carry its model, token counts and cost."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Existing event columns are unchanged",
+        "body": "The `ai` values are written after the current columns (`blob11` and `double7` to `double10`), and points without `ai` write empty or 0 there, so existing queries and dashboards keep working with no changes."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Spend per model per event is now queryable",
+        "body": "With `blob11` holding the model and `double7..10` holding usd, tokens in, tokens out and cache reads, you can group by model to see cost and token use for an AI answer, a generated draft or an accept."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.257",
     "date": "2026-11-14T06:52:47Z",
     "takeaways": [
