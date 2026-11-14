@@ -11,6 +11,9 @@ import { Stream } from 'openai/core/streaming';
 import { type ModelDef, XAI_BASE_URL } from '../assistant/models';
 import { backoffFetch } from './backoff';
 
+/** Whether a ChatGPT plan takes `prompt_cache_options` (on until it refuses it once). */
+let planCacheTtl = true;
+
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
 export interface ModelKey {
   apiKey: string;
@@ -87,7 +90,20 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       headers.set('session-id', body.prompt_cache_key);
       headers.set('thread-id', body.prompt_cache_key);
     }
-    const res = await base(input, { ...init, headers, body: JSON.stringify(body) });
+    // A plan wrote nothing to its cache (cache_write_tokens 0, live 2026-11-14): ask for the default
+    // 30-minute cache in so many words, and ask again without it if the plan refuses the field.
+    if (typeof body.prompt_cache_key === 'string' && planCacheTtl && !body.prompt_cache_options)
+      body.prompt_cache_options = { ttl: '30m' };
+    let res = await base(input, { ...init, headers, body: JSON.stringify(body) });
+    if (
+      res.status === 400 &&
+      body.prompt_cache_options &&
+      /prompt_cache_options/i.test(await res.clone().text())
+    ) {
+      planCacheTtl = false;
+      const { prompt_cache_options: _, ...rest } = body;
+      res = await base(input, { ...init, headers, body: JSON.stringify(rest) });
+    }
     // A refusal is logged with OpenAI's own reason; the person sees a plain sentence.
     if (!res.ok)
       console.error(
