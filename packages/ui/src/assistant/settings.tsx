@@ -387,7 +387,7 @@ function OwnCapUse({ s }: { s: AssistantStatus }) {
       }
     >
       <div className="flex w-56 min-w-0 flex-col gap-1">
-        <ShareMeter value={cap > 0 ? used / cap : 1} wide />
+        <ShareMeter value={cap > 0 ? used / cap : 1} wide capped />
         <span
           className="truncate text-muted-foreground text-xs"
           title={`${usd(used)} of ${usd(cap)}${full ? ' · Cap reached: credits pay' : ''}`}
