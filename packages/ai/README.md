@@ -162,7 +162,7 @@ The panel's composer lists what can follow three keys as they are typed. The kit
 
 ### Bearings
 
-Each message the model gets starts with a few lines of bearings: the time now in the person's zone (the panel sends the browser's), UTC, how long since the chat's last message and the app's name. They go in the message, not the system prompt, so the prompt cache holds. Each turn's lead (bearings, `plan.lead`, news) is kept with the message it came before and sent again on later turns, so every turn's prompt starts with the last turn's whole prompt and the cache reads it; a chat's OpenAI calls carry the chat's id as their cache key. An app adds its own lines with `bearings`; each call gets 300 ms, and when it is late or throws its lines are left out.
+Each message the model gets starts with a few lines of bearings: the time now in the person's zone (the panel sends the browser's), UTC, how long since the chat's last message and the app's name. They go in the message, not the system prompt, so the prompt cache holds. A turn's lead (bearings, `plan.lead`, news) goes before the newest message only, so the chat never grows by it; a chat's OpenAI calls carry the chat's id as their cache key. `/compact` in the panel summarizes the chat's older part at once (as past `compactAt()`), without asking the model. An app adds its own lines with `bearings`; each call gets 300 ms, and when it is late or throws its lines are left out.
 
 ```ts
 createAssistant({
