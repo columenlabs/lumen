@@ -31,7 +31,7 @@ export interface AiToolsOptions {
   /** A write ran at once: what it did, for Undo. Its answer is added to the model's result. */
   wrote?: (w: DraftCall & { result: unknown }) => Promise<unknown>;
   /** Every call's outcome, for the app's meter: shapes only. */
-  called?: (c: { group: string; tool: string; ok: boolean; ms: number }) => void;
+  called?: (c: { group: string; tool: string; ok: boolean; ms: number; error?: string }) => void;
   /** A result handed to the model is cut past this many characters. */
   maxChars?: number;
 }
@@ -42,6 +42,8 @@ export interface ToolInfo {
   group: string;
   kind: 'read' | 'draft' | 'write';
   find: boolean;
+  /** The tool's own title, in words a person reads ("Read the design guide"). */
+  title?: string;
 }
 
 /** Tools open for one answer, as the AI SDK's set, and how to let them go. */
@@ -94,7 +96,13 @@ export async function openAiTools(
       if (kind === 'draft' && !o.draft) continue;
       const name = toolName(s.group, def.name);
       if (kind === 'read') reads.push(name);
-      info.push({ name, group: s.group, kind, find: !!def.find });
+      info.push({
+        name,
+        group: s.group,
+        kind,
+        find: !!def.find,
+        ...(def.title ? { title: def.title } : {}),
+      });
       tools[name] = tool({
         description: describe(def, kind),
         inputSchema: jsonSchema(withoutMeta(def.inputSchema) as JSONSchema7),
@@ -119,8 +127,9 @@ export async function openAiTools(
             }
             return shown;
           } catch (err) {
-            o.called?.({ group: s.group, tool: def.name, ok: false, ms: Date.now() - t0 });
-            return { error: String((err as Error)?.message ?? err).slice(0, 500) };
+            const error = String((err as Error)?.message ?? err).slice(0, 500);
+            o.called?.({ group: s.group, tool: def.name, ok: false, ms: Date.now() - t0, error });
+            return { error };
           }
         },
       });

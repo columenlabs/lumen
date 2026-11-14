@@ -1346,7 +1346,7 @@ function HandOff({
           <span className="ml-auto text-muted-foreground tabular-nums">{usd(item.usage.usd)}</span>
         )}
       </p>
-      <p className="text-muted-foreground text-xs">{item.task}</p>
+      {item.task && <p className="text-muted-foreground text-xs">{item.task}</p>}
       <Items items={item.items} onSettle={onSettle} busy={busy} />
     </section>
   );

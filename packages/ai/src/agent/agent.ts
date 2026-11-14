@@ -63,7 +63,14 @@ import {
   screenTool,
 } from './screen';
 import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools, usedTools } from './search';
-import { type AskMeta, type SteerNote, chunkEvents, itemsOf } from './stream';
+import {
+  type AskMeta,
+  type SteerNote,
+  type StepNames,
+  chunkEvents,
+  itemsOf,
+  shownTitle,
+} from './stream';
 import {
   type AiToolsOptions,
   type DraftCall,
@@ -418,6 +425,48 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     return false;
   }
 
+  /**
+   * Whether the chat's tool lines keep inner names off the screen: each reads its tool's title
+   * (or a word for what it did), with no tool id, tier, model, row count or error text. Off
+   * (`false`) unless the app overrides it; the app logs the details from `onStep`.
+   */
+  protected plainSteps(): boolean {
+    return false;
+  }
+
+  /** How this chat words its tool lines: plain or not, with the titles of every tool it offered. */
+  #names(): StepNames {
+    return {
+      plain: this.plainSteps(),
+      titleOf: (n) =>
+        this.#turn?.tools.info.find((i) => i.name === n)?.title ??
+        this.#get<Record<string, string>>('titles')?.[n],
+    };
+  }
+
+  /**
+   * A tool call this answer failed: its name and whole error (a plain line shows neither). Does
+   * nothing unless the app overrides it, e.g. to log it with the chat's ids.
+   */
+  protected stepFailed(_f: { tool: string; error: string; ms: number }): void {}
+
+  /** A tool line's title as this chat words it (`plainSteps`), for an app's own card answers. */
+  protected stepTitleOf(name: string, kind?: 'read' | 'draft' | 'write'): string {
+    return shownTitle(name, this.#names(), kind);
+  }
+
+  /** Keeps the titles of a turn's tools, so a chat read back words its lines the same. */
+  #keepTitles(info: { name: string; title?: string }[]) {
+    const titles = this.#get<Record<string, string>>('titles') ?? {};
+    let changed = false;
+    for (const i of info)
+      if (i.title && titles[i.name] !== i.title) {
+        titles[i.name] = i.title.slice(0, 80);
+        changed = true;
+      }
+    if (changed) this.#put('titles', titles);
+  }
+
   /** The chat's running use: every answer's parts added up, and the last context size. */
   usage(): ChatUsage {
     return this.#get<ChatUsage>('usage') ?? chatUsage([]);
@@ -434,6 +483,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         this.cards(),
         this.#screens(),
         this.#get<Record<string, SteerNote[]>>('steers') ?? {},
+        this.#names(),
       ),
       usage: this.usage(),
     };
@@ -491,6 +541,8 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       cards: () => new Map(this.cards().map((c) => [c.id, c])),
       screens: () => this.#screens(),
       kindOf: (n) => this.#turn?.tools.info.find((i) => i.name === n)?.kind,
+      names: this.#names(),
+      failed: (f) => this.stepFailed(f),
     });
     const map = screenMapOf(input.screen);
     const userId = `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
@@ -831,6 +883,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       : undefined;
     if (advice) meters.push(advice);
     let system = typeof plan.system === 'string' ? plan.system : plan.system(opened);
+    this.#keepTitles(opened.info);
     this.#turn = {
       plan,
       system,
