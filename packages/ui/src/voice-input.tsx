@@ -166,6 +166,8 @@ export function VoiceButton({
       label={listening ? 'Stop listening' : 'Talk to type'}
       size={size}
       variant="ghost"
+      // Inside a form it must not send it.
+      type="button"
       aria-pressed={listening}
       data-voice={listening ? 'listening' : 'idle'}
       disabled={disabled}
