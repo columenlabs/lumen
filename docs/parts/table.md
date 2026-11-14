@@ -62,6 +62,7 @@ The header's Export (`download` control) downloads or copies the table as CSV: t
 ```
 
 - ✗ A second line in a cell. ✓ One value; more in a hover tooltip or the drawer.
+- A cell's hover tooltip opens on a tap on a phone (the kit's `Tooltip`: a trigger that is not a button, link or field toggles on a tap; a tap elsewhere closes it), so hover details reach touch screens with nothing more to write.
 - ✗ `value + unit` text. ✓ `UnitValue`.
 - ✗ An app's own pager beside a table. ✓ The view's `pagination` (`size` 10, 25, 50, 100 or 250; 25 by default), drawn by `LumenView`.
 - ✗ Resetting the page on a new `rows` array. ✓ Only a new filter, sort, grouping or page size goes back to page 1.
