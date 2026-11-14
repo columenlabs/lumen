@@ -23,7 +23,7 @@ export interface WebFetchOptions {
 }
 
 /** Why a URL is refused, or null. */
-function refused(url: URL, block: string[]): string | null {
+export function refused(url: URL, block: string[]): string | null {
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return 'only http and https';
   const host = url.hostname.toLowerCase();
   if (block.some((b) => host === b || host.endsWith(`.${b}`))) return "the app's own hosts";
@@ -248,6 +248,29 @@ export function webStep(
       results.push(title ? { url, title } : { url });
     }
     return { ...(query ? { query } : {}), results };
+  }
+  if (tool === 'lookup') {
+    if (failed) return undefined;
+    let o: unknown = output;
+    if (typeof o === 'string') {
+      try {
+        o = JSON.parse(o);
+      } catch {
+        o = {};
+      }
+    }
+    const r = (o && typeof o === 'object' ? o : {}) as { question?: unknown; sources?: unknown };
+    const reads: WebLink[] = [];
+    for (const x of Array.isArray(r.sources) ? r.sources : []) {
+      const u = (x ?? {}) as { url?: unknown; title?: unknown };
+      if (typeof u.url !== 'string' || !/^https?:\/\//.test(u.url)) continue;
+      if (reads.some((p) => p.url === u.url)) continue;
+      reads.push(
+        typeof u.title === 'string' && u.title ? { url: u.url, title: u.title } : { url: u.url },
+      );
+    }
+    const q = typeof args.question === 'string' ? args.question : r.question;
+    return { lookup: true, ...(typeof q === 'string' ? { query: q.slice(0, 300) } : {}), reads };
   }
   if (failed) {
     const url = typeof args.url === 'string' ? args.url : '';

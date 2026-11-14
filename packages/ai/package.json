@@ -13,7 +13,8 @@
     "./mcp": "./src/mcp.ts",
     "./assistant": "./src/assistant/index.ts",
     "./agent": "./src/agent/index.ts",
-    "./workspaces": "./src/workspaces/index.ts"
+    "./workspaces": "./src/workspaces/index.ts",
+    "./subagents": "./src/subagents/index.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.96",
