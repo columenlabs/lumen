@@ -32,6 +32,7 @@ export function ShareMeter({
   levels,
   segments,
   wide,
+  capped,
   className,
 }: {
   /** 0 to 1 fills the bar; past 1 it stays full and the overage spills past a tick at the cap. */
@@ -48,12 +49,14 @@ export function ShareMeter({
   segments?: ShareSegment[];
   /** Fills its cell (a list row) instead of the fixed table width. */
   wide?: boolean;
+  /** A share that stops at its cap: no spill slot, so the bar takes the whole track. */
+  capped?: boolean;
   className?: string;
 }) {
   const said = segments
     ?.filter((s) => s.value > 0)
     .map((s) => `${s.label ?? ''} ${Math.round(s.value * 100)}%`.trim());
-  const over = kind !== 'health' && value > 1;
+  const over = !capped && kind !== 'health' && value > 1;
   const spill = over ? Math.min(value - 1, SPILL_MAX) / SPILL_MAX : 0;
   return (
     <span
@@ -79,7 +82,7 @@ export function ShareMeter({
           )}
         />
         {/* The spill slot: empty under the cap, so every bar in a column keeps one track width. */}
-        <span aria-hidden className="flex h-1.5 flex-1">
+        <span aria-hidden className={cn('flex h-1.5 flex-1', capped && 'hidden')}>
           {over && (
             <span
               data-slot="share-spill"
@@ -93,7 +96,7 @@ export function ShareMeter({
           )}
         </span>
       </span>
-      <span className="num w-11 shrink-0 text-right text-xs">
+      <span className={cn('num shrink-0 text-right text-xs', capped ? 'w-auto' : 'w-11')}>
         {label ?? `${Math.round(value * 100)}%`}
       </span>
     </span>

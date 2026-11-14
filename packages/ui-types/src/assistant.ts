@@ -397,7 +397,19 @@ export interface SpendState {
   cap: number | null;
   payer: AssistantPayer | null;
   /** `free`: a job the app pays whatever the cap (it counts toward no one's cap). */
-  rows: (UsagePart & { payer: AssistantPayer; free?: true })[];
+  rows: (UsagePart & {
+    payer: AssistantPayer;
+    free?: true;
+    /** Of an own row: paid by an API key or a plan sign-in (a plan costs the person $0). */
+    way?: AssistantOwnWay;
+    /** The provider the row ran on, when the server could tell. */
+    provider?: AssistantProvider;
+  })[];
+  /**
+   * USD of this month's own spend that counts toward the own cap: key calls on providers the
+   * person can still pay with; a plan sign-in's calls cost nothing. Left out by older servers.
+   */
+  own_used?: number;
 }
 
 /**
@@ -430,7 +442,7 @@ export interface UsageHistory {
   /** Months with any history, newest first (this month always). */
   months: string[];
   usd: number;
-  rows: (UsagePart & { payer: AssistantPayer; free?: true })[];
+  rows: SpendState['rows'];
   entries: UsageEntry[];
 }
 

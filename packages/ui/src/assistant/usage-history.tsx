@@ -198,7 +198,16 @@ type OwnRange = (typeof OWN_RANGES)[number]['id'];
  * (Session, Date, Amount), newest first, and a Total of the rows. A session counts in the range its
  * last use falls in. Shown when `always` (an own key or plan is set) or any session was paid on one.
  */
-export function OwnKeyUsage({ client, always }: { client: AssistantAdapter; always?: boolean }) {
+export function OwnKeyUsage({
+  client,
+  always,
+  usable,
+}: {
+  client: AssistantAdapter;
+  always?: boolean;
+  /** Providers the person can pay with now: earlier spend on any other is listed apart, uncounted. */
+  usable?: string[];
+}) {
   const [range, setRange] = useState<OwnRange>('7d');
   const now = useAssistantUsage(client).data;
   // The month before, for a range that reaches back past this month's start.
@@ -218,12 +227,21 @@ export function OwnKeyUsage({ client, always }: { client: AssistantAdapter; alwa
   // This month's own spend that no chat or run carries (spent before per-chat tracking), so the
   // table never reads "nothing" while the cap's own numbers say otherwise.
   const tagged = now.entries.reduce((a, e) => a + (e.own_usd ?? 0), 0);
-  const ownMonth = now.rows
-    .filter((r) => r.payer === 'own' && !r.free)
-    .reduce((a, r) => a + r.usd, 0);
-  const untracked = ownMonth - tagged >= 0.01 ? ownMonth - tagged : 0;
-  const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0) + untracked;
+  // A plan sign-in's calls cost nothing, so they are no one's spend.
+  const ownRows = now.rows.filter((r) => r.payer === 'own' && !r.free && r.way !== 'plan');
+  const removed =
+    usable && ownRows.length
+      ? ownRows
+          .filter((r) => r.provider && !usable.includes(r.provider))
+          .reduce((a, r) => a + r.usd, 0)
+      : 0;
+  const ownMonth = ownRows.reduce((a, r) => a + r.usd, 0);
+  const left = ownMonth - tagged - removed;
+  const untracked = left >= 0.01 ? left : 0;
+  const gone = removed >= 0.01 ? removed : 0;
+  const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0) + untracked + gone;
   const earlier = 'Earlier this month, not per chat';
+  const removedText = 'Key not in use now, not counted';
   return (
     <div className="flex flex-col gap-2 border-t border-border/60 pb-3 first:border-t-0">
       <SettingField
@@ -248,7 +266,7 @@ export function OwnKeyUsage({ client, always }: { client: AssistantAdapter; alwa
           </ToggleGroup>
         }
       />
-      {sessions.length || untracked ? (
+      {sessions.length || untracked || gone ? (
         <DetailsTable
           head={[
             { label: 'Session', grow: true },
@@ -286,6 +304,24 @@ export function OwnKeyUsage({ client, always }: { client: AssistantAdapter; alwa
                       </span>,
                       <span key="t" />,
                       usd(untracked),
+                    ],
+                  },
+                ]
+              : []),
+            ...(gone
+              ? [
+                  {
+                    key: 'removed',
+                    cells: [
+                      <span
+                        key="n"
+                        className="block truncate text-muted-foreground"
+                        title={removedText}
+                      >
+                        {removedText}
+                      </span>,
+                      <span key="t" />,
+                      usd(gone),
                     ],
                   },
                 ]
