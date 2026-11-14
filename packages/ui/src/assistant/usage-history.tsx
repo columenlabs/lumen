@@ -502,6 +502,8 @@ interface UsageRow {
   key: number;
   credits: number;
   plan: number;
+  /** Calls a plan sign-in answered. */
+  planCalls?: number;
 }
 /** Dollars with no `<` or `≈` (the table's note says which amounts are estimates). */
 const money = (n: number) => (n === 0 ? '$0' : `$${n.toFixed(n < 10 ? 2 : 0)}`);
@@ -510,22 +512,43 @@ const EARLIER = 'Earlier';
 
 /** This month's rows: every chat and run, then the spend no chat or run carries, by who paid. */
 function usageRows(h: UsageHistory): UsageRow[] {
-  const out: UsageRow[] = h.entries.map((e) => {
+  // One row a session: a chat, or every run of one task on one thing (each Rebuild of a part).
+  const sessions = new Map<string, UsageRow>();
+  for (const e of h.entries) {
     const key = e.own_usd ?? 0;
     const plan = e.own_plan_usd ?? 0;
-    const type: UsageType = plan > 0 || e.own_plan_calls ? 'plan' : key > 0 ? 'key' : 'credits';
-    return {
-      id: e.id,
+    const id = e.kind === 'chat' ? e.id : `task:${e.task ?? ''}:${e.title}`;
+    const s = sessions.get(id);
+    const planCalls = (s?.planCalls ?? 0) + (e.own_plan_calls ?? 0);
+    const row: UsageRow = {
+      id,
       title: e.title,
-      type,
-      at: e.at,
-      calls: e.calls,
-      tokens: { in: e.in, read: e.read, out: e.out },
-      key,
-      credits: Math.max(0, e.usd - key),
-      plan,
+      type: 'credits',
+      at: Math.max(s?.at ?? 0, e.at),
+      calls: (s?.calls ?? 0) + e.calls,
+      tokens: {
+        in: (s?.tokens?.in ?? 0) + e.in,
+        read: (s?.tokens?.read ?? 0) + e.read,
+        out: (s?.tokens?.out ?? 0) + e.out,
+      },
+      key: (s?.key ?? 0) + key,
+      credits: (s?.credits ?? 0) + Math.max(0, e.usd - key),
+      plan: (s?.plan ?? 0) + plan,
+      planCalls,
     };
-  });
+    // Its type is whoever paid most; the hover splits the rest.
+    const top = Math.max(row.key, row.credits, row.plan);
+    row.type =
+      row.plan > 0 && row.plan === top
+        ? 'plan'
+        : row.key > 0 && row.key === top
+          ? 'key'
+          : row.credits > 0 || !planCalls
+            ? 'credits'
+            : 'plan';
+    sessions.set(id, row);
+  }
+  const out = [...sessions.values()];
   const sum = (xs: number[]) => xs.reduce((a, n) => a + n, 0);
   const earlier = (type: UsageType, title: string, calls: number, amount: number) =>
     amount >= 0.01 &&
@@ -727,7 +750,7 @@ const GROUPS = [
 type UsageGroup = (typeof GROUPS)[number]['id'];
 
 /**
- * This month's use, one row a chat or run: its Type (the person's API key, their plan sign-in, or
+ * This month's use, one row a session (a chat, or every run of one task on one thing): its Type (the person's API key, their plan sign-in, or
  * the app's credits), Date, Calls and Amount, grouped by Type, Date or not at all, filtered by
  * type or name. A row's hover gives its tokens and cost. A sign-in's amount is an estimate: the
  * same tokens at the model's API rates (the plan charges $0).
