@@ -241,7 +241,7 @@ export function OwnKeyUsage({
   const gone = removed >= 0.01 ? removed : 0;
   const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0) + untracked + gone;
   const earlier = 'Earlier this month, not per chat';
-  const removedText = 'Earlier, on a key not in use now (not counted toward your cap)';
+  const removedText = 'Key not in use now, not counted';
   return (
     <div className="flex flex-col gap-2 border-t border-border/60 pb-3 first:border-t-0">
       <SettingField
