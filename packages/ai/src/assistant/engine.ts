@@ -1758,7 +1758,11 @@ export class Assistant {
           ...(effort &&
             effort !== 'default' && { reasoning: { effort: effort === 'max' ? 'high' : effort } }),
         } as OpenAI.Responses.ResponseCreateParamsStreaming,
-        signal ? { signal } : {},
+        {
+          ...(signal ? { signal } : {}),
+          // A ChatGPT plan keeps its prompt cache by this header, not the body's key (planFetch).
+          ...(cacheKey ? { headers: { 'session-id': cacheKey, 'thread-id': cacheKey } } : {}),
+        },
       );
       for await (const e of stream as AsyncIterable<{ type: string } & Record<string, unknown>>) {
         if (e.type === 'response.output_text.delta' && typeof e.delta === 'string') text += e.delta;

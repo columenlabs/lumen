@@ -78,7 +78,16 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       ];
     const streamed = body.stream === true;
     body.stream = true;
-    const res = await base(input, { ...init, body: JSON.stringify(body) });
+    // ChatGPT keeps a plan's prompt cache by the request's `session-id` header, not the body's
+    // `prompt_cache_key` (OpenAI's own Codex client: "ChatGPT derives cache affinity from the
+    // Responses session-id header", codex-rs/core/src/client.rs). Without it each call of a plan
+    // went to a fresh cache and read 0 (live 2026-11-14), while the same calls on a key read 92%.
+    const headers = new Headers(init?.headers);
+    if (typeof body.prompt_cache_key === 'string' && !headers.has('session-id')) {
+      headers.set('session-id', body.prompt_cache_key);
+      headers.set('thread-id', body.prompt_cache_key);
+    }
+    const res = await base(input, { ...init, headers, body: JSON.stringify(body) });
     // A refusal is logged with OpenAI's own reason; the person sees a plain sentence.
     if (!res.ok)
       console.error(
