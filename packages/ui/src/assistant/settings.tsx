@@ -359,7 +359,11 @@ function Providers({ client }: { client: AssistantAdapter }) {
               </SettingField>
             )}
             {ownSet && <OwnCapUse s={s} />}
-            <OwnKeyUsage client={client} always={ownSet} />
+            <OwnKeyUsage
+              client={client}
+              always={ownSet}
+              usable={rows.filter(ownUsable).map((p) => p.id)}
+            />
           </div>
         );
       }}
@@ -372,9 +376,10 @@ function Providers({ client }: { client: AssistantAdapter }) {
  * against, so this and the switch to shared credits never disagree.
  */
 function OwnCapUse({ s }: { s: AssistantStatus }) {
-  const used = s.spend.rows
-    .filter((r) => r.payer === 'own' && !r.free)
-    .reduce((a, r) => a + r.usd, 0);
+  // The server's own count (key calls only, on providers still set); older servers sum own rows.
+  const used =
+    s.spend.own_used ??
+    s.spend.rows.filter((r) => r.payer === 'own' && !r.free).reduce((a, r) => a + r.usd, 0);
   const cap = s.caps.own;
   const full = cap > 0 && used >= cap;
   return (
@@ -383,7 +388,7 @@ function OwnCapUse({ s }: { s: AssistantStatus }) {
       info={
         full
           ? 'Your cap is used up, so the shared credits pay until next month or until you raise the cap.'
-          : 'What your own keys and plan have spent this month, against your cap.'
+          : 'What your own API keys spent this month, against your cap. A plan sign-in counts nothing.'
       }
     >
       <div className="flex w-56 min-w-0 flex-col gap-1">
