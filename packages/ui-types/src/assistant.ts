@@ -268,7 +268,11 @@ export type AssistantEvent =
   | { event: 'chat'; data: { id: string; title: string } }
   | { event: 'text'; data: { delta: string; handoff?: boolean } }
   | { event: 'text_end'; data: { handoff?: boolean } }
-  | { event: 'step_start'; data: { id: string; tool: string; title: string; handoff?: boolean } }
+  | {
+      event: 'step_start';
+      /** `write`: the tool makes a change at once (its group is on Read + write). */
+      data: { id: string; tool: string; title: string; write?: boolean; handoff?: boolean };
+    }
   | { event: 'step'; data: StepItem & { handoff?: boolean } }
   | { event: 'draft'; data: DraftItem & { handoff?: boolean } }
   | { event: 'screen'; data: ScreenItem & { handoff?: boolean } }
