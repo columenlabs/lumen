@@ -1,7 +1,13 @@
 /** An AI SDK step's usage as the kit's tokens and list-price cost. */
 import type { UsagePart } from '@columenlabs/lumen-ui-types/assistant';
 import type { LanguageModelUsage } from 'ai';
-import { type ModelDef, type TokenUsage, priced } from '../assistant/models';
+import {
+  type CallContext,
+  type ModelDef,
+  type TokenUsage,
+  logCall,
+  priced,
+} from '../assistant/models';
 
 /**
  * One call's usage in the kit's terms. Input splits into plain, cache writes and cache reads where
@@ -24,6 +30,8 @@ export function tokenUsage(u: LanguageModelUsage) {
 /** A running part of an answer (a tier, its advice): calls, tokens and dollars. `free` on a plan. */
 export class UsageMeter {
   private p: UsagePart;
+  /** What the calls are for, on each call's log line (`logCall`). */
+  ctx?: CallContext;
   constructor(
     readonly model: ModelDef,
     label: string,
@@ -37,6 +45,7 @@ export class UsageMeter {
   /** Tokens a provider reports apart from the step's usage (Claude's advisor calls). */
   addTokens(u: TokenUsage) {
     const t = priced(this.model, u);
+    logCall(this.model, this.p.label, u, t, this.free, this.ctx);
     this.p.calls += 1;
     this.p.in += t.in;
     this.p.read += t.read;

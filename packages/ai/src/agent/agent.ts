@@ -903,6 +903,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     if (!last) throw new Error('No model to compact with until the next answer.');
     const { plan } = last;
     let meter = new UsageMeter(plan.model, `${plan.label} · compact`, !!plan.key.plan);
+    meter.ctx = { task: 'chat', run: this.name };
     this.#owed.push(meter);
     const r = await generateText({
       maxRetries: 0,
@@ -910,6 +911,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         const fb = plan.fallback;
         if (!fb) return;
         meter = new UsageMeter(fb.model, `${fb.label} · compact`, false);
+        meter.ctx = { task: 'chat', run: this.name };
         this.#owed.push(meter);
       }),
       prompt,
@@ -956,13 +958,18 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       ...plan.tools,
     });
     const free = !!plan.key.plan;
+    const call = { task: 'chat', run: this.name };
     const main = new UsageMeter(plan.model, plan.label, free);
+    main.ctx = call;
     const meters = [main, ...this.#owed];
     this.#owed = [];
     const advice = plan.advisor
       ? new UsageMeter(plan.advisor.model, plan.advisor.label, free)
       : undefined;
-    if (advice) meters.push(advice);
+    if (advice) {
+      advice.ctx = call;
+      meters.push(advice);
+    }
     let system = typeof plan.system === 'string' ? plan.system : plan.system(opened);
     this.#keepTitles(opened.info);
     this.#turn = {
@@ -982,6 +989,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       over: () => plan.left !== undefined && this.#spent() >= plan.left,
       meter: (model, label, f = free) => {
         const m = new UsageMeter(model, label, f);
+        m.ctx = call;
         meters.push(m);
         return m;
       },
@@ -1049,6 +1057,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         if (!fb) return;
         // Claude answers the rest of the turn on the payer's key: its use is its own part.
         turn.main = new UsageMeter(fb.model, fb.label, false);
+        turn.main.ctx = { task: 'chat', run: this.name };
         turn.meters.push(turn.main);
       }),
       // Think types instructions as a string; the SDK it hands them to takes a system message too.

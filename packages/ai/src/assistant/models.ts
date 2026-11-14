@@ -167,6 +167,69 @@ export function priced(model: ModelDef, usage: TokenUsage) {
   };
 }
 
+/** What a model call was for, as far as the code that made it knows: its task and its run (a chat, a rebuild). */
+export interface CallContext {
+  task?: string;
+  run?: string;
+}
+
+/**
+ * One model call, as every app logs it: the model, the part's label (`Tier · Model`), tokens in (cache
+ * reads and writes included), cache reads, cache writes and tokens out, the share of the input read
+ * from cache (`hit`, 0 to 1), the cost at list price and whether a plan sign-in ran it (`free`).
+ */
+export interface CallRecord extends CallContext {
+  event: 'ai.call';
+  model: string;
+  label: string;
+  in: number;
+  read: number;
+  written: number;
+  out: number;
+  hit: number;
+  usd: number;
+  free: boolean;
+}
+
+let callLog: ((r: CallRecord) => void) | null = (r) => console.log(JSON.stringify(r));
+
+/**
+ * Where each model call's record goes. By default one JSON line on the console (Workers Logs keeps
+ * it), so every app sees each call's tokens and cache reads with no wiring. `null` turns it off.
+ */
+export function setCallLog(fn: ((r: CallRecord) => void) | null) {
+  callLog = fn;
+}
+
+/** Logs one priced call. Never throws: a log that fails never fails the call. */
+export function logCall(
+  model: ModelDef,
+  label: string,
+  usage: TokenUsage,
+  p: ReturnType<typeof priced>,
+  free: boolean,
+  ctx?: CallContext,
+) {
+  try {
+    callLog?.({
+      event: 'ai.call',
+      model: model.id,
+      label,
+      ...(ctx?.task && { task: ctx.task }),
+      ...(ctx?.run && { run: ctx.run }),
+      in: p.in,
+      read: p.read,
+      written: usage.cache_creation_input_tokens ?? 0,
+      out: p.out,
+      hit: p.in ? Math.round((p.read / p.in) * 1000) / 1000 : 0,
+      usd: free ? 0 : Math.round(p.usd * 1e6) / 1e6,
+      free,
+    });
+  } catch {
+    // A log is never worth a failed call.
+  }
+}
+
 /** The running use of one tier in one answer. */
 export class Meter {
   calls = 0;
@@ -174,6 +237,8 @@ export class Meter {
   read = 0;
   out = 0;
   usd = 0;
+  /** What the calls are for, on each call's log line. */
+  ctx?: CallContext;
   constructor(
     readonly model: ModelDef,
     readonly label: string,
@@ -181,6 +246,7 @@ export class Meter {
   /** `free`: the call ran on a plan sign-in, so it counts tokens and no dollars. */
   add(usage: TokenUsage, free = false) {
     const p = priced(this.model, usage);
+    logCall(this.model, this.label, usage, p, free, this.ctx);
     this.calls += 1;
     this.in += p.in;
     this.read += p.read;
