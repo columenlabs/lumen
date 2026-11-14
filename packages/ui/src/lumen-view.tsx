@@ -1220,6 +1220,16 @@ function CappedCell({
   );
 }
 
+/** A group heading's row count, as a chip beside its name. */
+function GroupCount({ children }: { children: ReactNode }) {
+  if (children === '' || children == null) return null;
+  return (
+    <Badge variant="secondary" className="num h-4.5 shrink-0 px-1.5 font-normal text-xs">
+      {children}
+    </Badge>
+  );
+}
+
 /** The flat or grouped table: sortable headers, a Total row, group rows that collapse. */
 // Sorting, and paging of flat tables (the page is LumenView's, set right of the row count).
 const SORTING = tableFeatures({
@@ -1964,7 +1974,7 @@ function LumenTableRows<T extends RowData>({
                   <span className="truncate font-medium" title={key}>
                     {titleOf(key, ms)}
                   </span>
-                  <span className="num shrink-0 text-xs text-muted-foreground">{ms.length}</span>
+                  <GroupCount>{ms.length}</GroupCount>
                 </span>
               ) : (
                 rollCell(f, ms, 'fold')
@@ -2277,11 +2287,11 @@ function LumenTableRows<T extends RowData>({
                                   />
                                   <GroupMark field={groupBy} value={key} />
                                   <span className="truncate">{key}</span>
-                                  <span className="num shrink-0 font-normal text-muted-foreground">
+                                  <GroupCount>
                                     {serverGroups
                                       ? (served.get(key)?.n?.toLocaleString() ?? '')
                                       : members.length}
-                                  </span>
+                                  </GroupCount>
                                 </Button>
                                 {groupActions?.(
                                   key,

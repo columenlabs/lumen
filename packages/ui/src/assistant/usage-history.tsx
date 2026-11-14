@@ -642,8 +642,40 @@ function UsageTip({ r, children }: { r: UsageRow; children: ReactNode }) {
   );
 }
 
-const dayOf = (at: number) =>
-  at ? new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : EARLIER;
+/** Midnight of `d`'s day, local time. */
+const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+/** Days from `at`'s day back to today (0 today, 1 yesterday). */
+const daysAgo = (at: number) =>
+  Math.round((startOf(new Date()) - startOf(new Date(at))) / 86_400_000);
+/** Days since Monday, today included (0 on a Monday). */
+const sinceMonday = () => (new Date().getDay() + 6) % 7;
+const sameMonth = (at: number) => {
+  const d = new Date(at);
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth();
+};
+
+/** Grouping by date: Today, Yesterday, This week, This month, then each month by name. Spend
+ *  from before chats kept their own count is this month's. */
+const dayOf = (at: number) => {
+  if (!at) return 'This month';
+  const n = daysAgo(at);
+  if (n <= 0) return 'Today';
+  if (n === 1) return 'Yesterday';
+  if (n <= sinceMonday()) return 'This week';
+  if (sameMonth(at)) return 'This month';
+  return new Date(at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+};
+
+/** A row's date: today's time, Yesterday, the weekday this week, else the day. */
+const relWhen = (at: number) => {
+  const n = daysAgo(at);
+  if (n <= 0)
+    return new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (n === 1) return 'Yesterday';
+  if (n <= sinceMonday()) return new Date(at).toLocaleDateString(undefined, { weekday: 'short' });
+  return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
 
 const USAGE_FIELDS: ViewField<UsageRow>[] = [
   {
@@ -697,7 +729,7 @@ const USAGE_FIELDS: ViewField<UsageRow>[] = [
       <UsageTip r={r}>
         {r.at ? (
           <time dateTime={new Date(r.at).toISOString()} className="text-muted-foreground">
-            {when(r.at)}
+            {relWhen(r.at)}
           </time>
         ) : (
           <span className="text-muted-foreground">{EARLIER}</span>
