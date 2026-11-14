@@ -2,18 +2,30 @@
 // background work (`GET /usage`). The panel's footer opens it; Settings ▸ Spend shows it in place.
 import type { UsageEntry, UsageHistory, UsagePart } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeftIcon, ChevronRightIcon, CpuIcon, MessageSquareIcon } from 'lucide-react';
-import { Fragment, useEffect, useState } from 'react';
+import {
+  CalendarIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CpuIcon,
+  HashIcon,
+  KeyRoundIcon,
+  MessageSquareIcon,
+  ReceiptIcon,
+} from 'lucide-react';
+import { Fragment, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { DetailsTable } from '../details-table';
 import { IconButton } from '../icon-button';
 import { InfoLabel } from '../info-tip';
 import { cn } from '../lib/utils';
+import { type FilterField, LumenTokenizedFilter, useLumenFilter } from '../lumen-filter';
+import { LumenTable } from '../lumen-view';
 import { SettingField } from '../setting-parts';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Spinner } from '../ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { CHIP_TONE, type ViewChipTone, type ViewDomain, type ViewField } from '../view-model';
 import type { AssistantAdapter } from './client';
 
 export const usd = (n: number) =>
@@ -271,11 +283,11 @@ export function OwnKeyUsage({
     e.own_plan_calls ? `${e.title} · ${PLAN_NAME}, ${calls(e.own_plan_calls)}` : e.title;
   const total = keyTotal + planTotal + (planEarlier ? planListEarlier : 0);
   const anyPlan = planTotal > 0 || (planEarlier > 0 && planListEarlier > 0);
-  // An amount with plan calls in it reads ≈: the plan's part is what API rates would charge.
+  // An amount with plan calls in it is an estimate: the plan's part is what API rates would charge.
   const amount = (key: number, plan: number, title: string) =>
     plan > 0 ? (
       <span key="a" title={title}>
-        ≈{usd(key + plan)}
+        {usd(key + plan)}
       </span>
     ) : (
       usd(key)
@@ -286,7 +298,7 @@ export function OwnKeyUsage({
     <div className="flex flex-col gap-2 border-t border-border/60 pb-3 first:border-t-0">
       <SettingField
         label="Spent on your keys"
-        info="Each chat and run your own key or plan paid for, by its last use. A ≈ amount prices plan calls at API rates; the plan charges $0."
+        info="Each chat and run your own key or plan paid for, by its last use. Plan amounts are estimates at API rates; the plan charges $0."
         className="border-t-0"
         end={
           <ToggleGroup
@@ -408,7 +420,7 @@ export function OwnKeyUsage({
 
 /**
  * What one chat has cost so far, as a chip for the assistant's header: what was charged (credits or
- * the person's key) plus a plan sign-in's calls at API rates, shown ≈ when the plan's part is in it.
+ * the person's key) plus a plan sign-in's calls at API rates (an estimate, said in its hover).
  * Nothing while the chat has no history line. The hover splits it.
  */
 export function AssistantChatCost({
@@ -438,10 +450,10 @@ export function AssistantChatCost({
     own > 0 ? `${usd(own)} on your key` : null,
     charged - own >= 0.005 ? `${usd(charged - own)} on credits` : null,
     e.own_plan_calls
-      ? `${e.own_plan_calls === 1 ? '1 call' : `${e.own_plan_calls} calls`} on your ${PLAN_NAME}: ≈${usd(plan)} at API rates (charged $0)`
+      ? `${e.own_plan_calls === 1 ? '1 call' : `${e.own_plan_calls} calls`} on your ${PLAN_NAME}: ${usd(plan)} estimate at API rates (charged $0)`
       : null,
   ].filter(Boolean) as string[];
-  const text = `${plan > 0 ? '≈' : ''}${usd(total)}`;
+  const text = usd(total);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -464,5 +476,320 @@ export function AssistantChatCost({
         </div>
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/** Who paid for a usage row: the person's API key, their plan sign-in, or the app's credits. */
+type UsageType = 'key' | 'plan' | 'credits';
+const TYPE_LABEL: Record<UsageType, string> = {
+  key: 'API key',
+  plan: 'Sign-in',
+  credits: 'Credits',
+};
+const TYPE_TONE: Record<UsageType, ViewChipTone> = { key: 'sky', plan: 'amber', credits: 'muted' };
+
+/** One line of the usage table: a chat or run, or a month's spend no chat or run carries. */
+interface UsageRow {
+  id: string;
+  title: string;
+  type: UsageType;
+  /** Last use, ms; 0 for spend from before each chat kept its own count. */
+  at: number;
+  calls: number;
+  /** Tokens, where the row kept them. */
+  tokens?: { in: number; read: number; out: number };
+  /** What the person's key paid, the app's credits paid, and a plan's calls at API rates. */
+  key: number;
+  credits: number;
+  plan: number;
+}
+/** Dollars with no `<` or `≈` (the table's note says which amounts are estimates). */
+const money = (n: number) => (n === 0 ? '$0' : `$${n.toFixed(n < 10 ? 2 : 0)}`);
+const amountOf = (r: UsageRow) => r.key + r.credits + r.plan;
+const EARLIER = 'Earlier';
+
+/** This month's rows: every chat and run, then the spend no chat or run carries, by who paid. */
+function usageRows(h: UsageHistory): UsageRow[] {
+  const out: UsageRow[] = h.entries.map((e) => {
+    const key = e.own_usd ?? 0;
+    const plan = e.own_plan_usd ?? 0;
+    const type: UsageType = plan > 0 || e.own_plan_calls ? 'plan' : key > 0 ? 'key' : 'credits';
+    return {
+      id: e.id,
+      title: e.title,
+      type,
+      at: e.at,
+      calls: e.calls,
+      tokens: { in: e.in, read: e.read, out: e.out },
+      key,
+      credits: Math.max(0, e.usd - key),
+      plan,
+    };
+  });
+  const sum = (xs: number[]) => xs.reduce((a, n) => a + n, 0);
+  const earlier = (type: UsageType, title: string, calls: number, amount: number) =>
+    amount >= 0.01 &&
+    out.push({
+      id: `earlier:${type}:${title}`,
+      title,
+      type,
+      at: 0,
+      calls,
+      key: type === 'key' ? amount : 0,
+      credits: type === 'credits' ? amount : 0,
+      plan: type === 'plan' ? amount : 0,
+    });
+  const own = h.rows.filter((r) => r.payer === 'own' && !r.free);
+  const plans = own.filter((r) => r.way === 'plan' || (!r.way && r.usd < 0.0005));
+  const keys = own.filter((r) => !plans.includes(r));
+  const app = h.rows.filter((r) => r.payer !== 'own' && !r.free);
+  earlier(
+    'key',
+    'Earlier this month, not per chat',
+    Math.max(
+      0,
+      sum(keys.map((r) => r.calls)) - sum(h.entries.filter((e) => e.own_usd).map((e) => e.calls)),
+    ),
+    sum(keys.map((r) => r.usd)) - sum(h.entries.map((e) => e.own_usd ?? 0)),
+  );
+  earlier(
+    'plan',
+    'Earlier this month, not per chat',
+    Math.max(0, sum(plans.map((r) => r.calls)) - sum(h.entries.map((e) => e.own_plan_calls ?? 0))),
+    sum(plans.map((r) => r.list_usd ?? 0)) - sum(h.entries.map((e) => e.own_plan_usd ?? 0)),
+  );
+  earlier(
+    'credits',
+    'Earlier this month, not per chat',
+    Math.max(
+      0,
+      sum(app.map((r) => r.calls)) -
+        sum(h.entries.filter((e) => e.usd > (e.own_usd ?? 0)).map((e) => e.calls)),
+    ),
+    sum(app.map((r) => r.usd)) - sum(h.entries.map((e) => Math.max(0, e.usd - (e.own_usd ?? 0)))),
+  );
+  return out;
+}
+
+/** A row's hover: its tokens (cache reads as a share of input) and what it cost, by who paid. */
+function UsageTip({ r, children }: { r: UsageRow; children: ReactNode }) {
+  const t = r.tokens;
+  const lines: [string, string][] = [
+    ...(t
+      ? ([
+          ['Input', tokens(t.in)],
+          ['Cache read', `${tokens(t.read)} · ${t.in ? Math.round((t.read / t.in) * 100) : 0}%`],
+          ['Output', tokens(t.out)],
+        ] as [string, string][])
+      : []),
+    ...(r.key > 0 ? ([['Cost (your key)', money(r.key)]] as [string, string][]) : []),
+    ...(r.credits > 0 || (r.type === 'credits' && !r.plan)
+      ? ([['Credits', money(r.credits)]] as [string, string][])
+      : []),
+    ...(r.plan > 0 || r.type === 'plan'
+      ? ([['Estimate (API rates)', money(r.plan)]] as [string, string][])
+      : []),
+  ];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent className="max-w-72">
+        <div className="flex flex-col gap-1">
+          <span className="truncate font-medium">{r.title}</span>
+          <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
+            {lines.map(([k, v]) => (
+              <Fragment key={k}>
+                <dt className="opacity-75">{k}</dt>
+                <dd className="num text-right">{v}</dd>
+              </Fragment>
+            ))}
+          </dl>
+          {!t && <span className="opacity-75">Spent before each chat kept its own count.</span>}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+const dayOf = (at: number) =>
+  at ? new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : EARLIER;
+
+const USAGE_FIELDS: ViewField<UsageRow>[] = [
+  {
+    key: 'title',
+    label: 'Session',
+    icon: MessageSquareIcon,
+    format: 'text',
+    value: (r) => r.title,
+    render: (r) => (
+      <UsageTip r={r}>
+        <span
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a keyboard reaches the row's hover
+          tabIndex={0}
+          className={cn(
+            'rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+            !r.at && 'text-muted-foreground',
+          )}
+        >
+          {r.title}
+        </span>
+      </UsageTip>
+    ),
+  },
+  {
+    key: 'type',
+    label: 'Type',
+    icon: KeyRoundIcon,
+    format: 'text',
+    groupable: true,
+    filterable: true,
+    value: (r) => TYPE_LABEL[r.type],
+    render: (r) => (
+      <UsageTip r={r}>
+        <Badge variant="outline" className={cn('whitespace-nowrap', CHIP_TONE[TYPE_TONE[r.type]])}>
+          {TYPE_LABEL[r.type]}
+        </Badge>
+      </UsageTip>
+    ),
+  },
+  {
+    key: 'at',
+    label: 'Date',
+    icon: CalendarIcon,
+    format: 'integer',
+    hideOnPhone: true,
+    value: (r) => r.at,
+    render: (r) => (
+      <UsageTip r={r}>
+        {r.at ? (
+          <time dateTime={new Date(r.at).toISOString()} className="text-muted-foreground">
+            {when(r.at)}
+          </time>
+        ) : (
+          <span className="text-muted-foreground">{EARLIER}</span>
+        )}
+      </UsageTip>
+    ),
+  },
+  {
+    key: 'calls',
+    label: 'Calls',
+    icon: HashIcon,
+    format: 'integer',
+    hideOnPhone: true,
+    aggregate: 'sum',
+    value: (r) => r.calls,
+    render: (r) => (
+      <UsageTip r={r}>
+        <span>{r.calls}</span>
+      </UsageTip>
+    ),
+  },
+  {
+    key: 'amount',
+    label: 'Amount',
+    icon: ReceiptIcon,
+    format: 'price',
+    aggregate: 'sum',
+    value: (r) => amountOf(r),
+    render: (r) => (
+      <UsageTip r={r}>
+        <span>{money(amountOf(r))}</span>
+      </UsageTip>
+    ),
+    rollRender: (rows) => money(rows.reduce((a, r) => a + amountOf(r), 0)),
+  },
+];
+/** Grouping by date: each day, then the spend from before chats kept their own count. */
+const DAY_FIELD: ViewField<UsageRow> = {
+  key: 'day',
+  label: 'Date',
+  icon: CalendarIcon,
+  format: 'text',
+  groupable: true,
+  value: (r) => dayOf(r.at),
+};
+const USAGE_DOMAIN: ViewDomain<UsageRow> = {
+  id: 'assistant-usage',
+  fields: USAGE_FIELDS,
+  rowKey: (r) => r.id,
+  text: (r) => [r.title],
+  formulas: false,
+};
+const USAGE_FILTER: FilterField<UsageRow>[] = [
+  { key: 'type', label: 'Type', icon: KeyRoundIcon, values: (r) => [TYPE_LABEL[r.type]] },
+];
+const GROUPS = [
+  { id: 'type', label: 'Type', field: USAGE_FIELDS[1] },
+  { id: 'none', label: 'None', field: null },
+  { id: 'date', label: 'Date', field: DAY_FIELD },
+] as const;
+type UsageGroup = (typeof GROUPS)[number]['id'];
+
+/**
+ * This month's use, one row a chat or run: its Type (the person's API key, their plan sign-in, or
+ * the app's credits), Date, Calls and Amount, grouped by Type, Date or not at all, filtered by
+ * type or name. A row's hover gives its tokens and cost. A sign-in's amount is an estimate: the
+ * same tokens at the model's API rates (the plan charges $0).
+ */
+export function AssistantUsageTable({ client }: { client: AssistantAdapter }) {
+  const [group, setGroup] = useState<UsageGroup>('type');
+  const q = useAssistantUsage(client);
+  const rows = useMemo(() => (q.data ? usageRows(q.data) : []), [q.data]);
+  const filter = useLumenFilter(rows, USAGE_FILTER, { text: (r) => [r.title] });
+  if (!client.usage) return null;
+  if (!q.data)
+    return (
+      <div className="flex justify-center p-4">
+        {q.isError ? (
+          <p className="text-muted-foreground text-sm">Usage didn't load. Try again later.</p>
+        ) : (
+          <Spinner />
+        )}
+      </div>
+    );
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <LumenTokenizedFilter
+          filter={filter}
+          label="Filter usage"
+          placeholder="Filter: type, or a session name"
+          className="min-w-48 flex-1"
+          link={null}
+        />
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          spacing={0}
+          value={group}
+          aria-label="Group by"
+          onValueChange={(v) => v && setGroup(v as UsageGroup)}
+        >
+          {GROUPS.map((g) => (
+            <ToggleGroupItem key={g.id} value={g.id} aria-label={`Group by ${g.label}`}>
+              {g.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+      <LumenTable
+        domain={USAGE_DOMAIN}
+        rows={filter.results}
+        groupBy={GROUPS.find((g) => g.id === group)?.field ?? null}
+        sort={{ key: 'at', desc: true }}
+        emptyState={
+          rows.length ? undefined : (
+            <p className="text-muted-foreground text-sm">Nothing used this month.</p>
+          )
+        }
+        onClearFilter={filter.clear}
+      />
+      <p className="text-muted-foreground text-xs">
+        Sign-in amounts are estimates: your {PLAN_NAME} charges $0, so the amount is what the same
+        tokens would cost at the model's API rates. Key and credit amounts are what was charged.
+      </p>
+    </div>
   );
 }

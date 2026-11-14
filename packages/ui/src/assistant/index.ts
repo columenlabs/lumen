@@ -18,6 +18,7 @@ export {
 export { assistantAdminSections, assistantSettingsSections } from './settings';
 export {
   AssistantChatCost,
+  AssistantUsageTable,
   UsageHistoryView,
   assistantUsageKey,
   tokens as formatTokens,
