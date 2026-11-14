@@ -926,7 +926,7 @@ function pathOf(url: string): string {
 /** A web step: a search, its results folded under it, or one page read. */
 function WebStep({ step, live }: { step: StepItem; live: boolean }) {
   const web = step.web ?? {};
-  const results = web.results ?? [];
+  const results = (web.lookup ? web.reads : web.results) ?? [];
   const icon = live ? (
     <Spinner className="size-3" />
   ) : !step.ok ? (
@@ -950,13 +950,15 @@ function WebStep({ step, live }: { step: StepItem; live: boolean }) {
         </span>
       ) : (
         <span className="truncate" title={web.query}>
-          Searched the web{web.query ? ': ' : ''}
+          {web.lookup ? 'Looked up' : 'Searched the web'}
+          {web.query ? ': ' : ''}
           {web.query && <span className="text-foreground">{web.query}</span>}
         </span>
       )}
       {!live && !web.read && !web.tried && step.ok && (
         <span className="ml-auto shrink-0 tabular-nums">
-          {results.length} result{results.length === 1 ? '' : 's'}
+          {results.length} {web.lookup ? 'source' : 'result'}
+          {results.length === 1 ? '' : 's'}
         </span>
       )}
       {step.error && <span className="truncate">· {step.error}</span>}
@@ -1001,8 +1003,9 @@ function turnPages(items: readonly ChatItem[]): WebLink[] {
   const walk = (list: readonly ChatItem[]) => {
     for (const i of list) {
       if (i.kind === 'handoff') walk(i.items);
-      else if (i.kind === 'step' && i.web?.read && !pages.some((p) => p.url === i.web?.read?.url))
-        pages.push(i.web.read);
+      else if (i.kind === 'step')
+        for (const p of i.web?.read ? [i.web.read] : (i.web?.reads ?? []))
+          if (!pages.some((x) => x.url === p.url)) pages.push(p);
     }
   };
   walk(items);

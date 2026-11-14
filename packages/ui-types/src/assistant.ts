@@ -126,6 +126,10 @@ export interface StepWeb {
   read?: WebLink;
   /** A read that failed: the page it could not open (the step's `error` says why). */
   tried?: WebLink;
+  /** A lookup's pages, in the order it returned them: its question is `query`. */
+  reads?: WebLink[];
+  /** True for a lookup (one question answered from several pages). */
+  lookup?: boolean;
 }
 
 /** A change the assistant drafted: nothing happens until the person presses Save. */

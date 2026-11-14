@@ -33,6 +33,7 @@ import OpenAI, { toFile } from 'openai';
 import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
 import { type ModelKey, aiModel, turnSettings } from '../agent/models';
 import type { OpenedTools, SourceAt } from '../agent/tools';
+import { type WebLookupOptions, webLookupTools } from '../subagents/web';
 import { type BearingsExtra, type BearingsNow, bearings } from './bearings';
 import {
   CHATGPT_REDIRECT,
@@ -242,6 +243,12 @@ export interface AssistantOptions {
      * (a service binding's), ScrapeQL is reached through it: no token, its tools always on.
      */
     scrapeql?: { url: string; fetch?: typeof fetch };
+    /**
+     * One `web__lookup` tool in place of fetch and ScrapeQL's own tools: it searches, has ScrapeQL
+     * read the best pages and answer the question, and returns a short answer per page, so whole
+     * pages never reach the model. Needs `scrapeql`; without it the web is off.
+     */
+    lookup?: boolean | WebLookupOptions;
   };
   store: AssistantStore;
   sealer?: Sealer;
@@ -1252,7 +1259,21 @@ export class Assistant {
       for (const source of Array.isArray(s) ? s : [s])
         sources.push({ group: g.id, access, source, ...(g.writes ? { writes: true } : {}) });
     }
-    if (p.web ?? true) {
+    const lookup = this.o.web?.lookup;
+    const blockHosts = this.o.web?.fetch ? this.o.web.fetch.blockHosts : undefined;
+    if ((p.web ?? true) && lookup) {
+      const sq = this.o.web?.scrapeql;
+      const token = sq && !sq.fetch ? await this.state.scrapeql() : null;
+      if (sq && (sq.fetch || token))
+        sources.push({
+          group: 'web',
+          access: 'read',
+          source: webLookupTools(scrapeqlTools(sq.url, token, sq.fetch ?? this.o.fetch), {
+            ...(blockHosts ? { blockHosts } : {}),
+            ...(typeof lookup === 'object' ? lookup : {}),
+          }),
+        });
+    } else if (p.web ?? true) {
       if (this.o.web?.fetch !== false)
         sources.push({
           group: 'web',
@@ -1307,7 +1328,11 @@ export class Assistant {
       lines.push('No tools are on now: the person can turn them on in Settings ▸ Tools.');
     if (failed)
       lines.push(`${failed} tool source${failed === 1 ? '' : 's'} could not be reached this turn.`);
-    if (fns.web)
+    if (fns.web && this.o.web?.lookup)
+      lines.push(
+        "Web: web__lookup answers one question from the web: give the full question (and urls when you already know the pages); it returns a short answer from each page it read. Look up again with a sharper question rather than asking for whole pages. The person sees each page a lookup read numbered under your answer, in the order returned (the first lookup's sources first, a later lookup's after them): mark a fact with its number, like [1], and never cite a page that is not among the sources.",
+      );
+    else if (fns.web)
       lines.push(
         'Web: use web__fetch first for APIs and plain pages; the browser tools only for pages that need JavaScript or after a fetch fails. To find pages, search, then read the one to three that answer the question. The person sees each page you read numbered under your answer, in the order you read them (1 for the first page read in this answer): mark a fact you took from a page with its number, like [1], and never cite a page you did not read.',
       );
