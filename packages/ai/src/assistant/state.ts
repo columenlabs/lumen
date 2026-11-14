@@ -148,6 +148,18 @@ export function listUsd(p: UsagePart): number | undefined {
 }
 
 /**
+ * An entry with plan calls priced from its stored parts: each $0 part's tokens at API rates. So a
+ * chat or run from before `own_plan_usd` was kept, or one that only partly kept it, reads in full.
+ */
+export function withPlanUsd(e: UsageEntry): UsageEntry {
+  if (!e.own_plan_calls) return e;
+  const est = e.parts
+    .filter((p) => p.calls && p.usd < 0.0005)
+    .reduce((a, p) => a + (listUsd(p) ?? 0), 0);
+  return est > (e.own_plan_usd ?? 0) ? { ...e, own_plan_usd: est } : e;
+}
+
+/**
  * Spend rows with the provider each ran on, so a page can tell a removed key's spend apart, and
  * a $0 row (a plan's calls) with what it would cost at API rates (`list_usd`).
  */
@@ -657,7 +669,7 @@ export class State {
       months,
       usd: spend.rows.reduce((a, r) => a + r.usd, 0),
       rows: withProvider(spend.rows),
-      entries: doc?.entries ?? [],
+      entries: (doc?.entries ?? []).map(withPlanUsd),
     };
   }
 
