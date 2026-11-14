@@ -38,6 +38,7 @@ import {
   type AssistantRefNote,
   type AssistantScreenMap,
   type AssistantScreenOutcome,
+  type AssistantTask,
   COMPACT_AT,
   type ChatUsage,
   type UsagePart,
@@ -81,6 +82,15 @@ import {
   itemsOf,
   shownTitle,
 } from './stream';
+import {
+  type KeptTask,
+  TASKS_KEPT,
+  openTask,
+  taskBlocks,
+  taskNews,
+  threadOf,
+  turnKeys,
+} from './tasks';
 import {
   type AiToolsOptions,
   type DraftCall,
@@ -148,6 +158,13 @@ export interface AgentTurnPlan {
    * for a model that should not read a new message between its calls. Refused steers are queued.
    */
   steer?: boolean;
+  /**
+   * This turn is a task (`AssistantTask`): the app's work in its own session, inside this chat. The
+   * model reads `brief` (sent as first given, so the task's turns stay in the prompt cache) and the
+   * task's own messages, never the rest of the chat; the chat's other turns never read the task's
+   * messages and hear in one line how it ended (`endTask`). The panel shows its turns as one block.
+   */
+  task?: { id: string; label: string; brief: string };
   /** Fetch for provider calls (a metered one). */
   fetch?: typeof fetch;
   tools?: Omit<AiToolsOptions, 'maxChars'>;
@@ -359,6 +376,8 @@ export interface AskInput {
   outcomes?: AssistantScreenOutcome[];
   /** The person kept this message in this chat after a fresh chat was offered (`offerFresh`). */
   stay?: boolean;
+  /** The open task the composer keeps this message on (its chip); the app's plan decides. */
+  task?: string;
   /** How many images went with the message (set by the agent: the images go in its parts). */
   image_count?: number;
 }
@@ -604,25 +623,117 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
 
   /** The chat as the panel reads it: title, last message, items and use. */
   async view(id = this.name): Promise<AssistantChat> {
+    const open = openTask(this.#tasks());
     return {
       id,
       title: this.#get<string>('title') ?? '',
       at: this.#get<number>('at') ?? 0,
-      items: itemsOf(
-        await this.getMessages(),
-        this.cards(),
-        this.#screens(),
-        this.#get<Record<string, SteerNote[]>>('steers') ?? {},
-        this.#names(),
+      items: taskBlocks(
+        itemsOf(
+          await this.getMessages(),
+          this.cards(),
+          this.#screens(),
+          this.#get<Record<string, SteerNote[]>>('steers') ?? {},
+          this.#names(),
+          this.#get<Record<string, string>>('task_of') ?? {},
+        ),
+        this.#tasks(),
       ),
       usage: this.usage(),
+      ...(open ? { task: open } : {}),
     };
   }
 
-  /** Stops the answer running now; what was said so far is kept. */
+  #tasks(): Record<string, KeptTask> {
+    return this.#get<Record<string, KeptTask>>('tasks') ?? {};
+  }
+
+  /** The chat's tasks, by id. */
+  chatTasks(): Record<string, AssistantTask> {
+    return Object.fromEntries(
+      Object.entries(this.#tasks()).map(([id, t]) => [id, { id, label: t.label, state: t.state }]),
+    );
+  }
+
+  /**
+   * A task ended: the app took its result (`done`) or it was dropped. The chat's next turn hears it
+   * in one line, with the task's last answer. Ending one that already ended changes nothing.
+   */
+  endTask(id: string, state: 'done' | 'dropped'): AssistantTask | null {
+    const tasks = this.#tasks();
+    const t = tasks[id];
+    if (!t) return null;
+    if (t.state === 'open') {
+      const taskOf = this.#get<Record<string, string>>('task_of') ?? {};
+      let last = '';
+      let mine = false;
+      for (const m of this.messages) {
+        if (m.role === 'user') mine = taskOf[m.id] === id;
+        else if (m.role === 'assistant' && mine) {
+          const said = m.parts
+            .map((p) => (p.type === 'text' ? p.text : ''))
+            .join('')
+            .trim();
+          if (said) last = said;
+        }
+      }
+      tasks[id] = { ...t, state, told: false, ...(last ? { last } : {}) };
+      this.#put('tasks', tasks);
+    }
+    const now = tasks[id] as KeptTask;
+    return { id, label: now.label, state: now.state };
+  }
+
+  /**
+   * Starts the turn's task, or carries it on: kept with its brief as first sent, and the person's
+   * newest message (`asked`, its key among the turn's messages) marked as the task's.
+   */
+  #startTask(task: NonNullable<AgentTurnPlan['task']>, key: string | null): KeptTask {
+    const tasks = this.#tasks();
+    const was = tasks[task.id];
+    const t: KeptTask = was
+      ? { ...was, label: task.label, state: 'open', at: Date.now() }
+      : { label: task.label, brief: task.brief, state: 'open', at: Date.now() };
+    tasks[task.id] = t;
+    const ids = Object.keys(tasks).sort(
+      (a, b) => (tasks[a] as KeptTask).at - (tasks[b] as KeptTask).at,
+    );
+    for (const id of ids.slice(0, Math.max(0, ids.length - TASKS_KEPT))) delete tasks[id];
+    this.#put('tasks', tasks);
+    if (this.#asked) {
+      const taskOf = this.#get<Record<string, string>>('task_of') ?? {};
+      taskOf[this.#asked] = task.id;
+      this.#put('task_of', taskOf);
+    }
+    if (key) {
+      const byKey = this.#get<Record<string, string>>('task_keys') ?? {};
+      byKey[key] = task.id;
+      this.#put('task_keys', byKey);
+    }
+    return t;
+  }
+
+  /** Tasks that ended since the chat's own side last answered, as its note; marks them told. */
+  #taskNews(): string {
+    const tasks = this.#tasks();
+    const ended = Object.entries(tasks).filter(([, t]) => t.state !== 'open' && t.told === false);
+    if (!ended.length) return '';
+    for (const [id, t] of ended) tasks[id] = { ...t, told: true };
+    this.#put('tasks', tasks);
+    return taskNews(ended);
+  }
+
+  /**
+   * Stops the answer running now (the panel's Stop): what was said and made so far is kept, and
+   * the answer's stream ends with `stopped`.
+   */
   stop(): void {
+    if (this.#sink) this.#stopping = true;
     this.cancelAllChats();
   }
+
+  /** Stop was pressed for the answer running now. */
+  #stopping = false;
 
   /**
    * A message for the answer running now: it joins at the answer's next step (after the tool it
@@ -682,6 +793,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     const map = screenMapOf(input.screen);
     const userId = `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
     this.#sink = sink;
+    this.#stopping = false;
     this.#asked = userId;
     this.#steers = [];
     this.#steered = [];
@@ -741,6 +853,8 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     const unread = this.#steers.splice(0).map((s) => s.text);
     if (unread.length) await sink.event({ event: 'unsteered', data: { texts: unread } });
     if (this.#capped) await sink.event({ event: 'stopped', data: { reason: 'cap' } });
+    else if (this.#stopping) await sink.event({ event: 'stopped', data: {} });
+    this.#stopping = false;
     await sink.event({ event: 'done', data: { id: this.name, usage: this.usage() } });
   }
 
@@ -1138,15 +1252,35 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       this.#turn.lazy = lazy;
     }
     const turn = this.#turn;
+    // A task's turn reads its brief and its own messages; any other turn, the messages of no task.
+    const keys = turnKeys(ctx.messages);
+    const newest = keys.findLast((k) => k !== null) ?? null;
+    let kept: KeptTask | null = null;
+    if (plan.task) {
+      kept = this.#startTask(plan.task, newest);
+      await this.#sink?.event({
+        event: 'task',
+        data: { id: plan.task.id, label: kept.label, state: 'open' },
+      });
+    }
+    const thread = threadOf(
+      ctx.messages,
+      this.#get<Record<string, string>>('task_keys') ?? {},
+      plan.task?.id,
+    );
     // Each lead stays on the message it went with, so earlier messages are sent as before and read
     // from the prompt cache; the newest says only what changed since the last (`stickyLeads`).
+    const leadsAt = plan.task ? `leads:task:${plan.task.id}` : 'leads';
     const led = stickyLeads(
-      ctx.messages,
-      this.#get<SentLeads>('leads') ?? { sent: {} },
-      `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`,
+      thread,
+      this.#get<SentLeads>(leadsAt) ?? { sent: {} },
+      `${this.#news()}${this.#screenNews()}${plan.task ? '' : this.#taskNews()}${plan.lead ?? ''}`,
     );
-    this.#put('leads', led.kept);
-    const cached = cachedTurn(system, led.messages);
+    this.#put(leadsAt, led.kept);
+    const first = led.messages.findIndex((m) => m.role === 'user');
+    const sent =
+      kept?.brief && first >= 0 ? leadAt(led.messages, first, `${kept.brief}\n\n`) : led.messages;
+    const cached = cachedTurn(system, sent);
     return {
       model: this.#model(plan, () => {
         const fb = plan.fallback;

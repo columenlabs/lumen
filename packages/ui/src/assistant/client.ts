@@ -68,6 +68,11 @@ export interface AssistantAdapter {
    * false` (or no method) and the panel queues it for after the answer instead.
    */
   steer?(chatId: string, message: string): Promise<{ steered: boolean }>;
+  /**
+   * Stops the answer running in `chatId` on the server: what it said and made so far is kept, and
+   * the answer's stream ends with `stopped`. Without it Stop only stops reading the stream.
+   */
+  stop?(chatId: string): Promise<void>;
   settleDraft(chatId: string, draftId: string, action: 'save' | 'dismiss'): Promise<DraftItem>;
   /** Takes back a change the assistant made at once. */
   undoWrite(chatId: string, stepId: string): Promise<StepItem>;
@@ -168,6 +173,9 @@ export function assistantClient(base: string): AssistantAdapter {
       }),
     steer: (chatId, message) =>
       send('POST', `/chats/${encodeURIComponent(chatId)}/steer`, { message }),
+    async stop(chatId) {
+      await send('POST', `/chats/${encodeURIComponent(chatId)}/stop`);
+    },
     async send(msg, onEvent, signal) {
       const url = `${root}/chat`;
       const res = await fetch(url, {

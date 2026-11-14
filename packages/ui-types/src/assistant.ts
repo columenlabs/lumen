@@ -157,6 +157,26 @@ export interface HandOffItem {
   usage?: UsagePart;
 }
 
+/** Where a task inside a chat stands: open, done (the app took its result) or dropped. */
+export type AssistantTaskState = 'open' | 'done' | 'dropped';
+
+/**
+ * A task inside a chat (`AgentTurnPlan.task`): a piece of work the app runs in its own session, on
+ * its own model, reading the app's brief and the task's own messages, never the rest of the chat.
+ */
+export interface AssistantTask {
+  id: string;
+  /** What it works on, in a few words ("Lid · hard edit"). */
+  label: string;
+  state: AssistantTaskState;
+}
+
+/** A task's messages in the chat: shown as one block, its state in the header. */
+export interface TaskItem extends AssistantTask {
+  kind: 'task';
+  items: ChatItem[];
+}
+
 /**
  * One move of the assistant's `screen` tool, run in the person's browser: a page of the app, Settings
  * at a section (pulsing a row, never changing it), a symbol's chart (or up to 8 to compare), a row's
@@ -236,6 +256,7 @@ export type ChatItem =
   | DraftItem
   | ScreenItem
   | HandOffItem
+  | TaskItem
   | { kind: 'advice'; tier: string; label: string; error?: string }
   | { kind: 'compacted' }
   /**
@@ -255,6 +276,8 @@ export interface AssistantChat {
   at: number;
   items: ChatItem[];
   usage?: ChatUsage;
+  /** The newest task still open in this chat: the composer offers to keep the next message on it. */
+  task?: AssistantTask;
 }
 
 /** One line of the chats list. */
@@ -287,6 +310,8 @@ export type AssistantEvent =
   | { event: 'screen'; data: ScreenItem & { handoff?: boolean } }
   | { event: 'handoff'; data: Omit<HandOffItem, 'items' | 'usage'> }
   | { event: 'handoff_done'; data: { usage: UsagePart } }
+  /** This answer runs inside a task: what follows lands in the task's block. */
+  | { event: 'task'; data: AssistantTask }
   | { event: 'advice'; data: { tier: string; label: string } }
   | { event: 'advice_done'; data: { error?: string } }
   | { event: 'compacted'; data: Record<string, never> }
@@ -341,6 +366,8 @@ export interface AssistantMessage {
   outcomes?: AssistantScreenOutcome[];
   /** The person chose to keep this message in this chat: the agent does not offer a fresh one. */
   stay?: boolean;
+  /** The open task the composer keeps this message on (its chip); left out once the person steps out. */
+  task?: string;
 }
 
 /** A tier as the person set it, with what it runs. */
