@@ -1163,13 +1163,9 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         ...(plan.out ? { out: plan.out } : {}),
         plan: free,
         // Named for how the prompt starts, so a new chat reads its instructions and tools from the cache.
-        cacheKey: prefixCacheKey(
-          plan.model.id,
-          system,
-          Object.keys(tools)
-            .filter((n) => !lazy || lazy.active().includes(n))
-            .join(','),
-        ),
+        // Not the tools on now: a tool_search find turns more on, and a key that moved with them
+        // sent the next turn to another cache (live: 0 read on a turn after a find).
+        cacheKey: prefixCacheKey(plan.model.id, system),
       }),
     };
   }
