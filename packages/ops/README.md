@@ -151,13 +151,16 @@ import { meterEvent, setEventSink } from '@columenlabs/lumen-ops/events';
 setEventSink(env.EVENTS);
 meterEvent({ event: 'bank.call', code: '/accounts/get', ok: res.ok, ms, status: res.status, upstream: true });
 meterEvent({ event: 'sync.done', ok: true, subject: accountId, ref: connectionId, counts: [added, modified, removed] });
+meterEvent({ event: 'ai.answer', code: 'ok', ok: true, ms, ai: { model: 'claude-sonnet-5-5', in: 12000, out: 800, read: 9000, usd: 0.021 } });
 ```
 
 | Column | Holds |
 |---|---|
 | `index1` | Subject, or `anon` |
-| `blob1` … `blob10` | App, event, code, outcome, ref, trigger, request id, upstream id, env, version |
-| `double1` … `double6` | ms, status, count1, count2, count3, attempt |
+| `blob1` … `blob11` | App, event, code, outcome, ref, trigger, request id, upstream id, env, version, AI model |
+| `double1` … `double10` | ms, status, count1, count2, count3, attempt, AI usd, AI tokens in (cache reads included), AI tokens out, AI cache reads |
+
+`ai` is for an event that asked a model (an answer, a generated draft): the model id and what that call cost, so use and spend can be read per model and per event. Points without it write empty and 0 there.
 
 `upstream: true` adds the call's time to the request's `upstream ms`. In a Durable Object no request is in scope: give `setEventSink(binding, { app, env, version })` the defaults, and pass a `requestId` the caller sent if you have one.
 

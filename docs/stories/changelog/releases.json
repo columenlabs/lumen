@@ -1,5 +1,147 @@
 [
   {
+    "tag": "v0.1.257",
+    "date": "2026-11-14T06:52:47Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Chat cost chip for the assistant",
+        "body": "From `@columenlabs/lumen-ui/assistant`, you can now import `AssistantChatCost` to show what an open chat has cost so far, as the amount charged on credits or on the person's own key."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Cost shows in the `LumenAssistant` header",
+        "body": "`LumenAssistant` now renders `AssistantChatCost` in its header, left of the chats (history) picker, so you get the cost chip with no extra props. It reads ≈ when the chat's plan sign-in calls at API rates are included in the amount."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Hover to see where the cost came from",
+        "body": "Hovering the `AssistantChatCost` chip splits the amount into key, credits, and plan calls ≈ at API rates (charged $0). It reads the existing usage history entry `chat:<id>`, so you need no new endpoint, and the chip is hidden until the chat has a history line."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.256",
+    "date": "2026-11-14T06:49:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan calls are priced from stored tokens",
+        "body": "In @columenlabs/lumen-ops, `usage()` now returns each entry with its plan-call cost recalculated from the tokens stored on that entry, so `own_plan_usd` no longer under-reports."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Older chats get a real plan cost",
+        "body": "Chats that started before plan pricing was recorded now show a priced total from `usage()` for their later turns, not just the old estimate."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The higher figure wins",
+        "body": "The new `withPlanUsd` step prices an entry's stored $0 parts at API rates and keeps that figure only when it is larger than the stored `own_plan_usd`, so existing totals are never lowered."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.255",
+    "date": "2026-11-14T06:42:20Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Web tools no longer vanish when the lookup service is unreachable",
+        "body": "In @columenlabs/lumen-ai, turning on the `web.lookup` option while the lookup service has no service binding and no saved access token now falls back to the plain `fetch` web tool, so the assistant can still browse instead of asking the person."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Lookup rules only appear when lookup is really available",
+        "body": "The lookup rules line is now added to the prompt only when `web__lookup` is among the turn's tools, as reported by the `lookup` field on `ToolsSummary`, so the assistant is never told about a tool it doesn't have."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.254",
+    "date": "2026-11-14T06:39:11Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Word each tool call from its own arguments and answer",
+        "body": "In `LumenAgent`, the new protected `stepLine(c: StepCall)` method lets an app return a line such as \"Editing Lid\", \"Edited Lid: wall 2 → 3 mm\" or \"Couldn't edit Lid\" from `c.state` (`running`, `done` or `failed`), `c.input` and `c.output`, or return `undefined` to keep the tool's title."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Live tool lines update in place",
+        "body": "`useAssistantChat` now updates a running line in place when a second `step_start` with the same id arrives once the arguments are in, and finished lines are saved with the chat as `line:<call id>`, so a chat read back shows the same words."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Web lookups say what they looked up",
+        "body": "The kit's own web lookup now reads \"Looking up <question>\" while it runs and \"Couldn't look up <question>\" on failure, and a finished lookup keeps its web card."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No more \"Look something up\" line for tool search",
+        "body": "In a plain chat (`plainSteps()`), the tool search that turns on more tools no longer shows a line, so people only see steps the assistant took for them."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.253",
+    "date": "2026-11-14T06:29:20Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Plan sign-in calls now show an API-rate estimate",
+        "body": "In `OwnKeyUsage` from @columenlabs/lumen-ui, a plan sign-in's calls no longer read $0, and each session and the \"Earlier, plan\" row show the key cost plus the plan calls priced at the model's API rates, marked ≈."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Price token usage at API rates",
+        "body": "From @columenlabs/lumen-ai `state`, the new `listUsd(part)` returns a part's cost at the model's API rates (cache writes count as plain input), and `ownPlanUsd(paying, parts)` totals the plan-covered portion."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Spend rows and usage entries carry the estimate",
+        "body": "In @columenlabs/lumen-ai, `withProvider` now adds `list_usd` to every $0 row that has calls, and `addUsage` stores `own_plan_usd` on the chat or run entry."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Optional estimate fields in the view model types",
+        "body": "@columenlabs/lumen-ui-types adds `SpendState.rows[].list_usd?` and `UsageEntry.own_plan_usd?`, so existing code keeps compiling and you can read the estimate where you need it."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.252",
     "date": "2026-11-14T05:44:45Z",
     "takeaways": [
