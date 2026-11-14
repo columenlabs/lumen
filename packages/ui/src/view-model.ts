@@ -145,9 +145,10 @@ export interface ViewField<T> {
   /**
    * The column's widest cell, a CSS length (`14rem`): past it the cell ends in an ellipsis on one
    * line, the full text in its hover. The first column defaults to `--lead-col-max` (18rem);
-   * `false` lets it grow.
+   * `false` lets it grow. `fill` gives it all the width the other columns leave (at least 12rem),
+   * so a long name ends in an ellipsis only where the table truly has no more room.
    */
-  maxWidth?: string | false;
+  maxWidth?: 'fill' | (string & {}) | false;
   /** Left out on phones, where the table has no room for it (a returns table's longer windows). */
   hideOnPhone?: boolean;
   /**

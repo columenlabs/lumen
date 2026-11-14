@@ -537,6 +537,18 @@
   );
 }
 
+/* A column that fills (`ViewField.maxWidth: 'fill'`): it takes the width the other columns leave
+   and gives none of its own text's width to the table (max-width: 0), so its cells end in an
+   ellipsis only where the table truly has no more room. Never under 12rem: narrower, the table
+   scrolls. A phone's cards lay the row out themselves. */
+@media (min-width: 640px) {
+  [data-slot="table"] :is(th, td)[data-fill] {
+    width: 100%;
+    max-width: 0;
+    min-width: 12rem;
+  }
+}
+
 /* A LumenView table on a narrow phone (`data-cards`): each row is a card, so nothing runs off
    the right edge, and every row is ONE line, whatever an app draws in it: the row's name (shortens
    in an ellipsis), then one figure (`data-card="meta"`, the sorted one, else the first number or

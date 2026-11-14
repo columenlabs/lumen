@@ -1191,14 +1191,20 @@ const colPropsOf =
     className: cn(colOf(f), ...more),
     'data-col': f?.key,
     'data-units': f && units.has(f.key) ? '' : undefined,
+    'data-fill': f?.maxWidth === 'fill' ? '' : undefined,
   });
 
 /**
  * A column's widest cell (`maxWidth`): the first column defaults to `--lead-col-max` (18rem in
  * theme.css), so one long name never pushes the other columns off screen; `false` lifts it.
+ * `fill` takes the room the other columns leave (theme.css `[data-fill]`), so its cell holds to it.
  */
 const capOf = <T,>(f: ViewField<T>, i: number) =>
-  f.maxWidth === false ? undefined : (f.maxWidth ?? (i === 0 ? 'var(--lead-col-max)' : undefined));
+  f.maxWidth === false
+    ? undefined
+    : f.maxWidth === 'fill'
+      ? '100%'
+      : (f.maxWidth ?? (i === 0 ? 'var(--lead-col-max)' : undefined));
 /** Holds a cell to its column's cap on one line: text past it ends in an ellipsis. `end` keeps a
  *  right-aligned column's value on its right edge (the wrapper is a flex row, which `text-right`
  *  alone does not move), so a capped or resized column keeps one edge. */

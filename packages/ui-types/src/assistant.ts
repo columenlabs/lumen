@@ -452,6 +452,11 @@ export interface UsageEntry {
   own_plan_usd?: number;
   /** A run of one of the app's own tasks (`TaskDef.internal`), not something the person asked for. */
   internal?: true;
+  /** Messages the person sent in the chat (left out when none, and before they were counted). */
+  turns?: number;
+  /** Images and picks (refs: parts, faces, rows) sent with those messages; left out when none. */
+  images?: number;
+  refs?: number;
   parts: UsagePart[];
 }
 

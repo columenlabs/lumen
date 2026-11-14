@@ -10,6 +10,7 @@ import {
   HashIcon,
   KeyRoundIcon,
   MessageSquareIcon,
+  MessagesSquareIcon,
   ReceiptIcon,
 } from 'lucide-react';
 import { Fragment, type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -510,6 +511,10 @@ interface UsageRow {
   plan: number;
   /** Calls a plan sign-in answered. */
   planCalls?: number;
+  /** Messages the person sent, and the images and picks with them (chats, once they were counted). */
+  turns?: number;
+  images?: number;
+  refs?: number;
 }
 /** Dollars with no `<` or `≈` (the table's note says which amounts are estimates). */
 const money = (n: number) => (n === 0 ? '$0' : `$${n.toFixed(n < 10 ? 2 : 0)}`);
@@ -541,6 +546,13 @@ function usageRows(h: UsageHistory): UsageRow[] {
       credits: (s?.credits ?? 0) + Math.max(0, e.usd - key),
       plan: (s?.plan ?? 0) + plan,
       planCalls,
+      ...(e.turns || s?.turns
+        ? {
+            turns: (s?.turns ?? 0) + (e.turns ?? 0),
+            images: (s?.images ?? 0) + (e.images ?? 0),
+            refs: (s?.refs ?? 0) + (e.refs ?? 0),
+          }
+        : {}),
     };
     // Its type is whoever paid most; the hover splits the rest.
     const top = Math.max(row.key, row.credits, row.plan);
@@ -602,6 +614,16 @@ function usageRows(h: UsageHistory): UsageRow[] {
   return out.filter((r) => r.type !== 'internal');
 }
 
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+/** A row's attachments: their count, then each kind there was (`3 · 2 images, 1 pick`). */
+const attachments = (r: UsageRow) => {
+  const kinds = [
+    ...(r.images ? [plural(r.images, 'image')] : []),
+    ...(r.refs ? [plural(r.refs, 'pick')] : []),
+  ];
+  return kinds.length ? `${(r.images ?? 0) + (r.refs ?? 0)} · ${kinds.join(', ')}` : '0';
+};
+
 /** A row's hover: its tokens (cache reads as a share of input) and what it cost, by who paid. */
 function UsageTip({ r, children }: { r: UsageRow; children: ReactNode }) {
   const t = r.tokens;
@@ -613,6 +635,8 @@ function UsageTip({ r, children }: { r: UsageRow; children: ReactNode }) {
           ['Output', tokens(t.out)],
         ] as [string, string][])
       : []),
+    ...(r.turns ? ([['Turns', String(r.turns)]] as [string, string][]) : []),
+    ...(r.turns ? ([['Attachments', attachments(r)]] as [string, string][]) : []),
     ...(r.key > 0 ? ([['Cost (your key)', money(r.key)]] as [string, string][]) : []),
     ...(r.credits > 0 || (r.type === 'credits' && !r.plan)
       ? ([['Credits', money(r.credits)]] as [string, string][])
@@ -683,9 +707,8 @@ const USAGE_FIELDS: ViewField<UsageRow>[] = [
     label: 'Session',
     icon: MessageSquareIcon,
     format: 'text',
-    // Names run long (a chat's first line): as wide as the table leaves after its other columns
-    // (the table's box is a size container), never under the usual name column.
-    maxWidth: 'max(12rem, calc(100cqw - 22rem))',
+    // Names run long (a chat's first line): all the width the other columns leave.
+    maxWidth: 'fill',
     value: (r) => r.title,
     render: (r) => (
       <UsageTip r={r}>
@@ -734,6 +757,21 @@ const USAGE_FIELDS: ViewField<UsageRow>[] = [
         ) : (
           <span className="text-muted-foreground">{EARLIER}</span>
         )}
+      </UsageTip>
+    ),
+  },
+  {
+    key: 'turns',
+    label: 'Turns',
+    icon: MessagesSquareIcon,
+    format: 'integer',
+    hideOnPhone: true,
+    aggregate: 'sum',
+    // A run, or a chat from before turns were counted, has none: a dash, not 0.
+    value: (r) => r.turns ?? null,
+    render: (r) => (
+      <UsageTip r={r}>
+        <span className={cn(!r.turns && 'text-muted-foreground')}>{r.turns ?? '—'}</span>
       </UsageTip>
     ),
   },
@@ -840,7 +878,7 @@ export function AssistantUsageTable({ client }: { client: AssistantAdapter }) {
           ))}
         </ToggleGroup>
       </div>
-      <div className="@container min-w-0">
+      <div className="min-w-0">
         <LumenTable
           domain={USAGE_DOMAIN}
           rows={filter.results}

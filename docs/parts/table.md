@@ -67,6 +67,7 @@ The header's Export (`download` control) downloads or copies the table as CSV: t
 - ✗ Resetting the page on a new `rows` array. ✓ Only a new filter, sort, grouping or page size goes back to page 1.
 - ✗ Another row of tabs to filter. ✓ A `LumenTokenizedFilter` field.
 - ✗ Hiding columns to fit a narrow box (sidebar open, docked drawer). ✓ Every column shows; the table scrolls sideways and the name stays at `--lead-col-max`.
+- ✗ A cap worked out by hand (`calc(100cqw - 22rem)`) so a long name uses the table's spare width. ✓ `maxWidth: 'fill'` on that column: it takes whatever the other columns leave (never under 12rem), so a name ends in an ellipsis only where there is truly no room.
 - ✗ Tags as comma text (`r.tags.join(', ')`) or a row of `Badge`s. ✓ `tags: true` on the field, `TagChips` elsewhere.
 - ✗ An app's own column-drag code or saved widths. ✓ `configureLumen({ resizableColumns: true })` (every table) or `resizable` on one `LumenView`.
 
