@@ -372,7 +372,7 @@ function claudeHistory(history: CompleteTurn[]): Anthropic.MessageParam[] {
   });
 }
 
-/** OpenAI's prompt cache key for one person's task or run: a short, stable hash of `of`. */
+/** OpenAI's prompt cache key: a short, stable hash of `of` (how the prompt starts). */
 function cacheKey(of: string): string {
   let h = 0x811c9dc5;
   let g = 0x01000193;
@@ -1897,7 +1897,9 @@ export class Assistant {
           o.signal,
           o.images,
           o.effort,
-          cacheKey(`${caller.id}:${o.task}:${o.run?.id ?? ''}`),
+          // Named for how the prompt starts (the person, task and instructions), not the run, so
+          // the next run of the same task reads that start from the cache.
+          cacheKey(`${caller.id}:${o.task}:${s.model.id}:${o.system ?? ''}`),
           o.history,
         ));
       } else if (clients.anthropic) {

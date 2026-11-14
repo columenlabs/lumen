@@ -88,8 +88,46 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
           body: (await res.clone().text()).slice(0, 500),
         }),
       );
-    return res.ok && !streamed ? whole(res, init?.signal) : res;
+    if (!res.ok || !res.body) return res;
+    // The plan's own usage numbers, as it sent them (cache reads included), one line a call.
+    const [mine, theirs] = res.body.tee();
+    void logPlanUsage(theirs, String(body.model ?? ''), typeof body.prompt_cache_key === 'string');
+    const seen = new Response(mine, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
+    });
+    return streamed ? seen : whole(seen, init?.signal);
   };
+}
+
+/**
+ * Reads a plan's streamed answer for its final usage and logs it as sent (`assistant_plan_usage`):
+ * whether a plan reads its prompt from the cache shows in its own numbers. Never throws.
+ */
+async function logPlanUsage(stream: ReadableStream<Uint8Array>, model: string, keyed: boolean) {
+  try {
+    const reader = stream.getReader();
+    const text = new TextDecoder();
+    let buf = '';
+    let usage: unknown;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += text.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data:') || !line.includes('"usage"')) continue;
+        const e = JSON.parse(line.slice(5)) as { type?: string; response?: { usage?: unknown } };
+        if (e.type === 'response.completed' || e.type === 'response.incomplete')
+          usage = e.response?.usage;
+      }
+    }
+    if (usage) console.log(JSON.stringify({ event: 'assistant_plan_usage', model, keyed, usage }));
+  } catch {
+    // A log line is never worth a failed answer.
+  }
 }
 
 /**
@@ -208,15 +246,32 @@ export function cachedTurn(
 }
 
 /**
- * OpenAI's prompt cache key for one chat or run: calls with the same key go to the same cache, so
- * a long prompt's start is read from it instead of paid again. A ChatGPT plan sign-in caches
- * nothing without one. At most 64 characters.
+ * OpenAI's prompt cache key: calls with the same key go to the same cache, so a long prompt's start
+ * is read from it instead of paid again. A ChatGPT plan sign-in caches nothing without one. At most
+ * 64 characters.
  */
 export const promptCacheKey = (key: string) => key.slice(0, 64);
 
 /**
+ * A cache key named for what a prompt starts with (its model, instructions and tools), not for
+ * one chat or run: a new chat or run that starts the same way reads that start from the cache
+ * (a key per chat read 0 of a new chat's 5.9k-token start; one key for the start read 99.7%, our
+ * key, 2026-11-14). The key only routes; what is read is still only the exact same start.
+ */
+export function prefixCacheKey(...parts: (string | undefined)[]): string {
+  const of = parts.filter(Boolean).join('\u0000');
+  let h = 0x811c9dc5;
+  let g = 0x01000193;
+  for (let i = 0; i < of.length; i++) {
+    h = Math.imul(h ^ of.charCodeAt(i), 0x01000193);
+    g = Math.imul(g ^ of.charCodeAt(i), 0x85ebca6b);
+  }
+  return `lumen-${(h >>> 0).toString(36)}${(g >>> 0).toString(36)}`;
+}
+
+/**
  * A tier's effort and output cap as a turn's settings, with the prompt cache on: Claude's
- * breakpoint, and OpenAI's cache key when `cacheKey` names the chat.
+ * breakpoint, and OpenAI's cache key (`prefixCacheKey`) when `cacheKey` is given.
  */
 export function turnSettings(
   model: ModelDef,
