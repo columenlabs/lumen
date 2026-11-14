@@ -349,6 +349,8 @@ export interface AskInput {
   outcomes?: AssistantScreenOutcome[];
   /** The person kept this message in this chat after a fresh chat was offered (`offerFresh`). */
   stay?: boolean;
+  /** How many images went with the message (set by the agent: the images go in its parts). */
+  image_count?: number;
 }
 
 /** A quote as sent, checked: its text cut to `ASSISTANT_QUOTE_MAX`, and whose message it came from. */
@@ -675,7 +677,12 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     this.#steered = [];
     // The images go in the message's parts; the turn's plan reads the rest.
     const { images: _images, ...asked } = input;
-    this.#input = { ...asked, ...(map ? { screen: map } : {}) };
+    const pictures = imageParts(input.images);
+    this.#input = {
+      ...asked,
+      ...(map ? { screen: map } : {}),
+      ...(pictures.length ? { image_count: pictures.length } : {}),
+    };
     if (!map) delete this.#input.screen;
     let failed = false;
     try {
@@ -686,7 +693,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
           parts: [
             ...(quote ? [{ type: 'text' as const, text: quoteLead(quote) }] : []),
             { type: 'text', text: input.message },
-            ...imageParts(input.images),
+            ...pictures,
           ],
           metadata: meta,
         },

@@ -637,6 +637,8 @@ export interface AgentTurnInput {
   tier?: string;
   /** The browser's IANA zone, for the bearings. */
   time_zone?: string;
+  /** How many images went with the message, counted in the chat's usage (`UsageEntry.images`). */
+  image_count?: number;
   /** When the chat's last message was, for "since you last asked". */
   last_at?: number;
   /**
@@ -989,6 +991,9 @@ export class Assistant {
               id: `chat:${input.chat}`,
               kind: 'chat',
               title: message.split('\n')[0] || 'Chat',
+              turns: 1,
+              images: input.image_count ?? 0,
+              refs: input.refs?.length ?? 0,
               own_usd: ownKeyUsd(paying, onPayer),
               own_plan_calls: ownPlanCalls(paying, onPayer),
               own_plan_usd: ownPlanUsd(paying, onPayer),

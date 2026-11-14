@@ -624,6 +624,11 @@ export class State {
       kind: UsageEntry['kind'];
       task?: string;
       title: string;
+      /** Messages the person sent with this use (1 a chat turn; a run's calls send none). */
+      turns?: number;
+      /** Images and picks (refs) that went with those messages. */
+      images?: number;
+      refs?: number;
       own_usd?: number;
       own_plan_calls?: number;
       own_plan_usd?: number;
@@ -642,6 +647,9 @@ export class State {
       const own = (prev?.own_usd ?? 0) + (e.own_usd ?? 0);
       const plan = (prev?.own_plan_calls ?? 0) + (e.own_plan_calls ?? 0);
       const planUsd = (prev?.own_plan_usd ?? 0) + (e.own_plan_usd ?? 0);
+      const turns = (prev?.turns ?? 0) + (e.turns ?? 0);
+      const images = (prev?.images ?? 0) + (e.images ?? 0);
+      const refs = (prev?.refs ?? 0) + (e.refs ?? 0);
       entries.unshift({
         id: e.id,
         kind: e.kind,
@@ -657,6 +665,9 @@ export class State {
         ...(own > 0 ? { own_usd: own } : {}),
         ...(plan > 0 ? { own_plan_calls: plan } : {}),
         ...(planUsd > 0 ? { own_plan_usd: planUsd } : {}),
+        ...(turns > 0 ? { turns } : {}),
+        ...(images > 0 ? { images } : {}),
+        ...(refs > 0 ? { refs } : {}),
         parts: merged,
       });
       return { entries: entries.slice(0, USAGE_KEPT) };
