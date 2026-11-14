@@ -244,7 +244,6 @@ const wayTest = (k: KeyState | undefined, plan = false): ConnectionTest | null =
     : null;
 
 /** A provider's mark: its initial on a tile. */
-const mark = (label: string) => <ConnectionLogo text={label.charAt(0)} />;
 
 /**
  * Whether the app lets this person use `w` of their own on `p` (the app's `ownWays`, the same
@@ -300,7 +299,6 @@ function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantP
     <LumenConnection
       id={p.id}
       name={p.label}
-      logo={mark(p.label)}
       ways={ways}
       use={p.use}
       onUse={(use) =>
@@ -332,19 +330,20 @@ function Providers({ client }: { client: AssistantAdapter }) {
                 label="Answers run on"
                 info="Your own key or plan first, with the shared credits behind it; or the shared credits first."
               >
-                <LumenSelector
-                  label="Answers run on"
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
                   size="sm"
-                  className="w-44"
+                  spacing={0}
                   value={s.pay}
-                  options={[
-                    { value: 'own', label: 'Your own first' },
-                    { value: 'app', label: 'Shared credits first' },
-                  ]}
-                  onChange={(pay) =>
-                    void apply('pay', () => client.settings({ pay: pay as AssistantPayer }))
+                  aria-label="Answers run on"
+                  onValueChange={(pay) =>
+                    pay && void apply('pay', () => client.settings({ pay: pay as AssistantPayer }))
                   }
-                />
+                >
+                  <ToggleGroupItem value="own">Your own first</ToggleGroupItem>
+                  <ToggleGroupItem value="app">Credits first</ToggleGroupItem>
+                </ToggleGroup>
               </SettingField>
             )}
             {ownSet && (
@@ -403,7 +402,6 @@ function SharedProviderKey({ client, p }: { client: AssistantAdapter; p: Assista
     <LumenConnection
       id={p.id}
       name={p.label}
-      logo={mark(p.label)}
       ways={[
         {
           id: 'key',
