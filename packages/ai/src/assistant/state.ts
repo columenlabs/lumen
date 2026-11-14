@@ -5,6 +5,7 @@
  *   key      (the app's scope)   the app's Anthropic key, tested before it is kept, sealed
  *   key:<p>  (the app's scope)   the app's key of another provider (`key:openai`), the same
  *   scrapeql (the app's scope)   ScrapeQL's Access service token, tested before it is kept, sealed
+ *   connectors (the app's scope) outside MCP servers: address, headers (sealed), access, tools
  *   settings (a person's scope)  their tiers, start tiers, hand off, advice, tool access, web, payer,
  *                                and the monthly cap on their own keys
  *   key, key:<p> (a person's)    their own key of each provider, sealed; OpenAI's may be a ChatGPT
@@ -35,6 +36,7 @@ import type {
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { type ChatgptTokens, refreshChatgpt, staleChatgpt } from './chatgpt';
+import type { ConnectorsDoc } from './connectors';
 import { ALL_MODELS, PROVIDERS, XAI_MODELS, keyHint } from './models';
 import { APP_SCOPE, type Docs } from './store';
 
@@ -512,6 +514,13 @@ export class State {
   }
   scrapeql() {
     return this.docs.read<TokenDoc>(APP_SCOPE, 'scrapeql');
+  }
+  /** The app's connectors (`./connectors`), their headers sealed with the rest. */
+  connectors() {
+    return this.docs.read<ConnectorsDoc>(APP_SCOPE, 'connectors');
+  }
+  setConnectors(d: ConnectorsDoc) {
+    return this.docs.write<ConnectorsDoc>(APP_SCOPE, 'connectors', d);
   }
   /** The last test of ScrapeQL over the app's service binding (no token to keep it beside). */
   scrapeqlLink() {

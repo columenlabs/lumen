@@ -955,16 +955,30 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     }
     const tools: ToolSet = { ...opened.tools, ...more, ...advisor, ...screen };
     let lazy: LazyTools | undefined;
-    if (Object.keys(tools).length > (plan.lazy?.at ?? LAZY_AT)) {
+    // A lazy group's tools (a connector's) are always found first; past `at` tools, all but the core.
+    const offPrompt = new Set(opened.info.filter((i) => i.lazy).map((i) => i.name));
+    const many = Object.keys(tools).length > (plan.lazy?.at ?? LAZY_AT);
+    if (many || offPrompt.size) {
       const groups = new Map(opened.info.map((i) => [i.name, i.group]));
-      const core = plan.lazy?.core ?? [
-        ...opened.info.filter((i) => i.find).map((i) => i.name),
-        ...Object.keys(more ?? {}),
-        ...Object.keys(advisor),
-        ...Object.keys(screen),
-      ];
+      const core = (
+        plan.lazy?.core ??
+        (many
+          ? [
+              ...opened.info.filter((i) => i.find).map((i) => i.name),
+              ...Object.keys(more ?? {}),
+              ...Object.keys(advisor),
+              ...Object.keys(screen),
+            ]
+          : Object.keys(tools))
+      ).filter((n) => !offPrompt.has(n));
       if (plan.first && !core.includes(plan.first)) core.push(plan.first);
-      lazy = lazyTools(tools, core, (n) => groups.get(n) ?? 'other', usedTools(ctx.messages));
+      lazy = lazyTools(
+        tools,
+        core,
+        (n) => groups.get(n) ?? 'other',
+        usedTools(ctx.messages),
+        opened.labels,
+      );
       tools[TOOL_SEARCH] = lazy.search;
       system = `${system}\n\n${lazy.catalog}`;
       this.#turn.system = system;

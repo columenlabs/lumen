@@ -18,6 +18,11 @@
  *                                   (`POST /my-key/test?way=key|plan` tests one; the plan and the
  *                                   key are kept side by side, `own_use` in /settings picks)
  *   PUT    /web/scrapeql {client_id, client_secret}, DELETE /web/scrapeql, POST /web/test   admin
+ *   POST   /connectors {name, url, headers, access}   admin: adds an MCP server, kept only when its
+ *                                   test lists its tools
+ *   PUT    /connectors/:id {name, url, headers?, access?}, DELETE /connectors/:id,
+ *   POST   /connectors/:id/test     admin: change (tested again when the address or headers
+ *                                   change), remove, or list its tools again
  *   POST   /chat                    one answer as server-sent events; closing the request stops it
  *   GET    /chats, GET|DELETE /chats/:id
  *   GET    /usage?month=YYYY-MM    the person's use that month: total, per tier and model, each chat and run
@@ -41,6 +46,8 @@ import {
   type AssistantSettingsPatch,
   HAND_OFF_POLICIES,
 } from '@columenlabs/lumen-ui-types/assistant';
+import { connectorId } from '../agent/connectors';
+import { CONNECTORS_MAX, type ConnectorDoc, connectorInput } from './connectors';
 import { type Assistant, AssistantError, type Caller } from './engine';
 import { PROVIDERS } from './models';
 import {
@@ -371,6 +378,80 @@ export function assistantRoutes(
 
         case 'GET /allowance/requests':
           return json(await a.allowanceRequests(caller));
+      }
+
+      if (parts[0] === 'connectors') {
+        const no = admin();
+        if (no) return no;
+        if (!a.hasConnectors) return fail('This app has no connectors.', 404);
+        const list = await a.connectorDocs();
+        const at = (id: string | undefined) => list.findIndex((c) => c.id === id);
+        if (parts.length === 1 && m === 'POST') {
+          let input: ReturnType<typeof connectorInput>;
+          let id: string;
+          try {
+            input = connectorInput(await body(req));
+            id = connectorId(input.name);
+          } catch (err) {
+            return fail((err as Error).message);
+          }
+          if (at(id) >= 0) return fail('A connector has that name already.', 409, 'exists');
+          if (list.length >= CONNECTORS_MAX) return fail(`At most ${CONNECTORS_MAX} connectors.`);
+          const headers = input.headers ?? {};
+          const { test, catalog } = await a.testConnector(input.url, headers);
+          if (!test.ok) return fail(test.detail, 400, 'connector_refused');
+          const doc: ConnectorDoc = {
+            id,
+            name: input.name,
+            url: input.url,
+            headers,
+            access: input.access ?? 'read',
+            catalog,
+            test,
+            saved_at: Date.now(),
+          };
+          await a.saveConnectors([...list, doc]);
+          return status();
+        }
+        const i = at(parts[1]);
+        const was = list[i];
+        if (!was) return fail('That connector is gone.', 404, 'not_found');
+        if (parts.length === 2 && m === 'DELETE') {
+          await a.saveConnectors(list.filter((_, j) => j !== i));
+          return status();
+        }
+        if (parts.length === 3 && parts[2] === 'test' && m === 'POST') {
+          const { test, catalog } = await a.testConnector(was.url, was.headers);
+          // A failed test keeps the tools it listed last; the turn's calls say if it is down.
+          const doc = { ...was, test, ...(test.ok ? { catalog } : {}) };
+          await a.saveConnectors(list.map((c, j) => (j === i ? doc : c)));
+          return json(test);
+        }
+        if (parts.length === 2 && m === 'PUT') {
+          let input: ReturnType<typeof connectorInput>;
+          try {
+            input = connectorInput(await body(req));
+          } catch (err) {
+            return fail((err as Error).message);
+          }
+          const headers = input.headers ?? was.headers;
+          const moved = input.url !== was.url || input.headers !== undefined;
+          let doc: ConnectorDoc = {
+            ...was,
+            name: input.name,
+            url: input.url,
+            headers,
+            ...(input.access ? { access: input.access } : {}),
+          };
+          if (moved) {
+            const { test, catalog } = await a.testConnector(input.url, headers);
+            if (!test.ok) return fail(test.detail, 400, 'connector_refused');
+            doc = { ...doc, test, catalog, saved_at: Date.now() };
+          }
+          await a.saveConnectors(list.map((c, j) => (j === i ? doc : c)));
+          return status();
+        }
+        return fail('Not found.', 404);
       }
 
       if (parts[0] === 'allowance' && parts[1] === 'requests' && parts[2] && m === 'POST') {

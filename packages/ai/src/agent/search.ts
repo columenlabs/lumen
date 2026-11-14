@@ -77,6 +77,7 @@ export function lazyTools(
   core: string[],
   groupOf: (name: string) => string,
   start: readonly string[] = [],
+  labels: Record<string, string> = {},
 ): LazyTools {
   const found = new Set<string>(
     start.filter((n) => n in tools && !core.includes(n) && n !== TOOL_SEARCH).slice(-FOUND_MAX),
@@ -92,10 +93,18 @@ export function lazyTools(
     const g = groupOf(n);
     groups.set(g, (groups.get(g) ?? 0) + 1);
   }
+  // A labelled group (a connector) names what it is and its tools, so the model knows to look.
+  const own = (n: string) => (n.includes('__') ? n.slice(n.indexOf('__') + 2) : n);
+  const line = (g: string, n: number) => {
+    const label = labels[g];
+    if (!label) return `${g} (${n})`;
+    const list = names.filter((x) => groupOf(x) === g && !core.includes(x)).map(own);
+    return `${g}: ${label} (${list.slice(0, 12).join(', ')}${list.length > 12 ? ', …' : ''})`;
+  };
   const catalog = `More tools are off until you find them: call ${TOOL_SEARCH} with a few words of what you need, then call what it finds. Groups: ${[
     ...groups,
   ]
-    .map(([g, n]) => `${g} (${n})`)
+    .map(([g, n]) => line(g, n))
     .join(', ')}.`;
   const search = tool({
     description:

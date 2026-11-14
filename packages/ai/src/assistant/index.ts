@@ -14,6 +14,7 @@
  */
 export * from './bearings';
 export * from './chatgpt';
+export * from './connectors';
 export * from './engine';
 export * from './find';
 export * from './meaning';

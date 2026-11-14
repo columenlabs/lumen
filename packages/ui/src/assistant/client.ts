@@ -4,6 +4,7 @@ import type {
   AllowanceRequest,
   AssistantChat,
   AssistantChatRow,
+  AssistantConnectorInput,
   AssistantEvent,
   AssistantMessage,
   AssistantOwnWay,
@@ -44,6 +45,13 @@ export interface AssistantAdapter {
   /** Admin: ScrapeQL's Access service token; null removes it. */
   scrapeql(token: { client_id: string; client_secret: string } | null): Promise<AssistantStatus>;
   testScrapeql(): Promise<Test>;
+  /** Admin: adds a connector (an MCP server), kept only when its test lists its tools. */
+  addConnector?(input: AssistantConnectorInput): Promise<AssistantStatus>;
+  /** Admin: changes one; left out, `headers` keeps the ones saved. */
+  saveConnector?(id: string, input: AssistantConnectorInput): Promise<AssistantStatus>;
+  removeConnector?(id: string): Promise<AssistantStatus>;
+  /** Admin: lists its tools again. */
+  testConnector?(id: string): Promise<Test>;
   chats(): Promise<AssistantChatRow[]>;
   chat(id: string): Promise<AssistantChat>;
   removeChat(id: string): Promise<void>;
@@ -132,6 +140,10 @@ export function assistantClient(base: string): AssistantAdapter {
     scrapeql: (token) =>
       token ? send('PUT', '/web/scrapeql', token) : send('DELETE', '/web/scrapeql'),
     testScrapeql: () => send('POST', '/web/test'),
+    addConnector: (input) => send('POST', '/connectors', input),
+    saveConnector: (id, input) => send('PUT', `/connectors/${encodeURIComponent(id)}`, input),
+    removeConnector: (id) => send('DELETE', `/connectors/${encodeURIComponent(id)}`),
+    testConnector: (id) => send('POST', `/connectors/${encodeURIComponent(id)}/test`),
     chats: () => get('/chats'),
     chat: (id) => get(`/chats/${encodeURIComponent(id)}`),
     removeChat: async (id) => {

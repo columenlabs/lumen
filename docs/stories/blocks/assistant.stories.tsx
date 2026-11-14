@@ -117,6 +117,21 @@ const STATUS: AssistantStatus = {
       test: { at: NOW - 3_600_000, ok: true, detail: 'ScrapeQL answered with 4 tools.' },
     },
   },
+  connectors: [
+    {
+      id: 'web_search',
+      name: 'Web search',
+      url: 'https://search.example.com/mcp',
+      headers: ['CF-Access-Client-Id', 'CF-Access-Client-Secret'],
+      access: 'read',
+      tools: [
+        { name: 'search', title: 'Search the web', read: true },
+        { name: 'ask', title: 'Ask a page', read: true },
+        { name: 'extract', title: 'Extract from a page', read: true },
+      ],
+      test: { at: NOW - 3_600_000, ok: true, detail: 'Answered with 3 tools, 3 read-only.' },
+    },
+  ],
   providers: [
     {
       id: 'anthropic',
@@ -469,6 +484,42 @@ function mockAdapter(
       await wait(500);
       return { ...ok, detail: 'ScrapeQL answered with 4 tools.' };
     },
+    addConnector: async (c) => {
+      await wait(600);
+      return done({
+        connectors: [
+          ...(status.connectors ?? []),
+          {
+            id: c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+            name: c.name,
+            url: c.url,
+            headers: Object.keys(c.headers ?? {}),
+            access: 'read',
+            tools: [{ name: 'lookup', read: true }],
+            test: { ...ok, detail: 'Answered with 1 tool, 1 read-only.' },
+          },
+        ],
+      });
+    },
+    saveConnector: async (id, c) =>
+      done({
+        connectors: (status.connectors ?? []).map((x) =>
+          x.id === id
+            ? {
+                ...x,
+                url: c.url,
+                ...(c.access ? { access: c.access } : {}),
+                ...(c.headers ? { headers: Object.keys(c.headers) } : {}),
+              }
+            : x,
+        ),
+      }),
+    removeConnector: async (id) =>
+      done({ connectors: (status.connectors ?? []).filter((x) => x.id !== id) }),
+    testConnector: async () => {
+      await wait(500);
+      return { ...ok, detail: 'Answered with 3 tools, 3 read-only.' };
+    },
     chats: async () => [
       { id: chat.id, title: chat.title, at: NOW },
       { id: 'c_0', title: 'Plan the offsite', at: NOW - 2 * 86_400_000 },
@@ -619,7 +670,7 @@ function Docked({
     // The admin's shared keys sit in the app's admin settings; the story lists them last.
     [
       ...assistantSettingsSections({ client: adapter, name: 'Helper', allowance }),
-      ...assistantAdminSections({ client: adapter, allowance }),
+      ...assistantAdminSections({ client: adapter, allowance, connectors: true }),
     ],
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: open the story's chat once on mount
