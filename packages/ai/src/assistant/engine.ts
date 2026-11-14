@@ -310,6 +310,11 @@ export class AssistantError extends Error {
 
 const MAX_ROUNDS = 8;
 const MEMO_CHARS = 8000;
+/**
+ * The most a hand-off may take. A chat turn waits for it with no stream of its own, so an app that
+ * times out a silent turn (Think's `chatStreamStallTimeoutMs`) sets that above this.
+ */
+export const HAND_OFF_MS = 240_000;
 /** The built-in tool that runs several reads at once, as one step. */
 const BATCH = 'batch';
 const ADVICE_MAX = 2;
@@ -934,7 +939,9 @@ export class Assistant {
             onStepFinish: (s) => {
               meter.add(s.usage);
             },
-            ...(abortSignal ? { abortSignal } : {}),
+            abortSignal: abortSignal
+              ? AbortSignal.any([abortSignal, AbortSignal.timeout(HAND_OFF_MS)])
+              : AbortSignal.timeout(HAND_OFF_MS),
             ...turnSettings(sub.model, {
               effort: sub.effort,
               out: tier.out ?? DEFAULT_OUT,
