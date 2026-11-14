@@ -37,6 +37,7 @@ import {
   STATUS_LABEL,
   adminGuard,
   fromNow,
+  syncText,
   topScopes,
   usePeopleAction,
   when,
@@ -151,7 +152,9 @@ export function PersonDrawer({
                 },
                 view.sync && {
                   label: 'Sign-in provider',
-                  value: `${view.sync.ok ? 'Synced' : 'Out of step'} · ${when(view.sync.at)}`,
+                  value: view.sync.at
+                    ? `${syncText(view.sync)} · ${when(view.sync.at)}`
+                    : syncText(view.sync),
                 },
               ]}
             />

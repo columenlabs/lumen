@@ -6,6 +6,7 @@ import {
   type Person,
   type PersonStatus,
   type Scope,
+  type SyncStatus,
   checkAdminFloor,
   levelLabel,
   levelOf,
@@ -71,6 +72,10 @@ export function when(ts: number | null | undefined, now = Date.now()): string {
 }
 
 /** `in 5 d`, `in 3 h`, `2 d ago`: how far a time is from now. */
+/** A sign-in sync's one-word state: never set up is not a failed sync. */
+export const syncText = (s: Pick<SyncStatus, 'configured' | 'ok'>) =>
+  !s.configured ? 'Not set up' : s.ok ? 'Synced' : 'Out of step';
+
 export function fromNow(ts: number | null | undefined, now = Date.now()): string {
   if (!ts) return '—';
   const ms = ts - now;

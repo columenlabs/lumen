@@ -121,8 +121,8 @@ const ROUTES: EmailSettingsView['routes'] = [
   { id: 'public', label: 'Public internet', url: 'https://api.resend.com' },
 ];
 
-function mockAdapter(opts: { mail: boolean }): PeopleAdapter {
-  let people = PEOPLE.map((p) => ({ ...p }));
+function mockAdapter(opts: { mail: boolean; solo?: boolean }): PeopleAdapter {
+  let people = (opts.solo ? PEOPLE.slice(0, 1) : PEOPLE).map((p) => ({ ...p }));
   let email: EmailSettingsView = {
     routes: ROUTES,
     current: opts.mail
@@ -145,7 +145,9 @@ function mockAdapter(opts: { mail: boolean }): PeopleAdapter {
     scopes: SCOPES,
     inviteDays: 7,
     mail: { configured: !!email.current, from: email.current?.from },
-    sync: { configured: true, ok: true, detail: 'Allow list has 4 emails', at: NOW - 600_000 },
+    sync: opts.solo
+      ? { configured: false, ok: false, detail: 'Not set up', at: null }
+      : { configured: true, ok: true, detail: 'Allow list has 4 emails', at: NOW - 600_000 },
     fixedAdmins: ['ada@example.com'],
   });
   const patch = (id: string, change: Partial<Person>) => {
@@ -175,7 +177,7 @@ function mockAdapter(opts: { mail: boolean }): PeopleAdapter {
           ],
   });
   return {
-    key: `story-people-${opts.mail}`,
+    key: `story-people-${opts.mail}-${!!opts.solo}`,
     view: async () => view(),
     invite: async (input) => {
       await wait();
@@ -278,8 +280,8 @@ export default meta;
 
 type Story = StoryObj<typeof LumenPeople>;
 
-function Live({ mail }: { mail: boolean }) {
-  const [adapter] = useState(() => mockAdapter({ mail }));
+function Live({ mail, solo }: { mail: boolean; solo?: boolean }) {
+  const [adapter] = useState(() => mockAdapter({ mail, solo }));
   return (
     <SampleShell>
       <LumenPeople adapter={adapter} />
@@ -291,6 +293,9 @@ export const People: Story = { render: () => <Live mail /> };
 
 /** No email set up: invites give a link to send by hand, and the page says so. */
 export const NoEmail: Story = { render: () => <Live mail={false} /> };
+
+/** Only the admin so far, sign-in sync never set up: the table still lists the admin. */
+export const JustYou: Story = { render: () => <Live mail={false} solo /> };
 
 /** Email · Resend-compatible API: how the server is reached, its sealed key, the sender, then a check
  *  or test. Save waits until one passes. */
