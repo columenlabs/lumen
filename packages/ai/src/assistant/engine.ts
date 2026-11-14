@@ -272,6 +272,12 @@ export interface AssistantOptions {
    */
   ownFallback?: (caller: Caller) => boolean | Promise<boolean>;
   /**
+   * Whether a tier's work counts against the person's allowance (Admin ▸ Models' Credits switch).
+   * False: it runs on the app's key whatever the person pays with or has left, and its spend is
+   * kept as free (shown, never counted). Left out, every tier counts.
+   */
+  credits?: (tier: string) => boolean | Promise<boolean>;
+  /**
    * Who answers when a ChatGPT plan reaches its usage limit mid-turn. 'claude' (default): the
    * app's smallest Claude on the same payer's Anthropic key. 'shared': the same model on the app's
    * shared key, counted as shared spend (only when `ownFallback` allows it).
@@ -582,6 +588,19 @@ export class Assistant {
     return { ...(ways ? { ways } : {}), fallback, ...(only ? { only } : {}) };
   }
 
+  /** True when this tier's work is the app's own (`credits` answers false): the app's key, not counted. */
+  private async freeTier(tier: string) {
+    if (!this.o.credits) return false;
+    return (await Promise.resolve(this.o.credits(tier)).catch(() => true)) === false;
+  }
+
+  /** The paying rules for a tier: its own rules, or the app's key uncounted for a free tier. */
+  private async rulesFor(caller: Caller, tier: string, only?: AssistantPayer) {
+    const free = await this.freeTier(tier);
+    const rules = await this.payingRules(caller, free ? 'app' : only);
+    return { rules: free ? { ...rules, free: true } : rules, free };
+  }
+
   // ---------------------------------------------------------------- a turn on Think
 
   /**
@@ -604,7 +623,7 @@ export class Assistant {
         ? this.tierById(input.tier)
         : undefined;
     const main = await this.session(caller, lower ?? picked);
-    const rules = await this.payingRules(caller);
+    const { rules, free } = await this.rulesFor(caller, main.tier.id);
     const { paying, wait } = await this.state.paying(caller.id, main.model.provider, rules);
     if (!paying) {
       const code = wait ?? 'not_connected';
@@ -728,7 +747,7 @@ export class Assistant {
       const onShared = sharedLabel ? end.parts.filter((x) => x.label === sharedLabel) : [];
       const onPayer = onShared.length ? end.parts.filter((x) => !onShared.includes(x)) : end.parts;
       await this.state
-        .addSpend(caller.id, paying.payer, onPayer, { task: 'chat', ms: end.ms })
+        .addSpend(caller.id, paying.payer, onPayer, { task: 'chat', ms: end.ms }, free)
         .catch(() => undefined);
       if (onShared.length)
         await this.state
@@ -956,7 +975,9 @@ export class Assistant {
       this.state.spend(caller.id),
       this.state.appCap(),
       this.state.ownCap(caller.id),
-      this.payingRules(caller).then((r) => this.state.paying(caller.id, mainModel.provider, r)),
+      this.rulesFor(caller, main.id).then(({ rules }) =>
+        this.state.paying(caller.id, mainModel.provider, rules),
+      ),
     ]);
     const link = await linkTest;
     const tiers = await Promise.all(
@@ -1458,11 +1479,8 @@ export class Assistant {
   ): Promise<{ text: string; usd: number; model: string; cut: boolean; usage: UsagePart }> {
     const began = Date.now();
     const s = await this.session(caller, await this.mainTier(caller, o.task));
-    const { paying, wait } = await this.state.paying(
-      caller.id,
-      s.model.provider,
-      await this.payingRules(caller, o.payer),
-    );
+    const { rules, free } = await this.rulesFor(caller, s.tier.id, o.payer);
+    const { paying, wait } = await this.state.paying(caller.id, s.model.provider, rules);
     if (!paying) {
       const code = wait ?? 'not_connected';
       throw new AssistantError(waitText(code, s.model.provider, !!this.o.allowance), code, 402);
@@ -1536,10 +1554,13 @@ export class Assistant {
       );
     } finally {
       const part = s.meter.part();
-      await this.state.addSpend(caller.id, paying.payer, [part], {
-        task: o.tag ?? o.task,
-        ms: Date.now() - began,
-      });
+      await this.state.addSpend(
+        caller.id,
+        paying.payer,
+        [part],
+        { task: o.tag ?? o.task, ms: Date.now() - began },
+        free,
+      );
       const task = this.tasks.find((t) => t.id === o.task);
       await this.state
         .addUsage(

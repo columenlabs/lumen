@@ -92,6 +92,7 @@ const assistant = createAssistant({
   // turn when a ChatGPT plan runs out ('shared': the same model on the app's key, shared spend).
   // ownWays: async (caller) => ({ openai: ['key', 'plan'] }),
   // ownFallback: async (caller) => true,
+  // credits: (tier) => tier !== 'reviewer', // false: that tier runs on the app's key, never counted against allowance
   // planFallback: 'shared',
 });
 // A check the app always runs on its own key, whoever pays the person's answers:
