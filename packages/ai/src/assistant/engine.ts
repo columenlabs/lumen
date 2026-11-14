@@ -84,6 +84,13 @@ import { type AssistantStore, Docs, type Sealer } from './store';
 import { type ToolSource, toolName, withDeadline } from './tools';
 import { type AccessToken, type WebFetchOptions, scrapeqlTools, webFetchTools } from './web';
 
+/** Whether a ChatGPT plan takes `prompt_cache_options` (on until it refuses it once). */
+let planCacheTtl = true;
+class CacheTtlRefused extends Error {}
+/** An error that names the cache field: the plan does not take it. */
+const refusesCacheTtl = (e: unknown) =>
+  /prompt_cache_options/i.test(typeof e === 'string' ? e : JSON.stringify(e ?? ''));
+
 /** An app's slash command (`/story <words>`). */
 export interface AssistantCommandDef {
   /** Typed after the slash, letters, digits and `-`: `story`. */
@@ -1775,6 +1782,9 @@ export class Assistant {
           ],
           store: false,
           ...(cacheKey ? { prompt_cache_key: cacheKey } : {}),
+          // A plan wrote nothing to its cache (cache_write_tokens 0, live 2026-11-14): ask for the
+          // default 30-minute cache in so many words. Left out if the plan refuses the field.
+          ...(plan && cacheKey && planCacheTtl ? { prompt_cache_options: { ttl: '30m' } } : {}),
           stream: true,
           // A plan request as OpenAI's own Codex client sends it (and as planFetch does for chat).
           ...(plan ? { include: ['reasoning.encrypted_content'] } : { max_output_tokens: max }),
@@ -1797,10 +1807,32 @@ export class Assistant {
           done = e.response as OpenAI.Responses.Response;
         else if (e.type === 'error') {
           const er = (e.error ?? e) as { code?: string; type?: string; message?: string };
+          if (plan && planCacheTtl && refusesCacheTtl(er)) throw new CacheTtlRefused();
           throw new AssistantError(openaiStreamError(er, plan), 'upstream');
         }
       }
     } catch (err) {
+      // The plan refused the cache field: drop it for good and ask again once without it.
+      if (
+        plan &&
+        planCacheTtl &&
+        (err instanceof CacheTtlRefused ||
+          (err instanceof OpenAI.APIError && refusesCacheTtl(err.error ?? err.message)))
+      ) {
+        planCacheTtl = false;
+        return this.openaiOnce(
+          clients,
+          s,
+          instructions,
+          input,
+          max,
+          signal,
+          images,
+          effort,
+          cacheKey,
+          history,
+        );
+      }
       // The SDK throws a stream's `error` event as an APIError with no HTTP status.
       if (err instanceof OpenAI.APIError && err.status === undefined) {
         const er = (err.error ?? {}) as { code?: string; type?: string; message?: string };
