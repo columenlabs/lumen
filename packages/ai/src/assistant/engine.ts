@@ -1918,9 +1918,10 @@ export class Assistant {
           o.signal,
           o.images,
           o.effort,
-          // Named for how the prompt starts (the person, task and instructions), not the run, so
-          // the next run of the same task reads that start from the cache.
-          cacheKey(`${caller.id}:${o.task}:${s.model.id}:${o.system ?? ''}`),
+          // Named for how the prompt starts (the person, model and instructions), not the run, so the
+          // next run reads that start from the cache. Not the task: one conversation can change task
+          // (a fix after a failed build) and still share its whole start (live: 0 read of 56k).
+          cacheKey(`${caller.id}:${s.model.id}:${o.system ?? ''}`),
           o.history,
         ));
       } else if (clients.anthropic) {
