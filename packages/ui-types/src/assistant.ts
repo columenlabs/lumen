@@ -396,7 +396,8 @@ export interface SpendState {
   /** The cap of the payer now in use, USD a month. */
   cap: number | null;
   payer: AssistantPayer | null;
-  rows: (UsagePart & { payer: AssistantPayer })[];
+  /** `free`: a job the app pays whatever the cap (it counts toward no one's cap). */
+  rows: (UsagePart & { payer: AssistantPayer; free?: true })[];
 }
 
 /**
@@ -429,7 +430,7 @@ export interface UsageHistory {
   /** Months with any history, newest first (this month always). */
   months: string[];
   usd: number;
-  rows: (UsagePart & { payer: AssistantPayer })[];
+  rows: (UsagePart & { payer: AssistantPayer; free?: true })[];
   entries: UsageEntry[];
 }
 
