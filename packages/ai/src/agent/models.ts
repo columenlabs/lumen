@@ -9,6 +9,7 @@ import type { AssistantEffort } from '@columenlabs/lumen-ui-types/assistant';
 import type { JSONValue, LanguageModel, ModelMessage, SystemModelMessage } from 'ai';
 import { Stream } from 'openai/core/streaming';
 import { type ModelDef, XAI_BASE_URL } from '../assistant/models';
+import { backoffFetch } from './backoff';
 
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
 export interface ModelKey {
@@ -151,18 +152,17 @@ function textOf(content: unknown): string {
 
 /** The AI SDK model a tier runs: its provider's client on the payer's key. */
 export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}): LanguageModel {
+  // Every provider call backs off the same way on a limit or overload (backoff.ts).
+  const f = backoffFetch(o.fetch ?? fetch);
   if (model.provider === 'anthropic')
-    return createAnthropic({ apiKey: key.apiKey, ...(o.fetch ? { fetch: o.fetch } : {}) })(
+    return createAnthropic({ apiKey: key.apiKey, fetch: f })(model.id);
+  if (model.provider === 'xai')
+    return createOpenAI({ apiKey: key.apiKey, baseURL: XAI_BASE_URL, fetch: f }).responses(
       model.id,
     );
-  if (model.provider === 'xai')
-    return createOpenAI({
-      apiKey: key.apiKey,
-      baseURL: XAI_BASE_URL,
-      ...(o.fetch ? { fetch: o.fetch } : {}),
-    }).responses(model.id);
-  const f = key.plan ? planFetch(o.fetch, o.name) : o.fetch;
-  return createOpenAI({ apiKey: key.apiKey, ...(f ? { fetch: f } : {}) }).responses(model.id);
+  return createOpenAI({ apiKey: key.apiKey, fetch: key.plan ? planFetch(f, o.name) : f }).responses(
+    model.id,
+  );
 }
 
 /**
