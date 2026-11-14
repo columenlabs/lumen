@@ -54,7 +54,14 @@ import {
   connectorId,
   connectorSource,
 } from './connectors';
-import { type ModelKey, aiModel, cachedTurn, planFallback, turnSettings } from './models';
+import {
+  type ModelKey,
+  aiModel,
+  cachedTurn,
+  planFallback,
+  prefixCacheKey,
+  turnSettings,
+} from './models';
 import {
   type ScreenCall,
   screenMapOf,
@@ -1148,7 +1155,14 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         effort: plan.effort ?? 'default',
         ...(plan.out ? { out: plan.out } : {}),
         plan: free,
-        cacheKey: this.name,
+        // Named for how the prompt starts, so a new chat reads its instructions and tools from the cache.
+        cacheKey: prefixCacheKey(
+          plan.model.id,
+          system,
+          Object.keys(tools)
+            .filter((n) => !lazy || lazy.active().includes(n))
+            .join(','),
+        ),
       }),
     };
   }
