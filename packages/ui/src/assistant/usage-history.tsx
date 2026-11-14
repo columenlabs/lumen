@@ -215,7 +215,15 @@ export function OwnKeyUsage({ client, always }: { client: AssistantAdapter; alwa
   const sessions = all
     .filter((e) => e.at >= since && !seen.has(e.id) && seen.add(e.id))
     .sort((a, b) => b.at - a.at);
-  const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0);
+  // This month's own spend that no chat or run carries (spent before per-chat tracking), so the
+  // table never reads "nothing" while the cap's own numbers say otherwise.
+  const tagged = now.entries.reduce((a, e) => a + (e.own_usd ?? 0), 0);
+  const ownMonth = now.rows
+    .filter((r) => r.payer === 'own' && !r.free)
+    .reduce((a, r) => a + r.usd, 0);
+  const untracked = ownMonth - tagged >= 0.01 ? ownMonth - tagged : 0;
+  const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0) + untracked;
+  const earlier = 'Earlier this month, not per chat';
   return (
     <div className="flex flex-col gap-2 border-t border-border/60 pb-3 first:border-t-0">
       <SettingField
@@ -240,29 +248,49 @@ export function OwnKeyUsage({ client, always }: { client: AssistantAdapter; alwa
           </ToggleGroup>
         }
       />
-      {sessions.length ? (
+      {sessions.length || untracked ? (
         <DetailsTable
           head={[
             { label: 'Session', grow: true },
             { label: 'Date', hideOnPhone: true },
             { label: 'Amount', right: true },
           ]}
-          rows={sessions.map((e) => ({
-            key: e.id,
-            cells: [
-              <span key="n" className="block truncate" title={e.title}>
-                {e.title}
-              </span>,
-              <time
-                key="t"
-                dateTime={new Date(e.at).toISOString()}
-                title={new Date(e.at).toLocaleString()}
-              >
-                {when(e.at)}
-              </time>,
-              usd(e.own_usd ?? 0),
-            ],
-          }))}
+          rows={[
+            ...sessions.map((e) => ({
+              key: e.id,
+              cells: [
+                <span key="n" className="block truncate" title={e.title}>
+                  {e.title}
+                </span>,
+                <time
+                  key="t"
+                  dateTime={new Date(e.at).toISOString()}
+                  title={new Date(e.at).toLocaleString()}
+                >
+                  {when(e.at)}
+                </time>,
+                usd(e.own_usd ?? 0),
+              ],
+            })),
+            ...(untracked
+              ? [
+                  {
+                    key: 'earlier',
+                    cells: [
+                      <span
+                        key="n"
+                        className="block truncate text-muted-foreground"
+                        title={earlier}
+                      >
+                        {earlier}
+                      </span>,
+                      <span key="t" />,
+                      usd(untracked),
+                    ],
+                  },
+                ]
+              : []),
+          ]}
           foot={['Total', <span key="d" className="max-md:hidden" />, usd(total)]}
         />
       ) : (
