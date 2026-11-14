@@ -84,6 +84,11 @@ function itemMarkdown(i: ChatItem, depth: number, name: string): string {
       ]
         .filter(Boolean)
         .join('\n\n');
+    case 'task':
+      return [
+        `${h} ${i.label} (${i.state})`,
+        ...i.items.map((x) => itemMarkdown(x, depth + 1, name)),
+      ].join('\n\n');
     case 'advice':
       return `_${i.error ? 'Could not ask' : 'Asked'} ${i.label} for advice._`;
     case 'fresh':

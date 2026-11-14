@@ -14,6 +14,8 @@ import {
   type AssistantRefNote,
   type AssistantScreenMove,
   type AssistantStatus,
+  type AssistantTask,
+  type AssistantTaskState,
   COMPACT_AT,
   type ChatItem,
   type ChatUsage,
@@ -21,6 +23,7 @@ import {
   type HandOffItem,
   type ScreenItem,
   type StepItem,
+  type TaskItem,
   type UsagePart,
   type WebLink,
 } from '@columenlabs/lumen-ui-types/assistant';
@@ -189,6 +192,16 @@ export interface LumenAssistantProps {
    * yellow at 75% of it and red at it. The person's Auto-compact (status `compact_at`) wins; 150k by default.
    */
   compactAt?: number;
+  /**
+   * A task in the chat (`AssistantTask`, the app's work in its own session): the buttons in its
+   * block's header, such as Keep and Drop, from the app.
+   */
+  taskActions?: (task: AssistantTask) => ReactNode;
+  /**
+   * The app's word on where a task stands, ahead of the chat's: it took or dropped the task's result
+   * in its own screens. A task no longer open drops its chip over the box.
+   */
+  taskState?: (task: AssistantTask) => AssistantTaskState | undefined;
 }
 
 /** A composer mode: its toggle's icon and label (also its tooltip and aria-label). */
@@ -227,6 +240,8 @@ export function LumenAssistant({
   modes = [],
   imageTool,
   compactAt = COMPACT_AT,
+  taskActions,
+  taskState,
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
@@ -258,9 +273,17 @@ export function LumenAssistant({
   // each new screen call runs here once; how it ended goes with the next message.
   const screen = useAssistantScreen();
   const screenOn = !!screen && (s?.screen ?? 'move') === 'move';
+  // The open task's chip over the box: the next message goes to the task (the app decides) until
+  // the person steps out with its ×, or the task ends.
+  const [stepped, setStepped] = useState<string | null>(null);
+  const openTask =
+    chat.task && (taskState?.(chat.task) ?? chat.task.state) === 'open' && stepped !== chat.task.id
+      ? chat.task
+      : null;
   const extra = (): Omit<AssistantMessage, 'message' | 'chat_id'> => ({
     ...(context ? { context } : {}),
     ...(screenOn && screen ? { screen: screenMapFor(screen) } : {}),
+    ...(openTask ? { task: openTask.id } : {}),
   });
   const ran = useRef(new Set<string>());
   const ended = chat.screenEnded;
@@ -414,16 +437,23 @@ export function LumenAssistant({
       <AssistantName.Provider value={name}>
         <Screen.Provider value={controls}>
           <ImageTool.Provider value={imageTool ?? null}>
-            <Messages
-              chat={chat}
-              status={s}
-              onSettings={onSettings}
-              onRetry={(at, user) => chat.retry(at, user, extra())}
-              onFresh={(choice) => chat.fresh(choice, extra())}
-            />
+            <TaskSlots.Provider value={{ actions: taskActions, state: taskState }}>
+              <Messages
+                chat={chat}
+                status={s}
+                onSettings={onSettings}
+                onRetry={(at, user) => chat.retry(at, user, extra())}
+                onFresh={(choice) => chat.fresh(choice, extra())}
+              />
+            </TaskSlots.Provider>
           </ImageTool.Provider>
         </Screen.Provider>
       </AssistantName.Provider>
+      {openTask && (
+        <div className="flex px-3 pt-1">
+          <TaskChip task={openTask} onLeave={() => setStepped(openTask.id)} />
+        </div>
+      )}
       <LumenComposer
         name={s?.name ?? 'the assistant'}
         busy={chat.busy}
@@ -542,7 +572,7 @@ function Messages({
 }
 
 const isLive = (i: LiveItem): boolean =>
-  !!i.live || (i.kind === 'handoff' && (i.items as LiveItem[]).some(isLive));
+  !!i.live || ((i.kind === 'handoff' || i.kind === 'task') && (i.items as LiveItem[]).some(isLive));
 
 const WAIT: Record<
   NonNullable<AssistantStatus['wait']>,
@@ -781,6 +811,8 @@ function Item({
       return <ScreenChip item={item} />;
     case 'handoff':
       return <HandOff item={item} onSettle={onSettle} busy={busy} />;
+    case 'task':
+      return <TaskBlock item={item} onSettle={onSettle} busy={busy} />;
     case 'advice':
       return (
         <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
@@ -1352,6 +1384,82 @@ function HandOff({
       {item.task && <p className="text-muted-foreground text-xs">{item.task}</p>}
       <Items items={item.items} onSettle={onSettle} busy={busy} />
     </section>
+  );
+}
+
+/** The app's parts of a task's block (`taskActions`, `taskState`). */
+const TaskSlots = createContext<{
+  actions?: (task: AssistantTask) => ReactNode;
+  state?: (task: AssistantTask) => AssistantTaskState | undefined;
+}>({});
+
+const TASK_STATE: Record<AssistantTaskState, string> = {
+  open: 'Open',
+  done: 'Kept',
+  dropped: 'Dropped',
+};
+
+/**
+ * A task's turns in the chat (`TaskItem`): one block with its label and state; while open the
+ * app's buttons (`taskActions`) sit in its header, once ended it folds to that one line.
+ */
+function TaskBlock({
+  item,
+  onSettle,
+  busy,
+}: {
+  item: TaskItem;
+  onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
+  busy: boolean;
+}) {
+  const slots = useContext(TaskSlots);
+  const state = slots.state?.(item) ?? item.state;
+  const live = (item.items as LiveItem[]).some(isLive);
+  const [open, setOpen] = useState<boolean | null>(null);
+  const shown = open ?? (state === 'open' || live);
+  return (
+    <section
+      data-slot="chat-task"
+      data-state={state}
+      className="flex min-w-0 flex-col gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2"
+    >
+      <div className="flex min-w-0 items-center gap-1.5 text-xs">
+        <WrenchIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left font-medium"
+          title={item.label}
+          aria-expanded={shown}
+          onClick={() => setOpen(!shown)}
+        >
+          {item.label}
+        </button>
+        {state === 'open' ? (
+          !live && slots.actions?.(item)
+        ) : (
+          <span className="shrink-0 text-muted-foreground">
+            {state === 'done' ? <CheckIcon className="inline size-3.5" aria-hidden /> : null}{' '}
+            {TASK_STATE[state]}
+          </span>
+        )}
+      </div>
+      {shown && <Items items={item.items} onSettle={onSettle} busy={busy} />}
+    </section>
+  );
+}
+
+/** The open task's chip over the box: the next message goes to it; its × steps out. */
+function TaskChip({ task, onLeave }: { task: AssistantTask; onLeave: () => void }) {
+  return (
+    <span
+      data-slot="chat-task-chip"
+      className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-xs"
+      title={`Your next message goes to ${task.label}`}
+    >
+      <WrenchIcon className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="truncate">{task.label}</span>
+      <IconButton icon={XIcon} label="Step out of this task" size="icon-xs" onClick={onLeave} />
+    </span>
   );
 }
 

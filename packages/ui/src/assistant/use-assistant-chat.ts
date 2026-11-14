@@ -6,6 +6,7 @@ import type {
   AssistantImage,
   AssistantMessage,
   AssistantScreenOutcome,
+  AssistantTask,
   ChatItem,
   ChatUsage,
   DraftItem,
@@ -81,6 +82,8 @@ export interface AssistantChatState {
   canSteer: boolean;
   /** The chat is loading. */
   loading: boolean;
+  /** The newest task open in this chat (`AssistantTask`): the composer offers to keep the next message on it. */
+  task: AssistantTask | null;
   /**
    * Sends now, or while an answer runs: `steer` (the default where the adapter can) into it at its
    * next step, else queued for after it.
@@ -124,8 +127,13 @@ function resendOf(user: Extract<ChatItem, { kind: 'user' }>): Extra {
   };
 }
 
-/** Where an event lands: the chat, or the last hand-off section when it came from inside one. */
-function sinkOf(items: LiveItem[], handoff?: boolean): LiveItem[] {
+/**
+ * Where an event lands: the chat, the task block this answer runs in, or the last hand-off section
+ * when it came from inside one.
+ */
+function sinkOf(all: LiveItem[], handoff?: boolean): LiveItem[] {
+  const top = all[all.length - 1];
+  const items = top?.kind === 'task' && top.live ? (top.items as LiveItem[]) : all;
   if (!handoff) return items;
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
@@ -136,9 +144,11 @@ function sinkOf(items: LiveItem[], handoff?: boolean): LiveItem[] {
 
 /** A copy of the items with one event applied (hand-off sections copied too). */
 export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
-  const items: LiveItem[] = prev.map((i) =>
-    i.kind === 'handoff' ? { ...i, items: [...(i.items as LiveItem[])] } : i,
-  );
+  const copy = (i: LiveItem): LiveItem =>
+    i.kind === 'handoff' || i.kind === 'task'
+      ? ({ ...i, items: (i.items as LiveItem[]).map(copy) } as LiveItem)
+      : i;
+  const items: LiveItem[] = prev.map(copy);
   const inside = 'handoff' in e.data && e.data.handoff === true;
   const sink = sinkOf(items, inside);
   const last = sink[sink.length - 1];
@@ -190,10 +200,31 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
       break;
     }
     case 'handoff':
-      items.push({ ...e.data, items: [] } as HandOffItem);
+      sink.push({ ...e.data, items: [] } as HandOffItem);
       break;
+    case 'task': {
+      // This answer runs in a task: the message just sent joins the task's block when the block is
+      // right above it, else a new block opens under it; what the answer says lands in the block.
+      const user = items.findLastIndex((i) => i.kind === 'user' && !i.steered);
+      const above = user > 0 ? items[user - 1] : undefined;
+      if (
+        user >= 0 &&
+        user === items.length - 1 &&
+        above?.kind === 'task' &&
+        above.id === e.data.id
+      ) {
+        const u = items.splice(user, 1)[0] as LiveItem;
+        items[user - 1] = {
+          ...above,
+          ...e.data,
+          items: [...(above.items as LiveItem[]), u],
+          live: true,
+        } as LiveItem;
+      } else items.push({ kind: 'task', ...e.data, items: [], live: true } as LiveItem);
+      break;
+    }
     case 'handoff_done': {
-      const h = [...items].reverse().find((i): i is HandOffItem => i.kind === 'handoff');
+      const h = [...sink].reverse().find((i): i is HandOffItem => i.kind === 'handoff');
       if (h) h.usage = e.data.usage;
       break;
     }
@@ -239,16 +270,24 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
 const settled = (items: LiveItem[]): LiveItem[] =>
   items.map((i) => {
     if (i.kind === 'handoff') return { ...i, items: settled(i.items as LiveItem[]) };
+    if (i.kind === 'task') {
+      const { live: _l, ...rest } = i;
+      return { ...rest, items: settled(i.items as LiveItem[]) } as LiveItem;
+    }
     if (!i.live || i.kind === 'screen') return i;
     const { live: _l, writing: _w, ...rest } = i;
     return rest as LiveItem;
   });
+
+/** How long Stop waits for the server to end the answer before it stops reading the stream. */
+const STOP_WAIT_MS = 8_000;
 
 export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   const [chatId, setChatId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [items, setItems] = useState<LiveItem[]>([]);
   const [usage, setUsage] = useState<ChatUsage | null>(null);
+  const [task, setTask] = useState<AssistantTask | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [queue, setQueue] = useState<QueuedMessage[]>([]);
@@ -321,7 +360,10 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
               setChatId(e.data.id);
               setTitle(e.data.title);
             } else if (e.event === 'usage') setUsage(e.data);
-            else if (e.event === 'done') setUsage(e.data.usage);
+            else if (e.event === 'task') {
+              setTask(e.data.state === 'open' ? e.data : null);
+              setItems((p) => applyEvent(p, e));
+            } else if (e.event === 'done') setUsage(e.data.usage);
             else if (e.event === 'steered') {
               // Read by the answer here: the line moves from the queue into the chat.
               setQueue((q) => {
@@ -430,6 +472,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         setTitle('');
         setItems([]);
         setUsage(null);
+        setTask(null);
         void run(user.text, { ...extra, ...resendOf(user) });
       } else {
         // The message goes again in its place, without the card.
@@ -461,7 +504,22 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     return m;
   }, []);
 
-  const stop = useCallback(() => abort.current?.abort(), []);
+  // Stop asks the server to end the answer, and the stream ends there with what was said and made
+  // so far, so nothing it finished is lost. An app with no stop route (or one that does not
+  // answer in a few seconds) stops reading the stream instead.
+  const stop = useCallback(() => {
+    const ctl = abort.current;
+    const id = idRef.current;
+    if (!ctl) return;
+    if (!client.stop || !id) return void ctl.abort();
+    const late = setTimeout(() => {
+      if (abort.current === ctl) ctl.abort();
+    }, STOP_WAIT_MS);
+    client.stop(id).catch(() => {
+      clearTimeout(late);
+      if (abort.current === ctl) ctl.abort();
+    });
+  }, [client]);
 
   const reset = useCallback(() => {
     abort.current?.abort();
@@ -471,6 +529,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     setTitle('');
     setItems([]);
     setUsage(null);
+    setTask(null);
   }, []);
 
   const open = useCallback(
@@ -494,6 +553,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
           }),
         );
         setUsage(c.usage ?? null);
+        setTask(c.task ?? null);
       } catch (err) {
         setItems([{ kind: 'error', text: errorText(err) }]);
       } finally {
@@ -509,8 +569,8 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       list.map((i) =>
         i.kind === next.kind && i.id === next.id
           ? next
-          : i.kind === 'handoff'
-            ? { ...i, items: swap(i.items as LiveItem[]) }
+          : i.kind === 'handoff' || i.kind === 'task'
+            ? ({ ...i, items: swap(i.items as LiveItem[]) } as LiveItem)
             : i,
       );
     setItems(swap);
@@ -542,8 +602,8 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       list.map((i) =>
         i.kind === 'screen' && i.id === o.id
           ? { kind: 'screen', id: i.id, label: i.label, moves: i.moves, outcome }
-          : i.kind === 'handoff'
-            ? { ...i, items: mark(i.items as LiveItem[]) }
+          : i.kind === 'handoff' || i.kind === 'task'
+            ? ({ ...i, items: mark(i.items as LiveItem[]) } as LiveItem)
             : i,
       );
     setItems(mark);
@@ -559,6 +619,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     queue,
     canSteer,
     loading,
+    task,
     send,
     retry,
     steerQueued,

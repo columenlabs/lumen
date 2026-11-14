@@ -393,9 +393,11 @@ export function itemsOf(
   screens: Map<string, ScreenCall> = new Map(),
   steers: Record<string, SteerNote[]> = {},
   names: StepNames = {},
-): ChatItem[] {
+  /** Each message the person wrote for a task (`AgentTurnPlan.task`), by id: `taskBlocks` reads the mark. */
+  taskOf: Record<string, string> = {},
+): (ChatItem & { _task?: string })[] {
   const byId = new Map(cards.map((c) => [c.id, c]));
-  const items: ChatItem[] = [];
+  const items: (ChatItem & { _task?: string })[] = [];
   let asked: string | undefined;
   for (const m of messages) {
     if (m.role === 'user') {
@@ -420,6 +422,7 @@ export function itemsOf(
         ...(meta.refs?.length ? { refs: meta.refs } : {}),
         ...(meta.quote ? { quote: meta.quote } : {}),
         ...(meta.tier ? { tier: meta.tier } : {}),
+        ...(m.id && taskOf[m.id] ? { _task: taskOf[m.id] } : {}),
       });
       continue;
     }

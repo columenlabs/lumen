@@ -72,7 +72,7 @@ const assistant = createAssistant({
   name: 'Helper',
   system: 'You help people with their notes. Use the notes tools for facts.',
   hideModel: true, // never names its model, provider or tier; asked, it is just "Helper"
-  // pickTier: false, // the app picks each turn's tier (agentTurn input.tier); no tier menu in the panel
+  // pickTier: false, // the app picks each turn's tier (agentTurn input.tier); no tier menu in the panel and no hand-off: its pick is the only routing
   // Smallest first. The app names them; a person picks each tier's model and effort.
   tiers: [
     { id: 'fast', label: 'Fast', about: 'Quick lookups', model: 'claude-haiku-5-5' },
@@ -263,6 +263,10 @@ Drafts and writes are cards in the chat's own storage (`lumen_cards` in the agen
 **A write in progress.** A tool line starts (`step_start`) as soon as the model starts the call, while it is still writing the arguments. For a Read + write tool it carries `write: true`, and `useAssistantChat` marks that running step `writing` until its result lands or the answer ends, so an app can show what the tool changes as being changed now (a pending edit is not ready to accept while the model rewrites it).
 
 **Steps.** One answer makes at most `plan.maxSteps` model calls (`MAX_STEPS`, 8). The last one runs with no tools and `LAST_STEP_NOTE`, so an answer always ends in words: what it found, and what is left when the task did not fit.
+
+**Stop.** The panel's Stop calls the adapter's `stop(chatId)`; the app routes `POST /chats/:id/stop` to the agent's `stop()`, the answer ends on the server with what it said and made so far, and its stream ends with `stopped`. An app without the route falls back to dropping the stream after a few seconds; the answer then runs on (`waitUntil`) and its result is in the chat when it is opened again.
+
+**Tasks inside a chat.** A plan may name a task (`plan.task: { id, label, brief }`): work the app runs in its own session on its own model inside the same chat, such as a hard edit. The task's turns read the app's `brief` (sent as first given) and the task's own messages only; the chat's other turns never read them and hear in one line how the task ended (`endTask(id, 'done' | 'dropped')`, with its last answer). Each side resends the same earlier messages turn after turn, so both stay in the prompt cache. The panel shows a task's turns as one block (`TaskItem`; the app's buttons in its header through `LumenAssistant` `taskActions`, its state through `taskState`), and while it is open a chip over the box sends the next message with `task: <id>` until the person steps out with its ×; the app's plan decides whether that message goes on the task. An app with `pickTier: false` has no hand-off tool: its pick of each turn's tier, and its tasks, are the only routing.
 
 **Steer and queue.** While an answer runs, the panel's box stays open: Enter steers the message into the answer (`steer(message)` on the agent; the app routes `POST /chats/:id/steer` `{ message }` to it and answers `{ steered }`), Alt+Enter queues it for after. A steer joins at the answer's next step, after the tool it is on, with `STEER_NOTE` before it for the model; the panel shows it there marked Steered (event `steered`), and `view()` keeps it in place (`SteerNote`, under the message the answer is to). A steer the answer ends before reading comes back as `unsteered` and goes first in the queue. `plan.steer: false` turns it off for a model; an app without the route (404) shows Queue only. Queued messages each go as their own message when the answer before them ends; each has Steer now, Edit and Remove.
 
