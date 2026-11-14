@@ -480,13 +480,19 @@ export function AssistantChatCost({
 }
 
 /** Who paid for a usage row: the person's API key, their plan sign-in, or the app's credits. */
-type UsageType = 'key' | 'plan' | 'credits';
+type UsageType = 'key' | 'plan' | 'credits' | 'internal';
 const TYPE_LABEL: Record<UsageType, string> = {
   key: 'API key',
   plan: 'Sign-in',
   credits: 'Credits',
+  internal: 'Internal',
 };
-const TYPE_TONE: Record<UsageType, ViewChipTone> = { key: 'sky', plan: 'amber', credits: 'muted' };
+const TYPE_TONE: Record<UsageType, ViewChipTone> = {
+  key: 'sky',
+  plan: 'amber',
+  credits: 'muted',
+  internal: 'muted',
+};
 
 /** One line of the usage table: a chat or run, or a month's spend no chat or run carries. */
 interface UsageRow {
@@ -546,6 +552,7 @@ function usageRows(h: UsageHistory): UsageRow[] {
           : row.credits > 0 || !planCalls
             ? 'credits'
             : 'plan';
+    if (e.internal) row.type = 'internal';
     sessions.set(id, row);
   }
   const out = [...sessions.values()];
@@ -591,7 +598,8 @@ function usageRows(h: UsageHistory): UsageRow[] {
     ),
     sum(app.map((r) => r.usd)) - sum(h.entries.map((e) => Math.max(0, e.usd - (e.own_usd ?? 0)))),
   );
-  return out;
+  // The app's own calls are kept (and counted above, so no Earlier row takes them) but not shown.
+  return out.filter((r) => r.type !== 'internal');
 }
 
 /** A row's hover: its tokens (cache reads as a share of input) and what it cost, by who paid. */
@@ -617,8 +625,8 @@ function UsageTip({ r, children }: { r: UsageRow; children: ReactNode }) {
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent className="max-w-72">
-        <div className="flex flex-col gap-1">
-          <span className="truncate font-medium">{r.title}</span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="whitespace-normal break-words font-medium">{r.title}</span>
           <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
             {lines.map(([k, v]) => (
               <Fragment key={k}>
@@ -643,6 +651,9 @@ const USAGE_FIELDS: ViewField<UsageRow>[] = [
     label: 'Session',
     icon: MessageSquareIcon,
     format: 'text',
+    // Names run long (a chat's first line): as wide as the table leaves after its other columns
+    // (the table's box is a size container), never under the usual name column.
+    maxWidth: 'max(12rem, calc(100cqw - 22rem))',
     value: (r) => r.title,
     render: (r) => (
       <UsageTip r={r}>
@@ -797,18 +808,20 @@ export function AssistantUsageTable({ client }: { client: AssistantAdapter }) {
           ))}
         </ToggleGroup>
       </div>
-      <LumenTable
-        domain={USAGE_DOMAIN}
-        rows={filter.results}
-        groupBy={GROUPS.find((g) => g.id === group)?.field ?? null}
-        sort={{ key: 'at', desc: true }}
-        emptyState={
-          rows.length ? undefined : (
-            <p className="text-muted-foreground text-sm">Nothing used this month.</p>
-          )
-        }
-        onClearFilter={filter.clear}
-      />
+      <div className="@container min-w-0">
+        <LumenTable
+          domain={USAGE_DOMAIN}
+          rows={filter.results}
+          groupBy={GROUPS.find((g) => g.id === group)?.field ?? null}
+          sort={{ key: 'at', desc: true }}
+          emptyState={
+            rows.length ? undefined : (
+              <p className="text-muted-foreground text-sm">Nothing used this month.</p>
+            )
+          }
+          onClearFilter={filter.clear}
+        />
+      </div>
       <p className="text-muted-foreground text-xs">
         Sign-in amounts are estimates: your {PLAN_NAME} charges $0, so the amount is what the same
         tokens would cost at the model's API rates. Key and credit amounts are what was charged.

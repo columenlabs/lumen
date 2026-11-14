@@ -132,6 +132,11 @@ export interface TaskDef {
   label: string;
   about: string;
   tier: string;
+  /**
+   * The app's own call, not the person's (a check run before every message): its usage is kept
+   * and marked `internal`, and the person's usage table leaves it out.
+   */
+  internal?: boolean;
 }
 
 /** Output tokens per model call when a tier sets none. */
