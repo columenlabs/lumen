@@ -185,6 +185,9 @@ export function UsageHistoryView({
   );
 }
 
+/** How the own-key table names calls a plan sign-in paid. */
+const PLAN_NAME = 'ChatGPT plan';
+
 /** The ranges the own-key table offers, in days. */
 const OWN_RANGES = [
   { id: '1d', days: 1 },
@@ -215,7 +218,7 @@ export function OwnKeyUsage({
   const prev = useAssistantUsage(client, before, !!before && range === '30d').data;
   if (!now) return null;
   const all = [...now.entries, ...(range === '30d' ? (prev?.entries ?? []) : [])].filter(
-    (e) => (e.own_usd ?? 0) > 0,
+    (e) => (e.own_usd ?? 0) > 0 || (e.own_plan_calls ?? 0) > 0,
   );
   if (!always && !all.length) return null;
   const days = OWN_RANGES.find((r) => r.id === range)?.days ?? 7;
@@ -242,6 +245,20 @@ export function OwnKeyUsage({
   const total = sessions.reduce((a, e) => a + (e.own_usd ?? 0), 0) + untracked + gone;
   const earlier = 'Earlier this month, not per chat';
   const removedText = 'Key not in use now, not counted';
+  // Calls a plan sign-in paid: free to the person, so listed by count. A $0 own row from before
+  // rows recorded their way is a plan's too (a key call always costs something).
+  const planCalls = now.rows
+    .filter((r) => r.payer === 'own' && !r.free && (r.way === 'plan' || (!r.way && r.usd < 0.0005)))
+    .reduce((a, r) => a + r.calls, 0);
+  const calls = (n: number) => (n === 1 ? '1 call' : `${n} calls`);
+  // Plan calls no chat or run carries (made before each entry kept its own count).
+  const planEarlier = Math.max(
+    0,
+    planCalls - now.entries.reduce((a, e) => a + (e.own_plan_calls ?? 0), 0),
+  );
+  const planText = `Earlier, ${PLAN_NAME}, ${calls(planEarlier)}`;
+  const named = (e: (typeof sessions)[number]) =>
+    e.own_plan_calls ? `${e.title} · ${PLAN_NAME}, ${calls(e.own_plan_calls)}` : e.title;
   return (
     <div className="flex flex-col gap-2 border-t border-border/60 pb-3 first:border-t-0">
       <SettingField
@@ -266,7 +283,7 @@ export function OwnKeyUsage({
           </ToggleGroup>
         }
       />
-      {sessions.length || untracked || gone ? (
+      {sessions.length || untracked || gone || planEarlier ? (
         <DetailsTable
           head={[
             { label: 'Session', grow: true },
@@ -277,8 +294,8 @@ export function OwnKeyUsage({
             ...sessions.map((e) => ({
               key: e.id,
               cells: [
-                <span key="n" className="block truncate" title={e.title}>
-                  {e.title}
+                <span key="n" className="block truncate" title={named(e)}>
+                  {named(e)}
                 </span>,
                 <time
                   key="t"
@@ -322,6 +339,24 @@ export function OwnKeyUsage({
                       </span>,
                       <span key="t" />,
                       usd(gone),
+                    ],
+                  },
+                ]
+              : []),
+            ...(planEarlier
+              ? [
+                  {
+                    key: 'plan',
+                    cells: [
+                      <span
+                        key="n"
+                        className="block truncate text-muted-foreground"
+                        title={planText}
+                      >
+                        {planText}
+                      </span>,
+                      <span key="t" />,
+                      usd(0),
                     ],
                   },
                 ]

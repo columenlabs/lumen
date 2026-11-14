@@ -437,6 +437,8 @@ export interface UsageEntry {
   usd: number;
   /** Of `usd`, what the person's own key or plan paid (left out when nothing, and before it was kept). */
   own_usd?: number;
+  /** Calls the person's plan sign-in answered (free to them; left out when none, and before it was kept). */
+  own_plan_calls?: number;
   parts: UsagePart[];
 }
 
