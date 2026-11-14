@@ -450,6 +450,8 @@ export interface UsageEntry {
   own_plan_calls?: number;
   /** Those plan calls at the models' API rates, an estimate (the plan itself charged $0). */
   own_plan_usd?: number;
+  /** A run of one of the app's own tasks (`TaskDef.internal`), not something the person asked for. */
+  internal?: true;
   parts: UsagePart[];
 }
 

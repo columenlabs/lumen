@@ -365,7 +365,19 @@ export function assistantRoutes(
         case 'GET /usage': {
           const month = url.searchParams.get('month') ?? undefined;
           if (month !== undefined && !/^\d{4}-\d{2}$/.test(month)) return fail('month is YYYY-MM.');
-          return json(await a.state.usage(caller.id, month));
+          const h = await a.state.usage(caller.id, month);
+          // Runs of the app's own tasks (`TaskDef.internal`) are marked, so the table can leave them out.
+          const internal = new Set(a.tasks.filter((t) => t.internal).map((t) => t.id));
+          return json(
+            internal.size
+              ? {
+                  ...h,
+                  entries: h.entries.map((e) =>
+                    e.task && internal.has(e.task) ? { ...e, internal: true as const } : e,
+                  ),
+                }
+              : h,
+          );
         }
 
         case 'POST /allowance/request': {
