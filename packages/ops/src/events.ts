@@ -30,6 +30,8 @@ export interface EventPoint {
   /** Up to three counts, named by the event (a sync: added, modified, removed). */
   counts?: [number?, number?, number?];
   attempt?: number;
+  /** A model call's use, for an event that asked an AI model: its id, tokens (in counts cache reads) and cost. */
+  ai?: { model?: string; in?: number; out?: number; read?: number; usd?: number };
   /** `true` when the event was a call to another service: its time adds to the request's. */
   upstream?: boolean;
   /** Defaults to the request in scope; pass these from a Durable Object or a job. */
@@ -59,8 +61,8 @@ export function setEventSink(s: PointSink | undefined, d: EventDefaults = {}) {
 
 /**
  * Column order is the contract with whoever reads the dataset back: index1 subject (or `anon`);
- * blobs app, event, code, outcome, ref, trigger, request id, upstream id, env, version; doubles
- * ms, status, count1, count2, count3, attempt.
+ * blobs app, event, code, outcome, ref, trigger, request id, upstream id, env, version, AI model;
+ * doubles ms, status, count1, count2, count3, attempt, AI usd, tokens in, tokens out, cache reads.
  */
 export function meterEvent(p: EventPoint) {
   try {
@@ -86,6 +88,7 @@ export function meterEvent(p: EventPoint) {
         cap(p.upstreamId),
         cap(fields.env),
         cap(fields.version),
+        cap(p.ai?.model),
       ],
       doubles: [
         num(p.ms),
@@ -94,6 +97,10 @@ export function meterEvent(p: EventPoint) {
         num(p.counts?.[1]),
         num(p.counts?.[2]),
         num(p.attempt),
+        num(p.ai?.usd),
+        num(p.ai?.in),
+        num(p.ai?.out),
+        num(p.ai?.read),
       ],
     });
     logLine('event', {
