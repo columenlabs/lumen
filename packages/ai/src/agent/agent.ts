@@ -245,6 +245,80 @@ export function withLead(messages: ModelMessage[], lead: string | undefined): Mo
   return i < 0 ? messages : leadAt(messages, i, lead);
 }
 
+/** The leads a chat has sent, kept so each earlier message is sent again exactly as it was. */
+export interface SentLeads {
+  /** Each person's message (`leadKey`) and the lead it went with. */
+  sent: Record<string, string>;
+  /** The last whole lead, which the next one is told against. */
+  last?: string;
+}
+
+/** Leads kept per chat; the oldest go first (a compacted chat no longer has their messages). */
+const LEADS_KEPT = 60;
+const LEAD_SAME = 'Context: as in my last message.\n\n';
+const LEAD_CHANGED = 'Context: what changed since my last message (the rest is as it was).';
+
+/** A person's message's place among theirs and a hash of its words: the same message turn after turn. */
+function leadKey(n: number, m: ModelMessage): string {
+  const text =
+    typeof m.content === 'string'
+      ? m.content
+      : m.content.map((p) => (p.type === 'text' ? p.text : p.type)).join('\n');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return `${n}:${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * The lead for the newest message, told against the last one: the whole lead the first time, a line
+ * when nothing changed, else only the lines that are new and the lines that went (the whole lead
+ * when that is not much shorter).
+ */
+export function leadDelta(last: string | undefined, next: string): string {
+  if (!next || last === undefined) return next;
+  if (last === next) return LEAD_SAME;
+  const was = new Set(last.split('\n'));
+  const is = new Set(next.split('\n'));
+  const added = next.split('\n').filter((l) => l.trim() && !was.has(l));
+  const gone = last.split('\n').filter((l) => l.trim() && !is.has(l));
+  const delta = `${LEAD_CHANGED}\n${added.length ? `Now:\n${added.join('\n')}\n` : ''}${gone.length ? `No longer:\n${gone.join('\n')}\n` : ''}\n`;
+  return delta.length < next.length * 0.6 ? delta : next;
+}
+
+/**
+ * The chat's messages with every lead where it was first sent, and the newest message's lead told
+ * against the last. A provider's prompt cache reuses only earlier messages sent exactly as before:
+ * a lead moved off the last message changed it, and that message and every step after it were
+ * paid again on the next turn. Unchanged context costs one line, changed context only what changed.
+ */
+export function stickyLeads(
+  messages: ModelMessage[],
+  kept: SentLeads,
+  lead: string,
+): { messages: ModelMessage[]; kept: SentLeads } {
+  const users = messages.flatMap((m, i) => (m.role === 'user' ? [i] : []));
+  const newest = users.at(-1);
+  const sent = { ...kept.sent };
+  // Told against the last lead only when an earlier message still carries one (not after compaction).
+  let last = users.some((i, n) => i !== newest && sent[leadKey(n, messages[i] as ModelMessage)])
+    ? kept.last
+    : undefined;
+  let out = messages;
+  users.forEach((i, n) => {
+    const m = messages[i] as ModelMessage;
+    const key = leadKey(n, m);
+    if (i === newest && sent[key] === undefined && lead) {
+      sent[key] = leadDelta(last, lead);
+      last = lead;
+    }
+    const l = sent[key];
+    if (l) out = leadAt(out, i, l);
+  });
+  const keys = Object.keys(sent);
+  for (const k of keys.slice(0, Math.max(0, keys.length - LEADS_KEPT))) delete sent[k];
+  return { messages: out, kept: { sent, ...(last !== undefined && { last }) } };
+}
+
 /** The message at `i` (one the person wrote) with `lead` put before what it says. */
 function leadAt(messages: ModelMessage[], i: number, lead: string): ModelMessage[] {
   const m = messages[i];
@@ -1045,12 +1119,15 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       this.#turn.lazy = lazy;
     }
     const turn = this.#turn;
-    // The lead goes before the newest message only. Kept on every earlier message it grew the chat
-    // by a whole lead (an app's page, often thousands of tokens) each turn.
-    const cached = cachedTurn(
-      system,
-      withLead(ctx.messages, `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`),
+    // Each lead stays on the message it went with, so earlier messages are sent as before and read
+    // from the prompt cache; the newest says only what changed since the last (`stickyLeads`).
+    const led = stickyLeads(
+      ctx.messages,
+      this.#get<SentLeads>('leads') ?? { sent: {} },
+      `${this.#news()}${this.#screenNews()}${plan.lead ?? ''}`,
     );
+    this.#put('leads', led.kept);
+    const cached = cachedTurn(system, led.messages);
     return {
       model: this.#model(plan, () => {
         const fb = plan.fallback;
