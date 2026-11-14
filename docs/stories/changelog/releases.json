@@ -1,5 +1,215 @@
 [
   {
+    "tag": "v0.1.248",
+    "date": "2026-11-14T05:06:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Plain tool lines in the assistant chat",
+        "body": "Call `LumenAgent.plainSteps()` in `@columenlabs/lumen-ai` to turn on plain mode, which shows friendly wording for tool lines, hides row counts, says \"didn't work\" for failures, and labels hand-offs \"Take a closer look\" with no tier or task."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tool titles on chat lines",
+        "body": "A chat line now shows the tool's own `ToolInfo.title` (from an MCP or plain tool), the titles are saved with the chat so a reloaded chat reads the same, and tools without a title still show their name."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Failed calls go to your logs",
+        "body": "`LumenAgent.stepFailed({ tool, error, ms })` is called for every failed tool call with the whole error, so you can keep raw errors off the screen and in your logs."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "More detail in `called` and `onStep`",
+        "body": "Both now carry `error` and `caller`, and a failed `escalate` reports its raw error through `onStep` with `handoff: true`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Cleaner hand-off sections in the chat UI",
+        "body": "The chat hides a hand-off section's task when it is empty, and Copy chat leaves it out too."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.247",
+    "date": "2026-11-14T03:14:32Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Know when a running tool is writing",
+        "body": "In `@columenlabs/lumen-ai`, `chunkEvents` now sets `write: true` on `step_start` for write tools, and in `useAssistantChat` from `@columenlabs/lumen-ui` the running `LiveItem` carries `writing`, so your app can stop showing a pending change as ready while the assistant is still rewriting it."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Own cap counts only API-key spend",
+        "body": "In the `@columenlabs/lumen-ai` `State`, the own cap (`paying`, via `ownCapUsed`) now counts only spend paid by an API key on a provider the person can still pay with, and plan sign-in calls count $0."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Cap meter fits its row",
+        "body": "In `@columenlabs/lumen-ui`, `ShareMeter` with `capped` no longer renders the spill slot, so the bar stops at its percentage and the amount sits on the line below."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer own-key usage",
+        "body": "`OwnKeyUsage` in `@columenlabs/lumen-ui` now leaves plan rows out and lists spend on a provider that is no longer usable as its own row, \"Key not in use now, not counted\"."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.246",
+    "date": "2026-11-14T03:11:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Long messages no longer run under the chat tools",
+        "body": "In `LumenComposer` (used inside `LumenAssistant` from @columenlabs/lumen-ui), text that grows until the box scrolls now stays clear of the paperclip, image icons and send button, so the last line is always readable."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Chat tools sit on their own row",
+        "body": "In `LumenComposer`, the paperclip, the `modes` toggles and Send/Stop/Queue now share one row under the text, with no prop changes needed in your app."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One border and focus ring around text and tools",
+        "body": "`LumenComposer` is now built from the kit's `InputGroup` with `InputGroupTextarea` and `InputGroupAddon align=\"block-end\"` instead of a `Textarea` with floating tools, so apps get the fix by upgrading @columenlabs/lumen-ui."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.245",
+    "date": "2026-11-14T01:48:01Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Pick who pays first with a segmented control",
+        "body": "In the assistant settings in `@columenlabs/lumen-ui`, the **Answers run on** setting is now a two-option `ToggleGroup` (\"Your own first\" | \"Credits first\") in place of the `LumenSelector`, so users see both choices at once and use the same control as the 1d/7d/30d range."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No more letter box on provider rows",
+        "body": "In the assistant settings in `@columenlabs/lumen-ui`, provider rows for your own and shared keys no longer draw the `ConnectionLogo` letter fallback (`text`), so each row starts with the provider name."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.244",
+    "date": "2026-11-14T01:45:05Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Mount ⌘K Find on any screen",
+        "body": "From `@columenlabs/lumen-ui`, `LumenFinder` is now exported, so an app that draws its own frame (a full-screen editor with no `LumenShell`) can wrap its screen in `LumenFinder` to get the ⌘K Find dialog."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Add your own Find commands outside the shell",
+        "body": "Inside `LumenFinder`, `useLumenFinderRows` lets you register rows with a `run` callback, for example a command that switches between mouse and trackpad navigation."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Find no longer needs a router",
+        "body": "`LumenFinder` now works in an app with no router, where each row either calls its `run` function or follows a plain link, and inside `LumenShell` nothing changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.243",
+    "date": "2026-11-14T01:35:19Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Know who paid for an AI answer",
+        "body": "In @columenlabs/lumen-ai, `Assistant.complete()` now also returns `payer` (`app` or `own`), so an app can show cost on the person's own key as money and everything else as credits."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "See the monthly cap being used",
+        "body": "In the own-AI section of assistant settings (Providers), a new \"Used this month\" row, built from `SettingField` and `ShareMeter`, shows spend against the person's monthly cap, for example \"$30.06 of $30\"."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Earlier spend no longer shows as \"Nothing spent\"",
+        "body": "In `OwnKeyUsage` (\"Spent on your keys\"), this month's own spend that no chat carries now appears as an \"Earlier this month, not per chat\" row, even when the cap is already full."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Free rows are typed",
+        "body": "In @columenlabs/lumen-ui-types, `SpendState.rows` and `UsageHistory.rows` now declare `free?: true`, so you can read the flag the engine already sends. Free rows count toward neither the used nor the cap number."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.241",
+    "date": "2026-11-14T00:41:39Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Settings controls line up on the right",
+        "body": "In `@columenlabs/lumen-ui`, every `SettingField` row now puts its label on the left and its control flush to the right edge, so you no longer need per-field spacing tweaks to align a Settings section."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Stacked rows keep their control on the left on phones",
+        "body": "When you use `SettingField` with the `stack` layout on a phone-width screen, the control stays at the left under its label instead of jumping to the right edge."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Label column unchanged",
+        "body": "`SettingField` labels keep the uncut label column from the previous release, so right-aligning the control does not clip or shift your label text."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.240",
     "date": "2026-11-14T00:22:25Z",
     "takeaways": [

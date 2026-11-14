@@ -184,6 +184,8 @@ export type StepRecord =
       ms: number;
       rows?: number;
       error?: string;
+      /** The person the answer was for (their id), so a log line links to them. */
+      caller?: string;
       tier: string;
       handoff: boolean;
     }
@@ -722,6 +724,8 @@ export class Assistant {
               tool: toolName(c.group, c.tool),
               ok: c.ok,
               ms: c.ms,
+              ...(c.error ? { error: c.error } : {}),
+              caller: caller.id,
               tier: main.tier.id,
               handoff: false,
             }),
@@ -908,6 +912,7 @@ export class Assistant {
         c.counts.handoffs += 1;
         if (this.tiers.indexOf(tier) > this.tiers.indexOf(c.counts.end)) c.counts.end = tier;
         const shown = asked.has(tier.id) ? 'asked' : why;
+        const t0 = Date.now();
         try {
           const r = await generateText({
             model: aiModel(sub.model, key, {
@@ -936,6 +941,19 @@ export class Assistant {
           };
         } catch (err) {
           if (abortSignal?.aborted) throw err;
+          // The whole error goes to the app's log; the chat line may show none of it (plain steps).
+          await Promise.resolve(
+            this.o.onStep?.({
+              kind: 'tool',
+              tool: 'escalate',
+              ok: false,
+              ms: Date.now() - t0,
+              error: `${sub.meter.label}: ${String((err as Error)?.message ?? err).slice(0, 500)}`,
+              caller: c.caller.id,
+              tier: tier.id,
+              handoff: true,
+            }),
+          ).catch(() => undefined);
           return { error: `${sub.meter.label} failed: ${shownError(err).message}` };
         }
       },

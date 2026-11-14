@@ -26,6 +26,39 @@ export function stepTitle(name: string): string {
   return own.replace(/_/g, ' ');
 }
 
+/**
+ * How a chat's tool lines are worded. `plain` keeps every inner name off the screen: no tool ids,
+ * no tier or model, no row counts and no error text (the app logs those; see `StepRecord.error`).
+ * A line reads the tool's own `title` (`titleOf`), else a word for what it did.
+ */
+export interface StepNames {
+  plain?: boolean;
+  /** The tool's own title, when it has one. */
+  titleOf?: (name: string) => string | undefined;
+}
+
+/** What a plain line says when a call failed: the assistant reads the error and goes on. */
+export const PLAIN_FAILED = "didn't work";
+/** A plain hand-off's heading: a closer look, never the tier it went to. */
+export const PLAIN_HANDOFF = 'Take a closer look';
+
+/** The line's title: the tool's own title, else its name (or, plain, a word for what it did). */
+export function shownTitle(
+  name: string,
+  names: StepNames = {},
+  kind?: 'read' | 'draft' | 'write',
+): string {
+  const own = names.titleOf?.(name);
+  if (own) return own;
+  if (!names.plain) return stepTitle(name);
+  if (name === 'escalate') return PLAIN_HANDOFF;
+  return kind === 'write'
+    ? 'Make a change'
+    : kind === 'draft'
+      ? 'Draft a change'
+      : 'Look something up';
+}
+
 /** The hand off a tool's result reports, when it was one. */
 interface HandOffOut {
   tier: string;
@@ -63,6 +96,7 @@ function settledCall(
   ms: number,
   cards: Map<string, AgentCard>,
   screens: Map<string, ScreenCall> = new Map(),
+  names: StepNames = {},
 ): AssistantEvent[] {
   const o = obj(out.output);
   if (c.name === 'screen') {
@@ -86,7 +120,7 @@ function settledCall(
       kind: 'draft',
       id,
       tool: c.name,
-      title: stepTitle(c.name),
+      title: shownTitle(c.name, names, 'draft'),
       args: card?.args ?? c.input ?? null,
       status: card && card.status !== 'done' && card.status !== 'undone' ? card.status : 'open',
       ...(card?.result !== undefined ? { result: card.result } : {}),
@@ -96,11 +130,13 @@ function settledCall(
   }
   const h = obj(o?.handoff) as HandOffOut | null;
   if (h && typeof h.tier === 'string' && typeof o?.memo === 'string') {
-    const task = String(obj(c.input)?.task ?? '');
+    // Plain: the tier and the task the model wrote for it stay off the screen.
+    const task = names.plain ? '' : String(obj(c.input)?.task ?? '');
+    const label = names.plain ? PLAIN_HANDOFF : h.label;
     return [
       {
         event: 'handoff',
-        data: { kind: 'handoff', tier: h.tier, label: h.label, task, why: h.why },
+        data: { kind: 'handoff', tier: h.tier, label, task, why: h.why },
       },
       { event: 'handoff_done', data: { usage: h.usage } },
     ];
@@ -109,16 +145,17 @@ function settledCall(
   const rows = rowCount(o && 'result' in o ? o.result : out.output);
   const image = stepImage(o?.image);
   const web = webStep(c.name, c.input, out.output, !!error || obj(out.output)?.ok === false);
+  const wrote = card?.kind === 'write' || (o && typeof o.change === 'string');
   const step: StepItem = {
     kind: 'step',
     id,
     tool: c.name,
-    title: stepTitle(c.name),
+    title: shownTitle(c.name, names, wrote ? 'write' : 'read'),
     ok: !error,
     ms,
-    ...(rows !== undefined && !error ? { rows } : {}),
-    ...(error ? { error: error.slice(0, 300) } : {}),
-    ...(card?.kind === 'write' || (o && typeof o.change === 'string')
+    ...(rows !== undefined && !error && !names.plain ? { rows } : {}),
+    ...(error ? { error: names.plain ? PLAIN_FAILED : error.slice(0, 300) } : {}),
+    ...(wrote
       ? { write: { undo: true, status: card?.status === 'undone' ? 'undone' : 'done' } }
       : {}),
     ...(web ? { web } : {}),
@@ -139,8 +176,13 @@ export function chunkEvents(
     screens?: () => Map<string, ScreenCall>;
     /** A tool's kind this turn: a draft shows as its card only, with no line before it. */
     kindOf?: (name: string) => 'read' | 'draft' | 'write' | undefined;
+    /** How the lines are worded. */
+    names?: StepNames;
+    /** A tool call failed: its name and whole error, before a plain line hides them (for logs). */
+    failed?: (f: { tool: string; error: string; ms: number }) => void;
   } = {},
 ) {
+  const names = o.names ?? {};
   const calls = new Map<string, Called>();
   let advising = false;
   return (chunk: { type: string; [k: string]: unknown }): AssistantEvent[] => {
@@ -160,7 +202,21 @@ export function chunkEvents(
           return [{ event: 'advice', data: { tier: 'advisor', label: o.advisor ?? 'Advice' } }];
         }
         if (name === 'escalate' || name === 'screen' || o.kindOf?.(name) === 'draft') return [];
-        return [{ event: 'step_start', data: { id, tool: name, title: stepTitle(name) } }];
+        // A tool that makes a change at once says so as it starts, so an app can show that what it
+        // changes is being changed now, before the model has finished writing the call.
+        const kind = o.kindOf?.(name);
+        const write = kind === 'write';
+        return [
+          {
+            event: 'step_start',
+            data: {
+              id,
+              tool: name,
+              title: shownTitle(name, names, kind),
+              ...(write ? { write } : {}),
+            },
+          },
+        ];
       }
       case 'tool-input-available': {
         const c = calls.get(id) ?? { name: String(chunk.toolName ?? ''), t0: Date.now() };
@@ -178,13 +234,24 @@ export function chunkEvents(
           advising = false;
           return [{ event: 'advice_done', data: error ? { error } : {} }];
         }
+        const ms = Date.now() - c.t0;
+        const out = obj(chunk.output);
+        const said = error ?? (out && typeof out.error === 'string' ? out.error : undefined);
+        if (said !== undefined) {
+          try {
+            o.failed?.({ tool: c.name, error: said.slice(0, 2000), ms });
+          } catch {
+            // a log hook never breaks the answer
+          }
+        }
         return settledCall(
           id,
           c,
           error !== undefined ? { error } : { output: chunk.output },
-          Date.now() - c.t0,
+          ms,
           o.cards?.() ?? new Map(),
           c.name === 'screen' ? (o.screens?.() ?? new Map()) : undefined,
+          names,
         );
       }
       case 'error':
@@ -235,6 +302,7 @@ export function itemsOf(
   cards: AgentCard[],
   screens: Map<string, ScreenCall> = new Map(),
   steers: Record<string, SteerNote[]> = {},
+  names: StepNames = {},
 ): ChatItem[] {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const items: ChatItem[] = [];
@@ -312,6 +380,7 @@ export function itemsOf(
         0,
         byId,
         screens,
+        names,
       )) {
         if (e.event === 'handoff') items.push({ ...e.data, items: [] });
         else if (e.event === 'handoff_done') {
