@@ -1776,7 +1776,8 @@ export class Assistant {
           store: false,
           ...(cacheKey ? { prompt_cache_key: cacheKey } : {}),
           stream: true,
-          ...(plan ? {} : { max_output_tokens: max }),
+          // A plan request as OpenAI's own Codex client sends it (and as planFetch does for chat).
+          ...(plan ? { include: ['reasoning.encrypted_content'] } : { max_output_tokens: max }),
           ...(effort &&
             effort !== 'default' && { reasoning: { effort: effort === 'max' ? 'high' : effort } }),
         } as OpenAI.Responses.ResponseCreateParamsStreaming,
@@ -1820,6 +1821,16 @@ export class Assistant {
     if (done?.status === 'failed')
       throw new AssistantError(openaiStreamError(done.error ?? {}, plan), 'upstream');
     const u = done?.usage;
+    // The plan's own usage numbers, as it sent them, one line a call (as planFetch logs chat's).
+    if (plan && u)
+      console.log(
+        JSON.stringify({
+          event: 'assistant_plan_usage',
+          model: s.model.id,
+          keyed: !!cacheKey,
+          usage: u,
+        }),
+      );
     if (u) {
       const read = u.input_tokens_details?.cached_tokens ?? 0;
       s.meter.add(
