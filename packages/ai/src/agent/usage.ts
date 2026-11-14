@@ -29,7 +29,7 @@ export class UsageMeter {
     label: string,
     private readonly free = false,
   ) {
-    this.p = { label, calls: 0, in: 0, read: 0, out: 0, usd: 0 };
+    this.p = { label, calls: 0, in: 0, read: 0, out: 0, usd: 0, model: model.id };
   }
   add(u: LanguageModelUsage) {
     return this.addTokens(tokenUsage(u));
