@@ -1154,8 +1154,13 @@ export abstract class LumenSession {
         effort: plan.effort ?? 'default',
         ...(plan.out ? { out: plan.out } : {}),
         plan: free,
-        // Named for how the prompt starts, so each session's turns read their own cache.
-        cacheKey: prefixCacheKey(plan.model.id, system),
+        // Named for how the prompt starts, so each session's turns read their own cache. On a ChatGPT
+        // plan the key is also the request's `session-id`, and a plan keeps one cached prompt per
+        // session-id: the last request's. Sessions that share it (every session with the same model and
+        // system line) take it from each other, and a call that follows another session's read 0 of its
+        // own unchanged start (live 2026-11-15: each call read exactly the previous request on the id).
+        // So on a plan the key names this session too, as OpenAI's own client does (one per thread).
+        cacheKey: free ? prefixCacheKey(plan.model.id, system, this.name) : prefixCacheKey(plan.model.id, system),
       }),
     };
   }
