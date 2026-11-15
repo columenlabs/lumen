@@ -110,6 +110,14 @@ import { UsageMeter } from './usage';
 /** The longest one turn of any session runs before it stops and keeps what it made (5 minutes). */
 export const TURN_LIMIT_MS = 5 * 60_000;
 
+/** How long a model call may think before its first output: a long reasoning fits (3 minutes). */
+const FIRST_OUTPUT_MS = 3 * 60_000;
+/** How long a model call may go quiet once it has started answering (1 minute). */
+const QUIET_MS = 60_000;
+/** What the person reads when a model call went quiet. */
+const QUIET_TEXT =
+  'The model stopped answering, so this turn ended. Send your message again to retry.';
+
 /** Messages kept whole after a compaction: the newest turns stay as they were. */
 const KEEP_AFTER_COMPACT = 6;
 
@@ -921,6 +929,9 @@ export abstract class LumenSession {
           providerOptions: config.providerOptions,
           maxRetries: 0,
           abortSignal: abort.signal,
+          // A model call that goes quiet ends the turn with an error instead of holding it to the
+          // turn's limit: the SDK's own timeouts, the first output allowing for a long reasoning.
+          timeout: { firstChunkMs: FIRST_OUTPUT_MS, chunkMs: QUIET_MS },
           prepareStep: (e) => this.beforeStep(e) as never,
           onStepFinish: (e) => this.onStepFinish(e as never),
         });
@@ -929,6 +940,7 @@ export abstract class LumenSession {
           generateMessageId: () => `a_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
           onError: (err) => {
             failed = true;
+            if ((err as Error)?.name === 'TimeoutError') return QUIET_TEXT;
             return String((err as Error)?.message ?? err).slice(0, 500);
           },
           onFinish: ({ responseMessage }) => {
