@@ -32,7 +32,14 @@ import { type ModelMessage, type ToolSet, generateText, jsonSchema, stepCountIs,
 import OpenAI, { toFile } from 'openai';
 import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
 import { backoffFetch } from '../agent/backoff';
-import { type ModelKey, aiModel, cachedTurn, planLimited, turnSettings } from '../agent/models';
+import {
+  type ModelKey,
+  aiModel,
+  cachedTurn,
+  planLimited,
+  prefixCacheKey,
+  turnSettings,
+} from '../agent/models';
 import type { OpenedTools, SourceAt } from '../agent/tools';
 import { tokenUsage } from '../agent/usage';
 import { type WebLookupOptions, webLookupTools } from '../subagents/web';
@@ -344,17 +351,6 @@ export interface AssistantOptions {
 }
 
 /** A turn's failure the person can act on. */
-
-/** OpenAI's prompt cache key: a short, stable hash of `of` (how the prompt starts). */
-function cacheKey(of: string): string {
-  let h = 0x811c9dc5;
-  let g = 0x01000193;
-  for (let i = 0; i < of.length; i++) {
-    h = Math.imul(h ^ of.charCodeAt(i), 0x01000193);
-    g = Math.imul(g ^ of.charCodeAt(i), 0x85ebca6b);
-  }
-  return `lumen-${(h >>> 0).toString(36)}${(g >>> 0).toString(36)}`;
-}
 
 export class AssistantError extends Error {
   constructor(
@@ -1817,9 +1813,9 @@ export class Assistant {
         o.signal,
         o.images,
         o.effort ?? s.effort,
-        // Named for how the prompt starts (the person, model and instructions), not the run or the
-        // task, so every call of one conversation and the next run read that start from the cache.
-        cacheKey(`${caller.id}:${s.model.id}:${o.system ?? ''}`),
+        // The chat's key: named for how the prompt starts (model and instructions), never the run
+        // or the task, so every call of one conversation and the next run read that start.
+        prefixCacheKey(s.model.id, o.system),
         o.history,
       ));
     } catch (e) {
