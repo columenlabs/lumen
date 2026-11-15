@@ -32,7 +32,7 @@ import { type ModelMessage, type ToolSet, generateText, jsonSchema, stepCountIs,
 import OpenAI, { toFile } from 'openai';
 import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
 import { backoffFetch } from '../agent/backoff';
-import { type ModelKey, aiModel, planLimited, turnSettings } from '../agent/models';
+import { type ModelKey, aiModel, cachedTurn, planLimited, turnSettings } from '../agent/models';
 import type { OpenedTools, SourceAt } from '../agent/tools';
 import { tokenUsage } from '../agent/usage';
 import { type WebLookupOptions, webLookupTools } from '../subagents/web';
@@ -63,7 +63,6 @@ import {
   type TaskDef,
   type TierDef,
   XAI_BASE_URL,
-  effortParams,
 } from './models';
 import {
   DEFAULT_CAP,
@@ -84,13 +83,6 @@ import {
 import { type AssistantStore, Docs, type Sealer } from './store';
 import { type ToolSource, toolName, withDeadline } from './tools';
 import { type AccessToken, type WebFetchOptions, scrapeqlTools, webFetchTools } from './web';
-
-/** Whether a ChatGPT plan takes `prompt_cache_options` (on until it refuses it once). */
-let planCacheTtl = true;
-class CacheTtlRefused extends Error {}
-/** An error that names the cache field: the plan does not take it. */
-const refusesCacheTtl = (e: unknown) =>
-  /prompt_cache_options/i.test(typeof e === 'string' ? e : JSON.stringify(e ?? ''));
 
 /** An app's slash command (`/story <words>`). */
 export interface AssistantCommandDef {
@@ -353,40 +345,6 @@ export interface AssistantOptions {
 
 /** A turn's failure the person can act on. */
 
-/** Claude's prompt cache mark on a block: the prompt up to it is kept for the next call. */
-const CACHE_MARK = { type: 'ephemeral' } as const;
-
-/**
- * A `complete` conversation's earlier messages for Claude, the last block marked so the next call
- * reads the whole conversation so far from the cache.
- */
-function claudeHistory(history: CompleteTurn[]): Anthropic.MessageParam[] {
-  return history.map((t, n) => {
-    const last = n === history.length - 1;
-    if (t.role === 'assistant')
-      return {
-        role: 'assistant',
-        content: [{ type: 'text', text: t.text, ...(last ? { cache_control: CACHE_MARK } : {}) }],
-      };
-    return {
-      role: 'user',
-      content: [
-        ...(t.images ?? []).map(
-          (i): Anthropic.ImageBlockParam => ({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: i.mediaType as Anthropic.Base64ImageSource['media_type'],
-              data: i.data,
-            },
-          }),
-        ),
-        { type: 'text', text: t.text, ...(last ? { cache_control: CACHE_MARK } : {}) },
-      ],
-    };
-  });
-}
-
 /** OpenAI's prompt cache key: a short, stable hash of `of` (how the prompt starts). */
 function cacheKey(of: string): string {
   let h = 0x811c9dc5;
@@ -445,16 +403,6 @@ interface ChatDoc {
   told?: string[];
   /** What each write made at once ran with and returned, by its step id: what Undo needs. */
   writes?: Record<string, AssistantWrite & { group: string }>;
-}
-
-/** The payer's client of each provider it has a key for. */
-interface Clients {
-  anthropic?: Anthropic;
-  openai?: OpenAI;
-  /** The OpenAI key is a ChatGPT plan sign-in: the plan's request rules apply, and it costs nothing. */
-  openaiPlan?: boolean;
-  /** xAI's OpenAI-compatible API on the payer's xAI key. */
-  xai?: OpenAI;
 }
 
 interface Session {
@@ -599,12 +547,14 @@ function bodyCode(v: unknown): string | undefined {
 function openaiStreamError(
   er: { code?: unknown; type?: unknown; message?: unknown },
   plan: boolean,
+  provider: AssistantProvider = 'openai',
 ): string {
+  const who = PROVIDERS[provider].label;
   const code = String(er.code || er.type || '');
   console.error(
     JSON.stringify({
       event: 'assistant_upstream_error',
-      provider: 'openai',
+      provider,
       plan,
       code: er.code ?? null,
       type: er.type ?? null,
@@ -615,19 +565,19 @@ function openaiStreamError(
   if (/usage_limit|usage_unavailable|insufficient_quota/.test(code))
     return plan
       ? `Your ChatGPT plan reached its usage limit for now${tag}: try again later, or pick another model.`
-      : `OpenAI says the key is out of quota${tag}. Add credit to the key, or pick another model.`;
+      : `${who} says the key is out of quota${tag}. Add credit to the key, or pick another model.`;
   if (/rate_limit/.test(code))
-    return `OpenAI is rate limiting these requests${tag}: try again in a minute.`;
+    return `${who} is rate limiting these requests${tag}: try again in a minute.`;
   if (/context_length|too_long|max_tokens/.test(code))
     return 'This chat is too long for the model. Start a new chat, or type /compact.';
   if (/model_not_found|model_not_supported|invalid_model|unsupported_model/.test(code))
     return plan
       ? 'This model is not on your ChatGPT plan. Pick another model for this tier in Settings.'
-      : 'OpenAI does not offer this model to the key. Pick another model for this tier in Settings.';
+      : `${who} does not offer this model to the key. Pick another model for this tier in Settings.`;
   if (/server_error|overloaded|timeout|unavailable/.test(code))
-    return `OpenAI is overloaded${tag}. Try again shortly.`;
-  if (/content_policy|safety|refus/.test(code)) return 'OpenAI declined to answer this message.';
-  return `OpenAI could not answer (${code || 'no reason given'}). It is logged; try again or pick another model.`;
+    return `${who} is overloaded${tag}. Try again shortly.`;
+  if (/content_policy|safety|refus/.test(code)) return `${who} declined to answer this message.`;
+  return `${who} could not answer (${code || 'no reason given'}). It is logged; try again or pick another model.`;
 }
 
 /** What the instructions say about the tools offered: which kinds are there. */
@@ -743,14 +693,6 @@ export class Assistant {
       maxRetries: 0,
       fetch: backoffFetch(this.o.fetch ?? fetch),
     });
-  }
-  private clients(paying: Pick<Paying, 'keys' | 'plans'>): Clients {
-    const { keys, plans } = paying;
-    return {
-      ...(keys.anthropic ? { anthropic: this.anthropic(keys.anthropic) } : {}),
-      ...(keys.openai ? { openai: this.openai(keys.openai), openaiPlan: !!plans.openai } : {}),
-      ...(keys.xai ? { xai: this.xai(keys.xai) } : {}),
-    };
   }
   /** The providers the app's models run on, in the order the models list them. */
   get providers(): AssistantProvider[] {
@@ -1721,179 +1663,18 @@ export class Assistant {
 
   /** Swaps the history for a short summary. False with nothing to compact. */
   /**
-   * One plain answer from OpenAI (or xAI, on the same API), metered on `s`: no tools, no chat. Streamed and read from the raw
-   * events like the chat loop, because a ChatGPT plan sign-in answers only streamed calls, takes no
-   * output cap and may send its words only as deltas.
+   * One answer, sent exactly as a chat turn sends it: the AI SDK model for the provider (`aiModel`,
+   * over `planFetch` on a ChatGPT plan) with the chat's settings (`turnSettings`) and Claude's cache
+   * marks (`cachedTurn`). There is one client for every model call, chat or not. The conversation
+   * goes as messages, each user message's pictures before its words, the newest message last, so a
+   * later call reads every earlier message from the cache.
    */
-  private async openaiOnce(
-    clients: Clients,
-    s: Session,
+  private async once(
+    s: { model: ModelDef; meter: Meter },
+    key: ModelKey,
     instructions: string,
     input: string[],
     max: number,
-    signal?: AbortSignal,
-    images?: CompleteImage[],
-    effort?: AssistantEffort,
-    cacheKey?: string,
-    history: CompleteTurn[] = [],
-  ): Promise<{ text: string; cut: boolean }> {
-    // xAI's API is OpenAI's Responses API at another address.
-    const xai = s.model.provider === 'xai';
-    const client = (xai ? clients.xai : clients.openai) as OpenAI;
-    const plan = !xai && !!clients.openaiPlan;
-    // Pictures first, then words (a message's photos are read before its text).
-    const order = <I, T>(pics: I[], words: T[]): (I | T)[] => [...pics, ...words];
-    let text = '';
-    let done: OpenAI.Responses.Response | undefined;
-    try {
-      const stream = await client.responses.create(
-        {
-          model: s.model.id,
-          instructions,
-          // A plan sign-in takes only a list of items, never bare text ("Input must be a list").
-          // The earlier messages as they were, then the newest: pictures first, then its text parts.
-          input: [
-            ...history.map((t) =>
-              t.role === 'assistant'
-                ? {
-                    role: 'assistant' as const,
-                    content: [{ type: 'output_text' as const, text: t.text }],
-                  }
-                : {
-                    role: 'user' as const,
-                    content: order(
-                      (t.images ?? []).map((i) => ({
-                        type: 'input_image' as const,
-                        image_url: `data:${i.mediaType};base64,${i.data}`,
-                        detail: 'auto' as const,
-                      })),
-                      [{ type: 'input_text' as const, text: t.text }],
-                    ),
-                  },
-            ),
-            {
-              role: 'user',
-              content: order(
-                (images ?? []).map((i) => ({
-                  type: 'input_image' as const,
-                  image_url: `data:${i.mediaType};base64,${i.data}`,
-                  detail: 'auto' as const,
-                })),
-                input.map((text) => ({ type: 'input_text' as const, text })),
-              ),
-            },
-          ],
-          store: false,
-          ...(cacheKey ? { prompt_cache_key: cacheKey } : {}),
-          // A plan wrote nothing to its cache (cache_write_tokens 0, live 2026-11-14): ask for the
-          // default 30-minute cache in so many words. Left out if the plan refuses the field.
-          ...(plan && cacheKey && planCacheTtl ? { prompt_cache_options: { ttl: '30m' } } : {}),
-          stream: true,
-          // A plan request as OpenAI's own Codex client sends it (and as planFetch does for chat).
-          ...(plan ? { include: ['reasoning.encrypted_content'] } : { max_output_tokens: max }),
-          ...(effort &&
-            effort !== 'default' && { reasoning: { effort: effort === 'max' ? 'high' : effort } }),
-        } as OpenAI.Responses.ResponseCreateParamsStreaming,
-        {
-          ...(signal ? { signal } : {}),
-          // A ChatGPT plan keeps its prompt cache by this header, not the body's key (planFetch).
-          ...(cacheKey ? { headers: { 'session-id': cacheKey, 'thread-id': cacheKey } } : {}),
-        },
-      );
-      for await (const e of stream as AsyncIterable<{ type: string } & Record<string, unknown>>) {
-        if (e.type === 'response.output_text.delta' && typeof e.delta === 'string') text += e.delta;
-        else if (
-          e.type === 'response.completed' ||
-          e.type === 'response.incomplete' ||
-          e.type === 'response.failed'
-        )
-          done = e.response as OpenAI.Responses.Response;
-        else if (e.type === 'error') {
-          const er = (e.error ?? e) as { code?: string; type?: string; message?: string };
-          if (plan && planCacheTtl && refusesCacheTtl(er)) throw new CacheTtlRefused();
-          throw new AssistantError(openaiStreamError(er, plan), 'upstream');
-        }
-      }
-    } catch (err) {
-      // The plan refused the cache field: drop it for good and ask again once without it.
-      if (
-        plan &&
-        planCacheTtl &&
-        (err instanceof CacheTtlRefused ||
-          (err instanceof OpenAI.APIError && refusesCacheTtl(err.error ?? err.message)))
-      ) {
-        planCacheTtl = false;
-        return this.openaiOnce(
-          clients,
-          s,
-          instructions,
-          input,
-          max,
-          signal,
-          images,
-          effort,
-          cacheKey,
-          history,
-        );
-      }
-      // The SDK throws a stream's `error` event as an APIError with no HTTP status.
-      if (err instanceof OpenAI.APIError && err.status === undefined) {
-        const er = (err.error ?? {}) as { code?: string; type?: string; message?: string };
-        throw new AssistantError(
-          openaiStreamError(
-            {
-              ...er,
-              code: er.code || er.type || err.code || '',
-              message: er.message ?? err.message,
-            },
-            plan,
-          ),
-          'upstream',
-        );
-      }
-      throw err;
-    }
-    if (done?.status === 'failed')
-      throw new AssistantError(openaiStreamError(done.error ?? {}, plan), 'upstream');
-    const u = done?.usage;
-    // The plan's own usage numbers, as it sent them, one line a call (as planFetch logs chat's).
-    if (plan && u)
-      console.log(
-        JSON.stringify({
-          event: 'assistant_plan_usage',
-          model: s.model.id,
-          keyed: !!cacheKey,
-          usage: u,
-        }),
-      );
-    if (u) {
-      const read = u.input_tokens_details?.cached_tokens ?? 0;
-      s.meter.add(
-        {
-          input_tokens: Math.max(0, u.input_tokens - read),
-          output_tokens: u.output_tokens,
-          cache_read_input_tokens: read,
-        },
-        plan,
-      );
-    }
-    return {
-      text: text || done?.output_text || '',
-      cut: done?.status === 'incomplete' && done.incomplete_details?.reason === 'max_output_tokens',
-    };
-  }
-
-  /**
-   * One answer on a ChatGPT plan sign-in, sent as a plan chat sends it: the AI SDK's Responses
-   * model over `planFetch` (instructions, store off, encrypted reasoning, streamed, `session-id`).
-   * The conversation goes as messages, each user message's pictures before its words, and the
-   * newest message last, so a later call reads every earlier message from the cache.
-   */
-  private async planOnce(
-    s: { model: ModelDef; meter: Meter },
-    apiKey: string,
-    instructions: string,
-    input: string[],
     signal?: AbortSignal,
     images?: CompleteImage[],
     effort?: AssistantEffort,
@@ -1907,7 +1688,7 @@ export class Assistant {
         ...words.map((text) => ({ type: 'text' as const, text })),
       ],
     });
-    const messages: ModelMessage[] = [
+    const turn = cachedTurn(instructions, [
       ...history.map(
         (t): ModelMessage =>
           t.role === 'assistant'
@@ -1915,38 +1696,36 @@ export class Assistant {
             : user(t.images ?? [], [t.text]),
       ),
       user(images ?? [], input),
-    ];
+    ]);
+    const plan = !!key.plan;
     const r = await generateText({
       maxRetries: 0,
-      model: aiModel(
-        s.model,
-        { apiKey, plan: true },
-        {
-          ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
-          name: this.name,
-        },
-      ),
-      instructions,
-      messages,
+      model: aiModel(s.model, key, {
+        ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
+        name: this.name,
+      }),
+      instructions: turn.instructions,
+      messages: turn.messages,
       ...(signal ? { abortSignal: signal } : {}),
       ...turnSettings(s.model, {
         effort: effort ?? 'default',
-        plan: true,
+        out: max,
+        plan,
         ...(cacheKey ? { cacheKey } : {}),
       }),
     }).catch((err: unknown) => {
       if (signal?.aborted) throw err;
-      // The plan's own reason, worded as the OpenAI SDK path words it (a used-up plan says so).
+      // The provider's own reason (a used-up plan says so).
       const e = err as { responseBody?: string; message?: string };
       let er: { code?: unknown; type?: unknown; message?: unknown } = { message: e?.message };
       try {
         const j = JSON.parse(e?.responseBody ?? '') as { error?: typeof er; detail?: unknown };
         er = j.error ?? { message: j.detail ?? e?.message };
       } catch {}
-      if (planLimited(err) && !er.code) er = { ...er, code: 'usage_limit_reached' };
-      throw new AssistantError(openaiStreamError(er, true), 'upstream');
+      if (plan && planLimited(err) && !er.code) er = { ...er, code: 'usage_limit_reached' };
+      throw new AssistantError(openaiStreamError(er, plan, s.model.provider), 'upstream');
     });
-    s.meter.add(tokenUsage(r.usage), true);
+    s.meter.add(tokenUsage(r.usage), plan);
     return { text: r.text, cut: r.finishReason === 'length' };
   }
 
@@ -1981,9 +1760,8 @@ export class Assistant {
       /** The answer's token cap, thinking included (default 1,000, at most COMPLETE_MAX_TOKENS). */
       maxTokens?: number;
       /**
-       * How hard the model thinks on this one call, whatever the person saved for the tier. On an
-       * OpenAI or xAI model it is the request's reasoning effort (`max` asks for `high`); left out,
-       * those models run at their own default.
+       * How hard the model thinks on this one call, whatever the person saved for the tier. Left
+       * out, the tier's own effort, as in a chat turn.
        */
       effort?: AssistantEffort;
       signal?: AbortSignal;
@@ -2021,94 +1799,29 @@ export class Assistant {
       const code = wait ?? 'not_connected';
       throw new AssistantError(waitText(code, s.model.provider, !!this.o.allowance), code, 402);
     }
-    const clients = this.clients(paying);
     const max = Math.min(o.maxTokens ?? 1000, COMPLETE_MAX_TOKENS);
     const parts = (typeof o.prompt === 'string' ? [o.prompt] : o.prompt).filter(Boolean);
     let text = '';
     // The answer stopped at `max` before it ended (its thinking counts toward the cap too).
     let cut = false;
     try {
-      if (s.model.provider === 'openai' && clients.openaiPlan && paying.keys.openai) {
-        // A ChatGPT plan answers through the same client and request as a plan chat (the AI SDK
-        // over planFetch): plan chats read 85-99% from the cache while the same plan's one-shot
-        // calls through the OpenAI SDK read 0 of 57k every time (live 2026-11-14), so both now
-        // send one request shape.
-        ({ text, cut } = await this.planOnce(
-          s,
-          paying.keys.openai,
-          o.system,
-          parts,
-          o.signal,
-          o.images,
-          o.effort,
-          cacheKey(`${caller.id}:${s.model.id}:${o.system ?? ''}`),
-          o.history,
-        ));
-      } else if (
-        (s.model.provider === 'openai' && clients.openai) ||
-        (s.model.provider === 'xai' && clients.xai)
-      ) {
-        ({ text, cut } = await this.openaiOnce(
-          clients,
-          s,
-          o.system,
-          parts,
-          max,
-          o.signal,
-          o.images,
-          o.effort,
-          // Named for how the prompt starts (the person, model and instructions), not the run, so the
-          // next run reads that start from the cache. Not the task: one conversation can change task
-          // (a fix after a failed build) and still share its whole start (live: 0 read of 56k).
-          cacheKey(`${caller.id}:${s.model.id}:${o.system ?? ''}`),
-          o.history,
-        ));
-      } else if (clients.anthropic) {
-        // Streamed and read whole: a long answer (minutes at a high cap) keeps its connection alive,
-        // and the SDK refuses a long answer as one unstreamed request.
-        // Claude caches only up to a marked block: the instructions, the last picture and the
-        // prompt's parts before its last are marked, so the next call of the run reads them.
-        const images = o.images ?? [];
-        const content: Anthropic.ContentBlockParam[] = [
-          ...images.map(
-            (i, n): Anthropic.ImageBlockParam => ({
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: i.mediaType as Anthropic.Base64ImageSource['media_type'],
-                data: i.data,
-              },
-              ...(n === images.length - 1 ? { cache_control: CACHE_MARK } : {}),
-            }),
-          ),
-          ...parts.map(
-            (text, n): Anthropic.TextBlockParam => ({
-              type: 'text',
-              text,
-              ...(n === parts.length - 2 ? { cache_control: CACHE_MARK } : {}),
-            }),
-          ),
-        ];
-        const msg = await clients.anthropic.messages
-          .stream(
-            {
-              model: s.model.id,
-              max_tokens: max,
-              system: [{ type: 'text', text: o.system, cache_control: CACHE_MARK }],
-              messages: [...claudeHistory(o.history ?? []), { role: 'user', content }],
-              ...effortParams(o.effort ?? s.effort),
-            },
-            o.signal ? { signal: o.signal } : undefined,
-          )
-          .finalMessage();
-        s.meter.add(msg.usage);
-        cut = msg.stop_reason === 'max_tokens';
-        text = msg.content
-          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-          .map((b) => b.text)
-          .join('');
-      } else
+      const apiKey = paying.keys[s.model.provider];
+      if (!apiKey)
         throw new AssistantError(waitText('not_connected', s.model.provider), 'not_connected', 402);
+      ({ text, cut } = await this.once(
+        s,
+        { apiKey, ...(paying.plans[s.model.provider] ? { plan: true } : {}) },
+        o.system,
+        parts,
+        max,
+        o.signal,
+        o.images,
+        o.effort ?? s.effort,
+        // Named for how the prompt starts (the person, model and instructions), not the run or the
+        // task, so every call of one conversation and the next run read that start from the cache.
+        cacheKey(`${caller.id}:${s.model.id}:${o.system ?? ''}`),
+        o.history,
+      ));
     } catch (e) {
       if (e instanceof AssistantError) throw e;
       throw new AssistantError(
