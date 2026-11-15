@@ -62,7 +62,14 @@ import {
   quoteOf,
   stickyLeads,
 } from './agent';
-import { aiModel, cachedTurn, planFallback, prefixCacheKey, turnSettings } from './models';
+import {
+  aiModel,
+  cachedTurn,
+  planFallback,
+  planTools,
+  prefixCacheKey,
+  turnSettings,
+} from './models';
 import {
   type ScreenCall,
   screenMapOf,
@@ -1104,7 +1111,11 @@ export abstract class LumenSession {
       ).filter((n) => !offPrompt.has(n));
       for (const n of Object.keys(files)) if (!core.includes(n)) core.push(n);
       if (plan.first && !core.includes(plan.first)) core.push(plan.first);
-      if (plan.model.provider === 'openai') {
+      // A plan model that refused OpenAI's own search takes the assistant's (planTools).
+      if (
+        plan.model.provider === 'openai' &&
+        (!plan.key.plan || planTools(plan.model.id) !== 'additional')
+      ) {
         // OpenAI loads a found tool at the end of the conversation, so the cached start stays put.
         const all = deferredTools(tools, core);
         for (const k of Object.keys(tools)) delete tools[k];
