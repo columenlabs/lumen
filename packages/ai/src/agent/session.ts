@@ -1160,7 +1160,9 @@ export abstract class LumenSession {
         // system line) take it from each other, and a call that follows another session's read 0 of its
         // own unchanged start (live 2026-11-15: each call read exactly the previous request on the id).
         // So on a plan the key names this session too, as OpenAI's own client does (one per thread).
-        cacheKey: free ? prefixCacheKey(plan.model.id, system, this.name) : prefixCacheKey(plan.model.id, system),
+        cacheKey: free
+          ? prefixCacheKey(plan.model.id, system, this.name)
+          : prefixCacheKey(plan.model.id, system),
       }),
     };
   }
