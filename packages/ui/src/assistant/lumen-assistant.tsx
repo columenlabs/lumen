@@ -499,6 +499,9 @@ export function LumenAssistant({
   );
 }
 
+/** How near the end of the chat (px) still counts as at the end, so it keeps following. */
+const FOLLOW_PX = 48;
+
 function Messages({
   chat,
   status,
@@ -518,15 +521,35 @@ function Messages({
   const end = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const count = JSON.stringify(chat.items).length;
+  // Follow the chat as it grows only while the person is at its end: once they scroll up to read,
+  // a streaming answer or a card that changes leaves their place alone. Sending a message, or
+  // opening another chat, goes to the end again.
+  const pinned = useRef(true);
+  const onScroll = () => {
+    const el = box.current;
+    if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_PX;
+  };
+  const last = chat.items[chat.items.length - 1];
+  const sent = last?.kind === 'user' ? last.at : undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new message or chat pins the end again
+  useEffect(() => {
+    pinned.current = true;
+  }, [sent, chat.chatId]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll to the end as the chat grows
   useEffect(() => {
-    end.current?.scrollIntoView({ block: 'end' });
-  }, [count]);
+    const el = box.current;
+    // The list's own scroll only: scrollIntoView would move the page and every scroll box around it.
+    if (el && pinned.current) el.scrollTop = el.scrollHeight;
+  }, [count, sent, chat.chatId, chat.loading]);
   // The app's own link to Settings, else the shell's, at the section that answers the wait.
   const shellSettings = useOpenSettings();
   const settings = onSettings ? (_section: string) => onSettings() : shellSettings;
   return (
-    <div ref={box} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-3">
+    <div
+      ref={box}
+      onScroll={onScroll}
+      className="relative min-h-0 flex-1 overflow-y-auto px-3 py-3"
+    >
       <ReplyToSelection box={box} />
       {status?.wait && (
         <Alert className="mb-3">
