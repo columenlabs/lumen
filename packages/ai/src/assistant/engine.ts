@@ -350,9 +350,10 @@ export interface AssistantOptions {
   planFallback?: 'claude' | 'shared';
   onStep?: (s: StepRecord) => void | Promise<void>;
   /**
-   * The Category of a usage line kept before lines carried one (`UsageEntry.category`), from what
-   * the line does carry (its id, kind, task). Left out, or undefined: a run takes its task's label
-   * and a chat reads Chat.
+   * The Category of a usage line with none of its own (`UsageEntry.category`): one kept before
+   * lines carried one, or a run of a task the app does not list in `tasks` (an image, a retired
+   * task). Read from what the line carries (its id, kind, task). Left out, or undefined: a run
+   * takes its task's label (else its id) and a chat reads Chat.
    */
   usageCategory?: (e: UsageEntry) => string | undefined;
 }
@@ -1870,7 +1871,7 @@ export class Assistant {
             id: `task:${o.task}:${o.run?.id ?? new Date().toISOString().slice(0, 10)}`,
             kind: 'task',
             task: o.task,
-            category: task?.label ?? o.task,
+            ...(task ? { category: task.label } : {}),
             title: o.run?.title ?? task?.label ?? o.task,
             own_usd: ownKeyUsd(paying, [part]),
             own_plan_calls: ownPlanCalls(paying, [part]),
@@ -1999,7 +2000,7 @@ export class Assistant {
             id: `task:${o.task}:${o.run?.id ?? new Date().toISOString().slice(0, 10)}`,
             kind: 'task',
             task: o.task,
-            category: task?.label ?? o.task,
+            ...(task ? { category: task.label } : {}),
             title: o.run?.title ?? task?.label ?? o.task,
             own_usd: ownKeyUsd(paying, [part]),
             own_plan_calls: ownPlanCalls(paying, [part]),
