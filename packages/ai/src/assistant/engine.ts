@@ -620,6 +620,11 @@ export interface AgentTurnInput {
    * chat's first turn names it; later turns leave it as it is. Left out: Chat.
    */
   category?: string;
+  /**
+   * The chat's Category once a turn makes a change (a write at once or a draft card,
+   * `AgentTurnEnd.changes`), whatever `category` it started with (Edit). Left out: no change renames it.
+   */
+  changedCategory?: string;
 }
 
 /**
@@ -980,6 +985,9 @@ export class Assistant {
               id: `chat:${input.chat}`,
               kind: 'chat',
               category: input.category || 'Chat',
+              ...(end.changes && input.changedCategory
+                ? { recategorize: input.changedCategory }
+                : {}),
               title: message.split('\n')[0] || 'Chat',
               turns: 1,
               images: input.image_count ?? 0,
