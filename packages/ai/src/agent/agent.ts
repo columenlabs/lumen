@@ -215,7 +215,7 @@ export interface AgentCard {
 /** Past this many tokens in the chat Think summarizes its older part. */
 export { COMPACT_AT };
 
-const CARD_NOTE =
+export const CARD_NOTE =
   "A card is on the person's screen; nothing has changed yet. Say what it will do when they save it. The next message tells you how it ended.";
 
 /** What the model is told of cards settled and changes undone since its last answer. */
@@ -236,7 +236,7 @@ export function cardNews(cards: AgentCard[]): string {
     .join('\n')}\n\n`;
 }
 
-interface CardRow {
+export interface CardRow {
   id: string;
   kind: string;
   grp: string;
@@ -249,7 +249,7 @@ interface CardRow {
   at: number;
 }
 
-const cardOf = (r: CardRow): AgentCard => ({
+export const cardOf = (r: CardRow): AgentCard => ({
   id: r.id,
   kind: r.kind as AgentCard['kind'],
   group: r.grp,
@@ -347,7 +347,7 @@ export function stickyLeads(
 }
 
 /** The message at `i` (one the person wrote) with `lead` put before what it says. */
-function leadAt(messages: ModelMessage[], i: number, lead: string): ModelMessage[] {
+export function leadAt(messages: ModelMessage[], i: number, lead: string): ModelMessage[] {
   const m = messages[i];
   if (!m || m.role !== 'user') return messages;
   const content =
@@ -460,7 +460,7 @@ export function chatUsage(parts: UsagePart[], context?: number): ChatUsage {
   };
 }
 
-interface AdvisorIteration {
+export interface AdvisorIteration {
   type?: string;
   inputTokens?: number;
   outputTokens?: number;
@@ -468,7 +468,7 @@ interface AdvisorIteration {
   cacheCreationInputTokens?: number;
 }
 
-interface Running {
+export interface Running {
   plan: AgentTurnPlan;
   system: string;
   tools: OpenedTools;

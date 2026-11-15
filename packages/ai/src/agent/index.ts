@@ -9,6 +9,7 @@ export * from './models';
 export * from './respond';
 export * from './screen';
 export * from './search';
+export * from './session';
 export * from './stream';
 export * from './tools';
 export * from './usage';
