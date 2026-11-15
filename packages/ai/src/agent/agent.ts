@@ -47,16 +47,6 @@ import { createCompactFunction } from 'agents/sessions';
 import { type ModelMessage, type ToolSet, generateText } from 'ai';
 import type { ModelDef } from '../assistant/models';
 import {
-  type AgentConnector,
-  CONNECTOR_GROUP,
-  type ConnectorAt,
-  type ConnectorClient,
-  checkConnectorUrl,
-  connectorGroup,
-  connectorId,
-  connectorSource,
-} from './connectors';
-import {
   type ModelKey,
   aiModel,
   cachedTurn,
@@ -134,8 +124,6 @@ export interface AgentTurnPlan {
   more?: (t: TurnTools) => ToolSet;
   /** Call this tool first (a message handed to a higher tier). */
   first?: string;
-  /** The person's connectors to open, at the access they gave each. */
-  connectors?: ConnectorAt[];
   /** Past `at` tools (`LAZY_AT`) the model starts with `core` and `tool_search` only. */
   lazy?: { at?: number; core?: string[] };
   /** Claude's advisor: a bigger Claude reads the chat and sends a plan. */
@@ -497,7 +485,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     return Promise.reject(new Error('This change cannot be undone here.'));
   }
 
-  /** Connectors' tools join a turn through `plan.connectors`, at the person's access. */
+  /** Think's own MCP servers are never merged in: connectors reach a turn as the app's tool groups (`ext_`). */
   override includeMcpTools = false;
 
   #turn: Running | null = null;
@@ -957,50 +945,6 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     );
   }
 
-  #connectorClient(): ConnectorClient {
-    return {
-      listTools: () => this.getMcpServers().tools as ReturnType<ConnectorClient['listTools']>,
-      callTool: (p) => this.mcp.callTool(p) as ReturnType<ConnectorClient['callTool']>,
-    };
-  }
-
-  /** The person's connectors, with their state and tool counts. */
-  connectors(): AgentConnector[] {
-    const { servers, tools } = this.getMcpServers();
-    return Object.entries(servers).map(([id, s]) => {
-      const own = tools.filter((t) => t.serverId === id);
-      return {
-        id,
-        name: s.name,
-        url: s.server_url,
-        state: s.state,
-        ...(s.auth_url ? { authUrl: s.auth_url } : {}),
-        ...(s.error ? { error: s.error.slice(0, 300) } : {}),
-        tools: own.length,
-        reads: own.filter((t) => t.annotations?.readOnlyHint === true).length,
-      };
-    });
-  }
-
-  /** Adds a connector by its https address; the answer says where to sign in when it asks. */
-  async addConnector(
-    name: string,
-    url: string,
-    o: { callbackHost?: string; callbackPath?: string } = {},
-  ): Promise<AgentConnector> {
-    const u = checkConnectorUrl(url);
-    const id = connectorId(name);
-    await this.addMcpServer(name.slice(0, 60), u.href, { id, ...o });
-    const c = this.connectors().find((x) => x.id === id);
-    if (!c) throw new Error('The connector did not stay.');
-    return c;
-  }
-
-  /** Removes a connector and its sign-in. */
-  async removeConnector(id: string): Promise<void> {
-    await this.removeMcpServer(id);
-  }
-
   /** The chat's cards, newest last: drafts and writes made at once (at most 200). */
   cards(): AgentCard[] {
     this.#cards();
@@ -1015,12 +959,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     if (!c || c.kind !== 'draft') throw new Error('That card is gone.');
     if (c.status !== 'open') throw new Error(`That card is already ${c.status}.`);
     try {
-      const server = c.group.startsWith(CONNECTOR_GROUP)
-        ? c.group.slice(CONNECTOR_GROUP.length)
-        : null;
-      const result = server
-        ? await (await connectorSource(this.#connectorClient(), server)()).call(c.tool, c.args)
-        : await this.applyDraft(c);
+      const result = await this.applyDraft(c);
       this.#setCard(id, 'saved', { result });
     } catch (err) {
       this.#setCard(id, 'failed', { error: String((err as Error)?.message ?? err).slice(0, 300) });
@@ -1145,23 +1084,9 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     this.#last = { plan };
     // The person's Auto-compact, read each turn, so a change in Settings holds from the next message.
     this.session.compactAfter(plan.compactAt ?? this.compactAt());
-    const linked = (plan.connectors ?? []).filter((c) => c.access !== 'off');
-    if (linked.length) await this.mcp.waitForConnections({ timeout: 1500 }).catch(() => undefined);
-    const client = this.#connectorClient();
-    const sources = [
-      ...plan.sources,
-      ...linked.map((c) => ({
-        group: connectorGroup(c.id),
-        access: c.access,
-        source: connectorSource(client, c.id),
-        writes: true,
-      })),
-    ];
-    const opened = await openAiTools(sources, {
+    const opened = await openAiTools(plan.sources, {
       draft: async (d) => ({ card: this.#addCard('draft', d), note: CARD_NOTE }),
-      // A connector's change cannot be taken back, so it gets no Undo card.
-      wrote: async (w) =>
-        w.group.startsWith(CONNECTOR_GROUP) ? undefined : this.#addCard('write', w, w.result),
+      wrote: async (w) => this.#addCard('write', w, w.result),
       ...plan.tools,
     });
     const free = !!plan.key.plan;
