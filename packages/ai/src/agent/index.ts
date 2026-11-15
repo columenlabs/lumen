@@ -12,3 +12,4 @@ export * from './session';
 export * from './stream';
 export * from './tools';
 export * from './usage';
+export { stepName } from '@columenlabs/lumen-ui-types/assistant';

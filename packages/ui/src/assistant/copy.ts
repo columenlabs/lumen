@@ -1,6 +1,6 @@
 // A chat as Markdown, for Copy chat and each turn's copy icon: every message, tool line and card as
 // it shows, so a chat can be pasted into an issue, a doc or another agent.
-import type { ChatItem } from '@columenlabs/lumen-ui-types/assistant';
+import { type ChatItem, stepLineText } from '@columenlabs/lumen-ui-types/assistant';
 import { lumenToast } from '../lumen-toast';
 
 /** The whole chat, its title as the heading. */
@@ -64,7 +64,7 @@ function itemMarkdown(i: ChatItem, depth: number, name: string): string {
         i.ms ? `${(i.ms / 1000).toFixed(1)} s` : '',
         i.write ? i.write.status : '',
       ].filter(Boolean);
-      return `**${i.ok ? 'Tool' : 'Failed'}: ${i.title}** (${facts.join(', ')})${i.error ? `\n\nError: ${i.error}` : ''}`;
+      return `**${i.ok ? 'Tool' : 'Failed'}: ${stepLineText(i.title)}** (${facts.join(', ')})${i.error ? `\n\nError: ${i.error}` : ''}`;
     }
     case 'draft':
       return [
