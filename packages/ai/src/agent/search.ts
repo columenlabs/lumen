@@ -5,7 +5,15 @@
  * prompt instead of every schema on every call.
  */
 import { openai } from '@ai-sdk/openai';
-import { type JSONSchema7, type Tool, type ToolSet, jsonSchema, tool } from 'ai';
+import {
+  type JSONSchema7,
+  type JSONValue,
+  type Tool,
+  type ToolSet,
+  asSchema,
+  jsonSchema,
+  tool,
+} from 'ai';
 
 /** Past this many tools a turn starts with `tool_search` and its core tools only. */
 export const LAZY_AT = 30;
@@ -153,7 +161,11 @@ export function lazyTools(
  * with the list narrowed per step, the call after a search sent a longer list and read 0 of the
  * cache, its unchanged 5.4k-token instructions included).
  */
-export function deferredTools(tools: ToolSet, core: readonly string[]): ToolSet {
+export function deferredTools(
+  tools: ToolSet,
+  core: readonly string[],
+  o: { client?: boolean } = {},
+): ToolSet {
   const out: ToolSet = {};
   for (const [name, t] of Object.entries(tools)) {
     const kind = (t as { type?: string }).type;
@@ -169,6 +181,49 @@ export function deferredTools(tools: ToolSet, core: readonly string[]): ToolSet 
     } as Tool;
   }
   // Its own name: a chat's earlier calls of Lumen's `tool_search` stay plain function calls.
-  out[DEFERRED_SEARCH] = openai.tools.toolSearch({});
+  out[DEFERRED_SEARCH] = o.client ? clientSearch(tools, core) : openai.tools.toolSearch({});
   return out;
+}
+
+/**
+ * OpenAI's \`tool_search\` run by us (\`execution: 'client'\`, as the AI SDK and OpenAI's own Codex
+ * client send it): the model searches the deferred tools, we score them (\`toolScore\`) and hand
+ * back their definitions, which OpenAI loads at the end of the conversation. For a ChatGPT plan,
+ * whose server-side search is refused ("subscription_sharing_unsupported_capability").
+ */
+function clientSearch(tools: ToolSet, core: readonly string[]): Tool {
+  const names = Object.keys(tools).filter((n) => !core.includes(n));
+  return openai.tools.toolSearch({
+    execution: 'client',
+    description:
+      'Finds tools by what they do and loads them. Give a few words (e.g. "create calendar event").',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'A few words of what the tool does.' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    execute: async ({ arguments: args }) => {
+      const query = String((args as { query?: unknown } | undefined)?.query ?? '');
+      const about = (n: string) => {
+        const d = tools[n]?.description;
+        return typeof d === 'string' ? d : '';
+      };
+      const hits = names
+        .map((n) => ({ n, s: toolScore(query, n, about(n)) }))
+        .filter((h) => h.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, FOUND_MAX);
+      const found = await Promise.all(
+        hits.map(async ({ n }) => ({
+          type: 'function',
+          name: n,
+          description: about(n),
+          parameters: (await asSchema(tools[n]?.inputSchema).jsonSchema) as JSONValue,
+          defer_loading: true,
+        })),
+      );
+      return { tools: found };
+    },
+  });
 }
