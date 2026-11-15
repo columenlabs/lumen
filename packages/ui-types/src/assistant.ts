@@ -124,7 +124,16 @@ export interface StepItem {
    * under the turn while it is the chat's last, each a shortcut for typing that answer.
    */
   choices?: StepChoices;
+  /**
+   * What the app's own panel does with this call (its output's `apply`, or its result's): a small
+   * JSON value (at most `STEP_APPLY_MAX` characters) passed through untouched, for a change that
+   * lives in the app's page rather than on its server (what a list shows, a view to open).
+   */
+  apply?: unknown;
 }
+
+/** The most characters a step's `apply` keeps as JSON; a larger one is left out. */
+export const STEP_APPLY_MAX = 8000;
 
 /**
  * Quick replies to the assistant's question. The question itself is the assistant's own text; each

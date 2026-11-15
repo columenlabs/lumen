@@ -16,7 +16,7 @@ import type {
   StepItem,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
-import { CHOICES_MAX } from '@columenlabs/lumen-ui-types/assistant';
+import { CHOICES_MAX, STEP_APPLY_MAX } from '@columenlabs/lumen-ui-types/assistant';
 import { rowCount } from '../assistant/tools';
 import { webStep } from '../assistant/web';
 import type { AgentCard } from './agent';
@@ -144,6 +144,17 @@ function stepImage(v: unknown): StepImage | undefined {
   };
 }
 
+/** A tool's `apply` output for the app's panel, kept as is when it is small JSON. */
+function stepApply(v: unknown): unknown {
+  if (v === undefined || v === null) return undefined;
+  try {
+    const json = JSON.stringify(v);
+    return json && json.length <= STEP_APPLY_MAX ? JSON.parse(json) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A tool's `choices` output as quick replies: up to nine short labels, one suggested. */
 function stepChoices(v: unknown): StepChoices | undefined {
   const c = obj(v);
@@ -237,6 +248,7 @@ function settledCall(
   const rows = rowCount(o && 'result' in o ? o.result : out.output);
   const image = stepImage(o?.image);
   const choices = stepChoices(o?.choices);
+  const apply = stepApply(o?.apply !== undefined ? o.apply : inner?.apply);
   const web = webStep(c.name, c.input, out.output, !!error || obj(out.output)?.ok === false);
   const wrote = card?.kind === 'write' || (o && typeof o.change === 'string');
   // The app's own line says what the call did; a failed one already says it did not ("Couldn't …").
@@ -274,6 +286,7 @@ function settledCall(
     ...(web ? { web } : {}),
     ...(image && !error ? { image } : {}),
     ...(choices && !error ? { choices } : {}),
+    ...(apply !== undefined && !error ? { apply } : {}),
   };
   return [{ event: 'step', data: step }];
 }
