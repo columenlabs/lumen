@@ -42,6 +42,7 @@ import {
   ChevronUpIcon,
   CircleAlertIcon,
   CircleCheckIcon,
+  CircleHelpIcon,
   CircleXIcon,
   CopyIcon,
   CornerDownRightIcon,
@@ -53,6 +54,7 @@ import {
   ListPlusIcon,
   LoaderCircleIcon,
   type LucideIcon,
+  MessageSquareTextIcon,
   MonitorIcon,
   PaperclipIcon,
   PencilIcon,
@@ -266,6 +268,11 @@ export function LumenAssistant({
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
+  // While the chat ends in an open task, its waiting messages sit under its card, not above the box.
+  const tail = chat.items[chat.items.length - 1];
+  const queueUnder =
+    tail?.kind === 'task' && (taskState?.(tail) ?? tail.state) === 'open' && chat.queue.length > 0;
+  const editQueued = useRef<((id: string) => void) | null>(null);
   const qc = useQueryClient();
   const status = useAssistantStatus(client);
   const [allScopes, setAllScopes] = useAllScopes(client.key);
@@ -458,14 +465,30 @@ export function LumenAssistant({
             <TaskSlots.Provider
               value={{ actions: taskActions, state: taskState, view: taskView, stop: chat.stop }}
             >
-              <Messages
-                chat={chat}
-                status={s}
-                onSettings={onSettings}
-                onRetry={(at, user) => chat.retry(at, user, extra())}
-                onFresh={(choice) => chat.fresh(choice, extra())}
-                onAnswer={(text) => chat.send(text, extra())}
-              />
+              <TaskAnswer.Provider value={s?.wait ? null : (text) => chat.send(text, extra())}>
+                <TaskQueue.Provider
+                  value={
+                    queueUnder
+                      ? {
+                          queue: chat.queue,
+                          canSteer: chat.busy && chat.canSteer,
+                          onSteer: chat.steerQueued,
+                          onEdit: (id) => editQueued.current?.(id),
+                          onRemove: (id) => void chat.unqueue(id),
+                        }
+                      : null
+                  }
+                >
+                  <Messages
+                    chat={chat}
+                    status={s}
+                    onSettings={onSettings}
+                    onRetry={(at, user) => chat.retry(at, user, extra())}
+                    onFresh={(choice) => chat.fresh(choice, extra())}
+                    onAnswer={(text) => chat.send(text, extra())}
+                  />
+                </TaskQueue.Provider>
+              </TaskAnswer.Provider>
             </TaskSlots.Provider>
           </ImageTool.Provider>
         </Screen.Provider>
@@ -478,6 +501,8 @@ export function LumenAssistant({
         canSteer={chat.canSteer}
         onSteerQueued={chat.steerQueued}
         onUnqueue={chat.unqueue}
+        queueShown={queueUnder}
+        editQueued={editQueued}
         disabled={!s || !!s.wait}
         commands={allCommands}
         tiers={tiers}
@@ -606,7 +631,9 @@ function Messages({
       {!chat.busy &&
         !status?.wait &&
         (() => {
-          const c = lastChoices(chat.items);
+          // A task's question shows its answers in its card (its Follow-up step).
+          const c =
+            chat.items[chat.items.length - 1]?.kind === 'task' ? null : lastChoices(chat.items);
           return c ? (
             <div className="mt-2">
               <QuickReplies key={chat.items.length} choices={c} onSend={onAnswer} />
@@ -1483,6 +1510,18 @@ const TaskSlots = createContext<{
   stop?: () => void;
 }>({});
 
+/** Sends a quick reply or an answer in the person's words (null while the chat cannot take one). */
+const TaskAnswer = createContext<((text: string) => void) | null>(null);
+
+/** Messages waiting for the running task, drawn under its card: Steer now, Edit, Remove. */
+const TaskQueue = createContext<{
+  queue: QueuedMessage[];
+  canSteer: boolean;
+  onSteer: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onRemove?: (id: string) => void;
+} | null>(null);
+
 /** The words a card says without the app's own view. */
 const TASK_STATE: Record<AssistantTaskState, string> = {
   open: 'Open',
@@ -1551,6 +1590,7 @@ export function WorkCard({
   onStop,
   steps = 0,
   open: shownAt,
+  rows = false,
   children,
 }: {
   view: AssistantTaskView;
@@ -1563,6 +1603,8 @@ export function WorkCard({
   steps?: number;
   /** Starts open; by default it is open while the work runs. */
   open?: boolean;
+  /** `children` are rows with their own padding and lines (a task's steps), drawn edge to edge. */
+  rows?: boolean;
   children?: ReactNode;
 }) {
   const tone = TONE[view.tone];
@@ -1576,14 +1618,18 @@ export function WorkCard({
       data-tone={view.tone}
       aria-label={view.title}
       className={cn(
-        'flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card',
+        'flex min-w-0 flex-col overflow-clip rounded-lg border bg-card',
         view.tone === 'live' && 'border-primary/45',
         view.tone === 'ready' && 'border-gain/45',
         view.tone === 'failed' && 'border-loss/45',
         view.tone === 'ask' && 'border-warning/45',
       )}
     >
-      <div className="flex min-w-0 items-center gap-2.5 py-2 pr-1.5 pl-2.5">
+      {/* The header stays in view while a long card scrolls by (the chat pads 0.75rem). */}
+      <div
+        data-slot="chat-task-head"
+        className="sticky -top-3 z-10 flex min-w-0 items-center gap-2.5 rounded-t-lg bg-card py-2 pr-1.5 pl-2.5"
+      >
         <span className={cn('grid size-7 shrink-0 place-items-center rounded-md', tone.box)}>
           <Icon className={cn('size-4', tone.spin && 'animate-spin')} aria-hidden />
         </span>
@@ -1639,17 +1685,252 @@ export function WorkCard({
           <div className="h-full w-1/3 animate-[lumen-progress_1.4s_ease-in-out_infinite] bg-primary" />
         </div>
       )}
-      {shown && <div className="border-t px-3 py-2">{children}</div>}
+      {shown && <div className={cn('border-t', !rows && 'px-3 py-2')}>{children}</div>}
     </section>
+  );
+}
+
+/** A line of the assistant's words as a row's title: its first sentence, without Markdown marks. */
+function firstLine(text: string): string {
+  const plain = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[*_`#>[\]]|\(https?:[^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const m = plain.match(/^(.{12,}?[.!?:])(\s|$)/);
+  return m?.[1] ?? plain;
+}
+
+/** One row of a task's card: a step line, a fold of lookups, the assistant's words or the person's. */
+type TaskRow =
+  | { key: string; kind: 'line'; item: LiveItem }
+  | { key: string; kind: 'lookups'; steps: StepItem[] }
+  | {
+      key: string;
+      kind: 'words';
+      tag: 'Plan' | 'Result' | 'Follow-up' | 'Reply';
+      text: string;
+      choices?: StepChoices;
+    }
+  | { key: string; kind: 'you'; text: string; steered: boolean };
+
+/** A step that only looked something up: several in a row fold into one line. */
+const lookup = (i: LiveItem): boolean =>
+  i.kind === 'step' && i.ok !== false && !i.write && !i.choices && !i.live && !i.image;
+
+/**
+ * A task's items as the rows of its card. Each turn's words are a step of their own: before its
+ * tools they are its Plan, after them its Result, and the last words of a turn that asks are the
+ * Follow-up, holding the question's answers. Lookups in a row fold into one line; the person's
+ * later messages (answers, steering) are rows too.
+ */
+function taskRows(items: LiveItem[], answerable: StepChoices | null): TaskRow[] {
+  const rows: TaskRow[] = [];
+  let looked: StepItem[] = [];
+  let turnHasTools = false;
+  let turnStart = 0;
+  const flush = () => {
+    if (looked.length === 1)
+      rows.push({ key: `l${rows.length}`, kind: 'line', item: looked[0] as LiveItem });
+    else if (looked.length) rows.push({ key: `k${rows.length}`, kind: 'lookups', steps: looked });
+    looked = [];
+  };
+  items.forEach((it, n) => {
+    if (it.kind === 'user') {
+      flush();
+      turnHasTools = false;
+      turnStart = rows.length + 1;
+      rows.push({ key: `u${n}`, kind: 'you', text: it.text, steered: !!it.steered });
+      return;
+    }
+    if (it.kind === 'step' && it.choices) return;
+    if (lookup(it)) {
+      looked.push(it as StepItem);
+      turnHasTools = true;
+      return;
+    }
+    flush();
+    if (it.kind === 'text') {
+      if (!it.text.trim()) return;
+      const later = items.slice(n + 1);
+      const toolsAfter = later.findIndex((x) => x.kind === 'user');
+      const rest = toolsAfter < 0 ? later : later.slice(0, toolsAfter);
+      const tag = rest.some((x) => x.kind === 'step' && !x.choices)
+        ? 'Plan'
+        : turnHasTools || rows.slice(turnStart).some((r) => r.kind !== 'words')
+          ? 'Result'
+          : 'Reply';
+      rows.push({ key: `t${n}`, kind: 'words', tag, text: it.text });
+      return;
+    }
+    if (it.kind === 'step' || it.kind === 'draft') turnHasTools = true;
+    rows.push({ key: `i${n}`, kind: 'line', item: it });
+  });
+  flush();
+  // The last words of the chat, while its question waits: the Follow-up, with its answers.
+  if (answerable) {
+    const last = rows.findLastIndex((r) => r.kind === 'words');
+    const r = rows[last];
+    if (r?.kind === 'words' && last >= rows.findLastIndex((x) => x.kind === 'you'))
+      rows[last] = { ...r, tag: 'Follow-up', choices: answerable };
+  }
+  return rows;
+}
+
+const ROW_ICON: Record<TaskRow['kind'] | 'Plan' | 'Result' | 'Follow-up' | 'Reply', LucideIcon> = {
+  line: WrenchIcon,
+  lookups: SearchIcon,
+  words: LightbulbIcon,
+  you: CornerDownRightIcon,
+  Plan: LightbulbIcon,
+  Result: CircleCheckIcon,
+  'Follow-up': CircleHelpIcon,
+  Reply: MessageSquareTextIcon,
+};
+
+/** The person's answer in their own words, under a Follow-up's quick replies. */
+function OwnAnswer({ onSend }: { onSend: (text: string) => void }) {
+  const [text, setText] = useState('');
+  const send = () => {
+    if (!text.trim()) return;
+    onSend(text.trim());
+    setText('');
+  };
+  return (
+    <form
+      className="flex min-w-0 items-center gap-1 rounded-lg border bg-card py-1 pr-1 pl-2.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        send();
+      }}
+    >
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Something else…"
+        aria-label="Answer in your own words"
+        className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+      />
+      <IconButton
+        icon={ArrowUpIcon}
+        label="Send"
+        size="icon-xs"
+        type="submit"
+        disabled={!text.trim()}
+      />
+    </form>
+  );
+}
+
+/** One row of a task's card: a line that opens to its whole text (one open at a time). */
+function TaskRowView({
+  row,
+  open,
+  onToggle,
+  onSettle,
+  busy,
+}: {
+  row: TaskRow;
+  open: boolean;
+  onToggle: () => void;
+  onSettle: (d: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
+  busy: boolean;
+}) {
+  const answer = useContext(TaskAnswer);
+  if (row.kind === 'line')
+    return (
+      <div className="border-t px-3 py-1.5 first:border-t-0">
+        <Item item={row.item} onSettle={onSettle} busy={busy} />
+      </div>
+    );
+  const tag =
+    row.kind === 'words' ? row.tag : row.kind === 'you' ? (row.steered ? 'Steer' : 'You') : null;
+  const Icon = ROW_ICON[row.kind === 'words' ? row.tag : row.kind];
+  const now = row.kind === 'words' && row.tag === 'Follow-up';
+  const title =
+    row.kind === 'lookups'
+      ? row.steps.map((x) => x.title).join(' · ')
+      : row.kind === 'words'
+        ? firstLine(row.text)
+        : row.text;
+  return (
+    <div
+      data-slot="chat-task-row"
+      data-open={open || undefined}
+      className="border-t first:border-t-0"
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className={cn(
+          'flex w-full min-w-0 items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          now && 'bg-primary/5',
+        )}
+      >
+        <Icon
+          className={cn('size-3.5 shrink-0', now ? 'text-primary' : 'text-muted-foreground')}
+          aria-hidden
+        />
+        {tag && (
+          <span
+            className={cn(
+              'shrink-0 text-[11px] uppercase tracking-wide',
+              now ? 'text-primary' : 'text-muted-foreground',
+            )}
+          >
+            {tag}
+          </span>
+        )}
+        <span
+          className={cn('min-w-0 flex-1 truncate', !open && !now && 'text-muted-foreground')}
+          title={title}
+        >
+          {title}
+        </span>
+        {row.kind === 'lookups' && (
+          <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+            {row.steps.length}
+          </span>
+        )}
+        {open ? (
+          <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        ) : (
+          <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        )}
+      </button>
+      {open && (
+        <div className="flex min-w-0 flex-col gap-2 px-3 pt-0.5 pb-2.5">
+          {row.kind === 'lookups' ? (
+            <Items items={row.steps as LiveItem[]} onSettle={onSettle} busy={busy} />
+          ) : row.kind === 'words' ? (
+            <Item
+              item={{ kind: 'text', text: row.text } as LiveItem}
+              onSettle={onSettle}
+              busy={busy}
+            />
+          ) : (
+            <p className="text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{row.text}</p>
+          )}
+          {row.kind === 'words' && row.choices && answer && (
+            <>
+              <QuickReplies key={row.key} choices={row.choices} onSend={answer} />
+              <OwnAnswer onSend={answer} />
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 /**
  * A task's turns in the chat (`TaskItem`) as one card: a tinted icon for where it stands, its title
  * and a line under it (the app's `taskView`), the app's buttons (`taskActions`), Stop while it runs
- * and a chevron that shows the steps. The person's messages and the assistant's words stay in the
- * chat around it, so a conversation about the work reads as one; the card sits at the newest turn
- * that ran tools, holding that turn's steps, and earlier turns' steps stay as lines where they ran.
+ * and a chevron that folds its steps. The person's first message sits above it; everything after,
+ * the assistant's words included, is a step inside it (`taskRows`). Only the newest step is open:
+ * when the next one starts the one before folds, and any step opens again with a tap. Messages
+ * queued while it runs wait under it (`TaskQueue`).
  */
 function TaskBlock({
   item,
@@ -1661,6 +1942,8 @@ function TaskBlock({
   busy: boolean;
 }) {
   const slots = useContext(TaskSlots);
+  const answer = useContext(TaskAnswer);
+  const queue = useContext(TaskQueue);
   const state = slots.state?.(item) ?? item.state;
   const items = item.items as LiveItem[];
   const live = items.some(isLive);
@@ -1669,9 +1952,17 @@ function TaskBlock({
     title: item.label,
     state: live ? 'Working' : TASK_STATE[state],
   };
-  const at = cardAt(items);
-  const steps = items.slice(at).filter((i) => i.kind === 'step' || i.kind === 'draft');
-  const after = items.slice(at).filter((i) => i.kind !== 'step' && i.kind !== 'draft');
+  const first = items.findIndex((i) => i.kind === 'user');
+  const head = items.slice(0, first + 1);
+  const inner = items.slice(first + 1);
+  const answerable = answer && !busy ? lastChoices(items) : null;
+  const rows = taskRows(inner, answerable);
+  // The newest row is open unless the person picked another since the rows last changed.
+  const [picked, setPicked] = useState<{ at: number; open: number | null } | null>(null);
+  const newest = rows.length - 1;
+  const auto = rows[newest]?.kind === 'line' ? null : newest;
+  const open = picked && picked.at === rows.length ? picked.open : auto;
+  const failed = inner.some((x) => x.kind === 'step' && (!x.ok || x.write?.status === 'failed'));
   const card = (
     <WorkCard
       view={view}
@@ -1679,17 +1970,35 @@ function TaskBlock({
       state={state}
       actions={slots.actions?.(item, live)}
       onStop={live ? slots.stop : undefined}
-      steps={steps.length}
-      open={steps.some((x) => x.kind === 'step' && (!x.ok || x.write?.status === 'failed'))}
+      steps={rows.length}
+      open={failed || !!answerable || state === 'open'}
+      rows
     >
-      <Items items={steps} onSettle={onSettle} busy={busy} />
+      {rows.map((r, n) => (
+        <TaskRowView
+          key={r.key}
+          row={r}
+          open={open === n}
+          onToggle={() => setPicked({ at: rows.length, open: open === n ? null : n })}
+          onSettle={onSettle}
+          busy={busy}
+        />
+      ))}
     </WorkCard>
   );
   return (
     <div data-slot="chat-task-turns" className="flex min-w-0 flex-col gap-3">
-      {at > 0 && <Items items={items.slice(0, at)} onSettle={onSettle} busy={busy} />}
+      {head.length > 0 && <Items items={head} onSettle={onSettle} busy={busy} />}
       {card}
-      {after.length > 0 && <Items items={after} onSettle={onSettle} busy={busy} />}
+      {queue && state === 'open' && queue.queue.length > 0 && (
+        <ComposerQueue
+          queue={queue.queue}
+          canSteer={queue.canSteer}
+          onSteer={queue.onSteer}
+          onEdit={queue.onEdit}
+          onRemove={queue.onRemove}
+        />
+      )}
     </div>
   );
 }
@@ -1948,7 +2257,13 @@ export function LumenComposer({
   onStop,
   meter,
   voice = true,
+  queueShown = false,
+  editQueued,
 }: {
+  /** The queue is drawn under the running task's card instead of above the box. */
+  queueShown?: boolean;
+  /** Gets this box's Edit, so a queued message shown elsewhere comes back here to edit. */
+  editQueued?: { current: ((id: string) => void) | null };
   /** A mic beside Send that types what the person says (`VoiceButton`); hidden where the browser can't. */
   voice?: boolean;
   /** Drawn in the icon row after the paperclip and the modes: `LumenAssistant` puts its context donut here. */
@@ -2107,7 +2422,8 @@ export function LumenComposer({
     if (q.extra?.use) setUse(q.extra.use);
     requestAnimationFrame(() => box.current?.focus());
   };
-  const waiting = queue ?? (queued ? [{ id: 'queued', message: queued }] : []);
+  if (editQueued) editQueued.current = onUnqueue ? edit : null;
+  const waiting = queueShown ? [] : (queue ?? (queued ? [{ id: 'queued', message: queued }] : []));
   const pickCommand = (o: LumenOption) => {
     const c = commands.find((x) => x.name === o.value);
     if (!c) return;
