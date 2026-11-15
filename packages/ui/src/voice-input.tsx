@@ -171,7 +171,7 @@ export function VoiceButton({
       aria-pressed={listening}
       data-voice={listening ? 'listening' : 'idle'}
       disabled={disabled}
-      className={cn(listening && 'text-destructive', className)}
+      className={cn(className, listening && 'text-destructive')}
       onClick={toggle}
     />
   );
