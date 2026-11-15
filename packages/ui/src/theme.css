@@ -974,3 +974,10 @@ body[data-spotlight="nav"] [data-spotlit] {
     display: none;
   }
 }
+
+/* LumenBottomSheet while the person types in it with the keyboard up: it is placed at the keyboard
+   (lumen-bottom-sheet.tsx), so vaul's slide to its snap, set inline, stays off until the keys go. */
+[data-slot="lumen-bottom-sheet"][data-lifted] {
+  transform: none !important;
+  transition: none !important;
+}
