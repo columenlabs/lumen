@@ -37,13 +37,21 @@ const history: UsageHistory = {
       20 * 60_000,
       12,
       0.41,
-      { turns: 3, images: 2, refs: 2 },
+      { turns: 3, images: 2, refs: 2, category: 'Edit' },
     ),
-    entry('chat:b', 'Close this hole', 3 * 3_600_000, 77, 6.29, { turns: 9, refs: 4 }),
+    entry('chat:b', 'Close this hole', 3 * 3_600_000, 77, 6.29, {
+      turns: 9,
+      refs: 4,
+      category: 'Edit',
+    }),
     entry('chat:c', 'List two ways to fasten a lid to a printed box', 4 * 3_600_000, 5, 0.03, {
       turns: 1,
+      category: 'Chat',
     }),
-    entry('task:rebuild:1', 'Rebuild Bracket', 5 * 3_600_000, 2, 0.1, { task: 'rebuild' }),
+    entry('task:rebuild:1', 'Rebuild Bracket', 5 * 3_600_000, 2, 0.1, {
+      task: 'rebuild',
+      category: 'Rebuild',
+    }),
     // A chat from before turns were counted.
     entry('chat:d', 'Rotate the lid and reset it to zero', 26 * 3_600_000, 13, 0.47),
   ],
@@ -58,7 +66,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Settings ▸ Assistant ▸ Usage: one row a chat or run this month. The Session column takes all the width the other columns leave (`maxWidth: 'fill'`). Turns counts the messages the person sent; a row's hover adds its tokens, attachments (images and picks) and cost. Runs, and chats from before turns were counted, show a dash.",
+          "Settings ▸ Assistant ▸ Usage: one row a chat or run this month, grouped by Date first, each with its Category (the app's name for it: Chat, Edit, Rebuild), 50 rows a page with every group's totals over all its rows. The Session column takes all the width the other columns leave (`maxWidth: 'fill'`). Turns counts the messages the person sent; a row's hover adds its tokens, attachments (images and picks) and cost. Runs, and chats from before turns were counted, show a dash.",
       },
     },
   },
@@ -67,6 +75,35 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+// A busy month: 120 chats, edits and Rebuilds over ten days, 50 rows a page.
+const busy: UsageHistory = {
+  ...history,
+  entries: Array.from({ length: 120 }, (_, i) =>
+    entry(
+      i % 3 === 2 ? `task:rebuild:${i}` : `chat:${i}`,
+      ['Explain this fillet', 'Line up the selected parts', 'Rebuild Lamp'][i % 3] as string,
+      i * 2 * 3_600_000,
+      1 + (i % 7),
+      0.01 * (1 + (i % 9)),
+      {
+        category: ['Chat', 'Edit', 'Rebuild'][i % 3],
+        ...(i % 3 === 2 ? { task: 'rebuild' } : { turns: 1 }),
+      },
+    ),
+  ),
+};
+
+export const Paged: Story = {
+  args: {
+    client: { key: 'usage-story-busy', usage: async () => busy } as unknown as AssistantAdapter,
+  },
+  render: (a) => (
+    <div className="max-w-[40rem]">
+      <AssistantUsageTable {...a} />
+    </div>
+  ),
+};
 
 export const Usage: Story = {
   render: (a) => (

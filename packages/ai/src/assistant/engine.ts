@@ -25,6 +25,7 @@ import type {
   ChatUsage,
   HandOffPolicy,
   HandOffWhy,
+  UsageEntry,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
@@ -348,6 +349,12 @@ export interface AssistantOptions {
    */
   planFallback?: 'claude' | 'shared';
   onStep?: (s: StepRecord) => void | Promise<void>;
+  /**
+   * The Category of a usage line kept before lines carried one (`UsageEntry.category`), from what
+   * the line does carry (its id, kind, task). Left out, or undefined: a run takes its task's label
+   * and a chat reads Chat.
+   */
+  usageCategory?: (e: UsageEntry) => string | undefined;
 }
 
 /** A turn's failure the person can act on. */
@@ -607,6 +614,11 @@ export interface AgentTurnInput {
    * usage history (`GET /usage`). Left out, the turn counts toward spend only.
    */
   chat?: string;
+  /**
+   * What this chat is, in the app's words (Chat, Edit, Rebuild): its usage line's Category. The
+   * chat's first turn names it; later turns leave it as it is. Left out: Chat.
+   */
+  category?: string;
 }
 
 /**
@@ -693,6 +705,17 @@ export class Assistant {
   /** The providers the app's models run on, in the order the models list them. */
   get providers(): AssistantProvider[] {
     return [...new Set(this.models.map((m) => m.provider))];
+  }
+
+  /** A usage line's Category: its own, else the app's `usageCategory`, else its task's label or Chat. */
+  categoryOf(e: UsageEntry): string {
+    return (
+      e.category ||
+      this.o.usageCategory?.(e) ||
+      (e.kind === 'task'
+        ? (this.tasks.find((t) => t.id === e.task)?.label ?? e.task ?? 'Run')
+        : 'Chat')
+    );
   }
 
   private tierById(id: string | undefined) {
@@ -955,6 +978,7 @@ export class Assistant {
             {
               id: `chat:${input.chat}`,
               kind: 'chat',
+              category: input.category || 'Chat',
               title: message.split('\n')[0] || 'Chat',
               turns: 1,
               images: input.image_count ?? 0,
@@ -1846,6 +1870,7 @@ export class Assistant {
             id: `task:${o.task}:${o.run?.id ?? new Date().toISOString().slice(0, 10)}`,
             kind: 'task',
             task: o.task,
+            category: task?.label ?? o.task,
             title: o.run?.title ?? task?.label ?? o.task,
             own_usd: ownKeyUsd(paying, [part]),
             own_plan_calls: ownPlanCalls(paying, [part]),
@@ -1974,6 +1999,7 @@ export class Assistant {
             id: `task:${o.task}:${o.run?.id ?? new Date().toISOString().slice(0, 10)}`,
             kind: 'task',
             task: o.task,
+            category: task?.label ?? o.task,
             title: o.run?.title ?? task?.label ?? o.task,
             own_usd: ownKeyUsd(paying, [part]),
             own_plan_calls: ownPlanCalls(paying, [part]),

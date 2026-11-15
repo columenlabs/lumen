@@ -1268,7 +1268,8 @@ export interface LumenTableProps<T> {
   rows: T[];
   groupBy?: ViewField<T> | null;
   chips?: ViewChip[];
-  /** The page a flat table shows; null shows every row. */
+  /** The page a table shows; null shows every row. A grouped table pages its rows in group order:
+   *  a group with rows on the page shows its row there, its count and totals over all its rows. */
   page?: { index: number; size: number } | null;
   /** The view page's own table, which scrolls with the page rather than in its card. */
   inView?: boolean;
@@ -1697,6 +1698,12 @@ function LumenTableRows<T extends RowData>({
     }
     return [...m];
   }, [groupBy, sorted, serverGroups]);
+  // A grouped table's page (`page`): the rows on it, in group order; every group keeps its totals.
+  const paged = useMemo(() => {
+    if (!groups || !page || serverGroups) return null;
+    const start = page.index * page.size;
+    return new Set(groups.flatMap(([, ms]) => ms).slice(start, start + page.size));
+  }, [groups, page, serverGroups]);
   const span = shown.length + (selection ? 1 : 0) + (add ? 1 : 0);
   const served = new Map((serverGroups?.list ?? []).map((g) => [g.key, g]));
   const startsOpen = (i: number) => rows.length <= OPEN_ALL || i === 0;
@@ -2238,6 +2245,8 @@ function LumenTableRows<T extends RowData>({
             {groups && groupBy
               ? groups.map(([key, members], gi) => {
                   const open = isOpen(key, gi);
+                  const here = paged ? members.filter((m) => paged.has(m)) : members;
+                  if (!here.length) return null;
                   return (
                     <Fragment key={key}>
                       <TableRow className={ROLLUP} data-group={key} data-rollup="">
@@ -2319,7 +2328,7 @@ function LumenTableRows<T extends RowData>({
                         {/* The + column's cell, so the group's band runs to the table's edge. */}
                         {add && <TableCell className={PINNED_GROUP} />}
                       </TableRow>
-                      {open && (serverGroups ? servedRows(members, key) : drawn(members, key))}
+                      {open && (serverGroups ? servedRows(members, key) : drawn(here, key))}
                     </Fragment>
                   );
                 })
