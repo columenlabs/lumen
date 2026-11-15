@@ -16,12 +16,15 @@ import {
   type AssistantStatus,
   type AssistantTask,
   type AssistantTaskState,
+  type AssistantTaskTone,
+  type AssistantTaskView,
   COMPACT_AT,
   type ChatItem,
   type ChatUsage,
   type DraftItem,
   type HandOffItem,
   type ScreenItem,
+  type StepChoices,
   type StepItem,
   type TaskItem,
   type UsagePart,
@@ -30,16 +33,23 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpIcon,
+  CheckCheckIcon,
   CheckIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
+  ChevronUpIcon,
   CircleAlertIcon,
+  CircleCheckIcon,
+  CircleXIcon,
   CopyIcon,
   CornerDownRightIcon,
   CrosshairIcon,
   FileTextIcon,
   GlobeIcon,
+  HandIcon,
   LightbulbIcon,
   ListPlusIcon,
+  LoaderCircleIcon,
   type LucideIcon,
   MonitorIcon,
   PaperclipIcon,
@@ -144,7 +154,8 @@ export function useAssistantStatus(client: AssistantAdapter) {
 }
 
 export { usd };
-const seconds = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
+const seconds = (ms?: number) =>
+  !ms ? '' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 
 export interface LumenAssistantProps {
   client: AssistantAdapter;
@@ -194,14 +205,21 @@ export interface LumenAssistantProps {
   compactAt?: number;
   /**
    * A task in the chat (`AssistantTask`, the app's work in its own session): the buttons in its
-   * block's header, such as Keep and Drop, from the app.
+   * card's header, such as Discard and Accept, from the app; `live` while the task's turn runs
+   * (the card adds Stop then).
    */
-  taskActions?: (task: AssistantTask) => ReactNode;
+  taskActions?: (task: AssistantTask, live: boolean) => ReactNode;
   /**
    * The app's word on where a task stands, ahead of the chat's: it took or dropped the task's result
-   * in its own screens. A task no longer open drops its chip over the box.
+   * in its own screens. While a task is open, each message the person sends goes to it.
    */
   taskState?: (task: AssistantTask) => AssistantTaskState | undefined;
+  /**
+   * The header of a task's card (`AssistantTaskView`): its tone (running, ready, settled, failed,
+   * waiting on an answer, stopped), title and the line under it. Without it the card shows the
+   * task's label and the chat's word for its state.
+   */
+  taskView?: (task: AssistantTask, live: boolean) => AssistantTaskView | undefined;
 }
 
 /** A composer mode: its toggle's icon and label (also its tooltip and aria-label). */
@@ -242,6 +260,7 @@ export function LumenAssistant({
   compactAt = COMPACT_AT,
   taskActions,
   taskState,
+  taskView,
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
@@ -273,13 +292,10 @@ export function LumenAssistant({
   // each new screen call runs here once; how it ended goes with the next message.
   const screen = useAssistantScreen();
   const screenOn = !!screen && (s?.screen ?? 'move') === 'move';
-  // The open task's chip over the box: the next message goes to the task (the app decides) until
-  // the person steps out with its ×, or the task ends.
-  const [stepped, setStepped] = useState<string | null>(null);
+  // While a task is open, every message goes to it (the app decides what that means); the task
+  // ends when the app takes or drops its result.
   const openTask =
-    chat.task && (taskState?.(chat.task) ?? chat.task.state) === 'open' && stepped !== chat.task.id
-      ? chat.task
-      : null;
+    chat.task && (taskState?.(chat.task) ?? chat.task.state) === 'open' ? chat.task : null;
   const extra = (): Omit<AssistantMessage, 'message' | 'chat_id'> => ({
     ...(context ? { context } : {}),
     ...(screenOn && screen ? { screen: screenMapFor(screen) } : {}),
@@ -437,23 +453,21 @@ export function LumenAssistant({
       <AssistantName.Provider value={name}>
         <Screen.Provider value={controls}>
           <ImageTool.Provider value={imageTool ?? null}>
-            <TaskSlots.Provider value={{ actions: taskActions, state: taskState }}>
+            <TaskSlots.Provider
+              value={{ actions: taskActions, state: taskState, view: taskView, stop: chat.stop }}
+            >
               <Messages
                 chat={chat}
                 status={s}
                 onSettings={onSettings}
                 onRetry={(at, user) => chat.retry(at, user, extra())}
                 onFresh={(choice) => chat.fresh(choice, extra())}
+                onAnswer={(text) => chat.send(text, extra())}
               />
             </TaskSlots.Provider>
           </ImageTool.Provider>
         </Screen.Provider>
       </AssistantName.Provider>
-      {openTask && (
-        <div className="flex px-3 pt-1">
-          <TaskChip task={openTask} onLeave={() => setStepped(openTask.id)} />
-        </div>
-      )}
       <LumenComposer
         name={s?.name ?? 'the assistant'}
         busy={chat.busy}
@@ -489,12 +503,15 @@ function Messages({
   onSettings,
   onRetry,
   onFresh,
+  onAnswer,
 }: {
   chat: AssistantChatState;
   status: AssistantStatus | undefined;
   onSettings?: () => void;
   onRetry: RetryFn;
   onFresh: (choice: 'new' | 'stay') => void;
+  /** Sends a quick reply as the person's message. */
+  onAnswer: (text: string) => void;
 }) {
   const end = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -561,6 +578,16 @@ function Messages({
           </UndoWrite.Provider>
         </TierNames.Provider>
       )}
+      {!chat.busy &&
+        !status?.wait &&
+        (() => {
+          const c = lastChoices(chat.items);
+          return c ? (
+            <div className="mt-2">
+              <QuickReplies key={chat.items.length} choices={c} onSend={onAnswer} />
+            </div>
+          ) : null;
+        })()}
       {chat.busy && !chat.items.some(isLive) && (
         <p className="flex items-center gap-2 py-1 text-muted-foreground text-sm">
           <Spinner /> Thinking…
@@ -1104,30 +1131,41 @@ function ToolStep({ step, live }: { step: StepItem; live: boolean }) {
       setUndoing(false);
     }
   };
+  // A change that did not land is a failure too, whatever the call returned.
+  const ok = step.ok && w?.status !== 'failed';
+  const facts = [
+    step.rows !== undefined ? `${step.rows} row${step.rows === 1 ? '' : 's'}` : '',
+    seconds(step.ms),
+  ].filter(Boolean);
   return (
     <p
+      data-slot="chat-step"
+      data-ok={ok}
       className={cn(
         'flex min-w-0 items-center gap-1.5 text-xs',
-        step.ok ? 'text-muted-foreground' : 'text-loss',
+        ok ? 'text-muted-foreground' : 'text-loss',
       )}
     >
       {live ? (
         <Spinner className="size-3" />
+      ) : !ok ? (
+        <CircleAlertIcon className="size-3.5 shrink-0" />
       ) : w ? (
         <PencilIcon className="size-3.5 shrink-0" />
-      ) : step.ok ? (
-        <WrenchIcon className="size-3.5 shrink-0" />
       ) : (
-        <CircleAlertIcon className="size-3.5 shrink-0" />
+        <WrenchIcon className="size-3.5 shrink-0" />
       )}
-      <span className="truncate">{step.title}</span>
-      {!live && (
-        <span className="shrink-0 tabular-nums">
-          {step.rows !== undefined && `${step.rows} row${step.rows === 1 ? '' : 's'} · `}
-          {seconds(step.ms)}
+      <span className="truncate" title={step.title}>
+        {step.title}
+      </span>
+      {!live && facts.length > 0 && (
+        <span className="shrink-0 tabular-nums">{facts.join(' · ')}</span>
+      )}
+      {(step.error || w?.error) && (
+        <span className="truncate" title={step.error ?? w?.error}>
+          · {step.error ?? w?.error}
         </span>
       )}
-      {step.error && <span className="truncate">· {step.error}</span>}
       {w?.status === 'undone' ? (
         <span className="shrink-0">· Undone</span>
       ) : (
@@ -1395,21 +1433,181 @@ function HandOff({
   );
 }
 
-/** The app's parts of a task's block (`taskActions`, `taskState`). */
+/** The app's parts of a task's card (`taskActions`, `taskState`, `taskView`) and the chat's Stop. */
 const TaskSlots = createContext<{
-  actions?: (task: AssistantTask) => ReactNode;
+  actions?: (task: AssistantTask, live: boolean) => ReactNode;
   state?: (task: AssistantTask) => AssistantTaskState | undefined;
+  view?: (task: AssistantTask, live: boolean) => AssistantTaskView | undefined;
+  stop?: () => void;
 }>({});
 
+/** The words a card says without the app's own view. */
 const TASK_STATE: Record<AssistantTaskState, string> = {
   open: 'Open',
   done: 'Kept',
   dropped: 'Dropped',
 };
 
+/** Each tone's icon and colour: the icon sits in a tinted square at the head of the card. */
+const TONE: Record<
+  AssistantTaskTone,
+  { icon: LucideIcon; box: string; word: string; spin?: boolean }
+> = {
+  live: {
+    icon: LoaderCircleIcon,
+    box: 'bg-primary/12 text-primary',
+    word: 'text-primary',
+    spin: true,
+  },
+  ready: { icon: CircleCheckIcon, box: 'bg-gain/15 text-gain', word: 'text-gain' },
+  done: {
+    icon: CheckCheckIcon,
+    box: 'bg-muted text-muted-foreground',
+    word: 'text-muted-foreground',
+  },
+  failed: { icon: CircleAlertIcon, box: 'bg-loss/12 text-loss', word: 'text-loss' },
+  ask: { icon: HandIcon, box: 'bg-warning/15 text-warning', word: 'text-warning' },
+  stopped: {
+    icon: CircleXIcon,
+    box: 'bg-muted text-muted-foreground',
+    word: 'text-muted-foreground',
+  },
+};
+
+/** m:ss since a time, ticking each second while shown. */
+function Clock({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const s = Math.max(0, Math.floor((now - since) / 1000));
+  return (
+    <span className="tabular-nums">{`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`}</span>
+  );
+}
+
+/** Where a task's card sits among its items: after the person's last message that tools answered. */
+function cardAt(items: LiveItem[]): number {
+  const last = items.findLastIndex((i) => i.kind === 'step' || i.kind === 'draft');
+  if (last < 0) return items.findLastIndex((i) => i.kind === 'user') + 1;
+  for (let i = last; i >= 0; i--) if (items[i]?.kind === 'user') return i + 1;
+  return 0;
+}
+
 /**
- * A task's turns in the chat (`TaskItem`): one block with its label and state; while open the
- * app's buttons (`taskActions`) sit in its header, once ended it folds to that one line.
+ * A piece of the assistant's work as one card: a tinted icon for where it stands, its title and the
+ * line under it (`AssistantTaskView`), the app's buttons, Stop while it runs, a thin running bar,
+ * and a chevron that shows its steps (`children`). The chat draws each task this way; an app draws
+ * its own work the same way (an edit waiting for review) so every piece of work looks alike.
+ */
+export function WorkCard({
+  view,
+  live = false,
+  state,
+  actions,
+  onStop,
+  steps = 0,
+  open: shownAt,
+  children,
+}: {
+  view: AssistantTaskView;
+  live?: boolean;
+  /** The task's own state, for `data-state`. */
+  state?: string;
+  actions?: ReactNode;
+  onStop?: () => void;
+  /** How many steps `children` holds: no chevron without any. */
+  steps?: number;
+  /** Starts open; by default it is open while the work runs. */
+  open?: boolean;
+  children?: ReactNode;
+}) {
+  const tone = TONE[view.tone];
+  const [open, setOpen] = useState<boolean | null>(null);
+  const shown = (open ?? (shownAt || live)) && steps > 0;
+  const Icon = tone.icon;
+  return (
+    <section
+      data-slot="chat-task"
+      data-state={state}
+      data-tone={view.tone}
+      aria-label={view.title}
+      className={cn(
+        'flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card',
+        view.tone === 'live' && 'border-primary/45',
+        view.tone === 'ready' && 'border-gain/45',
+        view.tone === 'failed' && 'border-loss/45',
+        view.tone === 'ask' && 'border-warning/45',
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2.5 py-2 pr-1.5 pl-2.5">
+        <span className={cn('grid size-7 shrink-0 place-items-center rounded-md', tone.box)}>
+          <Icon className={cn('size-4', tone.spin && 'animate-spin')} aria-hidden />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate font-medium text-sm" title={view.title}>
+            {view.title}
+          </span>
+          {(view.detail || view.state || (live && view.since)) && (
+            <span className="flex min-w-0 gap-1 text-muted-foreground text-xs">
+              {view.detail && (
+                <span className="min-w-0 truncate" title={view.detail}>
+                  {view.detail}
+                </span>
+              )}
+              {view.state && (
+                <span className={cn('shrink-0', tone.word)}>
+                  {view.detail ? '· ' : ''}
+                  {view.state}
+                </span>
+              )}
+              {live && view.since ? (
+                <span className="shrink-0 tabular-nums">
+                  · <Clock since={view.since} />
+                </span>
+              ) : null}
+            </span>
+          )}
+        </div>
+        <span className="flex shrink-0 items-center gap-1">
+          {actions}
+          {onStop && (
+            <IconButton
+              icon={SquareIcon}
+              label="Stop"
+              variant="outline"
+              size="icon-sm"
+              onClick={onStop}
+            />
+          )}
+          {steps > 0 && (
+            <IconButton
+              icon={shown ? ChevronUpIcon : ChevronDownIcon}
+              label={shown ? 'Hide steps' : 'Show steps'}
+              size="icon-sm"
+              aria-expanded={shown}
+              onClick={() => setOpen(!shown)}
+            />
+          )}
+        </span>
+      </div>
+      {live && (
+        <div className="h-0.5 w-full overflow-hidden bg-primary/15">
+          <div className="h-full w-1/3 animate-[lumen-progress_1.4s_ease-in-out_infinite] bg-primary" />
+        </div>
+      )}
+      {shown && <div className="border-t px-3 py-2">{children}</div>}
+    </section>
+  );
+}
+
+/**
+ * A task's turns in the chat (`TaskItem`) as one card: a tinted icon for where it stands, its title
+ * and a line under it (the app's `taskView`), the app's buttons (`taskActions`), Stop while it runs
+ * and a chevron that shows the steps. The person's messages and the assistant's words stay in the
+ * chat around it, so a conversation about the work reads as one; the card sits at the newest turn
+ * that ran tools, holding that turn's steps, and earlier turns' steps stay as lines where they ran.
  */
 function TaskBlock({
   item,
@@ -1422,52 +1620,161 @@ function TaskBlock({
 }) {
   const slots = useContext(TaskSlots);
   const state = slots.state?.(item) ?? item.state;
-  const live = (item.items as LiveItem[]).some(isLive);
-  const [open, setOpen] = useState<boolean | null>(null);
-  const shown = open ?? (state === 'open' || live);
-  return (
-    <section
-      data-slot="chat-task"
-      data-state={state}
-      className="flex min-w-0 flex-col gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2"
+  const items = item.items as LiveItem[];
+  const live = items.some(isLive);
+  const view = slots.view?.(item, live) ?? {
+    tone: live ? 'live' : state === 'open' ? 'ready' : 'done',
+    title: item.label,
+    state: live ? 'Working' : TASK_STATE[state],
+  };
+  const at = cardAt(items);
+  const steps = items.slice(at).filter((i) => i.kind === 'step' || i.kind === 'draft');
+  const after = items.slice(at).filter((i) => i.kind !== 'step' && i.kind !== 'draft');
+  const card = (
+    <WorkCard
+      view={view}
+      live={live}
+      state={state}
+      actions={slots.actions?.(item, live)}
+      onStop={live ? slots.stop : undefined}
+      steps={steps.length}
+      open={steps.some((x) => x.kind === 'step' && (!x.ok || x.write?.status === 'failed'))}
     >
-      <div className="flex min-w-0 items-center gap-1.5 text-xs">
-        <WrenchIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <button
-          type="button"
-          className="min-w-0 flex-1 truncate text-left font-medium"
-          title={item.label}
-          aria-expanded={shown}
-          onClick={() => setOpen(!shown)}
-        >
-          {item.label}
-        </button>
-        {state === 'open' ? (
-          !live && slots.actions?.(item)
-        ) : (
-          <span className="shrink-0 text-muted-foreground">
-            {state === 'done' ? <CheckIcon className="inline size-3.5" aria-hidden /> : null}{' '}
-            {TASK_STATE[state]}
-          </span>
-        )}
-      </div>
-      {shown && <Items items={item.items} onSettle={onSettle} busy={busy} />}
-    </section>
+      <Items items={steps} onSettle={onSettle} busy={busy} />
+    </WorkCard>
+  );
+  return (
+    <div data-slot="chat-task-turns" className="flex min-w-0 flex-col gap-3">
+      {at > 0 && <Items items={items.slice(0, at)} onSettle={onSettle} busy={busy} />}
+      {card}
+      {after.length > 0 && <Items items={after} onSettle={onSettle} busy={busy} />}
+    </div>
   );
 }
 
-/** The open task's chip over the box: the next message goes to it; its × steps out. */
-function TaskChip({ task, onLeave }: { task: AssistantTask; onLeave: () => void }) {
+/** The quick replies the last turn offers (`StepItem.choices`), unless the person answered since. */
+function lastChoices(items: (ChatItem | LiveItem)[]): StepChoices | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i] as LiveItem;
+    if (it.kind === 'user') return null;
+    if (it.kind === 'task') {
+      const inner = lastChoices(it.items as LiveItem[]);
+      if (inner || (it.items as LiveItem[]).some((x) => x.kind === 'user')) return inner;
+      continue;
+    }
+    if (it.kind === 'step' && it.choices) return it.choices;
+  }
+  return null;
+}
+
+/**
+ * Quick replies under the assistant's question: one row per answer, the suggested one outlined,
+ * numbered so a key picks it (when no text box has the focus). With `multi` each row ticks, and
+ * Send sends the ticked ones together. They are shortcuts: typing an answer in the box works too.
+ */
+export function QuickReplies({
+  choices,
+  onSend,
+}: {
+  choices: StepChoices;
+  onSend: (text: string) => void;
+}) {
+  const [picked, setPicked] = useState<number[]>(() =>
+    choices.multi ? choices.options.flatMap((o, n) => (o.on ? [n] : [])) : [],
+  );
+  const { options, multi, suggested } = choices;
+  const pick = (n: number) => {
+    const o = options[n];
+    if (!o) return;
+    if (!multi) return onSend(o.label);
+    setPicked((p) => (p.includes(n) ? p.filter((x) => x !== n) : [...p, n]));
+  };
+  const pickRef = useRef(pick);
+  pickRef.current = pick;
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (t?.closest('input, textarea, [contenteditable="true"], [role="dialog"]')) return;
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > options.length) return;
+      e.preventDefault();
+      pickRef.current(n - 1);
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [options.length]);
   return (
-    <span
-      data-slot="chat-task-chip"
-      className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-xs"
-      title={`Your next message goes to ${task.label}`}
+    <fieldset
+      data-slot="chat-choices"
+      aria-label="Quick replies"
+      className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0"
     >
-      <WrenchIcon className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="truncate">{task.label}</span>
-      <IconButton icon={XIcon} label="Step out of this task" size="icon-xs" onClick={onLeave} />
-    </span>
+      {options.map((o, n) => {
+        const on = picked.includes(n);
+        return (
+          <button
+            key={o.label}
+            type="button"
+            aria-pressed={multi ? on : undefined}
+            onClick={() => pick(n)}
+            className={cn(
+              'flex min-w-0 items-center gap-2.5 rounded-lg border bg-card px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+              n === suggested && !multi && 'border-primary ring-1 ring-primary',
+              on && 'border-primary',
+            )}
+          >
+            {multi ? (
+              <>
+                <span
+                  className={cn(
+                    'grid size-4 shrink-0 place-items-center rounded border',
+                    on && 'border-primary bg-primary text-primary-foreground',
+                  )}
+                >
+                  {on && <CheckIcon className="size-3" />}
+                </span>
+                <span className="grid size-4.5 shrink-0 place-items-center rounded-full bg-muted font-medium text-muted-foreground text-xs tabular-nums">
+                  {n + 1}
+                </span>
+              </>
+            ) : (
+              <kbd className="grid size-4.5 shrink-0 place-items-center rounded bg-muted font-medium text-xs text-muted-foreground">
+                {n + 1}
+              </kbd>
+            )}
+            <span className="min-w-0 flex-1 truncate" title={o.label}>
+              {o.label}
+              {(o.note || n === suggested) && (
+                <span className="ml-1.5 text-muted-foreground text-xs">
+                  {o.note ?? 'suggested'}
+                </span>
+              )}
+            </span>
+          </button>
+        );
+      })}
+      {multi && (
+        <div className="flex items-center justify-end gap-2 text-muted-foreground text-xs">
+          <span>{picked.length} picked</span>
+          <IconButton
+            icon={ArrowUpIcon}
+            label="Send picks"
+            variant="default"
+            size="icon-sm"
+            disabled={!picked.length}
+            onClick={() =>
+              onSend(
+                options
+                  .filter((_, n) => picked.includes(n))
+                  .map((o) => o.label)
+                  .join('; '),
+              )
+            }
+          />
+        </div>
+      )}
+    </fieldset>
   );
 }
 

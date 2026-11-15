@@ -10,6 +10,8 @@ export {
   LumenAssistant,
   type LumenAssistantProps,
   LumenComposer,
+  QuickReplies,
+  WorkCard,
   assistantStatusKey,
   readAssistantImage,
   useAssistantStatus,

@@ -11,10 +11,12 @@ import type {
   DraftItem,
   HandOffWhy,
   ScreenItem,
+  StepChoices,
   StepImage,
   StepItem,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
+import { CHOICES_MAX } from '@columenlabs/lumen-ui-types/assistant';
 import { rowCount } from '../assistant/tools';
 import { webStep } from '../assistant/web';
 import type { AgentCard } from './agent';
@@ -142,6 +144,33 @@ function stepImage(v: unknown): StepImage | undefined {
   };
 }
 
+/** A tool's `choices` output as quick replies: up to nine short labels, one suggested. */
+function stepChoices(v: unknown): StepChoices | undefined {
+  const c = obj(v);
+  if (!c || !Array.isArray(c.options)) return undefined;
+  const options = c.options
+    .map((o) => (typeof o === 'string' ? { label: o } : obj(o)))
+    .filter(
+      (o): o is Record<string, unknown> => !!o && typeof o.label === 'string' && !!o.label.trim(),
+    )
+    .slice(0, CHOICES_MAX)
+    .map((o) => ({
+      label: String(o.label).trim().slice(0, 120),
+      ...(typeof o.note === 'string' && o.note.trim() ? { note: o.note.trim().slice(0, 80) } : {}),
+      ...(o.on === true ? { on: true } : {}),
+    }));
+  if (options.length < 2) return undefined;
+  const suggested =
+    typeof c.suggested === 'number' && c.suggested >= 0 && c.suggested < options.length
+      ? Math.floor(c.suggested)
+      : undefined;
+  return {
+    options,
+    ...(suggested !== undefined ? { suggested } : {}),
+    ...(c.multi === true ? { multi: true } : {}),
+  };
+}
+
 /** What one finished tool call shows as: a line, a card, a hand-off section or nothing. */
 function settledCall(
   id: string,
@@ -195,9 +224,19 @@ function settledCall(
       { event: 'handoff_done', data: { usage: h.usage } },
     ];
   }
-  const error = out.error ?? (o && typeof o.error === 'string' ? o.error : undefined);
+  // A change made at once answers `{ change, result }`: its result's own error (a build that failed)
+  // is the call's failure too, so its line says "Couldn't …" in red, never a finished change.
+  const inner = o && 'result' in o ? obj(o.result) : null;
+  const error =
+    out.error ??
+    (o && typeof o.error === 'string'
+      ? o.error
+      : inner && typeof inner.error === 'string'
+        ? inner.error
+        : undefined);
   const rows = rowCount(o && 'result' in o ? o.result : out.output);
   const image = stepImage(o?.image);
+  const choices = stepChoices(o?.choices);
   const web = webStep(c.name, c.input, out.output, !!error || obj(out.output)?.ok === false);
   const wrote = card?.kind === 'write' || (o && typeof o.change === 'string');
   // The app's own line says what the call did; a failed one already says it did not ("Couldn't …").
@@ -216,16 +255,25 @@ function settledCall(
     tool: c.name,
     title: line ?? shownTitle(c.name, names, wrote ? 'write' : 'read'),
     ok: !error,
-    ms,
+    // A chat read back from storage keeps no times: 0 means unknown, and the line shows none.
+    ...(ms > 0 ? { ms } : {}),
     ...(rows !== undefined && !error && !names.plain ? { rows } : {}),
     ...(error && !(line && names.plain)
       ? { error: names.plain ? plainFailure(error) : error.slice(0, 300) }
       : {}),
     ...(wrote
-      ? { write: { undo: true, status: card?.status === 'undone' ? 'undone' : 'done' } }
+      ? {
+          write: error
+            ? { undo: false, status: 'failed' as const, error: error.slice(0, 300) }
+            : {
+                undo: true,
+                status: card?.status === 'undone' ? ('undone' as const) : ('done' as const),
+              },
+        }
       : {}),
     ...(web ? { web } : {}),
     ...(image && !error ? { image } : {}),
+    ...(choices && !error ? { choices } : {}),
   };
   return [{ event: 'step', data: step }];
 }
