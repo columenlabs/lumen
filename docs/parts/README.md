@@ -13,6 +13,7 @@ Each page has the same four headings:
 |---|---|---|
 | `LumenDrawer` + `DrawerSection` | [drawer.md](drawer.md) | The details or editor of one row, beside the list |
 | `LumenBottomSheet` | [bottom-sheet.md](bottom-sheet.md) | A phone panel that rests at peek, half or full beside a live page |
+| `LumenFloatingPanel` | [floating-panel.md](floating-panel.md) | A see-through panel the person drags, resizes and folds over a live page (a phone held sideways) |
 | `LumenForm`, `SaveButton`, `FormIssue` | [form.md](form.md) | Fields that save together |
 | `LumenSettings`, `LumenExpandList` | [settings.md](settings.md) | An app's Settings page |
 | `LumenShell bar`, `useStatus` | [status-bar.md](status-bar.md) | What is true right now, nobody has to act on |
