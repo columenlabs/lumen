@@ -29,6 +29,8 @@ import {
   type TaskItem,
   type UsagePart,
   type WebLink,
+  stepLineParts,
+  stepLineText,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -1155,8 +1157,25 @@ function ToolStep({ step, live }: { step: StepItem; live: boolean }) {
       ) : (
         <WrenchIcon className="size-3.5 shrink-0" />
       )}
-      <span className="truncate" title={step.title}>
-        {step.title}
+      <span className="truncate" title={stepLineText(step.title)}>
+        {stepLineParts(step.title).map((part, i) =>
+          part.name ? (
+            // A name (`stepName`): a token in the accent colour, so it reads as the thing it names.
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: parts of one fixed line, in order
+              key={i}
+              data-step-name
+              className={cn(
+                'rounded px-1 font-medium',
+                ok ? 'bg-primary/10 text-primary' : 'bg-loss/10',
+              )}
+            >
+              {part.text}
+            </span>
+          ) : (
+            part.text
+          ),
+        )}
       </span>
       {!live && facts.length > 0 && (
         <span className="shrink-0 tabular-nums">{facts.join(' · ')}</span>

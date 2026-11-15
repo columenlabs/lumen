@@ -80,6 +80,25 @@ export interface AssistantQuote {
 /** The longest quote a message carries; a longer selection is cut to it. */
 export const ASSISTANT_QUOTE_MAX = 2000;
 
+/**
+ * A name inside a step line ("Moved Top Small: …"): wrap it with `stepName` and the chat draws it as a
+ * name token. The marks are Unicode isolates (U+2068 … U+2069), so a log, a hover or an older chat that
+ * does not draw them shows the plain name.
+ */
+export const stepName = (name: string): string =>
+  `\u2068${name.replace(/[\u2068\u2069]/g, '')}\u2069`;
+
+/** A step line cut into its plain text and its names (`stepName`), in order. */
+export function stepLineParts(line: string): { text: string; name: boolean }[] {
+  const out: { text: string; name: boolean }[] = [];
+  for (const [i, text] of line.split(/[\u2068\u2069]/).entries())
+    if (text) out.push({ text, name: i % 2 === 1 });
+  return out;
+}
+
+/** A step line as plain text: its name marks taken out. */
+export const stepLineText = (line: string): string => line.replace(/[\u2068\u2069]/g, '');
+
 /** One tool call the assistant made. */
 export interface StepItem {
   kind: 'step';
