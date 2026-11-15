@@ -2396,7 +2396,14 @@ export function LumenComposer({
           {meter}
           <div className="ml-auto flex items-center gap-0.5">
             {voice && (
-              <VoiceButton value={text} onChange={setText} size="icon-xs" disabled={disabled} />
+              // Full colour beside Send: only Send dims while the box is empty.
+              <VoiceButton
+                value={text}
+                onChange={setText}
+                size="icon-xs"
+                disabled={disabled}
+                className="text-foreground"
+              />
             )}
             {busy && !text.trim() ? (
               <IconButton
