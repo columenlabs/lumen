@@ -28,12 +28,13 @@ import type {
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { HAND_OFF_WHYS } from '@columenlabs/lumen-ui-types/assistant';
-import { type ToolSet, generateText, jsonSchema, stepCountIs, tool } from 'ai';
+import { type ModelMessage, type ToolSet, generateText, jsonSchema, stepCountIs, tool } from 'ai';
 import OpenAI, { toFile } from 'openai';
 import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
 import { backoffFetch } from '../agent/backoff';
-import { type ModelKey, aiModel, turnSettings } from '../agent/models';
+import { type ModelKey, aiModel, planLimited, turnSettings } from '../agent/models';
 import type { OpenedTools, SourceAt } from '../agent/tools';
+import { tokenUsage } from '../agent/usage';
 import { type WebLookupOptions, webLookupTools } from '../subagents/web';
 import { type BearingsExtra, type BearingsNow, bearings } from './bearings';
 import {
@@ -1740,11 +1741,8 @@ export class Assistant {
     const xai = s.model.provider === 'xai';
     const client = (xai ? clients.xai : clients.openai) as OpenAI;
     const plan = !xai && !!clients.openaiPlan;
-    // On a ChatGPT plan a message's words go before its pictures: there the cache read stopped at the
-    // first picture (a Rebuild whose first message opens with pictures read 0 of 57k, while plan chats
-    // with words only read 99%, live 2026-11-14). On a key the pictures stay first.
-    const order = <I, T>(pics: I[], words: T[]): (I | T)[] =>
-      plan ? [...words, ...pics] : [...pics, ...words];
+    // Pictures first, then words (a message's photos are read before its text).
+    const order = <I, T>(pics: I[], words: T[]): (I | T)[] => [...pics, ...words];
     let text = '';
     let done: OpenAI.Responses.Response | undefined;
     try {
@@ -1885,6 +1883,73 @@ export class Assistant {
     };
   }
 
+  /**
+   * One answer on a ChatGPT plan sign-in, sent as a plan chat sends it: the AI SDK's Responses
+   * model over `planFetch` (instructions, store off, encrypted reasoning, streamed, `session-id`).
+   * The conversation goes as messages, each user message's pictures before its words, and the
+   * newest message last, so a later call reads every earlier message from the cache.
+   */
+  private async planOnce(
+    s: { model: ModelDef; meter: Meter },
+    apiKey: string,
+    instructions: string,
+    input: string[],
+    signal?: AbortSignal,
+    images?: CompleteImage[],
+    effort?: AssistantEffort,
+    cacheKey?: string,
+    history: CompleteTurn[] = [],
+  ): Promise<{ text: string; cut: boolean }> {
+    const user = (pics: CompleteImage[], words: string[]): ModelMessage => ({
+      role: 'user',
+      content: [
+        ...pics.map((i) => ({ type: 'image' as const, image: i.data, mediaType: i.mediaType })),
+        ...words.map((text) => ({ type: 'text' as const, text })),
+      ],
+    });
+    const messages: ModelMessage[] = [
+      ...history.map(
+        (t): ModelMessage =>
+          t.role === 'assistant'
+            ? { role: 'assistant', content: [{ type: 'text', text: t.text }] }
+            : user(t.images ?? [], [t.text]),
+      ),
+      user(images ?? [], input),
+    ];
+    const r = await generateText({
+      maxRetries: 0,
+      model: aiModel(
+        s.model,
+        { apiKey, plan: true },
+        {
+          ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
+          name: this.name,
+        },
+      ),
+      instructions,
+      messages,
+      ...(signal ? { abortSignal: signal } : {}),
+      ...turnSettings(s.model, {
+        effort: effort ?? 'default',
+        plan: true,
+        ...(cacheKey ? { cacheKey } : {}),
+      }),
+    }).catch((err: unknown) => {
+      if (signal?.aborted) throw err;
+      // The plan's own reason, worded as the OpenAI SDK path words it (a used-up plan says so).
+      const e = err as { responseBody?: string; message?: string };
+      let er: { code?: unknown; type?: unknown; message?: unknown } = { message: e?.message };
+      try {
+        const j = JSON.parse(e?.responseBody ?? '') as { error?: typeof er; detail?: unknown };
+        er = j.error ?? { message: j.detail ?? e?.message };
+      } catch {}
+      if (planLimited(err) && !er.code) er = { ...er, code: 'usage_limit_reached' };
+      throw new AssistantError(openaiStreamError(er, true), 'upstream');
+    });
+    s.meter.add(tokenUsage(r.usage), true);
+    return { text: r.text, cut: r.finishReason === 'length' };
+  }
+
   // ---------------------------------------------------------------- one-shot work
 
   /**
@@ -1963,7 +2028,23 @@ export class Assistant {
     // The answer stopped at `max` before it ended (its thinking counts toward the cap too).
     let cut = false;
     try {
-      if (
+      if (s.model.provider === 'openai' && clients.openaiPlan && paying.keys.openai) {
+        // A ChatGPT plan answers through the same client and request as a plan chat (the AI SDK
+        // over planFetch): plan chats read 85-99% from the cache while the same plan's one-shot
+        // calls through the OpenAI SDK read 0 of 57k every time (live 2026-11-14), so both now
+        // send one request shape.
+        ({ text, cut } = await this.planOnce(
+          s,
+          paying.keys.openai,
+          o.system,
+          parts,
+          o.signal,
+          o.images,
+          o.effort,
+          cacheKey(`${caller.id}:${s.model.id}:${o.system ?? ''}`),
+          o.history,
+        ));
+      } else if (
         (s.model.provider === 'openai' && clients.openai) ||
         (s.model.provider === 'xai' && clients.xai)
       ) {
