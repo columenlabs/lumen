@@ -4,9 +4,8 @@
  * group, `ext_<id>`, at the access the admin gives it: Read keeps the tools the server marks
  * read-only, Read + draft turns the rest into cards the person saves.
  *
- * Lazy by design: a test lists the server's tools once and keeps that catalog, so a turn offers
- * them without calling the server, and the model sees none of them until it searches
- * (`tool_search`); the server is only called when a tool is. A server's text is data, never
+ * A test lists the server's tools once and keeps that catalog, so a turn offers them without
+ * calling the server; the server is only called when a tool is. A server's text is data, never
  * instructions.
  */
 import type {

@@ -13,88 +13,6 @@ import { backoffFetch } from './backoff';
 
 /** Models a ChatGPT plan refused `prompt_cache_options` for ("not supported on this model"). */
 const noCacheTtl = new Set<string>();
-/** Models a ChatGPT plan refused deferred tools and `tool_search` for. */
-const noDeferred = new Set<string>();
-/** Models a ChatGPT plan refused `additional_tools` input items for. */
-const noAdditional = new Set<string>();
-/**
- * How a plan model takes a long tool list, best first: OpenAI's own deferred \`tool_search\`; else
- * the assistant's own search with each found tool added later in the conversation as an
- * \`additional_tools\` item, so the tool list at the cached start stays put; else every tool on
- * every call. Each is dropped for a model on its first refusal (live 2026-11-15: a plan refuses
- * \`tool_search\`, "subscription_sharing_unsupported_capability").
- */
-export function planTools(model: string): 'deferred' | 'additional' | 'all' {
-  if (!noDeferred.has(model)) return 'deferred';
-  return noAdditional.has(model) ? 'all' : 'additional';
-}
-/** The assistant's own tool search, as \`search.ts\` names it. */
-const OWN_SEARCH = 'tool_search';
-/**
- * Per conversation (its \`prompt_cache_key\`): the functions its first request sent, and where in
- * its input each function found later first came (kept for this isolate, at most 500 talks).
- */
-const loaded = new Map<
-  string,
-  { base: string[]; extra: { name: string; at: number }[]; len: number }
->();
-/**
- * A request whose tool list changed after a search, put back to its first list: each function
- * found since rides in an \`additional_tools\` item placed where it was first found, so every later
- * request starts the same as the one before it.
- */
-function withAdditional(
-  key: string,
-  input: Record<string, unknown>[],
-  fns: { name?: string }[],
-  ns: (tools: unknown[]) => Record<string, unknown>,
-): { fns: { name?: string }[]; input: Record<string, unknown>[] } | null {
-  let s = loaded.get(key);
-  if (!s || input.length < s.len) s = { base: fns.map((f) => f.name ?? ''), extra: [], len: 0 };
-  for (const f of fns) {
-    const n = f.name ?? '';
-    if (!s.base.includes(n) && !s.extra.some((e) => e.name === n))
-      s.extra.push({ name: n, at: input.length });
-  }
-  s.len = input.length;
-  loaded.delete(key);
-  loaded.set(key, s);
-  if (loaded.size > 500) loaded.delete(loaded.keys().next().value as string);
-  const here = s.extra.filter((e) => fns.some((f) => f.name === e.name));
-  if (!here.length) return null;
-  const out = [...input];
-  for (const at of [...new Set(here.map((e) => e.at))].sort((a, b) => b - a)) {
-    const tools = here.filter((e) => e.at === at).map((e) => fns.find((f) => f.name === e.name));
-    out.splice(Math.min(at, out.length), 0, {
-      type: 'additional_tools',
-      role: 'developer',
-      tools: [ns(tools)],
-    });
-  }
-  return { fns: fns.filter((f) => s.base.includes(f.name ?? '')), input: out };
-}
-/** Whether a request carries deferred tools (OpenAI's `tool_search`). */
-const hasDeferred = (body: Record<string, unknown>): boolean =>
-  ((body.tools as { type?: string }[] | undefined) ?? []).some((t) => t.type === 'tool_search');
-
-/** A request without deferred tools: every tool loaded, OpenAI's search and its history items gone. */
-function undeferred(body: Record<string, unknown>): Record<string, unknown> {
-  const plain = (t: Record<string, unknown>): Record<string, unknown> => {
-    const { defer_loading: _, ...rest } = t;
-    return Array.isArray(rest.tools)
-      ? { ...rest, tools: (rest.tools as Record<string, unknown>[]).map(plain) }
-      : rest;
-  };
-  const tools = ((body.tools as Record<string, unknown>[] | undefined) ?? [])
-    .filter((t) => t.type !== 'tool_search')
-    .map(plain);
-  const input = Array.isArray(body.input)
-    ? (body.input as Record<string, unknown>[]).filter(
-        (m) => m.type !== 'tool_search_call' && m.type !== 'tool_search_output',
-      )
-    : body.input;
-  return { ...body, tools, input };
-}
 
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
 export interface ModelKey {
@@ -164,28 +82,7 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       tools: list,
     });
     if (fns.length) body.tools = [...rest, ns(fns)];
-    // The assistant's own search on: each function it found joins later, not at the start.
-    const plain = { tools: body.tools, input: body.input };
     const model = String(body.model ?? '');
-    let added = false;
-    if (
-      typeof body.prompt_cache_key === 'string' &&
-      Array.isArray(body.input) &&
-      fns.some((f) => f.name === OWN_SEARCH) &&
-      !noAdditional.has(model)
-    ) {
-      const late = withAdditional(
-        body.prompt_cache_key,
-        body.input as Record<string, unknown>[],
-        fns,
-        ns,
-      );
-      if (late) {
-        body.tools = [...rest, ns(late.fns)];
-        body.input = late.input;
-        added = true;
-      }
-    }
     const streamed = body.stream === true;
     body.stream = true;
     // ChatGPT keeps a plan's prompt cache by the request's `session-id` header, not the body's
@@ -205,7 +102,6 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       !body.prompt_cache_options
     )
       body.prompt_cache_options = { ttl: '30m' };
-    if (hasDeferred(body) && noDeferred.has(model)) body = undeferred(body);
     // The request's shape, one line a call: every field but the token, each text as its length and a
     // short hash, never its words. Two calls' lines side by side show what one changed (the prompt
     // cache reads a request only as far as it matches an earlier one).
@@ -221,14 +117,6 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       if (body.prompt_cache_options && /prompt_cache_options/i.test(text)) {
         noCacheTtl.add(model);
         body = { ...body, prompt_cache_options: undefined };
-      } else if (hasDeferred(body) && /defer|tool_search|namespace/i.test(text)) {
-        noDeferred.add(model);
-        body = undeferred(body);
-      } else if (added) {
-        // Any other refusal of a request with found tools moved later: send them as before.
-        noAdditional.add(model);
-        added = false;
-        body = { ...body, ...plain };
       } else break;
       console.error(
         JSON.stringify({

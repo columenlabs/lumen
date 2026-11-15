@@ -62,7 +62,6 @@ import {
   screenRules,
   screenTool,
 } from './screen';
-import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools, usedTools } from './search';
 import {
   type AskMeta,
   type SteerNote,
@@ -124,7 +123,10 @@ export interface AgentTurnPlan {
   more?: (t: TurnTools) => ToolSet;
   /** Call this tool first (a message handed to a higher tier). */
   first?: string;
-  /** Past `at` tools (`LAZY_AT`) the model starts with `core` and `tool_search` only. */
+  /**
+   * @deprecated Ignored: every turn sends the whole tool list, so the prompt cache reads it (see the
+   * README, "Tools: the whole list on every call"). Kept so an app that still sets it type-checks.
+   */
   lazy?: { at?: number; core?: string[] };
   /** Claude's advisor: a bigger Claude reads the chat and sends a plan. */
   advisor?: { model: ModelDef; label: string; maxUses: number; maxTokens: number };
@@ -470,7 +472,6 @@ export interface Running {
   capped: boolean;
   /** Writes and draft cards this answer made (`AgentTurnEnd.changes`). */
   changes?: number;
-  lazy?: LazyTools;
   t0: number;
 }
 
@@ -1153,39 +1154,6 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       this.#turn.system = system;
     }
     const tools: ToolSet = { ...opened.tools, ...more, ...advisor, ...screen };
-    let lazy: LazyTools | undefined;
-    // A lazy group's tools (a connector's) are always found first; past `at` tools, all but the core.
-    const offPrompt = new Set(opened.info.filter((i) => i.lazy).map((i) => i.name));
-    const many = Object.keys(tools).length > (plan.lazy?.at ?? LAZY_AT);
-    if (many || offPrompt.size) {
-      const groups = new Map(opened.info.map((i) => [i.name, i.group]));
-      const core = (
-        plan.lazy?.core ??
-        (many
-          ? [
-              ...opened.info.filter((i) => i.find).map((i) => i.name),
-              ...Object.keys(more ?? {}),
-              ...Object.keys(advisor),
-              ...Object.keys(screen),
-            ]
-          : Object.keys(tools))
-      ).filter((n) => !offPrompt.has(n));
-      // The file tools are never in `tools` (Think adds them), so they would be left off the active
-      // list and hidden from the model: a lazy turn then had no read (live 2026-11-14).
-      for (const n of Object.keys(files)) if (!core.includes(n)) core.push(n);
-      if (plan.first && !core.includes(plan.first)) core.push(plan.first);
-      lazy = lazyTools(
-        tools,
-        core,
-        (n) => groups.get(n) ?? 'other',
-        usedTools(ctx.messages),
-        opened.labels,
-      );
-      tools[TOOL_SEARCH] = lazy.search;
-      system = `${system}\n\n${lazy.catalog}`;
-      this.#turn.system = system;
-      this.#turn.lazy = lazy;
-    }
     const turn = this.#turn;
     // A task's turn reads its brief and its own messages; any other turn, the messages of no task.
     const keys = turnKeys(ctx.messages);
@@ -1229,7 +1197,6 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       instructions: cached.instructions as unknown as string,
       messages: cached.messages,
       tools,
-      ...(lazy ? { activeTools: lazy.active() } : {}),
       ...(plan.first ? { toolChoice: { type: 'tool', toolName: plan.first } } : {}),
       maxSteps: plan.maxSteps ?? MAX_STEPS,
       ...turnSettings(plan.model, {
@@ -1272,10 +1239,9 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     }
     // A forced first call is for the first step only; tools a search found join each step.
     const auto = t.plan.first && ctx.stepNumber > 0;
-    if (!auto && !t.lazy && !steered) return undefined;
+    if (!auto && !steered) return undefined;
     return {
       ...(auto ? { toolChoice: 'auto' } : {}),
-      ...(t.lazy ? { activeTools: t.lazy.active() } : {}),
       ...messages,
     } as StepConfig;
   }

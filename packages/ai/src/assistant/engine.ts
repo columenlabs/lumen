@@ -322,7 +322,7 @@ export interface AssistantOptions {
   /**
    * Connectors: outside MCP servers (Streamable HTTP) an admin adds in Settings with an address
    * and the headers they sign in with. Each is a tool group (`ext_<id>`) at the access the admin
-   * gives it; its tools stay off the model's prompt until it searches for them (`tool_search`).
+   * gives it; its tools are on the prompt with every other tool.
    */
   connectors?: boolean;
   /**
@@ -1517,7 +1517,7 @@ export class Assistant {
       }
     }
     // The app's connectors, from the tools their last test listed: nothing is called until a
-    // tool is, and the model finds them through `tool_search` (lazy).
+    // tool is.
     for (const c of await this.connectorDocs()) {
       if (c.access === 'off' || !c.catalog.length) continue;
       sources.push({
