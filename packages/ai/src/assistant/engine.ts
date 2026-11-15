@@ -1662,7 +1662,7 @@ export class Assistant {
    * One answer, sent exactly as a chat turn sends it: the AI SDK model for the provider (`aiModel`,
    * over `planFetch` on a ChatGPT plan) with the chat's settings (`turnSettings`) and Claude's cache
    * marks (`cachedTurn`). There is one client for every model call, chat or not. The conversation
-   * goes as messages, each user message's pictures before its words, the newest message last, so a
+   * goes as messages, each user message's words before its pictures, the newest message last, so a
    * later call reads every earlier message from the cache.
    */
   private async once(
@@ -1679,9 +1679,12 @@ export class Assistant {
   ): Promise<{ text: string; cut: boolean }> {
     const user = (pics: CompleteImage[], words: string[]): ModelMessage => ({
       role: 'user',
+      // Words first, then pictures, as a chat message reads: on a ChatGPT plan, calls whose messages
+      // open with a picture read 0 of 57k from the cache while chats on the same plan and model
+      // read up to 99.8% (live 2026-11-15).
       content: [
-        ...pics.map((i) => ({ type: 'image' as const, image: i.data, mediaType: i.mediaType })),
         ...words.map((text) => ({ type: 'text' as const, text })),
+        ...pics.map((i) => ({ type: 'image' as const, image: i.data, mediaType: i.mediaType })),
       ],
     });
     const turn = cachedTurn(instructions, [
@@ -1744,7 +1747,7 @@ export class Assistant {
        * that adds a line) reads them at a tenth of the price. Put what stays the same first.
        */
       prompt: string | string[];
-      /** Photos read with the prompt (a scanned page, a screenshot), sent before it and cached. */
+      /** Photos read with the prompt (a scanned page, a screenshot), sent after its words and cached. */
       images?: CompleteImage[];
       /**
        * The conversation so far, oldest first, alternating user and assistant and ending with the
