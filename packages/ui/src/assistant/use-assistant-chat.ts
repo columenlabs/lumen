@@ -536,7 +536,9 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     async (id: string) => {
       abort.current?.abort();
       setQueue([]);
-      setLoading(true);
+      // Reading the chat that is on screen again (a task ended, a change was kept) swaps its items in
+      // place: the list stays, so the person's place in it stays. Only another chat shows Loading.
+      if (idRef.current !== id) setLoading(true);
       try {
         const c = await client.chat(id);
         idRef.current = c.id;
