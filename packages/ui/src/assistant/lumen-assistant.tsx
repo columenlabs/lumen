@@ -1875,7 +1875,7 @@ function TaskRowView({
         {tag && (
           <span
             className={cn(
-              'shrink-0 text-[11px] uppercase tracking-wide',
+              'shrink-0 text-xs uppercase tracking-wide',
               now ? 'text-primary' : 'text-muted-foreground',
             )}
           >
