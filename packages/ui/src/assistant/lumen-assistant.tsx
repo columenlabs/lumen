@@ -829,7 +829,15 @@ function Item({
     case 'fresh':
       return <FreshCard />;
     case 'stopped':
-      return <Rule>{item.reason === 'cap' ? "Stopped at this month's spend cap" : 'Stopped'}</Rule>;
+      return (
+        <Rule>
+          {item.reason === 'cap'
+            ? "Stopped at this month's spend cap"
+            : item.reason === 'limit'
+              ? 'Stopped at the time limit'
+              : 'Stopped'}
+        </Rule>
+      );
     case 'error':
       return (
         <p

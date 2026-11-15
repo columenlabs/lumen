@@ -264,7 +264,7 @@ export type ChatItem =
    * (`LumenAgent.offerFresh`); it was not answered or kept. Gone once the person chooses.
    */
   | { kind: 'fresh' }
-  | { kind: 'stopped'; reason?: 'cap' }
+  | { kind: 'stopped'; reason?: 'cap' | 'limit' }
   /** `retried`: its turn was sent again (Retry), so it no longer offers one. */
   | { kind: 'error'; text: string; code?: string; retried?: boolean };
 
@@ -317,7 +317,7 @@ export type AssistantEvent =
   | { event: 'compacted'; data: Record<string, never> }
   | { event: 'fresh'; data: Record<string, never> }
   | { event: 'usage'; data: ChatUsage }
-  | { event: 'stopped'; data: { reason?: 'cap' } }
+  | { event: 'stopped'; data: { reason?: 'cap' | 'limit' } }
   /** A message steered into the running answer was read by it here. */
   | { event: 'steered'; data: { text: string; at: number } }
   /** Steered messages the answer ended before reading: the panel queues them next. */
