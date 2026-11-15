@@ -1117,7 +1117,8 @@ export abstract class LumenSession {
         (!plan.key.plan || planTools(plan.model.id) !== 'additional')
       ) {
         // OpenAI loads a found tool at the end of the conversation, so the cached start stays put.
-        const all = deferredTools(tools, core);
+        // A plan refuses OpenAI's server-side search; it runs on our side there (execution: client).
+        const all = deferredTools(tools, core, { client: !!plan.key.plan });
         for (const k of Object.keys(tools)) delete tools[k];
         Object.assign(tools, all);
       } else {
