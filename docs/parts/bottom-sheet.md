@@ -2,7 +2,7 @@
 
 ## Use it for
 
-A phone panel that stays on screen beside a live page, such as a 3D view, a map or a canvas. It rests at a peek, half or full height, and the person drags its handle between them. It has no dim and no blur, and taps above it reach the page. It never closes, so a running answer, an upload or a form inside it keeps going.
+A phone panel that stays on screen beside a live page, such as a 3D view, a map or a canvas. It rests at a peek, half or full height, and the person drags its handle between them. It has no dim and no blur, and taps above it reach the page. It is not modal: a field above it takes focus and the keyboard, and the page stays visible to screen readers. It never closes, so a running answer, an upload or a form inside it keeps going.
 
 - The details or editor of one row: `LumenDrawer` (a bottom sheet on a phone, closed when done).
 - A yes or no: `LumenConfirm`.
