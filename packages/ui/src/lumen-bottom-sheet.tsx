@@ -1,3 +1,4 @@
+import { Dialog } from 'radix-ui';
 import * as React from 'react';
 import { Drawer } from 'vaul';
 import { cn } from './lib/utils';
@@ -96,30 +97,37 @@ export function LumenBottomSheet({
         if (next !== undefined) onSnap(next);
       }}
     >
-      <Drawer.Portal>
-        <Drawer.Content
-          data-slot="lumen-bottom-sheet"
-          aria-describedby={undefined}
-          // Focus stays where the person was: the sheet is always there, opening it is not a move.
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          className={cn(
-            'fixed inset-x-0 bottom-0 z-40 flex h-dvh flex-col rounded-t-2xl border-t bg-popover text-popover-foreground shadow-[0_-4px_16px_rgb(0_0_0/0.15)] outline-none',
-            className,
-          )}
-        >
-          <Drawer.Title className="sr-only">{title}</Drawer.Title>
-          {/* Clipped to its snap: at peek only the handle and the header show, nothing of the body below. */}
-          <div className="flex min-h-0 flex-col overflow-hidden" style={{ height: shown }}>
-            <Drawer.Handle
-              aria-label="Drag to resize"
-              className="mx-auto! my-2! h-1! w-9! shrink-0 rounded-full! bg-border! opacity-100!"
-            />
-            <div className="flex min-h-0 flex-1 flex-col pb-[env(safe-area-inset-bottom)]">
-              {children}
+      {/*
+        vaul 1.1.2 takes `modal={false}` but never hands it to the Radix dialog under it, so Radix
+        would trap focus in the sheet and hide the rest of the page from screen readers: no field
+        above the sheet could take a tap. A non-modal dialog root here is the one the content reads.
+      */}
+      <Dialog.Root open modal={false} onOpenChange={() => {}}>
+        <Drawer.Portal>
+          <Drawer.Content
+            data-slot="lumen-bottom-sheet"
+            aria-describedby={undefined}
+            // Focus stays where the person was: the sheet is always there, opening it is not a move.
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            className={cn(
+              'fixed inset-x-0 bottom-0 z-40 flex h-dvh flex-col rounded-t-2xl border-t bg-popover text-popover-foreground shadow-[0_-4px_16px_rgb(0_0_0/0.15)] outline-none',
+              className,
+            )}
+          >
+            <Drawer.Title className="sr-only">{title}</Drawer.Title>
+            {/* Clipped to its snap: at peek only the handle and the header show, nothing of the body below. */}
+            <div className="flex min-h-0 flex-col overflow-hidden" style={{ height: shown }}>
+              <Drawer.Handle
+                aria-label="Drag to resize"
+                className="mx-auto! my-2! h-1! w-9! shrink-0 rounded-full! bg-border! opacity-100!"
+              />
+              <div className="flex min-h-0 flex-1 flex-col pb-[env(safe-area-inset-bottom)]">
+                {children}
+              </div>
             </div>
-          </div>
-        </Drawer.Content>
-      </Drawer.Portal>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Dialog.Root>
     </Drawer.Root>
   );
 }
