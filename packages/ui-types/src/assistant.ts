@@ -89,7 +89,8 @@ export interface StepItem {
   /** The tool's title, or its name. */
   title: string;
   ok: boolean;
-  ms: number;
+  /** How long it took; left out when unknown (a chat read back from storage keeps no times). */
+  ms?: number;
   /** Rows in a list result, when it was one. */
   rows?: number;
   error?: string;
@@ -99,7 +100,29 @@ export interface StepItem {
   web?: StepWeb;
   /** An image the tool made (its output's `image`): the panel shows it as a card. */
   image?: StepImage;
+  /**
+   * The answers the assistant offers to its own question (its output's `choices`): quick replies
+   * under the turn while it is the chat's last, each a shortcut for typing that answer.
+   */
+  choices?: StepChoices;
 }
+
+/**
+ * Quick replies to the assistant's question. The question itself is the assistant's own text; each
+ * option is an answer the person can send with one tap (or its number key), `suggested` the one the
+ * assistant recommends. `multi` lets them tick several and send them together. Typing in the box
+ * always works as well.
+ */
+export interface StepChoices {
+  /** Each answer, a few words; `note` is shown after it, `on` ticks it at first when `multi`. */
+  options: { label: string; note?: string; on?: boolean }[];
+  /** The index of the recommended option. */
+  suggested?: number;
+  multi?: boolean;
+}
+
+/** The most options a question offers. */
+export const CHOICES_MAX = 16;
 
 /** An image a tool made: where the browser reads it, its words for a screen reader, and what it cost. */
 export interface StepImage {
@@ -169,6 +192,25 @@ export interface AssistantTask {
   /** What it works on, in a few words ("Lid · hard edit"). */
   label: string;
   state: AssistantTaskState;
+}
+
+/** How a task's card looks: running, ready for the person, settled, failed, waiting on an answer or stopped. */
+export const TASK_TONES = ['live', 'ready', 'done', 'failed', 'ask', 'stopped'] as const;
+export type AssistantTaskTone = (typeof TASK_TONES)[number];
+
+/**
+ * The app's header for a task's card (`LumenAssistant` `taskView`): what the work is (`title`), the
+ * line under it (`detail`, what it works on, then `state`, where it stands), its tone, and `since`,
+ * when the work started, for a running clock while it is live.
+ */
+export interface AssistantTaskView {
+  tone: AssistantTaskTone;
+  title: string;
+  /** What it works on ("Wall mount plate"), muted. */
+  detail?: string;
+  /** Where it stands ("Built", "Waiting for you"), in the tone's colour after the detail. */
+  state?: string;
+  since?: number;
 }
 
 /** A task's messages in the chat: shown as one block, its state in the header. */

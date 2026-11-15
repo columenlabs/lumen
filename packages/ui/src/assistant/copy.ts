@@ -61,7 +61,7 @@ function itemMarkdown(i: ChatItem, depth: number, name: string): string {
     case 'step': {
       const facts = [
         i.rows !== undefined ? `${i.rows} rows` : '',
-        `${(i.ms / 1000).toFixed(1)} s`,
+        i.ms ? `${(i.ms / 1000).toFixed(1)} s` : '',
         i.write ? i.write.status : '',
       ].filter(Boolean);
       return `**${i.ok ? 'Tool' : 'Failed'}: ${i.title}** (${facts.join(', ')})${i.error ? `\n\nError: ${i.error}` : ''}`;
