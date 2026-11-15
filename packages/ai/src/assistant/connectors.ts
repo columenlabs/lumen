@@ -15,7 +15,6 @@ import type {
   ConnectorAccess,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { CONNECTOR_ACCESS } from '@columenlabs/lumen-ui-types/assistant';
-import { checkConnectorUrl } from '../agent/connectors';
 import type { KeyTest } from './state';
 import { type OpenTools, type ToolDef, type ToolSource, remoteMcpTools } from './tools';
 
@@ -204,4 +203,30 @@ export function catalogTools(d: ConnectorDoc, f?: typeof fetch): ToolSource {
       },
     };
   };
+}
+
+/** A connector's id from its name: a letter first, then letters, digits and `_`, at most 24. */
+export function connectorId(name: string): string {
+  const id = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 24);
+  if (!id) throw new Error('Give the connector a name.');
+  return /^[a-z]/.test(id) ? id : `c_${id}`.slice(0, 24);
+}
+
+/** A connector's address must be https (localhost only while developing). */
+export function checkConnectorUrl(url: string): URL {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error('That is not a web address.');
+  }
+  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  if (u.protocol !== 'https:' && !(local && u.protocol === 'http:'))
+    throw new Error('A connector needs an https address.');
+  if (u.username || u.password) throw new Error('Leave sign-in details out of the address.');
+  return u;
 }

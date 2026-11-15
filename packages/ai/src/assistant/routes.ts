@@ -47,8 +47,7 @@ import {
   COMPACT_CHOICES,
   HAND_OFF_POLICIES,
 } from '@columenlabs/lumen-ui-types/assistant';
-import { connectorId } from '../agent/connectors';
-import { CONNECTORS_MAX, type ConnectorDoc, connectorInput } from './connectors';
+import { CONNECTORS_MAX, type ConnectorDoc, connectorId, connectorInput } from './connectors';
 import { type Assistant, AssistantError, type Caller } from './engine';
 import { PROVIDERS } from './models';
 import {
