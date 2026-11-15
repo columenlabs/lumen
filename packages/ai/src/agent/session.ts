@@ -6,7 +6,7 @@
  * waiting on the model, and the object serves the other sessions meanwhile.
  *
  * It is `LumenAgent` without Think (which runs one conversation per object): the same `plan` and
- * `settle`, the same cards, tasks, steers, screen, connectors, leads and usage, and its own turn
+ * `settle`, the same cards, tasks, steers, screen, leads and usage, and its own turn
  * loop on the AI SDK. A turn runs in the host, not in the request that asked: when the person
  * leaves, the answer goes on and is kept, and the panel reads it back. Every turn stops at the
  * host's turn limit (`turnLimitMs`) and keeps what it made.
@@ -62,13 +62,6 @@ import {
   quoteOf,
   stickyLeads,
 } from './agent';
-import {
-  type AgentConnector,
-  CONNECTOR_GROUP,
-  type ConnectorClient,
-  connectorGroup,
-  connectorSource,
-} from './connectors';
 import { aiModel, cachedTurn, planFallback, prefixCacheKey, turnSettings } from './models';
 import {
   type ScreenCall,
@@ -123,11 +116,6 @@ export interface SessionHost {
   sql: SessionSql;
   /** The host's storage, for the sessions' files. */
   storage: ConstructorParameters<typeof Workspace>[0]['storage'];
-  /** The person's connectors, when the host keeps any (an MCP client). */
-  connectors?: ConnectorClient & {
-    servers(): AgentConnector[];
-    waitForConnections?(o: { timeout: number }): Promise<unknown>;
-  };
   /** Keeps the host awake while a turn runs past the request that asked (`ctx.waitUntil`). */
   waitUntil?(p: Promise<unknown>): void;
 }
@@ -617,15 +605,7 @@ export abstract class LumenSession {
     if (!c || c.kind !== 'draft') throw new Error('That card is gone.');
     if (c.status !== 'open') throw new Error(`That card is already ${c.status}.`);
     try {
-      const server = c.group.startsWith(CONNECTOR_GROUP)
-        ? c.group.slice(CONNECTOR_GROUP.length)
-        : null;
-      const client = this.host.connectors;
-      if (server && !client) throw new Error('Connectors are not set up here.');
-      const result =
-        server && client
-          ? await (await connectorSource(client, server)()).call(c.tool, c.args)
-          : await this.applyDraft(c);
+      const result = await this.applyDraft(c);
       this.#setCard(id, 'saved', { result });
     } catch (err) {
       this.#setCard(id, 'failed', { error: String((err as Error)?.message ?? err).slice(0, 300) });
@@ -1030,25 +1010,9 @@ export abstract class LumenSession {
     await this.#close();
     const plan = await this.plan(ctx);
     this.#last = { plan };
-    const linked = (plan.connectors ?? []).filter((c) => c.access !== 'off');
-    const client = this.host.connectors;
-    if (linked.length && client?.waitForConnections)
-      await client.waitForConnections({ timeout: 1500 }).catch(() => undefined);
-    const sources = [
-      ...plan.sources,
-      ...(client
-        ? linked.map((c) => ({
-            group: connectorGroup(c.id),
-            access: c.access,
-            source: connectorSource(client, c.id),
-            writes: true,
-          }))
-        : []),
-    ];
-    const opened = await openAiTools(sources, {
+    const opened = await openAiTools(plan.sources, {
       draft: async (d) => ({ card: this.#addCard('draft', d), note: CARD_NOTE }),
-      wrote: async (w) =>
-        w.group.startsWith(CONNECTOR_GROUP) ? undefined : this.#addCard('write', w, w.result),
+      wrote: async (w) => this.#addCard('write', w, w.result),
       ...plan.tools,
     });
     const free = !!plan.key.plan;
