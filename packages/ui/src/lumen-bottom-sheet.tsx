@@ -19,6 +19,11 @@ export interface LumenBottomSheetProps {
   onSnap: (snap: SheetSnap) => void;
   /** Its name for screen readers. */
   title: string;
+  /**
+   * Its top row (tabs, a title): shown at every snap, and part of the drag area with the grab bar,
+   * so a drag that starts anywhere on it moves the sheet. Taps on its buttons still reach them.
+   */
+  header?: React.ReactNode;
   /** What it holds. It stays mounted at every snap, so running work inside keeps going. */
   children: React.ReactNode;
   className?: string;
@@ -75,6 +80,7 @@ export function LumenBottomSheet({
   snap,
   onSnap,
   title,
+  header,
   children,
   className,
 }: LumenBottomSheetProps) {
@@ -99,7 +105,8 @@ export function LumenBottomSheet({
       open
       modal={false}
       dismissible={false}
-      handleOnly
+      // The grab bar and the header drag it; the body is marked no-drag, so its lists and chat
+      // scroll and never move the sheet. (Only the 4px bar used to drag, so most swipes missed.)
       snapPoints={rests}
       activeSnapPoint={rests[at] ?? rest(snap)}
       setActiveSnapPoint={(s) => {
@@ -138,12 +145,17 @@ export function LumenBottomSheet({
             <Drawer.Title className="sr-only">{title}</Drawer.Title>
             {/* Clipped to its snap: at peek only the handle and the header show, nothing of the body below. */}
             <div className="flex min-h-0 flex-col overflow-hidden" style={{ height: shown }}>
-              <Drawer.Handle
-                aria-label="Drag to resize"
-                className="mx-auto! my-2! h-1! w-9! shrink-0 rounded-full! bg-border! opacity-100!"
-              />
+              {/* A tap on the bar steps it to the next rest; its row is tall enough to hit. */}
+              <div className="flex h-5 shrink-0 items-center justify-center">
+                <Drawer.Handle
+                  aria-label="Drag to resize"
+                  className="m-0! h-1! w-9! shrink-0 rounded-full! bg-border! opacity-100!"
+                />
+              </div>
+              {header !== undefined && <div className="shrink-0">{header}</div>}
               {/* With the keyboard up the keys cover the home bar, so no room is kept for it. */}
               <div
+                data-vaul-no-drag=""
                 className={cn(
                   'flex min-h-0 flex-1 flex-col',
                   lifted === undefined && 'pb-[env(safe-area-inset-bottom)]',

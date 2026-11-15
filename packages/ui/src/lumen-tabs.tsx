@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 /** The row's gap between tabs (`gap-6` in TabsList). */
 const GAP = 24;
@@ -41,14 +42,100 @@ export function LumenTabs<V extends string>({
   value,
   onChange,
   actions,
+  variant = 'row',
 }: {
   tabs: LumenTab<V>[];
   value: V | undefined;
   onChange: (value: V) => void;
   /** What only the open tab uses, at the row's right end. */
   actions?: ReactNode;
+  /**
+   * `row` (default): icon and name side by side, the rest in More. `stacked`: a phone panel's bar,
+   * the tabs sharing the row evenly, each its icon over a short name. `icons`: icons only, each
+   * named in its tooltip, for a small floating panel.
+   */
+  variant?: 'row' | 'stacked' | 'icons';
 }) {
   const shown = tabs.filter((t) => !t.hidden);
+  if (variant !== 'row')
+    return (
+      <EvenTabs
+        tabs={shown}
+        value={value}
+        onChange={onChange}
+        actions={actions}
+        icons={variant === 'icons'}
+      />
+    );
+  return <RowTabs tabs={shown} value={value} onChange={onChange} actions={actions} />;
+}
+
+/** A bar of tabs that share the row evenly: icon over name, or icons alone with a tooltip. */
+function EvenTabs<V extends string>({
+  tabs,
+  value,
+  onChange,
+  actions,
+  icons,
+}: {
+  tabs: LumenTab<V>[];
+  value: V | undefined;
+  onChange: (value: V) => void;
+  actions?: ReactNode;
+  icons: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      <Tabs value={value} onValueChange={(v) => onChange(v as V)} className="min-w-0 flex-1">
+        <TabsList className="w-full gap-0">
+          {tabs.map((t) => {
+            const name = typeof t.label === 'string' ? t.label : undefined;
+            const trigger = (
+              <TabsTrigger
+                key={t.value}
+                value={t.value}
+                aria-label={icons ? name : undefined}
+                className={cn(
+                  'relative min-h-11 min-w-0 flex-1 justify-center py-1 after:inset-x-3',
+                  !icons && 'flex-col gap-0.5 text-xs leading-3 [&_svg]:size-5',
+                )}
+              >
+                <t.icon />
+                {!icons && <span className="max-w-full truncate">{t.label}</span>}
+                {t.after && (
+                  <span className={cn('text-xs', !icons ? 'absolute top-0.5 left-1/2 ml-2' : '')}>
+                    {t.after}
+                  </span>
+                )}
+              </TabsTrigger>
+            );
+            return icons ? (
+              <Tooltip key={t.value}>
+                <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+                <TooltipContent>{t.label}</TooltipContent>
+              </Tooltip>
+            ) : (
+              trigger
+            );
+          })}
+        </TabsList>
+      </Tabs>
+      {actions}
+    </div>
+  );
+}
+
+function RowTabs<V extends string>({
+  tabs: shown,
+  value,
+  onChange,
+  actions,
+}: {
+  tabs: LumenTab<V>[];
+  value: V | undefined;
+  onChange: (value: V) => void;
+  actions?: ReactNode;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const ruler = useRef<HTMLDivElement>(null);
   // How many tabs fit before the More menu; all of them until measured.

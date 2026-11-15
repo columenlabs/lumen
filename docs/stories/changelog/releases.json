@@ -1,5 +1,324 @@
 [
   {
+    "tag": "v0.1.308",
+    "date": "2026-11-15T09:28:50Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Chat keeps your place while an answer streams",
+        "body": "In `LumenAssistant` from `@columenlabs/lumen-ui`, the message list now follows new content only while the reader is within 48 px of the end, so scrolling up to read is no longer overridden by streaming text or task card updates."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Chat no longer moves the page around it",
+        "body": "`LumenAssistant` now scrolls only its own list box by setting its `scrollTop`, so the page and surrounding panels stay still while messages arrive."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Re-opening the chat on screen reloads in place",
+        "body": "In `useAssistantChat`, calling `open(id)` for the chat already showing now swaps in the new items without the \"Loading the chat…\" state, so your app can refresh a chat (for example, to fold a finished task) without the list emptying or the scroll resetting. Opening a different chat still shows Loading."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.307",
+    "date": "2026-11-15T09:21:51Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Steps carry their tool's apply",
+        "body": "In `@columenlabs/lumen-ui-types/assistant`, `StepItem` has a new `apply` field holding the tool output's `apply` (or its result's, for a change made at once), so your app's panel can apply a change that lives in its own page and put it back on Undo."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Stored chats keep apply",
+        "body": "In `@columenlabs/lumen-ai`, `settledCall` now fills `StepItem.apply`, so a chat read back from storage carries it just like a live one."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Apply is small and skipped on failure",
+        "body": "`StepItem.apply` is passed through untouched as JSON up to `STEP_APPLY_MAX` (8,000 characters) and is left out when the tool call failed, so you only act on changes that succeeded."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.306",
+    "date": "2026-11-15T09:08:50Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Bottom sheet ends at the keyboard while typing",
+        "body": "In `LumenBottomSheet` from @columenlabs/lumen-ui, typing in a field inside the sheet now places the sheet so it ends at the phone's keyboard, with no empty gap between the composer and the keys."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Sheet sizes from the layout viewport",
+        "body": "`LumenBottomSheet` now sizes its content from the layout viewport (`documentElement.clientHeight`) instead of `innerHeight`, so its size and position agree when a phone keyboard shrinks the window."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Fields outside the sheet leave it alone",
+        "body": "In `LumenBottomSheet`, focus in a field above the sheet, such as a search box, leaves the sheet where it rests. Only focus inside the sheet lifts it."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.305",
+    "date": "2026-11-15T08:42:29Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Step lines can mark the names they mention",
+        "body": "From `@columenlabs/lumen-ui-types/assistant` (also re-exported from `@columenlabs/lumen-ai/agent`), `stepName(name)` wraps a name in invisible Unicode isolates, so a step line can mark the things it names and older kits still show the plain name."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Marked names draw as tokens in the chat",
+        "body": "In `LumenAssistant`, each name marked with `stepName` in a step line now draws as an accent-colour token, and on a failed line it stays red on a red tint."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Split a step line or strip its marks",
+        "body": "From `@columenlabs/lumen-ui-types/assistant`, `stepLineParts(line)` splits a step line into its text and names, and `stepLineText(line)` returns the plain text without the marks."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.304",
+    "date": "2026-11-15T08:18:24Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Fields above a bottom sheet take focus on phones",
+        "body": "In `@columenlabs/lumen-ui`, `LumenBottomSheet` is now truly non-modal, so a search box or rename input placed above the sheet can take focus even after something inside the sheet has had focus."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "The sheet no longer hides or locks the page behind it",
+        "body": "`LumenBottomSheet` stops trapping focus, marking the rest of the page `aria-hidden` and locking scroll while open, so content outside the sheet stays reachable by touch, keyboard and assistive tech."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The bottom sheet docs now say it is non-modal",
+        "body": "The `LumenBottomSheet` part page states that the sheet does not behave as a modal, so you can plan the layout around fields that stay interactive."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.303",
+    "date": "2026-11-15T07:57:43Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Composer mic no longer looks disabled",
+        "body": "In `LumenAssistant`'s composer, the mic (`VoiceButton`) is now drawn in `text-foreground` instead of the addon's muted colour, so it reads as enabled when the box is empty."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Only Send dims on an empty box",
+        "body": "In `LumenAssistant`'s composer, Send is now the only control that dims while the input is empty, so the disabled state is easy to tell apart from the active mic."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Listening indicator can't be hidden by a colour class",
+        "body": "`VoiceButton` from @columenlabs/lumen-ui now applies its `className` before its listening red, so a colour you pass in no longer hides the red dot while recording."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.302",
+    "date": "2026-11-15T07:51:11Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tag every chat and run with a usage category",
+        "body": "In `@columenlabs/lumen-ai`, pass `category` in `AgentTurnInput` on a chat's first turn to name what the chat is in your app's words, and each `UsageEntry` now carries it (task runs use their `TaskDef.label`, and anything unset shows as `Chat`)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Fill in categories for old usage lines",
+        "body": "In `AssistantOptions`, the new `usageCategory(e)` callback sets a category for lines stored before categories existed, and `GET /usage` now returns every line with its category."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Filter and group usage by Category",
+        "body": "In `@columenlabs/lumen-ui`, `AssistantUsageTable` has a new Category column that you can filter and group by, and it now groups by Date first and shows 50 rows per page."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Grouped tables can page",
+        "body": "In `@columenlabs/lumen-ui`, `LumenTable` now pages its rows in group order when you pass both `page` and `groupBy`, while each group's count and totals still cover all of its rows."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.301",
+    "date": "2026-11-15T07:04:53Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tasks show as one work card",
+        "body": "In `LumenAssistant` from `@columenlabs/lumen-ui/assistant`, return an `AssistantTaskView` (`tone`, `title`, `detail`, `state`, `since`) from the new `taskView` prop to show a task as a single card, or render the new `WorkCard` export yourself to draw your own work the same way."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Quick replies under the last turn",
+        "body": "When a tool output sets `StepItem.choices` (`options`, `suggested`, `multi`, `on`), `LumenAssistant` now shows numbered quick replies, the new `QuickReplies` export, where keys 1 to 9 pick a row and `multi` turns the rows into ticks with a Send button."
+      },
+      {
+        "kinds": [],
+        "title": "`taskActions` now takes `(task, live)`",
+        "body": "Update any `taskActions` prop on `LumenAssistant` to accept the second `live` argument, and don't assume the function only runs while a task is open, because it is now called in every state. The task chip is also gone, so while a task is open every message goes to it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Failed changes show in red",
+        "body": "In `LumenAssistant`, a write step whose `{ change, result }` result carries `error` now renders as a failed step in red with \"Couldn't …\", so a failed change is no longer easy to miss."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No more \"0 ms\" on steps",
+        "body": "`StepItem.ms` is now optional, so a step without a recorded time, such as one read back from storage, no longer shows a made-up \"0 ms\"."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.300",
+    "date": "2026-11-15T05:18:06Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Many chat sessions in one object",
+        "body": "From `@columenlabs/lumen-ai`, `LumenSession` and `LumenSessions` let one host object (for example, one per person) run many chats, edits and long jobs at once, each with its own messages, cards, screen calls, prompt-cache key and file root (`/s/<id>`)."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Turns outlive the caller",
+        "body": "A `LumenSession` turn runs inside the host object, so it keeps going and saves its answer after the caller leaves, and a turn cut off by a restart resumes once."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Shared turn time limit",
+        "body": "Every `LumenSession` turn now stops at `TURN_LIMIT_MS` (5 minutes), keeps what it made, and sends `stopped` with the reason `limit`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "New `limit` stop reason",
+        "body": "In `@columenlabs/lumen-ui-types`, `stopped.reason` now allows `'limit'`, so code that switches on the reason should handle it, and the panel shows \"Stopped at the time limit\"."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.299",
+    "date": "2026-11-15T04:51:39Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "Per-person `mcp_` connectors removed",
+        "body": "In @columenlabs/lumen-ai, `TurnPlan.connectors`, `LumenAgent.addConnector`, `removeConnector` and `connectors()` are gone, so delete any `connectors` field you read or destructure from a `TurnPlan` and any calls to those methods."
+      },
+      {
+        "kinds": [],
+        "title": "Connector types and helpers removed",
+        "body": "`ConnectorAt`, `AgentConnector`, `ConnectorClient`, `connectorSource`, `connectorResult`, `CONNECTOR_GROUP` and `connectorGroup` are no longer exported from @columenlabs/lumen-ai, so remove any imports of them."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One kind of MCP connector, the app's `ext_`",
+        "body": "In @columenlabs/lumen-ai, the admin-wide `ext_` connectors (header sign-in, tested and catalogued) are now the only connector system, and they still reach agent turns through `plan.sources`, so existing setups keep working unchanged."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.298",
+    "date": "2026-11-15T04:48:43Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "User bubbles stay inside the assistant panel",
+        "body": "In `LumenAssistant` from @columenlabs/lumen-ui, user messages (plain, steered and retried) no longer grow past the panel's left edge when they contain a long `@` chip, so the chip and the message are no longer clipped."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Long `@` chips shorten with an ellipsis",
+        "body": "In `LumenAssistant`, a composer chip in a user message now shrinks to fit its bubble and ends in an ellipsis, and hovering it shows the full label through its `title`."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Long links and unbroken words wrap",
+        "body": "In `LumenAssistant`, user and assistant message text now breaks long words and links onto the next line instead of overflowing the panel, with no prop or markup changes in your app."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.297",
     "date": "2026-11-15T03:09:55Z",
     "takeaways": [
