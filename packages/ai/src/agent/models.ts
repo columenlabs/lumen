@@ -13,6 +13,27 @@ import { backoffFetch } from './backoff';
 
 /** Whether a ChatGPT plan takes `prompt_cache_options` (on until it refuses it once). */
 let planCacheTtl = true;
+/** A plan took deferred tools and \`tool_search\` (cleared for this isolate on its first refusal). */
+let planDeferred = true;
+
+/** A request without deferred tools: every tool loaded, OpenAI's search and its history items gone. */
+function undeferred(body: Record<string, unknown>): Record<string, unknown> {
+  const plain = (t: Record<string, unknown>): Record<string, unknown> => {
+    const { defer_loading: _, ...rest } = t;
+    return Array.isArray(rest.tools)
+      ? { ...rest, tools: (rest.tools as Record<string, unknown>[]).map(plain) }
+      : rest;
+  };
+  const tools = ((body.tools as Record<string, unknown>[] | undefined) ?? [])
+    .filter((t) => t.type !== 'tool_search')
+    .map(plain);
+  const input = Array.isArray(body.input)
+    ? (body.input as Record<string, unknown>[]).filter(
+        (m) => m.type !== 'tool_search_call' && m.type !== 'tool_search_output',
+      )
+    : body.input;
+  return { ...body, tools, input };
+}
 
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
 export interface ModelKey {
@@ -42,7 +63,8 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
   return async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (!url.endsWith('/responses') || typeof init?.body !== 'string') return base(input, init);
-    const { max_output_tokens: _cap, ...body } = JSON.parse(init.body) as Record<string, unknown>;
+    const { max_output_tokens: _cap, ...parsed } = JSON.parse(init.body) as Record<string, unknown>;
+    let body = parsed;
     body.store = false;
     const include = Array.isArray(body.include) ? (body.include as string[]) : [];
     if (!include.includes('reasoning.encrypted_content'))
@@ -94,6 +116,10 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
     // 30-minute cache in so many words, and ask again without it if the plan refuses the field.
     if (typeof body.prompt_cache_key === 'string' && planCacheTtl && !body.prompt_cache_options)
       body.prompt_cache_options = { ttl: '30m' };
+    const deferred = ((body.tools as { type?: string }[] | undefined) ?? []).some(
+      (t) => t.type === 'tool_search',
+    );
+    if (deferred && !planDeferred) body = undeferred(body);
     // The request's shape, one line a call: every field but the token, each text as its length and a
     // short hash, never its words. Two calls' lines side by side show what one changed (the prompt
     // cache reads a request only as far as it matches an earlier one).
@@ -109,6 +135,21 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       planCacheTtl = false;
       const { prompt_cache_options: _, ...rest } = body;
       res = await base(input, { ...init, headers, body: JSON.stringify(rest) });
+    }
+    // A plan that refuses deferred tools gets them all loaded: the list still the same every call.
+    if (
+      res.status === 400 &&
+      deferred &&
+      planDeferred &&
+      /defer|tool_search|namespace/i.test(await res.clone().text())
+    ) {
+      planDeferred = false;
+      console.error(
+        JSON.stringify({ event: 'assistant_plan_refused', status: 400, body: 'deferred tools' }),
+      );
+      body = undeferred(body);
+      if (!planCacheTtl) body.prompt_cache_options = undefined;
+      res = await base(input, { ...init, headers, body: JSON.stringify(body) });
     }
     // A refusal is logged with OpenAI's own reason; the person sees a plain sentence.
     if (!res.ok)

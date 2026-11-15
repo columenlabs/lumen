@@ -4,11 +4,14 @@
  * description and turns them on from the next step, so a big set (many connectors) costs a short
  * prompt instead of every schema on every call.
  */
+import { openai } from '@ai-sdk/openai';
 import { type JSONSchema7, type Tool, type ToolSet, jsonSchema, tool } from 'ai';
 
 /** Past this many tools a turn starts with `tool_search` and its core tools only. */
 export const LAZY_AT = 30;
 export const TOOL_SEARCH = 'tool_search';
+/** OpenAI's own tool search, when the turn's tools are deferred (`deferredTools`). */
+export const DEFERRED_SEARCH = 'openai_tool_search';
 
 /** Most tools one search turns on. */
 const FOUND_MAX = 8;
@@ -140,4 +143,32 @@ export function lazyTools(
     catalog,
     active: () => [...core, TOOL_SEARCH, ...found],
   };
+}
+
+/**
+ * Lazy tools as an OpenAI model takes them: every tool is sent, those outside \`core\` marked
+ * \`defer_loading\`, with OpenAI's own \`tool_search\`. A deferred tool's schema stays out of the
+ * model's context until a search loads it, and the search's result lands at the end of the
+ * conversation, so the tool list at the start of the cached prompt never changes (live 2026-11-15:
+ * with the list narrowed per step, the call after a search sent a longer list and read 0 of the
+ * cache, its unchanged 5.4k-token instructions included).
+ */
+export function deferredTools(tools: ToolSet, core: readonly string[]): ToolSet {
+  const out: ToolSet = {};
+  for (const [name, t] of Object.entries(tools)) {
+    const kind = (t as { type?: string }).type;
+    if (core.includes(name) || (kind && kind !== 'function' && kind !== 'dynamic')) {
+      out[name] = t;
+      continue;
+    }
+    const po =
+      (t as { providerOptions?: Record<string, Record<string, unknown>> }).providerOptions ?? {};
+    out[name] = {
+      ...t,
+      providerOptions: { ...po, openai: { ...po.openai, deferLoading: true } },
+    } as Tool;
+  }
+  // Its own name: a chat's earlier calls of Lumen's `tool_search` stay plain function calls.
+  out[DEFERRED_SEARCH] = openai.tools.toolSearch({});
+  return out;
 }
