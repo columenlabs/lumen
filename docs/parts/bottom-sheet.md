@@ -21,6 +21,7 @@ A phone panel that stays on screen beside a live page, such as a 3D view, a map 
 - `snaps`: the rests, smallest first: a share of the screen (`0.5`) or px (`'64px'`). Peek is as tall as the handle plus the header, so the header (tabs) shows and nothing below it. A px snap is measured above the phone's home bar; the sheet adds the bar. The page leaves `calc(<peek> + env(safe-area-inset-bottom))` at its bottom.
 - `snap` / `onSnap`: where it rests, controlled. A header button or a tab tap moves it, and so does a drag.
 - What it holds fills only the part on screen, so a composer or footer at its bottom stays in view at every snap.
+- Typing in it with a phone's keyboard up, it ends at the keyboard (as tall as its snap, or what is visible), so the field and a composer sit just above the keys. A field above the sheet leaves it where it rests.
 - The page leaves room for the peek at its bottom (its status bar sits above it).
 
 ## Do / Don't

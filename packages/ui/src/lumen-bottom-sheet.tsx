@@ -1,6 +1,7 @@
 import { Dialog } from 'radix-ui';
 import * as React from 'react';
 import { Drawer } from 'vaul';
+import { useKeyboardFit } from './hooks/use-keyboard-fit';
 import { cn } from './lib/utils';
 
 /**
@@ -48,13 +49,16 @@ function useSafeBottom() {
   return inset;
 }
 
-/** The screen's height, kept up to date. */
+/**
+ * The screen's height, kept up to date: the layout viewport, which a phone's keyboard leaves alone
+ * (iOS shrinks `innerHeight` with the keyboard, which would shrink the sheet with it).
+ */
 function useScreenHeight() {
   const [h, setH] = React.useState(() =>
-    typeof window === 'undefined' ? 800 : window.innerHeight,
+    typeof window === 'undefined' ? 800 : document.documentElement.clientHeight,
   );
   React.useEffect(() => {
-    const on = () => setH(window.innerHeight);
+    const on = () => setH(document.documentElement.clientHeight);
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
   }, []);
@@ -82,7 +86,14 @@ export function LumenBottomSheet({
   const at = snaps.indexOf(snap);
   // The sheet is as tall as the screen and slides down to its snap; what it holds fills only the
   // part on screen, so a composer or footer at its bottom stays in view at every snap.
-  const shown = Math.min(h, Math.max(0, px(rest(snap), h)));
+  const rested = Math.min(h, Math.max(0, px(rest(snap), h)));
+  // Typing in the sheet with the keyboard up: the sheet ends at the keyboard, as tall as its snap or
+  // what is visible, so the field and the composer sit just above the keys (theme.css holds vaul's
+  // slide off while it does). A field above the sheet leaves the sheet where it rests.
+  const kb = useKeyboardFit();
+  const [typing, setTyping] = React.useState(false);
+  const lifted = typing && kb ? Math.min(rested, kb.height) : undefined;
+  const shown = lifted ?? rested;
   return (
     <Drawer.Root
       open
@@ -109,6 +120,16 @@ export function LumenBottomSheet({
             aria-describedby={undefined}
             // Focus stays where the person was: the sheet is always there, opening it is not a move.
             onOpenAutoFocus={(e) => e.preventDefault()}
+            onFocus={() => setTyping(true)}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setTyping(false);
+            }}
+            data-lifted={lifted === undefined ? undefined : ''}
+            style={
+              lifted === undefined || !kb
+                ? undefined
+                : { top: kb.top + kb.height - lifted, bottom: 'auto', height: lifted }
+            }
             className={cn(
               'fixed inset-x-0 bottom-0 z-40 flex h-dvh flex-col rounded-t-2xl border-t bg-popover text-popover-foreground shadow-[0_-4px_16px_rgb(0_0_0/0.15)] outline-none',
               className,
@@ -121,7 +142,13 @@ export function LumenBottomSheet({
                 aria-label="Drag to resize"
                 className="mx-auto! my-2! h-1! w-9! shrink-0 rounded-full! bg-border! opacity-100!"
               />
-              <div className="flex min-h-0 flex-1 flex-col pb-[env(safe-area-inset-bottom)]">
+              {/* With the keyboard up the keys cover the home bar, so no room is kept for it. */}
+              <div
+                className={cn(
+                  'flex min-h-0 flex-1 flex-col',
+                  lifted === undefined && 'pb-[env(safe-area-inset-bottom)]',
+                )}
+              >
                 {children}
               </div>
             </div>
