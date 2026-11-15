@@ -21,7 +21,6 @@ import { rowCount } from '../assistant/tools';
 import { webStep } from '../assistant/web';
 import type { AgentCard } from './agent';
 import type { ScreenCall } from './screen';
-import { TOOL_SEARCH } from './search';
 
 /** A tool's name as a line's title: `notes__find_notes` → `find notes`. */
 export function stepTitle(name: string): string {
@@ -73,11 +72,11 @@ function lineFor(names: StepNames, c: StepCall): string | undefined {
 }
 
 /**
- * Whether a call shows no line at all: in a plain chat, the tool search that turns more tools on is
- * the assistant finding its own tools, not something it did for the person.
+ * Whether a call shows no line at all: in a plain chat, a `tool_search` call kept in an earlier
+ * chat's history (the assistant once found its own tools) is not something it did for the person.
  */
 export function hiddenStep(name: string, names: StepNames = {}): boolean {
-  return !!names.plain && name === TOOL_SEARCH;
+  return !!names.plain && name === 'tool_search';
 }
 
 /** What a plain line says when a call failed: the assistant reads the error and goes on. */

@@ -62,14 +62,7 @@ import {
   quoteOf,
   stickyLeads,
 } from './agent';
-import {
-  aiModel,
-  cachedTurn,
-  planFallback,
-  planTools,
-  prefixCacheKey,
-  turnSettings,
-} from './models';
+import { aiModel, cachedTurn, planFallback, prefixCacheKey, turnSettings } from './models';
 import {
   type ScreenCall,
   screenMapOf,
@@ -78,14 +71,6 @@ import {
   screenRules,
   screenTool,
 } from './screen';
-import {
-  LAZY_AT,
-  type LazyTools,
-  TOOL_SEARCH,
-  deferredTools,
-  lazyTools,
-  usedTools,
-} from './search';
 import {
   type AskMeta,
   type SteerNote,
@@ -1106,47 +1091,6 @@ export abstract class LumenSession {
       this.#turn.system = system;
     }
     const tools: ToolSet = { ...files, ...opened.tools, ...more, ...advisor, ...screen };
-    let lazy: LazyTools | undefined;
-    const offPrompt = new Set(opened.info.filter((i) => i.lazy).map((i) => i.name));
-    const many = Object.keys(tools).length > (plan.lazy?.at ?? LAZY_AT);
-    if (many || offPrompt.size) {
-      const groups = new Map(opened.info.map((i) => [i.name, i.group]));
-      const core = (
-        plan.lazy?.core ??
-        (many
-          ? [
-              ...opened.info.filter((i) => i.find).map((i) => i.name),
-              ...Object.keys(more ?? {}),
-              ...Object.keys(advisor),
-              ...Object.keys(screen),
-            ]
-          : Object.keys(tools))
-      ).filter((n) => !offPrompt.has(n));
-      for (const n of Object.keys(files)) if (!core.includes(n)) core.push(n);
-      if (plan.first && !core.includes(plan.first)) core.push(plan.first);
-      // A plan model that refused OpenAI's own search takes the assistant's (planTools).
-      if (
-        plan.model.provider === 'openai' &&
-        (!plan.key.plan || planTools(plan.model.id) !== 'additional')
-      ) {
-        // OpenAI loads a found tool at the end of the conversation, so the cached start stays put.
-        const all = deferredTools(tools, core);
-        for (const k of Object.keys(tools)) delete tools[k];
-        Object.assign(tools, all);
-      } else {
-        lazy = lazyTools(
-          tools,
-          core,
-          (n) => groups.get(n) ?? 'other',
-          usedTools(ctx.messages),
-          opened.labels,
-        );
-        tools[TOOL_SEARCH] = lazy.search;
-        system = `${system}\n\n${lazy.catalog}`;
-        this.#turn.system = system;
-        this.#turn.lazy = lazy;
-      }
-    }
     const turn = this.#turn;
     const keys = turnKeys(ctx.messages);
     const newest = keys.findLast((k) => k !== null) ?? null;
@@ -1185,7 +1129,6 @@ export abstract class LumenSession {
       instructions: cached.instructions,
       messages: cached.messages,
       tools,
-      ...(lazy ? { activeTools: lazy.active() } : {}),
       ...(plan.first ? { toolChoice: { type: 'tool' as const, toolName: plan.first } } : {}),
       maxSteps: plan.maxSteps ?? MAX_STEPS,
       ...turnSettings(plan.model, {
@@ -1223,10 +1166,9 @@ export abstract class LumenSession {
         instructions: `${t.system}\n\n${LAST_STEP_NOTE}`,
       };
     const auto = t.plan.first && ctx.stepNumber > 0;
-    if (!auto && !t.lazy && !steered) return undefined;
+    if (!auto && !steered) return undefined;
     return {
       ...(auto ? { toolChoice: 'auto' } : {}),
-      ...(t.lazy ? { activeTools: t.lazy.active() } : {}),
       ...messages,
     };
   }

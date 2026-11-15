@@ -15,11 +15,11 @@ export interface SourceAt {
   /** The group runs writes at once on Read + write; else a write drafts. */
   writes?: boolean;
   /**
-   * Its tools stay off the model's prompt until it finds them with `tool_search` (a connector's),
-   * however few tools the turn has.
+   * An outside server's group (a connector's): its tools' own titles are never shown as a step's
+   * words. Its tools are on the prompt like every other (no tool search).
    */
   lazy?: boolean;
-  /** The group's name in the lazy catalog ("ScrapeQL"). */
+  /** The group's name ("ScrapeQL"). */
   label?: string;
 }
 
@@ -51,18 +51,18 @@ export interface ToolInfo {
   find: boolean;
   /** The tool's own title, in words a person reads ("Read the design guide"). */
   title?: string;
-  /** Off the prompt until `tool_search` finds it (`SourceAt.lazy`). */
+  /** From an outside server's group (`SourceAt.lazy`). */
   lazy?: boolean;
 }
 
 /** Tools open for one answer, as the AI SDK's set, and how to let them go. */
 export interface OpenedTools {
   tools: ToolSet;
-  /** Names of the reads, for a lazy loader's catalog or `activeTools`. */
+  /** Names of the reads. */
   reads: string[];
   /** Each tool offered: its name, group, kind and whether it is an app's find. */
   info: ToolInfo[];
-  /** Each labelled group's name (`SourceAt.label`), for the lazy catalog. */
+  /** Each labelled group's name (`SourceAt.label`). */
   labels?: Record<string, string>;
   failed: number;
   close(): Promise<void>;
