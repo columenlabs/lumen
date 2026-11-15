@@ -743,12 +743,12 @@ function Item({
     case 'user': {
       if (item.steered)
         return (
-          <div className="ml-8 flex flex-col items-end gap-0.5 self-end">
+          <div className="ml-8 flex min-w-0 max-w-[calc(100%-2rem)] flex-col items-end gap-0.5 self-end">
             <span className="flex items-center gap-1 text-primary text-xs">
               <CornerDownRightIcon className="size-3" />
               Steered
             </span>
-            <div className="rounded-lg border border-primary/40 bg-muted px-3 py-2 text-sm whitespace-pre-wrap break-words">
+            <div className="min-w-0 max-w-full rounded-lg border border-primary/40 bg-muted px-3 py-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
               {item.text}
             </div>
           </div>
@@ -756,11 +756,11 @@ function Item({
       const bubble = (
         <div
           data-chat-from="user"
-          className="ml-8 self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap has-[[data-slot=chat-image]]:ml-0 has-[[data-slot=chat-image]]:w-full"
+          className="ml-8 min-w-0 max-w-[calc(100%-2rem)] self-end rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere] has-[[data-slot=chat-image]]:ml-0 has-[[data-slot=chat-image]]:w-full has-[[data-slot=chat-image]]:max-w-full"
         >
           {item.quote && <QuoteLine quote={item.quote} />}
           {(item.tier || item.refs?.length) && (
-            <span className="mb-1 flex flex-wrap gap-1">
+            <span className="mb-1 flex min-w-0 flex-wrap gap-1">
               {item.tier && <ComposerChip sign={TIER} label={tierName(item.tier)} />}
               {item.refs?.map((r, i) => (
                 <ComposerChip key={`${r.kind}:${r.label}:${i}`} sign={POINT} label={r.label} />
@@ -782,7 +782,7 @@ function Item({
       );
       if (!item.retried) return bubble;
       return (
-        <div className="flex flex-col items-end gap-0.5 self-end">
+        <div className="flex w-full min-w-0 flex-col items-end gap-0.5 self-end">
           <span className="flex items-center gap-1 text-primary text-xs">
             <RefreshCwIcon className="size-3" />
             Retry
@@ -795,7 +795,7 @@ function Item({
       return (
         <div
           data-chat-from="assistant"
-          className="prose-sm text-sm leading-relaxed [&_code]:font-code [&_code]:text-xs [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1.5 [&_ul]:list-disc"
+          className="prose-sm min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] [&_code]:font-code [&_code]:text-xs [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1.5 [&_ul]:list-disc"
         >
           <ChatMarkdown>{item.text}</ChatMarkdown>
           {item.live && (
@@ -1478,9 +1478,12 @@ function ComposerChip({
   onRemove?: () => void;
 }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-xs">
-      <span className="text-muted-foreground">{sign}</span>
-      <span className="truncate">{label}</span>
+    <span
+      className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-xs"
+      title={label}
+    >
+      <span className="shrink-0 text-muted-foreground">{sign}</span>
+      <span className="min-w-0 truncate">{label}</span>
       {onRemove && (
         <button
           type="button"

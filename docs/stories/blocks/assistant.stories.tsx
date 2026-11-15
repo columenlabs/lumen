@@ -216,7 +216,20 @@ const CHAT: AssistantChat = {
     {
       kind: 'user',
       text: 'What did Sam ask for this week? Make a note to follow up.',
+      // A long chip and a long unbroken word: both stay inside the bubble (chip ends in an ellipsis).
+      refs: [
+        {
+          kind: 'selection',
+          label:
+            'Launch plan ▸ Goals ▸ Ship the beta to forty teams by March, then open sign-ups once support can answer',
+        },
+      ],
       at: NOW - 60_000,
+    },
+    {
+      kind: 'user',
+      text: 'Also check https://example.com/a/very/long/link/that/has/no/spaces/at/all/and/keeps/going/past/the/panel',
+      at: NOW - 59_000,
     },
     {
       kind: 'step',
