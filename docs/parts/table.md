@@ -66,6 +66,7 @@ The header's Export (`download` control) downloads or copies the table as CSV: t
 - ✗ `value + unit` text. ✓ `UnitValue`.
 - ✗ An app's own pager beside a table. ✓ The view's `pagination` (`size` 10, 25, 50, 100 or 250; 25 by default), drawn by `LumenView`.
 - ✗ Resetting the page on a new `rows` array. ✓ Only a new filter, sort, grouping or page size goes back to page 1.
+- ✗ Paging a grouped table by slicing its rows (each group then totals one page). ✓ `LumenTable page` with `groupBy`: it pages the rows in group order and every group's count and totals stay over all its rows; a standalone table draws `LumenPageFooter` under it.
 - ✗ Another row of tabs to filter. ✓ A `LumenTokenizedFilter` field.
 - ✗ Hiding columns to fit a narrow box (sidebar open, docked drawer). ✓ Every column shows; the table scrolls sideways and the name stays at `--lead-col-max`.
 - ✗ A cap worked out by hand (`calc(100cqw - 22rem)`) so a long name uses the table's spare width. ✓ `maxWidth: 'fill'` on that column: it takes whatever the other columns leave (never under 12rem), so a name ends in an ellipsis only where there is truly no room.

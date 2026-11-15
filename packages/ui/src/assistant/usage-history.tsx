@@ -9,6 +9,7 @@ import {
   CpuIcon,
   HashIcon,
   KeyRoundIcon,
+  LayersIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   ReceiptIcon,
@@ -20,6 +21,7 @@ import { InfoLabel } from '../info-tip';
 import { cn } from '../lib/utils';
 import { type FilterField, LumenTokenizedFilter, useLumenFilter } from '../lumen-filter';
 import { LumenTable } from '../lumen-view';
+import { LumenPageFooter } from '../pager';
 import { SettingField } from '../setting-parts';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
@@ -500,6 +502,8 @@ interface UsageRow {
   id: string;
   title: string;
   type: UsageType;
+  /** What the chat or run is (Chat, Edit, Rebuild): `UsageEntry.category`. */
+  category: string;
   /** Last use, ms; 0 for spend from before each chat kept its own count. */
   at: number;
   calls: number;
@@ -535,6 +539,7 @@ function usageRows(h: UsageHistory): UsageRow[] {
       id,
       title: e.title,
       type: 'credits',
+      category: s?.category ?? (e.category || (e.kind === 'chat' ? 'Chat' : (e.task ?? 'Run'))),
       at: Math.max(s?.at ?? 0, e.at),
       calls: (s?.calls ?? 0) + e.calls,
       tokens: {
@@ -575,6 +580,7 @@ function usageRows(h: UsageHistory): UsageRow[] {
       id: `earlier:${type}:${title}`,
       title,
       type,
+      category: EARLIER,
       at: 0,
       calls,
       key: type === 'key' ? amount : 0,
@@ -742,6 +748,23 @@ const USAGE_FIELDS: ViewField<UsageRow>[] = [
     ),
   },
   {
+    key: 'category',
+    label: 'Category',
+    icon: LayersIcon,
+    format: 'text',
+    groupable: true,
+    filterable: true,
+    hideOnPhone: true,
+    value: (r) => r.category,
+    render: (r) => (
+      <UsageTip r={r}>
+        <Badge variant="outline" className={cn('whitespace-nowrap', CHIP_TONE.muted)}>
+          {r.category}
+        </Badge>
+      </UsageTip>
+    ),
+  },
+  {
     key: 'at',
     label: 'Date',
     icon: CalendarIcon,
@@ -821,26 +844,41 @@ const USAGE_DOMAIN: ViewDomain<UsageRow> = {
   formulas: false,
 };
 const USAGE_FILTER: FilterField<UsageRow>[] = [
+  { key: 'category', label: 'Category', icon: LayersIcon, values: (r) => [r.category] },
   { key: 'type', label: 'Type', icon: KeyRoundIcon, values: (r) => [TYPE_LABEL[r.type]] },
 ];
+const fieldOf = (key: string) => USAGE_FIELDS.find((f) => f.key === key) ?? null;
 const GROUPS = [
-  { id: 'type', label: 'Type', field: USAGE_FIELDS[1] },
-  { id: 'none', label: 'None', field: null },
   { id: 'date', label: 'Date', field: DAY_FIELD },
+  { id: 'category', label: 'Category', field: fieldOf('category') },
+  { id: 'type', label: 'Type', field: fieldOf('type') },
+  { id: 'none', label: 'None', field: null },
 ] as const;
+/** Rows a page of the table shows; a group's totals still count every row of it. */
+const PAGE_SIZE = 50;
 type UsageGroup = (typeof GROUPS)[number]['id'];
 
 /**
- * This month's use, one row a session (a chat, or every run of one task on one thing): its Type (the person's API key, their plan sign-in, or
- * the app's credits), Date, Calls and Amount, grouped by Type, Date or not at all, filtered by
- * type or name. A row's hover gives its tokens and cost. A sign-in's amount is an estimate: the
- * same tokens at the model's API rates (the plan charges $0).
+ * This month's use, one row a session (a chat, or every run of one task on one thing): its
+ * Category (Chat, Edit, Rebuild: `UsageEntry.category`), Type (the person's API key, their plan
+ * sign-in, or the app's credits), Date, Calls and Amount, grouped by Date (first), Category, Type or
+ * not at all, filtered by category, type or name, PAGE_SIZE rows a page (a group's totals count all
+ * its rows). A row's hover gives its tokens and cost. A sign-in's amount is an estimate: the same
+ * tokens at the model's API rates (the plan charges $0).
  */
 export function AssistantUsageTable({ client }: { client: AssistantAdapter }) {
-  const [group, setGroup] = useState<UsageGroup>('type');
+  const [group, setGroup] = useState<UsageGroup>('date');
+  const [page, setPage] = useState(0);
   const q = useAssistantUsage(client);
   const rows = useMemo(() => (q.data ? usageRows(q.data) : []), [q.data]);
   const filter = useLumenFilter(rows, USAGE_FILTER, { text: (r) => [r.title] });
+  const shown = filter.results;
+  // A new filter or grouping starts from the first page; a page past the end shows the last.
+  const rowSet = shown.map((r) => r.id).join('\u0000');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resets on these changes only
+  useEffect(() => setPage(0), [rowSet, group]);
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const at = Math.min(page, pages - 1);
   if (!client.usage) return null;
   if (!q.data)
     return (
@@ -858,7 +896,7 @@ export function AssistantUsageTable({ client }: { client: AssistantAdapter }) {
         <LumenTokenizedFilter
           filter={filter}
           label="Filter usage"
-          placeholder="Filter: type, or a session name"
+          placeholder="Filter: category, type, or a session name"
           className="min-w-48 flex-1"
           link={null}
         />
@@ -881,8 +919,9 @@ export function AssistantUsageTable({ client }: { client: AssistantAdapter }) {
       <div className="min-w-0">
         <LumenTable
           domain={USAGE_DOMAIN}
-          rows={filter.results}
+          rows={shown}
           groupBy={GROUPS.find((g) => g.id === group)?.field ?? null}
+          page={{ index: at, size: PAGE_SIZE }}
           sort={{ key: 'at', desc: true }}
           emptyState={
             rows.length ? undefined : (
@@ -891,6 +930,9 @@ export function AssistantUsageTable({ client }: { client: AssistantAdapter }) {
           }
           onClearFilter={filter.clear}
         />
+        {pages > 1 && (
+          <LumenPageFooter total={shown.length} page={at} size={PAGE_SIZE} onPage={setPage} />
+        )}
       </div>
       <p className="text-muted-foreground text-xs">
         Sign-in amounts are estimates: your {PLAN_NAME} charges $0, so the amount is what the same

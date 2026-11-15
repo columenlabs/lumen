@@ -510,6 +510,12 @@ export interface UsageEntry {
   /** The task's id (`rebuild`) when `kind` is `task`. */
   task?: string;
   title: string;
+  /**
+   * What the chat or run is, in the app's words (Chat, Edit, Rebuild): the first turn's
+   * `AgentTurnInput.category`, a run's task label, or the app's `usageCategory`. Left out on lines
+   * kept before categories were.
+   */
+  category?: string;
   /** First and last use, ms. */
   first: number;
   at: number;
