@@ -94,6 +94,12 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
     // 30-minute cache in so many words, and ask again without it if the plan refuses the field.
     if (typeof body.prompt_cache_key === 'string' && planCacheTtl && !body.prompt_cache_options)
       body.prompt_cache_options = { ttl: '30m' };
+    // The request's shape, one line a call: every field but the token, each text as its length and a
+    // short hash, never its words. Two calls' lines side by side show what one changed (the prompt
+    // cache reads a request only as far as it matches an earlier one).
+    console.log(
+      JSON.stringify({ event: 'assistant_plan_request', ...requestShape(body, headers) }),
+    );
     let res = await base(input, { ...init, headers, body: JSON.stringify(body) });
     if (
       res.status === 400 &&
@@ -200,6 +206,46 @@ async function whole(res: Response, signal?: AbortSignal | null): Promise<Respon
 }
 
 /** A message's text, whether a string or a list of text parts. */
+/** A short, stable hash of a value as JSON: equal values give equal hashes. */
+function shapeHash(v: unknown): string {
+  const of = typeof v === 'string' ? v : JSON.stringify(v ?? null);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < of.length; i++) h = Math.imul(h ^ of.charCodeAt(i), 0x01000193);
+  return `${(h >>> 0).toString(36)}:${of.length}`;
+}
+
+/**
+ * A plan request with every field kept but its texts: each one as `hash:length`, and each input
+ * item as its role or type with its parts. The headers are named, the session id hashed, the
+ * token left out.
+ */
+function requestShape(body: Record<string, unknown>, headers: Headers) {
+  const items = Array.isArray(body.input) ? (body.input as Record<string, unknown>[]) : [];
+  const part = (c: Record<string, unknown>) => {
+    const { type, ...rest } = c;
+    return `${String(type)}=${shapeHash(rest)}`;
+  };
+  const { input: _i, instructions, tools, ...rest } = body;
+  const fields: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(rest))
+    fields[k] = typeof v === 'string' && v.length > 80 ? shapeHash(v) : v;
+  return {
+    headers: [...headers.keys()].filter((k) => k !== 'authorization').sort(),
+    session: shapeHash(headers.get('session-id') ?? ''),
+    fields,
+    instructions: shapeHash(instructions),
+    tools: shapeHash(tools),
+    input: items.map((m) => {
+      const head = String(m.role ?? m.type);
+      const c = m.content;
+      if (Array.isArray(c))
+        return `${head}[${(c as Record<string, unknown>[]).map(part).join(' ')}]`;
+      const { role: _r, type: _t, ...other } = m;
+      return `${head}=${shapeHash(c ?? other)}`;
+    }),
+  };
+}
+
 function textOf(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
