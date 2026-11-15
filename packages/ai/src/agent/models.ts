@@ -11,10 +11,13 @@ import { Stream } from 'openai/core/streaming';
 import { type ModelDef, XAI_BASE_URL } from '../assistant/models';
 import { backoffFetch } from './backoff';
 
-/** Whether a ChatGPT plan takes `prompt_cache_options` (on until it refuses it once). */
-let planCacheTtl = true;
-/** A plan took deferred tools and \`tool_search\` (cleared for this isolate on its first refusal). */
-let planDeferred = true;
+/** Models a ChatGPT plan refused `prompt_cache_options` for ("not supported on this model"). */
+const noCacheTtl = new Set<string>();
+/** Models a ChatGPT plan refused deferred tools and `tool_search` for. */
+const noDeferred = new Set<string>();
+/** Whether a request carries deferred tools (OpenAI's `tool_search`). */
+const hasDeferred = (body: Record<string, unknown>): boolean =>
+  ((body.tools as { type?: string }[] | undefined) ?? []).some((t) => t.type === 'tool_search');
 
 /** A request without deferred tools: every tool loaded, OpenAI's search and its history items gone. */
 function undeferred(body: Record<string, unknown>): Record<string, unknown> {
@@ -114,12 +117,14 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
     }
     // A plan wrote nothing to its cache (cache_write_tokens 0, live 2026-11-14): ask for the default
     // 30-minute cache in so many words, and ask again without it if the plan refuses the field.
-    if (typeof body.prompt_cache_key === 'string' && planCacheTtl && !body.prompt_cache_options)
+    const model = String(body.model ?? '');
+    if (
+      typeof body.prompt_cache_key === 'string' &&
+      !noCacheTtl.has(model) &&
+      !body.prompt_cache_options
+    )
       body.prompt_cache_options = { ttl: '30m' };
-    const deferred = ((body.tools as { type?: string }[] | undefined) ?? []).some(
-      (t) => t.type === 'tool_search',
-    );
-    if (deferred && !planDeferred) body = undeferred(body);
+    if (hasDeferred(body) && noDeferred.has(model)) body = undeferred(body);
     // The request's shape, one line a call: every field but the token, each text as its length and a
     // short hash, never its words. Two calls' lines side by side show what one changed (the prompt
     // cache reads a request only as far as it matches an earlier one).
@@ -127,28 +132,26 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       JSON.stringify({ event: 'assistant_plan_request', ...requestShape(body, headers) }),
     );
     let res = await base(input, { ...init, headers, body: JSON.stringify(body) });
-    if (
-      res.status === 400 &&
-      body.prompt_cache_options &&
-      /prompt_cache_options/i.test(await res.clone().text())
-    ) {
-      planCacheTtl = false;
-      const { prompt_cache_options: _, ...rest } = body;
-      res = await base(input, { ...init, headers, body: JSON.stringify(rest) });
-    }
-    // A plan that refuses deferred tools gets them all loaded: the list still the same every call.
-    if (
-      res.status === 400 &&
-      deferred &&
-      planDeferred &&
-      /defer|tool_search|namespace/i.test(await res.clone().text())
-    ) {
-      planDeferred = false;
+    // A plan refuses some fields on some models. Each 400 that names one drops that field for the
+    // model (kept for this isolate) and asks again, whichever order the refusals come in, so one
+    // refusal never leaves the person with an error: a field the model refused is never sent again.
+    for (let tries = 0; res.status === 400 && tries < 2; tries++) {
+      const text = await res.clone().text();
+      if (body.prompt_cache_options && /prompt_cache_options/i.test(text)) {
+        noCacheTtl.add(model);
+        body = { ...body, prompt_cache_options: undefined };
+      } else if (hasDeferred(body) && /defer|tool_search|namespace/i.test(text)) {
+        noDeferred.add(model);
+        body = undeferred(body);
+      } else break;
       console.error(
-        JSON.stringify({ event: 'assistant_plan_refused', status: 400, body: 'deferred tools' }),
+        JSON.stringify({
+          event: 'assistant_plan_retry',
+          model,
+          status: 400,
+          body: text.slice(0, 300),
+        }),
       );
-      body = undeferred(body);
-      if (!planCacheTtl) body.prompt_cache_options = undefined;
       res = await base(input, { ...init, headers, body: JSON.stringify(body) });
     }
     // A refusal is logged with OpenAI's own reason; the person sees a plain sentence.
