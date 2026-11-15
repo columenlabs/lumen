@@ -164,6 +164,7 @@ export {
 export { DetailsTable, type DetailsTableProps, FactsTable } from './details-table';
 export { DrawerSection, type DrawerSectionProps } from './drawer-section';
 export { type DrawerAction, LumenDrawer, type LumenDrawerProps } from './lumen-drawer';
+export { LumenBottomSheet, type LumenBottomSheetProps, type SheetSnap } from './lumen-bottom-sheet';
 export { LumenCode, type LumenCodeProps, langOfPath } from './lumen-code';
 export {
   LumenCodeEditor,
