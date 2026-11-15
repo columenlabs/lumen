@@ -71,7 +71,14 @@ import {
   screenRules,
   screenTool,
 } from './screen';
-import { LAZY_AT, type LazyTools, TOOL_SEARCH, lazyTools, usedTools } from './search';
+import {
+  LAZY_AT,
+  type LazyTools,
+  TOOL_SEARCH,
+  deferredTools,
+  lazyTools,
+  usedTools,
+} from './search';
 import {
   type AskMeta,
   type SteerNote,
@@ -1097,17 +1104,24 @@ export abstract class LumenSession {
       ).filter((n) => !offPrompt.has(n));
       for (const n of Object.keys(files)) if (!core.includes(n)) core.push(n);
       if (plan.first && !core.includes(plan.first)) core.push(plan.first);
-      lazy = lazyTools(
-        tools,
-        core,
-        (n) => groups.get(n) ?? 'other',
-        usedTools(ctx.messages),
-        opened.labels,
-      );
-      tools[TOOL_SEARCH] = lazy.search;
-      system = `${system}\n\n${lazy.catalog}`;
-      this.#turn.system = system;
-      this.#turn.lazy = lazy;
+      if (plan.model.provider === 'openai') {
+        // OpenAI loads a found tool at the end of the conversation, so the cached start stays put.
+        const all = deferredTools(tools, core);
+        for (const k of Object.keys(tools)) delete tools[k];
+        Object.assign(tools, all);
+      } else {
+        lazy = lazyTools(
+          tools,
+          core,
+          (n) => groups.get(n) ?? 'other',
+          usedTools(ctx.messages),
+          opened.labels,
+        );
+        tools[TOOL_SEARCH] = lazy.search;
+        system = `${system}\n\n${lazy.catalog}`;
+        this.#turn.system = system;
+        this.#turn.lazy = lazy;
+      }
     }
     const turn = this.#turn;
     const keys = turnKeys(ctx.messages);
