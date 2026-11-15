@@ -627,6 +627,8 @@ export class State {
       task?: string;
       /** What the chat or run is (`UsageEntry.category`); the first one given stays. */
       category?: string;
+      /** What this use turned the chat into (it made a change): replaces the kept Category. */
+      recategorize?: string;
       title: string;
       /** Messages the person sent with this use (1 a chat turn; a run's calls send none). */
       turns?: number;
@@ -658,7 +660,9 @@ export class State {
         id: e.id,
         kind: e.kind,
         ...(e.task ? { task: e.task } : {}),
-        ...(prev?.category || e.category ? { category: prev?.category || e.category } : {}),
+        ...(e.recategorize || prev?.category || e.category
+          ? { category: e.recategorize || prev?.category || e.category }
+          : {}),
         title: prev?.title || e.title.slice(0, 120),
         first: prev?.first ?? now,
         at: now,

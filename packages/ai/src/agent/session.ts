@@ -577,6 +577,7 @@ export abstract class LumenSession {
     d: { call?: string; group: string; tool: string; args?: unknown },
     result?: unknown,
   ) {
+    if (this.#turn) this.#turn.changes = (this.#turn.changes ?? 0) + 1;
     const id = d.call ?? `card_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
     this.sql(
       'INSERT OR REPLACE INTO lumen_s_cards (session, id, kind, grp, tool, args, result, status, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1297,6 +1298,7 @@ export abstract class LumenSession {
         parts,
         ...(t.context ? { context: t.context } : {}),
         steps: t.steps,
+        ...(t.changes ? { changes: t.changes } : {}),
         ms: Date.now() - t.t0,
         capped: t.capped,
       });

@@ -170,6 +170,8 @@ export interface AgentTurnEnd {
   ms: number;
   /** The spend cap stopped tool use in this answer. */
   capped: boolean;
+  /** Changes the answer made: writes run at once and draft cards (left out when none). */
+  changes?: number;
 }
 
 export const CAP_NOTE =
@@ -466,6 +468,8 @@ export interface Running {
   context?: number;
   steps: number;
   capped: boolean;
+  /** Writes and draft cards this answer made (`AgentTurnEnd.changes`). */
+  changes?: number;
   lazy?: LazyTools;
   t0: number;
 }
@@ -863,6 +867,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
 
   #addCard(kind: AgentCard['kind'], d: DraftCall, result?: unknown) {
     this.#cards();
+    if (this.#turn) this.#turn.changes = (this.#turn.changes ?? 0) + 1;
     const id = d.call ?? `card_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
     this
       .sql`INSERT OR REPLACE INTO lumen_cards (id, kind, grp, tool, args, result, status, at) VALUES (${id}, ${kind}, ${d.group}, ${d.tool}, ${JSON.stringify(d.args ?? null)}, ${result === undefined ? null : JSON.stringify(result).slice(0, 20_000)}, ${kind === 'draft' ? 'open' : 'done'}, ${Date.now()})`;
@@ -1353,6 +1358,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         parts,
         ...(t.context ? { context: t.context } : {}),
         steps: t.steps,
+        ...(t.changes ? { changes: t.changes } : {}),
         ms: Date.now() - t.t0,
         capped: t.capped,
       });
