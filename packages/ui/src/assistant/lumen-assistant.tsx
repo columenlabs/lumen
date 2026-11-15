@@ -554,8 +554,9 @@ function Messages({
     const el = box.current;
     if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_PX;
   };
-  const last = chat.items[chat.items.length - 1];
-  const sent = last?.kind === 'user' ? last.at : undefined;
+  // How many messages the person has sent: a reload in place swaps each item for the server's copy
+  // (a new `at`), which must not count as a new message and pull the list back to its end.
+  const sent = chat.items.reduce((n, it) => n + (it.kind === 'user' ? 1 : 0), 0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new message or chat pins the end again
   useEffect(() => {
     pinned.current = true;
