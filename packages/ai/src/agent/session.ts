@@ -805,11 +805,32 @@ export abstract class LumenSession {
   async ask(input: AskInput, sink: AskSink): Promise<void> {
     const at = Date.now();
     const out = detachable(sink);
-    if (this.#busy) {
-      await out.event({ event: 'error', data: { message: 'An answer is still running here.' } });
-      await out.event({ event: 'done', data: { id: this.name, usage: this.usage() } });
-      return;
+    // A message sent while an answer still runs (a cut-off stream, a send right as one ends) waits for
+    // it and then gets its own answer, never an error; asks run one at a time, in the order they came.
+    const before = this.#asks;
+    const gate: { done?: () => void } = {};
+    this.#asks = new Promise<void>((r) => {
+      gate.done = r;
+    });
+    const done = () => gate.done?.();
+    try {
+      const until = Date.now() + this.turnLimitMs();
+      await Promise.race([before, new Promise((r) => setTimeout(r, this.turnLimitMs()))]);
+      while (this.#busy && Date.now() < until) await new Promise((r) => setTimeout(r, 250));
+      if (this.#busy) {
+        await out.event({ event: 'error', data: { message: 'An answer is still running here.' } });
+        await out.event({ event: 'done', data: { id: this.name, usage: this.usage() } });
+        return;
+      }
+      await this.#ask(input, out, at);
+    } finally {
+      done();
     }
+  }
+
+  #asks: Promise<void> = Promise.resolve();
+
+  async #ask(input: AskInput, out: Detachable, at: number): Promise<void> {
     let title = this.#get<string>('title');
     if (!title) {
       title = input.message.replace(/\s+/g, ' ').trim().slice(0, 60);
