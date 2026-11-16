@@ -283,6 +283,22 @@ const settled = (items: LiveItem[]): LiveItem[] =>
     return rest as LiveItem;
   });
 
+/**
+ * A steer read by the answer: what ran before it settles, and the steer follows it. When the answer runs
+ * in a task block, the steer joins that block and the block stays live, so the rest of the answer lands
+ * in it too (never an Ended block with the steer and the rest under it).
+ */
+function steeredInto(items: LiveItem[], steer: LiveItem): LiveItem[] {
+  const top = items[items.length - 1];
+  const done = settled(items);
+  if (top?.kind !== 'task' || !top.live) return [...done, steer];
+  const block = done[done.length - 1] as LiveItem & { items: LiveItem[] };
+  return [
+    ...done.slice(0, -1),
+    { ...block, live: true, items: [...block.items, steer] } as LiveItem,
+  ];
+}
+
 /** How long Stop waits for the server to end the answer before it stops reading the stream. */
 const STOP_WAIT_MS = 8_000;
 
@@ -397,10 +413,9 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
                 const at = q.findIndex((m) => m.steering && m.message === e.data.text);
                 return at < 0 ? q : [...q.slice(0, at), ...q.slice(at + 1)];
               });
-              setItems((p) => [
-                ...settled(p),
-                { kind: 'user', text: e.data.text, at: e.data.at, steered: true },
-              ]);
+              setItems((p) =>
+                steeredInto(p, { kind: 'user', text: e.data.text, at: e.data.at, steered: true }),
+              );
             } else if (e.event === 'unsteered') unsteer(e.data.texts);
             else setItems((p) => applyEvent(p, e));
           },
