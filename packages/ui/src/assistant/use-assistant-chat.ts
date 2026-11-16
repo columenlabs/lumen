@@ -18,6 +18,10 @@ import { ApiError } from '../api-fetch';
 import { errorText } from '../integrations';
 import type { AssistantAdapter } from './client';
 
+/** How long a panel whose stream was cut keeps reading the chat for the answer to end, and how often. */
+const RESUME_MS = 5 * 60_000;
+const RESUME_EVERY_MS = 2_000;
+
 /** The browser's IANA zone, sent with each message for the assistant's bearings. */
 function browserZone(): string | undefined {
   try {
@@ -319,6 +323,29 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     });
   }, []);
 
+  // After a cut stream: the chat read again every RESUME_EVERY_MS while the server says its answer runs,
+  // then shown as saved. False when it cannot be read (the panel then shows the cut-off error).
+  const resumed = useCallback(
+    async (id: string, signal: AbortSignal) => {
+      const until = Date.now() + RESUME_MS;
+      while (Date.now() < until && !signal.aborted) {
+        await new Promise((r) => setTimeout(r, RESUME_EVERY_MS));
+        let c: Awaited<ReturnType<typeof client.chat>>;
+        try {
+          c = await client.chat(id);
+        } catch {
+          continue;
+        }
+        if (c.running) continue;
+        setItems(c.items);
+        setUsage(c.usage ?? null);
+        setTask(c.task ?? null);
+        return true;
+      }
+      return false;
+    },
+    [client],
+  );
   const run = useCallback(
     async (message: string, extra?: Extra, retried?: boolean) => {
       const ctl = new AbortController();
@@ -380,6 +407,16 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
           ctl.signal,
         );
       } catch (err) {
+        // The stream was cut (the network dropped, not Stop): the answer goes on on the server, so the
+        // panel reads the chat again until it ends and shows it as saved, never a cut-off error.
+        const id = idRef.current;
+        if (
+          err instanceof TypeError &&
+          id &&
+          !ctl.signal.aborted &&
+          (await resumed(id, ctl.signal))
+        )
+          return;
         for (const o of sent) if (!outcomes.current?.has(o.id)) outcomes.current?.set(o.id, o);
         if (outcomes.current) keepOutcomes(outcomes.current);
         if (ctl.signal.aborted) setItems((p) => [...p, { kind: 'stopped' }]);
@@ -392,7 +429,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         setBusy(false);
       }
     },
-    [client, unsteer],
+    [client, unsteer, resumed],
   );
 
   // A queued message goes once the answer ends, one an answer.

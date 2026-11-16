@@ -634,6 +634,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       ),
       usage: this.usage(),
       ...(open ? { task: open } : {}),
+      ...(this.#turn ? { running: true } : {}),
     };
   }
 
