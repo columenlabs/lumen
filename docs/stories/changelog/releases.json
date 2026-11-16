@@ -1,5 +1,18 @@
 [
   {
+    "tag": "v0.1.324",
+    "date": "2026-11-16T20:04:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Messages sent during a running answer now wait their turn",
+        "body": "In `@columenlabs/lumen-ai`, `AgentSession.ask` now queues a message that arrives while the chat's answer is still running, so asks in one chat run one at a time, in the order they arrived, and the message is no longer lost to an \"An answer is still running here.\" error."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.323",
     "date": "2026-11-16T18:59:26Z",
     "takeaways": [
