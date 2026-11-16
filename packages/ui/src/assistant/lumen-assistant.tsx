@@ -228,9 +228,10 @@ export interface LumenAssistantProps {
    * A turn drawn as a task's card: given a turn's items (the person's message and what answered
    * it, up to any task of its own), the app returns a task for a turn that is one piece of work
    * (an edit it reviews), and the turn's steps and words go inside a card like a task's, with the
-   * app's `taskView` header and `taskActions` buttons. Undefined keeps the turn as lines.
+   * app's `taskView` header and `taskActions` buttons. Undefined keeps the turn as lines. A returned
+   * `items` replaces the card's steps: a piece of work later turns added to shows their steps too.
    */
-  turnTask?: (items: ChatItem[]) => AssistantTask | undefined;
+  turnTask?: (items: ChatItem[]) => (AssistantTask & { items?: ChatItem[] }) | undefined;
 }
 
 /** A composer mode: its toggle's icon and label (also its tooltip and aria-label). */
@@ -779,7 +780,7 @@ function Items({
               {task ? (
                 <>
                   <TaskBlock
-                    item={{ ...task, kind: 'task', items: lead as ChatItem[] }}
+                    item={{ ...task, kind: 'task', items: task.items ?? (lead as ChatItem[]) }}
                     onSettle={onSettle}
                     busy={busy}
                   />
@@ -1539,7 +1540,7 @@ const TaskSlots = createContext<{
   actions?: (task: AssistantTask, live: boolean) => ReactNode;
   state?: (task: AssistantTask) => AssistantTaskState | undefined;
   view?: (task: AssistantTask, live: boolean) => AssistantTaskView | undefined;
-  turn?: (items: ChatItem[]) => AssistantTask | undefined;
+  turn?: (items: ChatItem[]) => (AssistantTask & { items?: ChatItem[] }) | undefined;
   stop?: () => void;
 }>({});
 
