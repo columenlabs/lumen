@@ -1,5 +1,370 @@
 [
   {
+    "tag": "v0.1.321",
+    "date": "2026-11-16T03:54:41Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Draw a turn as a task card",
+        "body": "In `LumenAssistant` from `@columenlabs/lumen-ui`, the new optional `turnTask(items)` prop returns an `AssistantTask` for a turn you name as one piece of work, such as an edit under review, and that turn is drawn as a task card inside the chat."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Turn cards match real tasks",
+        "body": "A card drawn through `LumenAssistant`'s `turnTask` prop uses your existing `taskView` header and `taskActions` buttons, so the card looks and behaves like a real task, with the person's message above it and the turn's steps and words inside."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Retry and Copy keep working",
+        "body": "Wrapping through `turnTask` happens at render time, so `chat.items` is never rewritten and Retry and Copy still act on the turn's own indexes. If you leave `turnTask` out or return `undefined`, the turn draws exactly as before, so nothing changes in existing apps."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.320",
+    "date": "2026-11-15T21:08:52Z",
+    "takeaways": [
+      {
+        "kinds": [],
+        "title": "Tool search exports removed",
+        "body": "From the `agent/search` entry of @columenlabs/lumen-ai, `lazyTools`, `TOOL_SEARCH` and `deferredTools` no longer exist, so delete those imports and pass your full tool list to the model call instead."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Whole tool list on every model call",
+        "body": "In @columenlabs/lumen-ai, every model call now sends the full tool list in a stable order so the prompt cache can read it, which cut the cost of a measured 5-turn chat from $0.028–$0.036 with search to $0.017."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`plan.lazy` is now ignored",
+        "body": "On the plan path in @columenlabs/lumen-ai, the `lazy` option is still accepted so existing plans compile, but it does nothing and is marked `@deprecated`, so remove it from your plans."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Old chats still hide `tool_search` steps",
+        "body": "Saved chats that already contain `tool_search` steps keep hiding them, so you don't need to migrate stored conversations."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.319",
+    "date": "2026-11-15T18:44:03Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Turn ends report how many changes were made",
+        "body": "In `@columenlabs/lumen-ai`, `AgentTurnEnd.changes` gives the number of changes an answer made, counting writes run at once and draft cards, so you can tell whether a turn changed anything."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "A chat's usage Category follows its first change",
+        "body": "In `@columenlabs/lumen-ai`, the new optional `AgentTurnInput.changedCategory` holds the chat's Category once one of its turns makes a change, whatever the chat started as, and later turns that change nothing leave it as it is."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Edits made in a chat no longer stay labelled Chat",
+        "body": "Usage recorded through `addUsage` with `recategorize` now replaces the stored category with `changedCategory`, so a chat whose first turn was a question but whose later turn edited something (for example \"Make this part blue\") is recategorized. Both new fields are optional, so existing apps keep working without changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.318",
+    "date": "2026-11-15T18:24:23Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan models skip the refused `tool_search`",
+        "body": "In `@columenlabs/lumen-ai`, `planTools` no longer starts a plan model on `'deferred'`, so an app running on a subscription plan goes straight to the assistant's own search with `additional_tools`."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Client-run `tool_search` is removed",
+        "body": "The client-side `tool_search` (`clientSearch`) added in 0.1.315 is gone from the agent helpers in `@columenlabs/lumen-ai`, because plans refused it with \"tool 'tool_search' is not supported\"."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "No wasted call and resend per fresh isolate",
+        "body": "When a model refuses `additional_tools`, `planTools` now falls back to sending every tool, so agents on a plan no longer burn a refused request and a retry on each new isolate."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.317",
+    "date": "2026-11-15T18:20:35Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Unlisted task runs no longer store their task id as a usage Category",
+        "body": "In @columenlabs/lumen-ai, a run of a task that is not in your `tasks` option now stores no category, so the Usage table stops showing raw ids like `image`."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Categories for unlisted tasks come from your app at read time",
+        "body": "In @columenlabs/lumen-ai, `categoryOf` now asks your app's `usageCategory` when a usage line is read, so you can label unlisted tasks yourself."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "`Assistant.image` runs show your own category in Usage",
+        "body": "In @columenlabs/lumen-ai, `Assistant.image` runs a task you may not list in `tasks`, and its usage lines now show the category your `usageCategory` returns instead of `image`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.316",
+    "date": "2026-11-15T18:17:21Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A silent model call no longer stalls an agent turn",
+        "body": "In the agent session in `@columenlabs/lumen-ai`, a model call that never answers now ends the turn instead of leaving it idle until the 5-minute turn limit, so your app gets a result within minutes."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Every model call now has a time limit",
+        "body": "The agent session in `@columenlabs/lumen-ai` waits up to 3 minutes for the first output of a call, so long reasoning still fits, then up to 1 minute between outputs."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A stalled turn ends with a plain message",
+        "body": "When a call times out, the agent session in `@columenlabs/lumen-ai` ends the turn with \"The model stopped answering, so this turn ended. Send your message again to retry.\" You can show that sentence to users as is."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.315",
+    "date": "2026-11-15T17:55:42Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tool search now works on a subscription-plan sign-in",
+        "body": "In `@columenlabs/lumen-ai`, `deferredTools` now runs tool search on your side when the sign-in is a plan, so the provider's 400 `subscription_sharing_unsupported_capability` refusal of server-side `tool_search` no longer blocks it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Deferred tools are scored locally",
+        "body": "With `deferredTools` on a plan, the model emits `tool_search_call`, and Lumen scores your deferred tools with the existing `toolScore` and returns their definitions as `tool_search_output`, so you don't change any tool setup."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Tool loading keeps the prompt cache intact",
+        "body": "In `deferredTools`, every tool outside the core set stays `defer_loading` and is loaded at the end of the conversation, so the cached start of your prompt never changes."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.314",
+    "date": "2026-11-15T17:40:01Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Chat keeps the reader's place on an in-place reload",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` no longer jumps back to the end when your app calls `open()` with the same id (for example after a turn ends or after Keep/Undo), so people who scrolled up to read stay where they are."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Scroll pin follows messages sent, not timestamps",
+        "body": "`LumenAssistant` Messages now pins to the end when the number of messages the person has sent changes, or when the chat switches, instead of whenever the last user message's `at` changes."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "No app changes needed",
+        "body": "Apps that reload the chat in place with `open()` and the same id get the new behavior after upgrading `@columenlabs/lumen-ui`, with no new prop or option."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.313",
+    "date": "2026-11-15T17:20:57Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plans that refuse `tool_search` no longer send every tool on every call",
+        "body": "In @columenlabs/lumen-ai, `planTools(model)` now falls back to the assistant's own search (`lazyTools`) on a plan sign-in that refuses the hosted `tool_search` tool, so long tool lists no longer fill the context."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Found tools join later as `additional_tools`",
+        "body": "In @columenlabs/lumen-ai, `planFetch` keeps the tool list of the conversation's first request and sends each function found later as an `additional_tools` input item, placed where it was first found."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Every request starts like the previous one",
+        "body": "With `planFetch`, the tool list stays the same across searches and new turns, so the request prefix remains stable and the cache can be reused."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Safe fallback if a plan rejects `additional_tools`",
+        "body": "If a plan returns any 400 on a request carrying `additional_tools`, `planFetch` re-sends the same call the old way and `planTools(model)` drops that model to `all`, so users never see the error."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.312",
+    "date": "2026-11-15T10:29:34Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A plan refusal of one field no longer fails a chat",
+        "body": "In the `@columenlabs/lumen-ai` agent, a chat on a plan that rejects `prompt_cache_options` or deferred tools now falls back and answers instead of returning a 400."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Refusals are remembered per model",
+        "body": "In `@columenlabs/lumen-ai`, the agent now tracks `noCacheTtl` and `noDeferred` as per-model sets, so a field refused by one plan model is still sent to another model that accepts it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Retries show up in your logs",
+        "body": "In `@columenlabs/lumen-ai`, each fallback retry now logs `assistant_plan_retry` with the model and the provider's reason (up to 300 characters), so you can see which plan models take deferred tools."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.311",
+    "date": "2026-11-15T10:11:27Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A task's card now holds its whole story as steps",
+        "body": "In `LumenAssistant`, everything the assistant says after the person's request now appears inside the task card as Plan, Result, Reply or Follow-up steps, with only the newest step open, so you no longer need to render assistant text outside the card."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Queued messages wait under the task card",
+        "body": "In `LumenAssistant`, messages queued while a task is open now sit under its card with Steer now, Edit and Remove actions, and the input box no longer draws its own queue."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Edge-to-edge rows in WorkCard",
+        "body": "The new `rows` prop on `WorkCard` draws children as rows with their own padding and dividing lines, edge to edge."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Provider tool search keeps the cached prompt start",
+        "body": "A `LumenSession` with more tools than `LAZY_AT` (or with lazy groups) now sends every tool on a model whose provider has its own tool search, marking non-core tools `defer_loading`, so the tool list stays the same between steps and the prompt cache holds (an estimated −36% input cost on a 3-call turn)."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plans that refuse deferred tools no longer fail",
+        "body": "`planFetch` in `@columenlabs/lumen-ai` now resends the request with every tool loaded and the provider's search removed, and remembers that choice for the isolate."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.310",
+    "date": "2026-11-15T09:48:24Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix",
+          "feature"
+        ],
+        "title": "Phone bottom sheet drags from its whole top",
+        "body": "In `LumenBottomSheet` from @columenlabs/lumen-ui, the new `header` prop draws a top row (tabs, a title) under the grab bar, and the sheet now drags from the bar's row and the header, so ordinary phone swipes work while the body still scrolls."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Floating panel over a live page",
+        "body": "The new `LumenFloatingPanel` in @columenlabs/lumen-ui is a see-through card inside a `relative` parent that people can drag, resize and fold, and you can keep its spot, size and fold across visits with `storageKey`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Compact tab layouts for small panels",
+        "body": "`LumenTabs` in @columenlabs/lumen-ui has a new `variant` prop, where `stacked` puts an icon over a short name for a phone sheet and `icons` shows icons only for a small floating panel."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.309",
+    "date": "2026-11-15T09:43:19Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix",
+          "performance"
+        ],
+        "title": "Sessions on a plan keep their own prompt cache",
+        "body": "In `LumenSession` from @columenlabs/lumen-ai, `prefixCacheKey(model, system, session)` now includes the session, so on a plan each session's calls after the first read from that session's own cache instead of colliding with other sessions that share the same model and system prompt."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.308",
     "date": "2026-11-15T09:28:50Z",
     "takeaways": [
