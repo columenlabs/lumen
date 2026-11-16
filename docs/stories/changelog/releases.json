@@ -1,5 +1,45 @@
 [
   {
+    "tag": "v0.1.323",
+    "date": "2026-11-16T18:59:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A steering follow-up no longer draws a second card",
+        "body": "In `LumenAssistant` from `@columenlabs/lumen-ui`, the `turnTask` prop may now return `null`, so a turn that steers work already shown on an earlier card draws nothing of its own."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Set the composer's empty-box words from the assistant",
+        "body": "In `LumenAssistant`, the new `composerHint` prop replaces the default \"Ask <name>…\" text in the empty box, for example \"Steer this change…\" while the person's messages steer open work."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Custom hint text on the composer itself",
+        "body": "`LumenComposer` from `@columenlabs/lumen-ui` gains a `hint` prop, so you can set the empty-box words when you use the composer on its own."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.322",
+    "date": "2026-11-16T18:37:08Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Assistant cards can list all of a task's steps",
+        "body": "In `LumenAssistant` from @columenlabs/lumen-ui, `turnTask` can now return `items`, which become the card's steps in place of the turn's own lines, so a task that later turns added to (such as a follow-up that revised a pending edit) shows every step in its one card. Leaving `items` out changes nothing."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.321",
     "date": "2026-11-16T03:54:41Z",
     "takeaways": [
