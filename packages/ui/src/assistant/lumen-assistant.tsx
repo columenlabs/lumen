@@ -224,6 +224,13 @@ export interface LumenAssistantProps {
    * task's label and the chat's word for its state.
    */
   taskView?: (task: AssistantTask, live: boolean) => AssistantTaskView | undefined;
+  /**
+   * A turn drawn as a task's card: given a turn's items (the person's message and what answered
+   * it, up to any task of its own), the app returns a task for a turn that is one piece of work
+   * (an edit it reviews), and the turn's steps and words go inside a card like a task's, with the
+   * app's `taskView` header and `taskActions` buttons. Undefined keeps the turn as lines.
+   */
+  turnTask?: (items: ChatItem[]) => AssistantTask | undefined;
 }
 
 /** A composer mode: its toggle's icon and label (also its tooltip and aria-label). */
@@ -265,6 +272,7 @@ export function LumenAssistant({
   taskActions,
   taskState,
   taskView,
+  turnTask,
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
@@ -463,7 +471,13 @@ export function LumenAssistant({
         <Screen.Provider value={controls}>
           <ImageTool.Provider value={imageTool ?? null}>
             <TaskSlots.Provider
-              value={{ actions: taskActions, state: taskState, view: taskView, stop: chat.stop }}
+              value={{
+                actions: taskActions,
+                state: taskState,
+                view: taskView,
+                turn: turnTask,
+                stop: chat.stop,
+              }}
             >
               <TaskAnswer.Provider value={s?.wait ? null : (text) => chat.send(text, extra())}>
                 <TaskQueue.Provider
@@ -748,15 +762,32 @@ function Items({
 }) {
   const name = useContext(AssistantName);
   const retry = useContext(RetryTurn);
+  const slots = useContext(TaskSlots);
   if (turns)
     return (
       <div className="flex flex-col gap-3">
         {chatTurns(items).map((t) => {
           const open = busy && t.from + t.items.length === items.length;
           const failed = retry && !open ? failedAt(t) : null;
+          // The app may draw the turn as a task's card (`turnTask`): its lines up to any task of its own.
+          const cut = t.items.findIndex((i) => i.kind === 'task' || i.kind === 'handoff');
+          const lead = cut < 0 ? t.items : t.items.slice(0, cut);
+          const task =
+            slots.turn && lead[0]?.kind === 'user' ? slots.turn(lead as ChatItem[]) : undefined;
           return (
             <div key={t.from} data-slot="assistant-turn" className="group/turn flex flex-col gap-3">
-              <Items items={t.items} onSettle={onSettle} busy={busy} />
+              {task ? (
+                <>
+                  <TaskBlock
+                    item={{ ...task, kind: 'task', items: lead as ChatItem[] }}
+                    onSettle={onSettle}
+                    busy={busy}
+                  />
+                  {cut >= 0 && <Items items={t.items.slice(cut)} onSettle={onSettle} busy={busy} />}
+                </>
+              ) : (
+                <Items items={t.items} onSettle={onSettle} busy={busy} />
+              )}
               {!open && <WebSources items={t.items as ChatItem[]} />}
               {!open && (
                 <div className="-mt-2 flex justify-end gap-0.5">
@@ -1508,6 +1539,7 @@ const TaskSlots = createContext<{
   actions?: (task: AssistantTask, live: boolean) => ReactNode;
   state?: (task: AssistantTask) => AssistantTaskState | undefined;
   view?: (task: AssistantTask, live: boolean) => AssistantTaskView | undefined;
+  turn?: (items: ChatItem[]) => AssistantTask | undefined;
   stop?: () => void;
 }>({});
 
