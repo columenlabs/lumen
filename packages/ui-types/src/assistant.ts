@@ -348,6 +348,8 @@ export interface AssistantChat {
   usage?: ChatUsage;
   /** The newest task still open in this chat: the composer offers to keep the next message on it. */
   task?: AssistantTask;
+  /** An answer runs on the server now: a panel whose stream was cut reads the chat again until it ends. */
+  running?: boolean;
 }
 
 /** One line of the chats list. */
