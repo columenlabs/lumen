@@ -230,11 +230,8 @@ export interface LumenAssistantProps {
    * (an edit it reviews), and the turn's steps and words go inside a card like a task's, with the
    * app's `taskView` header and `taskActions` buttons. Undefined keeps the turn as lines. A returned
    * `items` replaces the card's steps: a piece of work later turns added to shows their steps too.
-   * Null draws nothing for the turn: an earlier card holds it (its message as a Steer row).
    */
-  turnTask?: (items: ChatItem[]) => (AssistantTask & { items?: ChatItem[] }) | null | undefined;
-  /** The composer's words while the person's messages steer a piece of work ("Steer this change…"). */
-  composerHint?: string;
+  turnTask?: (items: ChatItem[]) => (AssistantTask & { items?: ChatItem[] }) | undefined;
 }
 
 /** A composer mode: its toggle's icon and label (also its tooltip and aria-label). */
@@ -277,7 +274,6 @@ export function LumenAssistant({
   taskState,
   taskView,
   turnTask,
-  composerHint,
 }: LumenAssistantProps) {
   const own = useAssistantChat(client);
   const chat = outside ?? own;
@@ -514,7 +510,6 @@ export function LumenAssistant({
       </AssistantName.Provider>
       <LumenComposer
         name={s?.name ?? 'the assistant'}
-        hint={composerHint}
         busy={chat.busy}
         queued={chat.queued}
         queue={chat.queue}
@@ -780,13 +775,9 @@ function Items({
           const lead = cut < 0 ? t.items : t.items.slice(0, cut);
           const task =
             slots.turn && lead[0]?.kind === 'user' ? slots.turn(lead as ChatItem[]) : undefined;
-          // Held by an earlier card (shown there as a Steer row): nothing of its own.
-          if (task === null && cut < 0) return null;
           return (
             <div key={t.from} data-slot="assistant-turn" className="group/turn flex flex-col gap-3">
-              {task === null ? (
-                <Items items={t.items.slice(cut)} onSettle={onSettle} busy={busy} />
-              ) : task ? (
+              {task ? (
                 <>
                   <TaskBlock
                     item={{ ...task, kind: 'task', items: task.items ?? (lead as ChatItem[]) }}
@@ -1549,7 +1540,7 @@ const TaskSlots = createContext<{
   actions?: (task: AssistantTask, live: boolean) => ReactNode;
   state?: (task: AssistantTask) => AssistantTaskState | undefined;
   view?: (task: AssistantTask, live: boolean) => AssistantTaskView | undefined;
-  turn?: (items: ChatItem[]) => (AssistantTask & { items?: ChatItem[] }) | null | undefined;
+  turn?: (items: ChatItem[]) => (AssistantTask & { items?: ChatItem[] }) | undefined;
   stop?: () => void;
 }>({});
 
@@ -2283,7 +2274,6 @@ const imageUrl = (i: AssistantImage) => `data:${i.media_type};base64,${i.data}`;
  */
 export function LumenComposer({
   name,
-  hint,
   busy,
   queued,
   queue,
@@ -2315,8 +2305,6 @@ export function LumenComposer({
   /** Toggles beside the paperclip (`LumenAssistant` `modes`). */
   modes?: AssistantMode[];
   name: string;
-  /** Words in the empty box in place of "Ask <name>…" (steering a piece of work). */
-  hint?: string;
   /** Images can be pasted or dropped on the box (`LumenAssistant` `images`). */
   images?: boolean;
   /** The page's name for `@` This page; the document's title by default. */
@@ -2732,7 +2720,7 @@ export function LumenComposer({
         <InputGroupTextarea
           ref={box}
           aria-label={`Message ${name}`}
-          placeholder={`${hint ?? `Ask ${name}…`}${hints.length ? ` (${hints.join(' ')})` : ''}`}
+          placeholder={`Ask ${name}…${hints.length ? ` (${hints.join(' ')})` : ''}`}
           className="max-h-48 min-h-11"
           value={text}
           disabled={disabled}
