@@ -320,6 +320,8 @@ export type ChatItem =
       steered?: boolean;
       /** Sent again from a failed turn's Retry. */
       retried?: boolean;
+      /** The turn's title, named before it ran (the app's `AgentTurnPlan.title`). */
+      label?: string;
     }
   | { kind: 'text'; text: string }
   | StepItem
@@ -384,6 +386,8 @@ export type AssistantEvent =
   | { event: 'handoff_done'; data: { usage: UsagePart } }
   /** This answer runs inside a task: what follows lands in the task's block. */
   | { event: 'task'; data: AssistantTask }
+  /** This answer's title, named before it runs: it lands on the message just sent (`label`). */
+  | { event: 'label'; data: { label: string } }
   | { event: 'advice'; data: { tier: string; label: string } }
   | { event: 'advice_done'; data: { error?: string } }
   | { event: 'compacted'; data: Record<string, never> }

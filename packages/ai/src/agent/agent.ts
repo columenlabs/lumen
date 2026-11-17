@@ -73,6 +73,8 @@ import {
 } from './stream';
 import {
   type KeptTask,
+  LABELS_KEPT,
+  LABEL_MAX,
   TASKS_KEPT,
   openTask,
   taskBlocks,
@@ -155,6 +157,12 @@ export interface AgentTurnPlan {
    * messages and hear in one line how it ended (`endTask`). The panel shows its turns as one block.
    */
   task?: { id: string; label: string; brief: string };
+  /**
+   * This turn's title, known before it runs (an app's router can name the work with its verdict):
+   * kept on the person's message (`ChatItem` user `label`) and sent at once as a `label` event, so the
+   * panel can draw the turn as a card with its title before the first step.
+   */
+  title?: string;
   /** Fetch for provider calls (a metered one). */
   fetch?: typeof fetch;
   tools?: Omit<AiToolsOptions, 'maxChars'>;
@@ -629,6 +637,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
           this.#get<Record<string, SteerNote[]>>('steers') ?? {},
           this.#names(),
           this.#get<Record<string, string>>('task_of') ?? {},
+          this.#get<Record<string, string>>('turn_labels') ?? {},
         ),
         this.#tasks(),
       ),
@@ -682,6 +691,16 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
    * Starts the turn's task, or carries it on: kept with its brief as first sent, and the person's
    * newest message (`asked`, its key among the turn's messages) marked as the task's.
    */
+  /** Keeps a turn's label (`AgentTurnPlan.title`) on the person's message, the newest LABELS_KEPT. */
+  #putLabel(id: string, label: string) {
+    const labels = this.#get<Record<string, string>>('turn_labels') ?? {};
+    delete labels[id];
+    labels[id] = label;
+    const ids = Object.keys(labels);
+    for (const k of ids.slice(0, Math.max(0, ids.length - LABELS_KEPT))) delete labels[k];
+    this.#put('turn_labels', labels);
+  }
+
   #startTask(task: NonNullable<AgentTurnPlan['task']>, key: string | null): KeptTask {
     const tasks = this.#tasks();
     const was = tasks[task.id];
@@ -1166,6 +1185,11 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         event: 'task',
         data: { id: plan.task.id, label: kept.label, state: 'open' },
       });
+    }
+    if (plan.title && this.#asked) {
+      const label = plan.title.replace(/\s+/g, ' ').trim().slice(0, LABEL_MAX);
+      this.#putLabel(this.#asked, label);
+      await this.#sink?.event({ event: 'label', data: { label } });
     }
     const thread = threadOf(
       ctx.messages,

@@ -82,6 +82,8 @@ import {
 } from './stream';
 import {
   type KeptTask,
+  LABELS_KEPT,
+  LABEL_MAX,
   TASKS_KEPT,
   openTask,
   taskBlocks,
@@ -456,6 +458,7 @@ export abstract class LumenSession {
           this.#get<Record<string, SteerNote[]>>('steers') ?? {},
           this.#names(),
           this.#get<Record<string, string>>('task_of') ?? {},
+          this.#get<Record<string, string>>('turn_labels') ?? {},
         ),
         this.#tasks(),
       ),
@@ -500,6 +503,16 @@ export abstract class LumenSession {
     }
     const now = tasks[id] as KeptTask;
     return { id, label: now.label, state: now.state };
+  }
+
+  /** Keeps a turn's label (`AgentTurnPlan.title`) on the person's message, the newest LABELS_KEPT. */
+  #putLabel(id: string, label: string) {
+    const labels = this.#get<Record<string, string>>('turn_labels') ?? {};
+    delete labels[id];
+    labels[id] = label;
+    const ids = Object.keys(labels);
+    for (const k of ids.slice(0, Math.max(0, ids.length - LABELS_KEPT))) delete labels[k];
+    this.#put('turn_labels', labels);
   }
 
   #startTask(task: NonNullable<AgentTurnPlan['task']>, key: string | null): KeptTask {
@@ -1122,6 +1135,11 @@ export abstract class LumenSession {
         event: 'task',
         data: { id: plan.task.id, label: kept.label, state: 'open' },
       });
+    }
+    if (plan.title && this.#asked) {
+      const label = plan.title.replace(/\s+/g, ' ').trim().slice(0, LABEL_MAX);
+      this.#putLabel(this.#asked, label);
+      await this.#sink?.event({ event: 'label', data: { label } });
     }
     const thread = threadOf(
       ctx.messages,

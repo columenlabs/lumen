@@ -227,6 +227,19 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
       } else items.push({ kind: 'task', ...e.data, items: [], live: true } as LiveItem);
       break;
     }
+    case 'label': {
+      // The answer's title, named before it runs: it lands on the message just sent (inside the task's
+      // block when the answer runs in a task).
+      const mark = (list: LiveItem[]) => {
+        const user = list.findLastIndex((i) => i.kind === 'user' && !i.steered);
+        const tail = list[list.length - 1];
+        if (tail?.kind === 'task' && list.length - 1 > user) return mark(tail.items as LiveItem[]);
+        const u = list[user];
+        if (u?.kind === 'user') list[user] = { ...u, label: e.data.label } as LiveItem;
+      };
+      mark(items);
+      break;
+    }
     case 'handoff_done': {
       const h = [...sink].reverse().find((i): i is HandOffItem => i.kind === 'handoff');
       if (h) h.usage = e.data.usage;

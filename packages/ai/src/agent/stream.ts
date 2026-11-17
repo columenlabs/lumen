@@ -463,6 +463,8 @@ export function itemsOf(
   names: StepNames = {},
   /** Each message the person wrote for a task (`AgentTurnPlan.task`), by id: `taskBlocks` reads the mark. */
   taskOf: Record<string, string> = {},
+  /** Each message's turn label (`AgentTurnPlan.title`), by id. */
+  labels: Record<string, string> = {},
 ): (ChatItem & { _task?: string })[] {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const items: (ChatItem & { _task?: string })[] = [];
@@ -491,6 +493,7 @@ export function itemsOf(
         ...(meta.quote ? { quote: meta.quote } : {}),
         ...(meta.tier ? { tier: meta.tier } : {}),
         ...(m.id && taskOf[m.id] ? { _task: taskOf[m.id] } : {}),
+        ...(m.id && labels[m.id] ? { label: labels[m.id] } : {}),
       });
       continue;
     }
