@@ -1,5 +1,59 @@
 [
   {
+    "tag": "v0.1.326",
+    "date": "2026-11-16T22:28:53Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A steer read by a running task stays inside its block",
+        "body": "In `@columenlabs/lumen-ui`, the `steered` handler of `useAssistantChat` now puts the steer inside the live task block instead of appending it at the top level, so you no longer get a separate \"Steered\" bubble under the block."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "The task block stays live after a steer",
+        "body": "With `useAssistantChat`, a task block that is the top item keeps `live` when a steer arrives, so it no longer flips to **Ended** while the answer is still running."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Later steps and text land in the block",
+        "body": "In `useAssistantChat`, steps and text that arrive after a steer now go into the same task block rather than outside it, and you no longer have to wait for the chat to be read again. The block draws the steer as its Steer row."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.325",
+    "date": "2026-11-16T22:22:10Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A cut chat stream shows the saved answer, not an error",
+        "body": "In `@columenlabs/lumen-ui`, when the network drops mid-answer, `LumenAssistant` (through `useAssistantChat`) now re-reads the chat from the server and shows the finished answer instead of \"The request was cut off…\"."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Chats can report that an answer is still running",
+        "body": "From `@columenlabs/lumen-ui-types`, `AssistantChat` has a new optional `running` field that is true while an answer is running on the server, so a client can tell a cut connection from a finished turn."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The agent marks its chat as running",
+        "body": "In `@columenlabs/lumen-ai`, the agent's `view()` now sets `running` on the chat for as long as its turn is open, with no change needed in your server code."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.324",
     "date": "2026-11-16T20:04:00Z",
     "takeaways": [
