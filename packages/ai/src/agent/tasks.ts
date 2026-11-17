@@ -26,6 +26,10 @@ export interface KeptTask {
 
 /** Tasks a chat keeps; the oldest go first. */
 export const TASKS_KEPT = 40;
+/** Turn labels (`AgentTurnPlan.title`) kept per chat, newest first: older turns draw as before. */
+export const LABELS_KEPT = 200;
+/** A turn label's most characters. */
+export const LABEL_MAX = 120;
 
 /** A task's last answer as the chat's note quotes it, at most this long. */
 const NOTE_CHARS = 600;
