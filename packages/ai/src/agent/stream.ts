@@ -275,7 +275,15 @@ function settledCall(
     ...(wrote
       ? {
           write: error
-            ? { undo: false, status: 'failed' as const, error: error.slice(0, 300) }
+            ? {
+                undo: false,
+                status: 'failed' as const,
+                // Like the step's own error: a plain chat never shows the raw error (engine codes, ids);
+                // its line already says what failed, and the whole error goes to the app's log.
+                ...(line && names.plain
+                  ? {}
+                  : { error: names.plain ? plainFailure(error) : error.slice(0, 300) }),
+              }
             : {
                 undo: true,
                 status: card?.status === 'undone' ? ('undone' as const) : ('done' as const),
