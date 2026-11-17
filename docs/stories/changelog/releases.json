@@ -1,5 +1,32 @@
 [
   {
+    "tag": "v0.1.327",
+    "date": "2026-11-17T06:42:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Quick replies appear once on a `turnTask` card",
+        "body": "In `LumenAssistant` from `@columenlabs/lumen-ui`, a plain turn that your app draws as a task card through `turnTask` no longer repeats its quick replies as a list under the chat, so they show only in the card's Follow-up step (with \"Something else…\")."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Task and handoff turns drawn as cards are covered too",
+        "body": "`LumenAssistant` now skips its chat-level quick-reply list whenever the last turn is drawn as a card, including a turn that is already a `task` or handoff item of its own."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Turns held as a Steer row no longer double up",
+        "body": "When `turnTask`, passed through `slots.turn`, holds the last turn as a Steer row, `LumenAssistant` no longer shows the same choices again under the chat, and your app needs no extra code."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.326",
     "date": "2026-11-16T22:28:53Z",
     "takeaways": [
