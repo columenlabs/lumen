@@ -565,6 +565,7 @@ function Messages({
 }) {
   const end = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
+  const slots = useContext(TaskSlots);
   const count = JSON.stringify(chat.items).length;
   // Follow the chat as it grows only while the person is at its end: once they scroll up to read,
   // a streaming answer or a card that changes leaves their place alone. Sending a message, or
@@ -652,9 +653,8 @@ function Messages({
       {!chat.busy &&
         !status?.wait &&
         (() => {
-          // A task's question shows its answers in its card (its Follow-up step).
-          const c =
-            chat.items[chat.items.length - 1]?.kind === 'task' ? null : lastChoices(chat.items);
+          // A task's question shows its answers in its card (its Follow-up step), so they never show twice.
+          const c = lastTurnInCard(chat.items, slots.turn) ? null : lastChoices(chat.items);
           return c ? (
             <div className="mt-2">
               <QuickReplies key={chat.items.length} choices={c} onSend={onAnswer} />
@@ -2044,6 +2044,22 @@ function TaskBlock({
       )}
     </div>
   );
+}
+
+/**
+ * Whether the chat's last turn is drawn as a task's card: a task or handoff of its own, or the app's
+ * `turnTask` draws it (or holds it as a Steer row in an earlier card). Such a card shows the turn's
+ * quick replies in its Follow-up step, so the chat must not show them again under it.
+ */
+function lastTurnInCard(
+  items: (ChatItem | LiveItem)[],
+  turn: ((items: ChatItem[]) => unknown) | undefined,
+): boolean {
+  const t = chatTurns(items).at(-1);
+  if (!t) return false;
+  const cut = t.items.findIndex((i) => i.kind === 'task' || i.kind === 'handoff');
+  if (cut >= 0) return true;
+  return !!turn && t.items[0]?.kind === 'user' && turn(t.items as ChatItem[]) !== undefined;
 }
 
 /** The quick replies the last turn offers (`StepItem.choices`), unless the person answered since. */
