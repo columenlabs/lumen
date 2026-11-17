@@ -661,7 +661,8 @@ function Messages({
             </div>
           ) : null;
         })()}
-      {chat.busy && !chat.items.some(isLive) && (
+      {/* A turn the app draws as a card shows its own running state there, never a second Thinking. */}
+      {chat.busy && !chat.items.some(isLive) && !lastTurnInCard(chat.items, slots.turn) && (
         <p className="flex items-center gap-2 py-1 text-muted-foreground text-sm">
           <Spinner /> Thinking…
         </p>
