@@ -1,0 +1,31 @@
+# A pull request merges only with a success-criteria table in its body: columns
+# Criterion | Met? | Evidence, at least one row, every row met, every row with evidence.
+# Its own workflow, not a step in CI, so editing the body reruns this check alone (seconds).
+# The body comes from the event; .github/criteria/check.ts parses it with mdast (GFM).
+# Public repo: like CI it runs only for this repo's own branches, never a fork's pull request.
+name: Success criteria
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+concurrency:
+  group: criteria-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  criteria:
+    name: Success criteria table
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, openship, linux]
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/criteria
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Check the PR body
+        working-directory: .github/criteria
+        run: timeout 45 bun install --frozen-lockfile >/dev/null && bun check.ts "$GITHUB_EVENT_PATH"
