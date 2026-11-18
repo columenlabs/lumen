@@ -1,5 +1,32 @@
 [
   {
+    "tag": "v0.1.332",
+    "date": "2026-11-18T18:55:03Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan requests send the system prompt as a developer item",
+        "body": "In `@columenlabs/lumen-ai`, `planFetch` now sends your system messages, developer messages and any `instructions` as one developer item at the start of the input, so a plan sign-in no longer leaves the system prompt in the `instructions` field."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Cached system prompts on a plan",
+        "body": "When you call `planFetch` on a plan sign-in with a newer model, the system prompt is now read from the prompt cache from the second call on. In testing with a 10k-token system prompt, about 99% was cached, where before none was."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`instructions` is now one fixed line",
+        "body": "A plan still requires the field, so `planFetch` fills `instructions` with a single fixed line. Your own instructions travel in the developer item instead, and no change is needed in your app."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.331",
     "date": "2026-11-18T10:10:49Z",
     "takeaways": [

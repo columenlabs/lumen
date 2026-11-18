@@ -222,8 +222,12 @@ export interface AssistantTask {
   state: AssistantTaskState;
 }
 
-/** How a task's card looks: running, ready for the person, settled, failed, waiting on an answer or stopped. */
-export const TASK_TONES = ['live', 'ready', 'done', 'failed', 'ask', 'stopped'] as const;
+/**
+ * How a task's card looks: running, ready for the person, a result waiting for the person to look at
+ * and decide (`review`: an eye, never a check that reads as already accepted), settled, failed,
+ * waiting on an answer or stopped.
+ */
+export const TASK_TONES = ['live', 'ready', 'review', 'done', 'failed', 'ask', 'stopped'] as const;
 export type AssistantTaskTone = (typeof TASK_TONES)[number];
 
 /**
