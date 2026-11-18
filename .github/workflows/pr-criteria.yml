@@ -8,11 +8,11 @@ on:
   pull_request:
     branches: [main]
     types: [opened, edited, synchronize, reopened]
-concurrency:
-  group: criteria-${{ github.ref }}
-  cancel-in-progress: true
+# No concurrency group: a cancelled run posts a "skipped" check that can land after the real one
+# and read as passing. Each run reads the current body from the API, so overlapping runs agree.
 permissions:
   contents: read
+  pull-requests: read
 jobs:
   criteria:
     name: Success criteria table
@@ -28,4 +28,9 @@ jobs:
           bun-version: 1.4.2
       - name: Check the PR body
         working-directory: .github/criteria
-        run: timeout 45 bun install --frozen-lockfile >/dev/null && bun check.ts "$GITHUB_EVENT_PATH"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # A stalled install is cut at 30 s and tried once more, as CI does.
+        run: |
+          { timeout 30 bun install --frozen-lockfile || timeout 30 bun install --frozen-lockfile; } >/dev/null
+          bun check.ts "$GITHUB_EVENT_PATH"

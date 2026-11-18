@@ -56,11 +56,33 @@ export function check(body: string): string[] {
   return errors;
 }
 
+// The body as it is now, from the GitHub API: two runs close together (a push, then an edit) can
+// finish out of order, and each must judge the current body, not the one its event carried.
+async function currentBody(event: { pull_request?: { number?: number; body?: string | null } }) {
+  const n = event.pull_request?.number;
+  const token = process.env.GITHUB_TOKEN;
+  const api = process.env.GITHUB_API_URL ?? "https://api.github.com";
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (n && token && repo) {
+    try {
+      const res = await fetch(`${api}/repos/${repo}/pulls/${n}`, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (res.ok) return ((await res.json()) as { body: string | null }).body ?? "";
+      console.log(`Could not read the PR (HTTP ${res.status}); using the event's copy of the body.`);
+    } catch {
+      console.log("Could not reach the GitHub API; using the event's copy of the body.");
+    }
+  }
+  return event.pull_request?.body ?? "";
+}
+
 if (import.meta.main) {
   const path = process.argv[2] ?? process.env.GITHUB_EVENT_PATH;
   if (!path) throw new Error("usage: bun check.ts <event.json | body.md>");
   const raw = readFileSync(path, "utf8");
-  const body = path.endsWith(".json") ? ((JSON.parse(raw).pull_request?.body as string | null) ?? "") : raw;
+  const body = path.endsWith(".json") ? await currentBody(JSON.parse(raw)) : raw;
   const errors = check(body);
   if (errors.length) {
     for (const e of errors) console.log(`::error title=Success criteria::${e}`);
