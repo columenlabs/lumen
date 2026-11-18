@@ -47,6 +47,7 @@ import {
   CopyIcon,
   CornerDownRightIcon,
   CrosshairIcon,
+  EyeIcon,
   FileTextIcon,
   GlobeIcon,
   HandIcon,
@@ -1585,6 +1586,7 @@ const TONE: Record<
     spin: true,
   },
   ready: { icon: CircleCheckIcon, box: 'bg-gain/15 text-gain', word: 'text-gain' },
+  review: { icon: EyeIcon, box: 'bg-info/15 text-info', word: 'text-info' },
   done: {
     icon: CheckCheckIcon,
     box: 'bg-muted text-muted-foreground',
@@ -1665,6 +1667,7 @@ export function WorkCard({
         'flex min-w-0 flex-col overflow-clip rounded-lg border bg-card',
         view.tone === 'live' && 'border-primary/45',
         view.tone === 'ready' && 'border-gain/45',
+        view.tone === 'review' && 'border-info/45',
         view.tone === 'failed' && 'border-loss/45',
         view.tone === 'ask' && 'border-warning/45',
       )}
