@@ -15,7 +15,7 @@ import type {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api-fetch';
-import { errorText } from '../integrations';
+import { errorText, plainError } from '../integrations';
 import type { AssistantAdapter } from './client';
 
 /** How long a panel whose stream was cut keeps reading the chat for the answer to end, and how often. */
@@ -272,7 +272,7 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
     case 'error':
       items.push({
         kind: 'error',
-        text: e.data.message,
+        text: plainError(e.data.message),
         ...(e.data.code ? { code: e.data.code } : {}),
       });
       break;

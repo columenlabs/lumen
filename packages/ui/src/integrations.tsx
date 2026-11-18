@@ -32,13 +32,29 @@ export function useClock() {
     });
 }
 
+/**
+ * The Workers runtime's own words when a deploy or a dropped link cuts a request or a Durable Object,
+ * and what a person reads instead: what happened and what to do.
+ */
+const RUNTIME_ERRORS: [RegExp, string][] = [
+  [
+    /Durable Object reset because its code was updated|code has been updated|new version of the code/i,
+    'The app was updated while this ran, so it stopped. Try again.',
+  ],
+  [/^Network connection lost\.?$/i, 'The connection dropped while this ran. Try again.'],
+];
+
+/** A runtime error's plain words, or the message as it is. */
+export const plainError = (message: string) =>
+  RUNTIME_ERRORS.find(([re]) => re.test(message))?.[1] ?? message;
+
 /** A fetch that never got an answer is a TypeError ("Load failed" in Safari, "Failed to fetch" in Chrome). */
 export const errorText = (e: unknown) =>
   e instanceof TypeError
     ? 'The request was cut off before the desk answered (the page was left or the network dropped). Try again.'
     : e instanceof Error
-      ? e.message
-      : String(e);
+      ? plainError(e.message)
+      : plainError(String(e));
 
 export function ErrorLine({ error }: { error: unknown }) {
   if (!error) return null;
