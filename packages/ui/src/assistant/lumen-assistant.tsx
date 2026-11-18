@@ -51,6 +51,7 @@ import {
   FileTextIcon,
   GlobeIcon,
   HandIcon,
+  InfoIcon,
   LightbulbIcon,
   ListPlusIcon,
   LoaderCircleIcon,
@@ -962,6 +963,15 @@ function Item({
         </Rule>
       );
     case 'error':
+      // The app was deployed mid-answer: what ran above stands, nothing failed on the person's side.
+      if (item.code === 'app_updated')
+        return (
+          <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+            <InfoIcon className="mt-0.5 size-4 shrink-0" />
+            {item.text} Steps shown as done above are done; check the result, then ask again for
+            anything left.
+          </p>
+        );
       return (
         <p
           role={item.retried ? undefined : 'alert'}

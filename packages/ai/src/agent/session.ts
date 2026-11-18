@@ -63,6 +63,7 @@ import {
   stickyLeads,
 } from './agent';
 import { aiModel, cachedTurn, planFallback, prefixCacheKey, turnSettings } from './models';
+import { errorData } from './respond';
 import {
   type ScreenCall,
   screenMapOf,
@@ -984,7 +985,7 @@ export abstract class LumenSession {
         failed = true;
         await out.event({
           event: 'error',
-          data: { message: String((err as Error)?.message ?? err).slice(0, 500) },
+          data: errorData(err),
         });
       }
     })();

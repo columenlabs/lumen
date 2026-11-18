@@ -13,6 +13,27 @@ export interface AskResponseOptions {
   waitUntil?: (p: Promise<unknown>) => void;
 }
 
+/**
+ * Cloudflare ends a Durable Object (or a request) when a new version of the app is deployed. Its
+ * error carries `durableObjectReset`; the answer stops there, and every step that already ended has
+ * ended. The panel says so in plain words (code `app_updated`) instead of the runtime's message.
+ */
+export function updatedMidAnswer(err: unknown): boolean {
+  const e = err as { durableObjectReset?: boolean; message?: unknown } | null;
+  if (e?.durableObjectReset === true) return true;
+  return /code was updated|code had changed/i.test(String(e?.message ?? ''));
+}
+
+/** The `error` event's data for a failure: plain words for an app update, else its message. */
+export function errorData(err: unknown): { message: string; code?: string } {
+  if (updatedMidAnswer(err))
+    return {
+      message: 'The app was updated while this answer ran, so it stopped here.',
+      code: 'app_updated',
+    };
+  return { message: String((err as Error)?.message ?? err).slice(0, 500) };
+}
+
 /** Streams `run`'s events as `event:` / `data:` blocks; a failure ends in an `error` event. */
 export function askResponse(
   run: (sink: AskSink) => Promise<void>,
@@ -38,10 +59,7 @@ export function askResponse(
     try {
       await run({ event: write });
     } catch (err) {
-      await write({
-        event: 'error',
-        data: { message: String((err as Error)?.message ?? err).slice(0, 500) },
-      });
+      await write({ event: 'error', data: errorData(err) });
     } finally {
       open = false;
       await writer.close().catch(() => undefined);

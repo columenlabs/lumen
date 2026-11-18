@@ -54,6 +54,7 @@ import {
   prefixCacheKey,
   turnSettings,
 } from './models';
+import { errorData } from './respond';
 import {
   type ScreenCall,
   screenMapOf,
@@ -854,7 +855,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       if (!failed)
         await sink.event({
           event: 'error',
-          data: { message: String((err as Error)?.message ?? err).slice(0, 500) },
+          data: errorData(err),
         });
     } finally {
       this.#input = null;
