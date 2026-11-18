@@ -84,6 +84,7 @@ const STATUS: AssistantStatus = {
     { id: 'gpt-6-luna', label: 'GPT-6 Luna', group: 'OpenAI', provider: 'openai' },
     { id: 'gpt-6.1-terra', label: 'GPT-6.1 Terra', group: 'OpenAI', provider: 'openai' },
     { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', group: 'OpenAI', provider: 'openai' },
+    { id: 'gpt-6.2-sol', label: 'GPT-6.2 Sol', group: 'OpenAI', provider: 'openai' },
     { id: 'gpt-6-astra', label: 'GPT-6 Astra', group: 'OpenAI', provider: 'openai' },
   ],
   tasks: [{ id: 'chat', label: 'Chat', about: 'The side panel', tier: 'fast' }],

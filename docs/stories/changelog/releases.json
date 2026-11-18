@@ -1,5 +1,79 @@
 [
   {
+    "tag": "v0.1.330",
+    "date": "2026-11-17T17:40:05Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "No second \"Thinking\" under a card turn",
+        "body": "In `LumenAssistant` from @columenlabs/lumen-ui, the `Messages` panel now hides its own \"Thinking…\" line when your app draws the newest turn as a card with `turnTask`, so only the card's \"Thinking\" shows."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.329",
+    "date": "2026-11-17T16:49:15Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Name a turn before it runs",
+        "body": "In `@columenlabs/lumen-ai`, both `LumenAgent` and the agent session now accept `AgentTurnPlan.title`, so an app can name the turn's work up front (for example from its router's verdict) without an extra model call."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Turn titles are stored and sent at once",
+        "body": "The kit now keeps the `title` on the person's message (`turn_labels`, newest 200) and sends a `label` event as soon as the turn is planned, so a client can show the title before the first step."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "User chat items carry a label",
+        "body": "In `@columenlabs/lumen-ui-types`, the user variant of `ChatItem` now has an optional `label`, so an app can read the turn's title straight from the message."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The chat hook fills in the label",
+        "body": "In `@columenlabs/lumen-ui`, `useAssistantChat` now puts the label on the message just sent, including inside a task block, so an app's `turnTask` can draw the turn as a card with its title before the first step and use it in `composerHint` (for example \"Steer <title>\")."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.328",
+    "date": "2026-11-17T06:58:46Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Failed writes in a plain chat no longer show raw tool errors",
+        "body": "In `@columenlabs/lumen-ai`, `toolEvents` now sets `write.error` by the same rule as the step's own error when `plainSteps` is on, so `LumenAssistant` (which draws `step.error ?? write.error`) stops showing internal messages or part ids as a failed line's detail."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Plain-language fallback for failed writes",
+        "body": "In a `plainSteps` chat, `toolEvents` leaves `write.error` out when the step's line already says what failed, and otherwise replaces it with a few plain words (`plainFailure`)."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Full errors still reach your logs and the model",
+        "body": "The unchanged raw error is still passed to your app's `stepFailed` log and to the model, and chats without `plainSteps` behave exactly as before, so you need no code changes."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.327",
     "date": "2026-11-17T06:42:26Z",
     "takeaways": [
