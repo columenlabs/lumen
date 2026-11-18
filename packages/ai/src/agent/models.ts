@@ -11,6 +11,9 @@ import { Stream } from 'openai/core/streaming';
 import { type ModelDef, XAI_BASE_URL } from '../assistant/models';
 import { backoffFetch } from './backoff';
 
+/** The one `instructions` line a plan request carries; the system prompt goes in a developer item. */
+const PLAN_INSTRUCTIONS = 'Follow the developer message.';
+
 /** Models a ChatGPT plan refused `prompt_cache_options` for ("not supported on this model"). */
 const noCacheTtl = new Set<string>();
 
@@ -31,7 +34,7 @@ export interface AiModelOptions {
  * A ChatGPT plan sign-in takes function tools only inside one namespace and no output cap, and a
  * forced call is the one tool offered with any call required (developers.openai.com/siwc, Preview
  * limitations). It also keeps nothing (`store: false`, so earlier reasoning rides along encrypted)
- * and takes the system prompt as `instructions`, as the assistant's own OpenAI loop sends it (the
+ * and requires an `instructions` field, as the assistant's own OpenAI loop sends it (the
  * AI SDK's request without these came back 400 Bad Request on a plan, 2026-11-04). A plan also
  * answers only streamed requests ("Stream must be set to true", 400): a call that is not streamed
  * (`generateText`: a hand-off, a compaction) is sent streamed and its events are put back together
@@ -48,16 +51,28 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
     const include = Array.isArray(body.include) ? (body.include as string[]) : [];
     if (!include.includes('reasoning.encrypted_content'))
       body.include = [...include, 'reasoning.encrypted_content'];
-    // System and developer messages become the request's instructions.
+    // System and developer messages (and any instructions) become one developer item at the start of
+    // the input, and `instructions` one fixed line. A plan requires `instructions`, but gpt-6.2-sol on
+    // a plan never reads it from the prompt cache, while it reads a developer item (plan, 2026-11-18:
+    // a 10k-token prompt read 0% four calls running as instructions, 99% from the second call as a
+    // developer item; gpt-6.1-terra read the same either way).
     const items = Array.isArray(body.input) ? (body.input as Record<string, unknown>[]) : [];
     const lead = items.filter((m) => m.role === 'system' || m.role === 'developer');
-    if (lead.length) {
-      const said = lead.map((m) => textOf(m.content)).filter(Boolean);
-      if (typeof body.instructions === 'string' && body.instructions)
-        said.unshift(body.instructions);
-      body.instructions = said.join('\n\n');
-      body.input = items.filter((m) => !lead.includes(m));
-    }
+    const said = lead.map((m) => textOf(m.content)).filter(Boolean);
+    if (
+      typeof body.instructions === 'string' &&
+      body.instructions &&
+      body.instructions !== PLAN_INSTRUCTIONS
+    )
+      said.unshift(body.instructions);
+    body.instructions = PLAN_INSTRUCTIONS;
+    if (said.length || lead.length)
+      body.input = [
+        ...(said.length
+          ? [{ role: 'developer', content: [{ type: 'input_text', text: said.join('\n\n') }] }]
+          : []),
+        ...items.filter((m) => !lead.includes(m)),
+      ];
     let tools =
       (body.tools as { type: string; name?: string; strict?: boolean }[] | undefined) ?? [];
     const choice = body.tool_choice as { type?: string; name?: string } | string | undefined;

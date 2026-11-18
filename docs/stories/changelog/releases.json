@@ -1,5 +1,18 @@
 [
   {
+    "tag": "v0.1.331",
+    "date": "2026-11-18T10:10:49Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "GPT-6.2 Sol is now in the kit's model list",
+        "body": "From `@columenlabs/lumen-ai`, `OPENAI_MODELS` (and so `ALL_MODELS`) now includes `gpt-6.2-sol`, so an app can name it in any tier and run it through the kit's `aiModel`, with cost known per answer at $2 in, $0.10 cached and $10 out per 1M tokens. GPT-6.1 Sol stays in the list, so tiers that already name it keep starting and nothing needs to change."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.330",
     "date": "2026-11-17T17:40:05Z",
     "takeaways": [
