@@ -21,6 +21,7 @@ import { Workspace } from '@cloudflare/computer';
 import { createAITools } from '@cloudflare/computer/tools/ai-sdk';
 import {
   type AssistantChat,
+  type AssistantEffort,
   type AssistantScreenOutcome,
   type AssistantTask,
   COMPACT_AT,
@@ -66,6 +67,7 @@ import {
   type SentPrompt,
   advisorTool,
   aiModel,
+  lockedEffort,
   planFallback,
   turnSettings,
 } from './models';
@@ -803,7 +805,7 @@ export abstract class LumenSession {
       maxRetries: 0,
       model,
       abortSignal: AbortSignal.timeout(120_000),
-      ...turnSettings(plan.model, { effort: 'default', out: 4000, plan: !!plan.key.plan }),
+      ...turnSettings(plan.model, { effort: this.#keptEffort(), out: 4000, plan: !!plan.key.plan }),
     };
     // The last turn's own prompt and one more message: the call reads all of it from the cache, so a
     // compaction pays only for the ask and its answer (a fresh prompt read 0 of 20-70k, 2026-11-19).
@@ -813,13 +815,35 @@ export abstract class LumenSession {
           ...settings,
           instructions: sent.instructions,
           messages: [...sent.messages, { role: 'user', content: SUMMARY_ASK }],
+          // The tools the last call offered, none of them called: tools lead the prompt too.
           ...(Object.keys(sent.tools).length
-            ? { tools: sent.tools, toolChoice: 'none' as const }
+            ? {
+                tools: sent.tools,
+                ...(sent.activeTools ? { activeTools: sent.activeTools } : {}),
+                toolChoice: 'none' as const,
+              }
             : {}),
         })
       : await generateText({ ...settings, prompt });
     meter.add(r.usage);
     return r.text;
+  }
+
+  /** The effort this turn runs at: the conversation's own (`lockedEffort`), kept with it. */
+  #effort(plan: AgentTurnPlan): AssistantEffort {
+    const r = lockedEffort(
+      this.#get<{ model: string; effort: AssistantEffort }>('effort'),
+      plan.model.id,
+      plan.effort ?? 'default',
+      !!plan.resetEffort,
+    );
+    if (r.keep) this.#put('effort', r.keep);
+    return r.effort;
+  }
+
+  /** The effort the conversation's calls ran at, for its compaction. */
+  #keptEffort(): AssistantEffort {
+    return this.#get<{ effort: AssistantEffort }>('effort')?.effort ?? 'default';
   }
 
   #model(plan: AgentTurnPlan, onSwitch: () => void) {
@@ -979,7 +1003,21 @@ export abstract class LumenSession {
           // A model call that goes quiet ends the turn with an error instead of holding it to the
           // turn's limit: the SDK's own timeouts, the first output allowing for a long reasoning.
           timeout: { firstChunkMs: FIRST_OUTPUT_MS, chunkMs: QUIET_MS },
-          prepareStep: (e) => this.beforeStep(e) as never,
+          prepareStep: (e) => {
+            const step = this.beforeStep(e) as
+              | { instructions?: string; messages?: ModelMessage[]; activeTools?: string[] }
+              | undefined;
+            // What this call sends, as the model reads it: a compaction after it sends the same
+            // and one more message, so it reads all of it from the cache.
+            const active = step?.activeTools ?? config.activeTools;
+            this.#sent = {
+              instructions: step?.instructions ?? config.instructions,
+              messages: step?.messages ?? e.messages,
+              tools: config.tools,
+              ...(active ? { activeTools: active } : {}),
+            };
+            return step as never;
+          },
           onStepFinish: (e) => this.onStepFinish(e as never),
         });
         let saved = false;
@@ -1197,7 +1235,7 @@ export abstract class LumenSession {
       ...(plan.first ? { toolChoice: { type: 'tool' as const, toolName: plan.first } } : {}),
       maxSteps: plan.maxSteps ?? MAX_STEPS,
       ...turnSettings(plan.model, {
-        effort: plan.effort ?? 'default',
+        effort: this.#effort(plan),
         ...(plan.out ? { out: plan.out } : {}),
         plan: free,
       }),
