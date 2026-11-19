@@ -395,8 +395,8 @@ function unmarked(m: LanguageModelV4Message): LanguageModelV4Message {
 }
 
 /**
- * The prompt cache, on every call `aiModel` makes (Bikram, 2026-11-19: caching is implicit, and
- * only `cache: false` turns it off). No caller passes a key or marks a message:
+ * The prompt cache, on every call `aiModel` makes: caching is implicit, and only
+ * `cache: false` turns it off. No caller passes a key or marks a message:
  * - Claude: a breakpoint after the system line (tools and instructions), one on the message before
  *   the newest person's message (the conversation so far, so the next turn reads it), and the
  *   request's own after the newest block (a turn's later steps read the earlier ones).
