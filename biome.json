@@ -6,13 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": [
-      "node_modules",
-      "dist",
-      "out",
-      "**/*.md",
-      "packages/ui/src/ui/**"
-    ]
+    "ignore": ["node_modules", "dist", "out", "**/*.md", "packages/ui/src/ui/**"]
   },
   "organizeImports": {
     "enabled": true
@@ -44,5 +38,37 @@
       "semicolons": "always",
       "trailingCommas": "all"
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": ["packages/**/*.ts", "packages/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@ai-sdk/openai": "Model calls go through aiModel() in lumen-ai (agent/models.ts), which keeps the prompt cache on.",
+                  "@ai-sdk/anthropic": "Model calls go through aiModel() in lumen-ai (agent/models.ts), which keeps the prompt cache on.",
+                  "openai": "Text calls go through aiModel() in lumen-ai (agent/models.ts), which keeps the prompt cache on.",
+                  "@anthropic-ai/sdk": "Text calls go through aiModel() in lumen-ai (agent/models.ts), which keeps the prompt cache on."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "include": ["packages/ai/src/agent/models.ts", "packages/ai/src/assistant/engine.ts"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }

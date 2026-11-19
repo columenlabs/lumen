@@ -1,5 +1,18 @@
 [
   {
+    "tag": "v0.1.337",
+    "date": "2026-11-19T18:17:12Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "`listUsd` is now exported from the assistant entry",
+        "body": "From `@columenlabs/lumen-ai/assistant`, you can import `listUsd(part)` to get a usage part's price at its model's API list rates, so an app can show \"at list price\" for its own runs even when a plan-signed-in call keeps `usd: 0`."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.336",
     "date": "2026-11-19T17:54:41Z",
     "takeaways": [

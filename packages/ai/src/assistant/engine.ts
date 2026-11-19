@@ -33,14 +33,7 @@ import { type ModelMessage, type ToolSet, generateText, jsonSchema, stepCountIs,
 import OpenAI, { toFile } from 'openai';
 import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
 import { backoffFetch } from '../agent/backoff';
-import {
-  type ModelKey,
-  aiModel,
-  cachedTurn,
-  planLimited,
-  prefixCacheKey,
-  turnSettings,
-} from '../agent/models';
+import { type ModelKey, aiModel, planLimited, turnSettings } from '../agent/models';
 import type { OpenedTools, SourceAt } from '../agent/tools';
 import { tokenUsage } from '../agent/usage';
 import { type WebLookupOptions, webLookupTools } from '../subagents/web';
@@ -1693,8 +1686,8 @@ export class Assistant {
   /** Swaps the history for a short summary. False with nothing to compact. */
   /**
    * One answer, sent exactly as a chat turn sends it: the AI SDK model for the provider (`aiModel`,
-   * over `planFetch` on a ChatGPT plan) with the chat's settings (`turnSettings`) and Claude's cache
-   * marks (`cachedTurn`). There is one client for every model call, chat or not. The conversation
+   * over `planFetch` on a ChatGPT plan, its prompt cache always on) with the chat's settings
+   * (`turnSettings`). There is one client for every model call, chat or not. The conversation
    * goes as messages, each user message's words before its pictures, the newest message last, so a
    * later call reads every earlier message from the cache.
    */
@@ -1707,7 +1700,6 @@ export class Assistant {
     signal?: AbortSignal,
     images?: CompleteImage[],
     effort?: AssistantEffort,
-    cacheKey?: string,
     history: CompleteTurn[] = [],
   ): Promise<{ text: string; cut: boolean }> {
     const user = (pics: CompleteImage[], words: string[]): ModelMessage => ({
@@ -1720,7 +1712,7 @@ export class Assistant {
         ...pics.map((i) => ({ type: 'image' as const, image: i.data, mediaType: i.mediaType })),
       ],
     });
-    const turn = cachedTurn(instructions, [
+    const messages: ModelMessage[] = [
       ...history.map(
         (t): ModelMessage =>
           t.role === 'assistant'
@@ -1728,7 +1720,7 @@ export class Assistant {
             : user(t.images ?? [], [t.text]),
       ),
       user(images ?? [], input),
-    ]);
+    ];
     const plan = !!key.plan;
     const r = await generateText({
       maxRetries: 0,
@@ -1736,14 +1728,13 @@ export class Assistant {
         ...(this.o.fetch ? { fetch: this.o.fetch } : {}),
         name: this.name,
       }),
-      instructions: turn.instructions,
-      messages: turn.messages,
+      instructions,
+      messages,
       ...(signal ? { abortSignal: signal } : {}),
       ...turnSettings(s.model, {
         effort: effort ?? 'default',
         out: max,
         plan,
-        ...(cacheKey ? { cacheKey } : {}),
       }),
     }).catch((err: unknown) => {
       if (signal?.aborted) throw err;
@@ -1849,9 +1840,6 @@ export class Assistant {
         o.signal,
         o.images,
         o.effort ?? s.effort,
-        // The chat's key: named for how the prompt starts (model and instructions), never the run
-        // or the task, so every call of one conversation and the next run read that start.
-        prefixCacheKey(s.model.id, o.system),
         o.history,
       ));
     } catch (e) {
