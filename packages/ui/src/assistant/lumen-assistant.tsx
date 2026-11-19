@@ -1797,7 +1797,7 @@ function taskRows(items: LiveItem[], answerable: StepChoices | null): TaskRow[] 
       flush();
       turnHasTools = false;
       turnStart = rows.length + 1;
-      rows.push({ key: `u${n}`, kind: 'you', text: it.text, steered: !!it.steered });
+      rows.push({ key: `u${n}`, kind: 'you', text: it.text, steered: true });
       return;
     }
     if (it.kind === 'step' && it.choices) return;
@@ -2009,7 +2009,9 @@ function TaskBlock({
     title: item.label,
     state: live ? 'Working' : TASK_STATE[state],
   };
-  const first = items.findIndex((i) => i.kind === 'user');
+  // The request that opened the task sits above its card when the block starts with it; a later
+  // message carried into the task (a follow-up while it is open) is a Steer row inside the card.
+  const first = items[0]?.kind === 'user' ? 0 : -1;
   const head = items.slice(0, first + 1);
   const inner = items.slice(first + 1);
   const answerable = answer && !busy ? lastChoices(items) : null;

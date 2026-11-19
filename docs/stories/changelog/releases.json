@@ -1,5 +1,86 @@
 [
   {
+    "tag": "v0.1.335",
+    "date": "2026-11-18T21:25:40Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Deploys no longer leak runtime errors into chat",
+        "body": "In the assistant chat, `plainError` now turns the runtime's \"code was updated\" reset message into \"The app was updated while this ran, so it stopped. Try again.\", so users no longer see backend wording when a deploy interrupts a running answer."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Dropped connections read as plain words",
+        "body": "In the assistant chat, `plainError` now turns \"Network connection lost.\" into \"The connection dropped while this ran. Try again.\", so users are told what happened and what to do."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Saved chats get the same wording",
+        "body": "`plainError` is applied both to stream errors (`errorText`) and to error events in a saved chat, so a reopened conversation shows the same plain message as the live one, and any other error message is left unchanged."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.334",
+    "date": "2026-11-18T21:00:25Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "An app deploy mid-answer no longer shows a raw runtime error",
+        "body": "From `@columenlabs/lumen-ai/agent`, the new `errorData(err)` turns a runtime reset caused by an app update into `{ code: 'app_updated', message: 'The app was updated while this answer ran, so it stopped here.' }`, and any other error keeps its message as before."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Detect an update-interrupted answer",
+        "body": "`@columenlabs/lumen-ai/agent` now exports `updatedMidAnswer(err)`, which tells you whether an error is a reset from a code update, so you can handle that case separately in your own error paths."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The assistant panel shows a calm note instead of a red alert",
+        "body": "In `@columenlabs/lumen-ui/assistant`, an `error` item with code `app_updated` now renders as a muted note with an info icon, steps that already finished keep their done state, and a step cut off mid-run settles the same way as after Stop."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.333",
+    "date": "2026-11-18T20:02:45Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New `review` task tone",
+        "body": "From `@columenlabs/lumen-ui-types/assistant`, `TASK_TONES` now includes `review`, so a task card can be typed as a result waiting for a person to look at it and decide."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Eye icon for `review` cards",
+        "body": "In the assistant task card from `@columenlabs/lumen-ui`, setting the tone to `review` draws an eye icon on a soft info-colour background with an info-colour border."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clearer than a green check",
+        "body": "For a result awaiting a decision, such as a built change before its Accept, use the `review` tone instead of `ready`, because people read the green check on `ready` as already accepted; `ready` is unchanged, so existing cards look the same."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.332",
     "date": "2026-11-18T18:55:03Z",
     "takeaways": [
