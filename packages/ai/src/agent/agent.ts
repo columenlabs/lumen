@@ -12,7 +12,6 @@
  * An `Assistant` gives both: `assistant.agentTurn(caller, input)` returns a plan and its settle.
  */
 
-import { anthropic } from '@ai-sdk/anthropic';
 import { createAITools } from '@cloudflare/computer/tools/ai-sdk';
 import {
   type ChatResponseResult,
@@ -48,10 +47,11 @@ import { type ModelMessage, type ToolSet, generateText } from 'ai';
 import type { ModelDef } from '../assistant/models';
 import {
   type ModelKey,
+  SUMMARY_ASK,
+  type SentPrompt,
+  advisorTool,
   aiModel,
-  cachedTurn,
   planFallback,
-  prefixCacheKey,
   turnSettings,
 } from './models';
 import { errorData } from './respond';
@@ -875,6 +875,8 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   #capped = false;
   /** The last turn's model and key, for compaction between turns. */
   #last: { plan: AgentTurnPlan } | null = null;
+  /** The last turn's prompt as it was sent, so a compaction reads it back from the cache. */
+  #sent: SentPrompt | null = null;
   /** Usage spent between turns (compaction), settled with the next turn. */
   #owed: UsageMeter[] = [];
   #tabled = false;
@@ -1076,7 +1078,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     let meter = new UsageMeter(plan.model, `${plan.label} · compact`, !!plan.key.plan);
     meter.ctx = { task: 'chat', run: this.name };
     this.#owed.push(meter);
-    const r = await generateText({
+    const settings = {
       maxRetries: 0,
       model: this.#model(plan, () => {
         const fb = plan.fallback;
@@ -1085,9 +1087,21 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         meter.ctx = { task: 'chat', run: this.name };
         this.#owed.push(meter);
       }),
-      prompt,
       ...turnSettings(plan.model, { effort: 'default', out: 4000, plan: !!plan.key.plan }),
-    });
+    };
+    // The last turn's own prompt and one more message: the call reads all of it from the cache, so a
+    // compaction pays only for the ask and its answer (a fresh prompt read 0 of 20-70k, 2026-11-19).
+    const sent = this.#sent;
+    const r = sent
+      ? await generateText({
+          ...settings,
+          instructions: sent.instructions,
+          messages: [...sent.messages, { role: 'user', content: SUMMARY_ASK }],
+          ...(Object.keys(sent.tools).length
+            ? { tools: sent.tools, toolChoice: 'none' as const }
+            : {}),
+        })
+      : await generateText({ ...settings, prompt });
     meter.add(r.usage);
     return r.text;
   }
@@ -1157,7 +1171,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     });
     const advisor: ToolSet = {};
     if (plan.advisor)
-      advisor.advisor = anthropic.tools.advisor_20260301({
+      advisor.advisor = advisorTool({
         model: plan.advisor.model.id,
         maxUses: plan.advisor.maxUses,
         maxTokens: plan.advisor.maxTokens,
@@ -1209,7 +1223,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     const first = led.messages.findIndex((m) => m.role === 'user');
     const sent =
       kept?.brief && first >= 0 ? leadAt(led.messages, first, `${kept.brief}\n\n`) : led.messages;
-    const cached = cachedTurn(system, sent);
+    this.#sent = { instructions: system, messages: sent, tools };
     return {
       model: this.#model(plan, () => {
         const fb = plan.fallback;
@@ -1219,9 +1233,8 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         turn.main.ctx = { task: 'chat', run: this.name };
         turn.meters.push(turn.main);
       }),
-      // Think types instructions as a string; the SDK it hands them to takes a system message too.
-      instructions: cached.instructions as unknown as string,
-      messages: cached.messages,
+      instructions: system,
+      messages: sent,
       tools,
       ...(plan.first ? { toolChoice: { type: 'tool', toolName: plan.first } } : {}),
       maxSteps: plan.maxSteps ?? MAX_STEPS,
@@ -1229,10 +1242,6 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         effort: plan.effort ?? 'default',
         ...(plan.out ? { out: plan.out } : {}),
         plan: free,
-        // Named for how the prompt starts, so a new chat reads its instructions and tools from the cache.
-        // Not the tools on now: a tool_search find turns more on, and a key that moved with them
-        // sent the next turn to another cache (live: 0 read on a turn after a find).
-        cacheKey: prefixCacheKey(plan.model.id, system),
       }),
     };
   }

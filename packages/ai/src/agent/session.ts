@@ -17,7 +17,6 @@
  *   }
  */
 
-import { anthropic } from '@ai-sdk/anthropic';
 import { Workspace } from '@cloudflare/computer';
 import { createAITools } from '@cloudflare/computer/tools/ai-sdk';
 import {
@@ -62,7 +61,14 @@ import {
   quoteOf,
   stickyLeads,
 } from './agent';
-import { aiModel, cachedTurn, planFallback, prefixCacheKey, turnSettings } from './models';
+import {
+  SUMMARY_ASK,
+  type SentPrompt,
+  advisorTool,
+  aiModel,
+  planFallback,
+  turnSettings,
+} from './models';
 import { errorData } from './respond';
 import {
   type ScreenCall,
@@ -140,7 +146,7 @@ export interface SessionTurn {
 /** A turn's settings, as `beforeTurn` gives them (an app may change them before the call). */
 export interface SessionTurnConfig {
   model: ReturnType<typeof aiModel>;
-  instructions: ReturnType<typeof cachedTurn>['instructions'];
+  instructions: string;
   messages: ModelMessage[];
   tools: ToolSet;
   activeTools?: string[];
@@ -717,6 +723,8 @@ export abstract class LumenSession {
   }
 
   #last: { plan: AgentTurnPlan } | null = null;
+  /** The last turn's prompt as it was sent, so a compaction reads it back from the cache. */
+  #sent: SentPrompt | null = null;
   #owed: UsageMeter[] = [];
 
   /** The messages the model reads: a summary in place of what was compacted, then the rest. */
@@ -771,7 +779,7 @@ export abstract class LumenSession {
       .join('\n')
       .slice(-200_000);
     const summary = await this.#summarize(
-      `${was ? `Earlier summary:\n${was.summary}\n\n` : ''}Summarize this conversation so the assistant can carry on from it: the person's goals, what was decided and made, names and numbers, and what is still open. Plain prose, at most 600 words.\n\n${text}`,
+      `${was ? `Earlier summary:\n${was.summary}\n\n` : ''}${SUMMARY_ASK}\n\n${text}`,
     );
     this.#put('compact', { upto: (rows[cut - 1] as { seq: number }).seq, summary });
     return true;
@@ -784,19 +792,32 @@ export abstract class LumenSession {
     let meter = new UsageMeter(plan.model, `${plan.label} · compact`, !!plan.key.plan);
     meter.ctx = { task: 'chat', run: this.name };
     this.#owed.push(meter);
-    const r = await generateText({
+    const model = this.#model(plan, () => {
+      const fb = plan.fallback;
+      if (!fb) return;
+      meter = new UsageMeter(fb.model, `${fb.label} · compact`, false);
+      meter.ctx = { task: 'chat', run: this.name };
+      this.#owed.push(meter);
+    });
+    const settings = {
       maxRetries: 0,
-      model: this.#model(plan, () => {
-        const fb = plan.fallback;
-        if (!fb) return;
-        meter = new UsageMeter(fb.model, `${fb.label} · compact`, false);
-        meter.ctx = { task: 'chat', run: this.name };
-        this.#owed.push(meter);
-      }),
-      prompt,
+      model,
       abortSignal: AbortSignal.timeout(120_000),
       ...turnSettings(plan.model, { effort: 'default', out: 4000, plan: !!plan.key.plan }),
-    });
+    };
+    // The last turn's own prompt and one more message: the call reads all of it from the cache, so a
+    // compaction pays only for the ask and its answer (a fresh prompt read 0 of 20-70k, 2026-11-19).
+    const sent = this.#sent;
+    const r = sent
+      ? await generateText({
+          ...settings,
+          instructions: sent.instructions,
+          messages: [...sent.messages, { role: 'user', content: SUMMARY_ASK }],
+          ...(Object.keys(sent.tools).length
+            ? { tools: sent.tools, toolChoice: 'none' as const }
+            : {}),
+        })
+      : await generateText({ ...settings, prompt });
     meter.add(r.usage);
     return r.text;
   }
@@ -930,6 +951,11 @@ export abstract class LumenSession {
           messages: history,
           ...(continuation ? { continuation } : {}),
         });
+        this.#sent = {
+          instructions: config.instructions,
+          messages: config.messages,
+          tools: config.tools,
+        };
         const toEvents = chunkEvents({
           ...(this.#last?.plan.advisor ? { advisor: this.#last.plan.advisor.label } : {}),
           cards: () => new Map(this.cards().map((c) => [c.id, c])),
@@ -1103,7 +1129,7 @@ export abstract class LumenSession {
     });
     const advisor: ToolSet = {};
     if (plan.advisor)
-      advisor.advisor = anthropic.tools.advisor_20260301({
+      advisor.advisor = advisorTool({
         model: plan.advisor.model.id,
         maxUses: plan.advisor.maxUses,
         maxTokens: plan.advisor.maxTokens,
@@ -1157,7 +1183,6 @@ export abstract class LumenSession {
     const first = led.messages.findIndex((m) => m.role === 'user');
     const sent =
       kept?.brief && first >= 0 ? leadAt(led.messages, first, `${kept.brief}\n\n`) : led.messages;
-    const cached = cachedTurn(system, sent);
     return {
       model: this.#model(plan, () => {
         const fb = plan.fallback;
@@ -1166,8 +1191,8 @@ export abstract class LumenSession {
         turn.main.ctx = { task: 'chat', run: this.name };
         turn.meters.push(turn.main);
       }),
-      instructions: cached.instructions,
-      messages: cached.messages,
+      instructions: system,
+      messages: sent,
       tools,
       ...(plan.first ? { toolChoice: { type: 'tool' as const, toolName: plan.first } } : {}),
       maxSteps: plan.maxSteps ?? MAX_STEPS,
@@ -1175,15 +1200,6 @@ export abstract class LumenSession {
         effort: plan.effort ?? 'default',
         ...(plan.out ? { out: plan.out } : {}),
         plan: free,
-        // Named for how the prompt starts, so each session's turns read their own cache. On a ChatGPT
-        // plan the key is also the request's `session-id`, and a plan keeps one cached prompt per
-        // session-id: the last request's. Sessions that share it (every session with the same model and
-        // system line) take it from each other, and a call that follows another session's read 0 of its
-        // own unchanged start (live 2026-11-15: each call read exactly the previous request on the id).
-        // So on a plan the key names this session too, as OpenAI's own client does (one per thread).
-        cacheKey: free
-          ? prefixCacheKey(plan.model.id, system, this.name)
-          : prefixCacheKey(plan.model.id, system),
       }),
     };
   }

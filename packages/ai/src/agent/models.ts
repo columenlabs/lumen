@@ -3,10 +3,17 @@
  * the same tiers, keys and sign-ins as the assistant: Claude on an API key, OpenAI on an API key or
  * a person's ChatGPT plan sign-in.
  */
-import { createAnthropic } from '@ai-sdk/anthropic';
+import { anthropic, createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { AssistantEffort } from '@columenlabs/lumen-ui-types/assistant';
-import type { JSONValue, LanguageModel, ModelMessage, SystemModelMessage } from 'ai';
+import {
+  type JSONValue,
+  type LanguageModel,
+  type LanguageModelMiddleware,
+  type ModelMessage,
+  type ToolSet,
+  wrapLanguageModel,
+} from 'ai';
 import { Stream } from 'openai/core/streaming';
 import { type ModelDef, XAI_BASE_URL } from '../assistant/models';
 import { backoffFetch } from './backoff';
@@ -16,6 +23,11 @@ const PLAN_INSTRUCTIONS = 'Follow the developer message.';
 
 /** Models a ChatGPT plan refused `prompt_cache_options` for ("not supported on this model"). */
 const noCacheTtl = new Set<string>();
+
+/** Claude's advisor tool: provider imports live here only, beside `aiModel`. */
+export const advisorTool = (
+  o: Parameters<typeof anthropic.tools.advisor_20260301>[0],
+): ToolSet[string] => anthropic.tools.advisor_20260301(o) as ToolSet[string];
 
 /** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
 export interface ModelKey {
@@ -28,6 +40,8 @@ export interface AiModelOptions {
   fetch?: typeof fetch;
   /** What a plan sign-in's tool namespace is described as (the assistant's name). */
   name?: string;
+  /** `false` sends the call with no prompt cache. The one way to turn it off; it is on otherwise. */
+  cache?: false;
 }
 
 /**
@@ -292,62 +306,43 @@ function textOf(content: unknown): string {
     .join('\n');
 }
 
-/** The AI SDK model a tier runs: its provider's client on the payer's key. */
+/** The AI SDK model a tier runs: its provider's client on the payer's key, its prompt cached. */
 export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}): LanguageModel {
   // Every provider call backs off the same way on a limit or overload (backoff.ts).
   const f = backoffFetch(o.fetch ?? fetch);
-  if (model.provider === 'anthropic')
-    return createAnthropic({ apiKey: key.apiKey, fetch: f })(model.id);
-  if (model.provider === 'xai')
-    return createOpenAI({ apiKey: key.apiKey, baseURL: XAI_BASE_URL, fetch: f }).responses(
-      model.id,
-    );
-  return createOpenAI({ apiKey: key.apiKey, fetch: key.plan ? planFetch(f, o.name) : f }).responses(
-    model.id,
-  );
+  const base =
+    model.provider === 'anthropic'
+      ? createAnthropic({ apiKey: key.apiKey, fetch: f })(model.id)
+      : model.provider === 'xai'
+        ? createOpenAI({ apiKey: key.apiKey, baseURL: XAI_BASE_URL, fetch: f }).responses(model.id)
+        : createOpenAI({
+            apiKey: key.apiKey,
+            fetch: key.plan ? planFetch(f, o.name) : f,
+          }).responses(model.id);
+  if (o.cache === false) return base;
+  return wrapLanguageModel({ model: base, middleware: promptCache(model, !!key.plan) });
 }
 
-/**
- * Claude's prompt cache. The request's own breakpoint follows the newest block, so a turn's later
- * steps read the steps before them. It alone never helps the next turn: the bearings put before
- * the newest message are gone from it by then, so that prefix never comes again. `cachedTurn`
- * adds two breakpoints that do: after the instructions (tools and instructions) and on the last
- * message before the newest question (the chat so far). Sent whatever the tier's provider, so a
- * plan's fallback to Claude caches too; other providers ignore it.
- */
-const CLAUDE_CACHE: Record<string, JSONValue> = { cacheControl: { type: 'ephemeral' } };
-const CACHED = { anthropic: CLAUDE_CACHE };
+/** What a compaction asks the model, after the conversation itself. */
+export const SUMMARY_ASK =
+  "Summarize this conversation so the assistant can carry on from it: the person's goals, what was decided and made, names and numbers, and what is still open. Plain prose, at most 600 words. Answer with the summary only.";
 
-/**
- * A turn's instructions and messages with Claude's two lasting cache breakpoints: the instructions
- * as a system message that carries one, and the message before the newest person's message.
- */
-export function cachedTurn(
-  instructions: string,
-  messages: ModelMessage[],
-): { instructions: SystemModelMessage; messages: ModelMessage[] } {
-  let i = messages.length - 1;
-  while (i >= 0 && messages[i]?.role !== 'user') i -= 1;
-  const before = i - 1;
-  const marked =
-    before >= 0
-      ? messages.map((m, n) =>
-          n === before
-            ? ({
-                ...m,
-                providerOptions: {
-                  ...m.providerOptions,
-                  anthropic: { ...m.providerOptions?.anthropic, ...CLAUDE_CACHE },
-                },
-              } as ModelMessage)
-            : m,
-        )
-      : messages;
-  return {
-    instructions: { role: 'system', content: instructions, providerOptions: CACHED },
-    messages: marked,
-  };
+/** A turn's prompt as it was sent: its system line, its messages and its tools. */
+export interface SentPrompt {
+  instructions: string;
+  messages: ModelMessage[];
+  tools: ToolSet;
 }
+
+/** The cache mark Claude reads: a breakpoint after the block it is set on. */
+/** One message of a prompt as a provider receives it (the AI SDK's own type, through middleware). */
+type LanguageModelV4Message = Parameters<
+  NonNullable<LanguageModelMiddleware['transformParams']>
+>[0]['params']['prompt'][number];
+
+const CLAUDE_CACHE: { cacheControl: { type: 'ephemeral' } } = {
+  cacheControl: { type: 'ephemeral' },
+};
 
 /**
  * OpenAI's prompt cache key: calls with the same key go to the same cache, so a long prompt's start
@@ -357,10 +352,10 @@ export function cachedTurn(
 export const promptCacheKey = (key: string) => key.slice(0, 64);
 
 /**
- * A cache key named for what a prompt starts with (its model, instructions and tools), not for
- * one chat or run: a new chat or run that starts the same way reads that start from the cache
- * (a key per chat read 0 of a new chat's 5.9k-token start; one key for the start read 99.7%, our
- * key, 2026-11-14). The key only routes; what is read is still only the exact same start.
+ * A cache key named for what a prompt starts with, not for one chat or run: a new chat or run that
+ * starts the same way reads that start from the cache (a key per chat read 0 of a new chat's
+ * 5.9k-token start; one key for the start read 99.7%, our key, 2026-11-14). The key only routes;
+ * what is read is still only the exact same start.
  */
 export function prefixCacheKey(...parts: (string | undefined)[]): string {
   const of = parts.filter(Boolean).join('\u0000');
@@ -373,26 +368,181 @@ export function prefixCacheKey(...parts: (string | undefined)[]): string {
   return `lumen-${(h >>> 0).toString(36)}${(g >>> 0).toString(36)}`;
 }
 
+/** A prompt message's words (its pictures and files count by their kind only). */
+function wordsOf(m: LanguageModelV4Message | undefined): string {
+  if (!m) return '';
+  if (typeof m.content === 'string') return m.content;
+  return m.content
+    .map((p) => ('text' in p && typeof p.text === 'string' ? p.text : `[${p.type}]`))
+    .join('\n');
+}
+
+/** A prompt message with Claude's breakpoint on it, and on no other of its fields. */
+const marked = (m: LanguageModelV4Message): LanguageModelV4Message => ({
+  ...m,
+  providerOptions: {
+    ...m.providerOptions,
+    anthropic: { ...m.providerOptions?.anthropic, ...CLAUDE_CACHE },
+  },
+});
+
+/** The same message with any breakpoint a caller set taken off, so the cache owns all of them. */
+function unmarked(m: LanguageModelV4Message): LanguageModelV4Message {
+  const a = m.providerOptions?.anthropic;
+  if (!a || !('cacheControl' in a)) return m;
+  const { cacheControl: _c, ...rest } = a;
+  return { ...m, providerOptions: { ...m.providerOptions, anthropic: rest } };
+}
+
 /**
- * A tier's effort and output cap as a turn's settings, with the prompt cache on: Claude's
- * breakpoint, and OpenAI's cache key (`prefixCacheKey`) when `cacheKey` is given.
+ * The prompt cache, on every call `aiModel` makes: caching is implicit, and only
+ * `cache: false` turns it off. No caller passes a key or marks a message:
+ * - Claude: a breakpoint after the system line (tools and instructions), one on the message before
+ *   the newest person's message (the conversation so far, so the next turn reads it), and the
+ *   request's own after the newest block (a turn's later steps read the earlier ones).
+ * - OpenAI: the cache key, named for the model and the system line, so every conversation that
+ *   starts the same way shares that start. On a ChatGPT plan the key is also the request's
+ *   `session-id`, and a plan keeps one cached prompt per id (the last request's), so there the key
+ *   also names the conversation by its first message: two conversations never take each other's.
+ * A key the caller set itself (`providerOptions.openai.promptCacheKey`) is kept.
  */
+export function promptCache(model: ModelDef, plan: boolean): LanguageModelMiddleware {
+  return {
+    specificationVersion: 'v4',
+    transformParams: async ({ params }) => {
+      const prompt = params.prompt.map(unmarked);
+      const system = prompt
+        .filter((m) => m.role === 'system')
+        .map(wordsOf)
+        .join('\n\n');
+      const first = prompt.find((m) => m.role !== 'system');
+      let newest = prompt.length - 1;
+      while (newest >= 0 && prompt[newest]?.role !== 'user') newest -= 1;
+      const lastSystem = prompt.findLastIndex((m) => m.role === 'system');
+      const marks = prompt.map((m, n) =>
+        n === lastSystem || (n === newest - 1 && n > lastSystem) ? marked(m) : m,
+      );
+      const openai = { ...params.providerOptions?.openai };
+      if (typeof openai.promptCacheKey !== 'string')
+        openai.promptCacheKey = promptCacheKey(
+          plan
+            ? prefixCacheKey(model.id, system, wordsOf(first))
+            : prefixCacheKey(model.id, system),
+        );
+      return {
+        ...params,
+        prompt: marks,
+        providerOptions: {
+          ...params.providerOptions,
+          anthropic: { ...params.providerOptions?.anthropic, ...CLAUDE_CACHE },
+          openai,
+        },
+      };
+    },
+    wrapGenerate: async ({ doGenerate, params }) => {
+      const r = await doGenerate();
+      await watchCache(model, params, r.usage);
+      return r;
+    },
+    wrapStream: async ({ doStream, params }) => {
+      const r = await doStream();
+      return {
+        ...r,
+        stream: r.stream.pipeThrough(
+          new TransformStream({
+            async transform(part, ctl) {
+              if (part.type === 'finish') await watchCache(model, params, part.usage);
+              ctl.enqueue(part);
+            },
+          }),
+        ),
+      };
+    },
+  };
+}
+
+/** A call's settings as a middleware receives them. */
+type CallParams = Parameters<NonNullable<LanguageModelMiddleware['transformParams']>>[0]['params'];
+/** What a call reports it used, as a provider gives it. */
+type CallUsage = {
+  inputTokens: { total: number | undefined; cacheRead: number | undefined };
+};
+
+/** The last call of each conversation (cache key and first message) in this isolate: its messages' hashes, size and time. */
+const lastOnKey = new Map<string, { hashes: string[]; in: number; at: number }>();
+/** How many keys are remembered, oldest dropped first. */
+const KEYS_KEPT = 200;
+/** How long after a call a later one on its key should still read it (OpenAI keeps 5 to 60 min). */
+const WATCH_MS = 30 * 60_000;
+
+/** A message's hash by what the model reads: its role and content, not the cache marks on it. */
+async function hashOf(m: LanguageModelV4Message): Promise<string> {
+  const read = JSON.stringify({ role: m.role, content: m.content });
+  const d = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(read));
+  return [...new Uint8Array(d).slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Misses are never silent: a call that reads less than half of the previous call of its
+ * conversation (same key and first message, within `WATCH_MS`) logs `ai.cache_miss`, with the first message that differs from that call
+ * (`changed`, or none when the new prompt only adds to it, which points at the provider's side).
+ */
+async function watchCache(model: ModelDef, params: CallParams, usage: CallUsage): Promise<void> {
+  try {
+    const key = params.providerOptions?.openai?.promptCacheKey;
+    if (typeof key !== 'string') return;
+    const hashes = await Promise.all(params.prompt.map(hashOf));
+    // One conversation: the same key and the same first message (a compaction starts a new one).
+    const first = params.prompt.findIndex((m) => m.role !== 'system');
+    const id = `${key}:${first >= 0 ? hashes[first] : ''}`;
+    const total = usage.inputTokens.total ?? 0;
+    const read = usage.inputTokens.cacheRead ?? 0;
+    const was = lastOnKey.get(id);
+    const at = Date.now();
+    if (was && at - was.at < WATCH_MS && read < was.in / 2) {
+      let same = 0;
+      while (same < was.hashes.length && hashes[same] === was.hashes[same]) same += 1;
+      console.log(
+        JSON.stringify({
+          event: 'ai.cache_miss',
+          model: model.id,
+          key,
+          in: total,
+          read,
+          before: was.in,
+          gapS: Math.round((at - was.at) / 1000),
+          messages: hashes.length,
+          ...(same < was.hashes.length
+            ? { changed: same, role: params.prompt[same]?.role ?? 'none' }
+            : {}),
+        }),
+      );
+    }
+    lastOnKey.delete(id);
+    lastOnKey.set(id, { hashes, in: total, at });
+    if (lastOnKey.size > KEYS_KEPT) lastOnKey.delete(lastOnKey.keys().next().value as string);
+  } catch {}
+}
+
+/** A tier's effort and output cap as a call's settings (the prompt cache is `aiModel`'s own). */
 export function turnSettings(
   model: ModelDef,
-  o: { effort: AssistantEffort; out?: number; plan?: boolean; cacheKey?: string },
+  o: { effort: AssistantEffort; out?: number; plan?: boolean },
 ): { maxOutputTokens?: number; providerOptions: Record<string, Record<string, JSONValue>> } {
   const out = o.plan || !o.out ? {} : { maxOutputTokens: o.out };
-  const anthropic: Record<string, JSONValue> = { ...CLAUDE_CACHE };
+  const anthropic: Record<string, JSONValue> = {};
   // A plan keeps nothing, so earlier turns go back as items, not references to stored ones.
   const openai: Record<string, JSONValue> = o.plan ? { store: false } : {};
-  if (o.cacheKey) openai.promptCacheKey = promptCacheKey(o.cacheKey);
   if (o.effort !== 'default') {
     if (model.provider === 'anthropic') anthropic.effort = o.effort;
     else openai.reasoningEffort = o.effort;
   }
   return {
     ...out,
-    providerOptions: { anthropic, ...(Object.keys(openai).length ? { openai } : {}) },
+    providerOptions: {
+      ...(Object.keys(anthropic).length ? { anthropic } : {}),
+      ...(Object.keys(openai).length ? { openai } : {}),
+    },
   };
 }
 
