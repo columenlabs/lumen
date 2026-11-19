@@ -51,6 +51,7 @@ import {
   type SentPrompt,
   advisorTool,
   aiModel,
+  lockedEffort,
   planFallback,
   turnSettings,
 } from './models';
@@ -112,6 +113,11 @@ export interface AgentTurnPlan {
   model: ModelDef;
   key: ModelKey;
   effort?: AssistantEffort;
+  /**
+   * Take `effort` even though this conversation runs at another one. Its next call then reads
+   * nothing from the prompt cache; without it the conversation keeps its first call's effort.
+   */
+  resetEffort?: boolean;
   /** Output tokens per call; left out on a plan sign-in, which takes no cap. */
   out?: number;
   /** The usage part's label: `Tier · Model`. */
@@ -877,6 +883,8 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   #last: { plan: AgentTurnPlan } | null = null;
   /** The last turn's prompt as it was sent, so a compaction reads it back from the cache. */
   #sent: SentPrompt | null = null;
+  /** The turn's own prompt, before any step changed it. */
+  #turnSent: SentPrompt | null = null;
   /** Usage spent between turns (compaction), settled with the next turn. */
   #owed: UsageMeter[] = [];
   #tabled = false;
@@ -1087,7 +1095,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         meter.ctx = { task: 'chat', run: this.name };
         this.#owed.push(meter);
       }),
-      ...turnSettings(plan.model, { effort: 'default', out: 4000, plan: !!plan.key.plan }),
+      ...turnSettings(plan.model, { effort: this.#keptEffort(), out: 4000, plan: !!plan.key.plan }),
     };
     // The last turn's own prompt and one more message: the call reads all of it from the cache, so a
     // compaction pays only for the ask and its answer (a fresh prompt read 0 of 20-70k, 2026-11-19).
@@ -1097,13 +1105,35 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
           ...settings,
           instructions: sent.instructions,
           messages: [...sent.messages, { role: 'user', content: SUMMARY_ASK }],
+          // The tools the last call offered, none of them called: tools lead the prompt too.
           ...(Object.keys(sent.tools).length
-            ? { tools: sent.tools, toolChoice: 'none' as const }
+            ? {
+                tools: sent.tools,
+                ...(sent.activeTools ? { activeTools: sent.activeTools } : {}),
+                toolChoice: 'none' as const,
+              }
             : {}),
         })
       : await generateText({ ...settings, prompt });
     meter.add(r.usage);
     return r.text;
+  }
+
+  /** The effort this turn runs at: the conversation's own (`lockedEffort`), kept with it. */
+  #effort(plan: AgentTurnPlan): AssistantEffort {
+    const r = lockedEffort(
+      this.#get<{ model: string; effort: AssistantEffort }>('effort'),
+      plan.model.id,
+      plan.effort ?? 'default',
+      !!plan.resetEffort,
+    );
+    if (r.keep) this.#put('effort', r.keep);
+    return r.effort;
+  }
+
+  /** The effort the conversation's calls ran at, for its compaction. */
+  #keptEffort(): AssistantEffort {
+    return this.#get<{ effort: AssistantEffort }>('effort')?.effort ?? 'default';
   }
 
   /** The turn's model; on a ChatGPT plan with a fallback, Claude once the plan's limit is reached. */
@@ -1224,6 +1254,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     const sent =
       kept?.brief && first >= 0 ? leadAt(led.messages, first, `${kept.brief}\n\n`) : led.messages;
     this.#sent = { instructions: system, messages: sent, tools };
+    this.#turnSent = this.#sent;
     return {
       model: this.#model(plan, () => {
         const fb = plan.fallback;
@@ -1239,7 +1270,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       ...(plan.first ? { toolChoice: { type: 'tool', toolName: plan.first } } : {}),
       maxSteps: plan.maxSteps ?? MAX_STEPS,
       ...turnSettings(plan.model, {
-        effort: plan.effort ?? 'default',
+        effort: this.#effort(plan),
         ...(plan.out ? { out: plan.out } : {}),
         plan: free,
       }),
@@ -1247,6 +1278,25 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
   }
 
   override beforeStep(ctx: PrepareStepContext): StepConfig | undefined {
+    const step = this.#step(ctx);
+    // What this call sends, as the model reads it: a compaction after it sends the same and one
+    // more message, so it reads all of it from the cache.
+    const was = this.#turnSent;
+    if (was) {
+      const s = step as
+        | { instructions?: string; messages?: ModelMessage[]; activeTools?: string[] }
+        | undefined;
+      this.#sent = {
+        instructions: s?.instructions ?? was.instructions,
+        messages: s?.messages ?? (ctx.messages as ModelMessage[]),
+        tools: was.tools,
+        ...(s?.activeTools ? { activeTools: s.activeTools } : {}),
+      };
+    }
+    return step;
+  }
+
+  #step(ctx: PrepareStepContext): StepConfig | undefined {
     const t = this.#turn;
     if (!t) return undefined;
     const steered = this.#steerInto(ctx);

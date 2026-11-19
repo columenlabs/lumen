@@ -332,6 +332,24 @@ export interface SentPrompt {
   instructions: string;
   messages: ModelMessage[];
   tools: ToolSet;
+  /** The tools the last call offered, when a step narrowed them (none on a last step). */
+  activeTools?: string[];
+}
+
+/**
+ * The effort a conversation keeps: the one its first call asked for, while the model stays the
+ * same. A reasoning model's effort leads its prompt, so a call at another effort reads nothing from
+ * the cache (tested on a plan, 2026-11-19: high, high, low, high read 22.4k, 22.4k, 0, 22.4k). Only
+ * `reset` (the plan's `resetEffort`) or a new model takes a new one; a new model starts a new cache anyway.
+ */
+export function lockedEffort<E extends string>(
+  kept: { model: string; effort: E } | null,
+  model: string,
+  want: E,
+  reset: boolean,
+): { effort: E; keep?: { model: string; effort: E } } {
+  if (kept && kept.model === model && !reset) return { effort: kept.effort };
+  return { effort: want, keep: { model, effort: want } };
 }
 
 /** The cache mark Claude reads: a breakpoint after the block it is set on. */
@@ -469,7 +487,10 @@ type CallUsage = {
 };
 
 /** The last call of each conversation (cache key and first message) in this isolate: its messages' hashes, size and time. */
-const lastOnKey = new Map<string, { hashes: string[]; in: number; at: number }>();
+const lastOnKey = new Map<
+  string,
+  { hashes: string[]; in: number; at: number; effort: string; tools: string }
+>();
 /** How many keys are remembered, oldest dropped first. */
 const KEYS_KEPT = 200;
 /** How long after a call a later one on its key should still read it (OpenAI keeps 5 to 60 min). */
@@ -485,7 +506,8 @@ async function hashOf(m: LanguageModelV4Message): Promise<string> {
 /**
  * Misses are never silent: a call that reads less than half of the previous call of its
  * conversation (same key and first message, within `WATCH_MS`) logs `ai.cache_miss`, with the first message that differs from that call
- * (`changed`, or none when the new prompt only adds to it, which points at the provider's side).
+ * (`changed`, or none when the new prompt only adds to it), and `effortBefore` / `toolsChanged` when
+ * the call's effort or offered tools differ from that call's.
  */
 async function watchCache(model: ModelDef, params: CallParams, usage: CallUsage): Promise<void> {
   try {
@@ -498,6 +520,15 @@ async function watchCache(model: ModelDef, params: CallParams, usage: CallUsage)
     const total = usage.inputTokens.total ?? 0;
     const read = usage.inputTokens.cacheRead ?? 0;
     const was = lastOnKey.get(id);
+    const effort = String(
+      params.providerOptions?.openai?.reasoningEffort ??
+        params.providerOptions?.anthropic?.effort ??
+        'default',
+    );
+    const tools = JSON.stringify([
+      (params.tools ?? []).map((t) => t.name),
+      params.toolChoice ?? null,
+    ]);
     const at = Date.now();
     if (was && at - was.at < WATCH_MS && read < was.in / 2) {
       let same = 0;
@@ -512,6 +543,9 @@ async function watchCache(model: ModelDef, params: CallParams, usage: CallUsage)
           before: was.in,
           gapS: Math.round((at - was.at) / 1000),
           messages: hashes.length,
+          effort,
+          ...(effort !== was.effort ? { effortBefore: was.effort } : {}),
+          ...(tools !== was.tools ? { toolsChanged: true } : {}),
           ...(same < was.hashes.length
             ? { changed: same, role: params.prompt[same]?.role ?? 'none' }
             : {}),
@@ -519,7 +553,7 @@ async function watchCache(model: ModelDef, params: CallParams, usage: CallUsage)
       );
     }
     lastOnKey.delete(id);
-    lastOnKey.set(id, { hashes, in: total, at });
+    lastOnKey.set(id, { hashes, in: total, at, effort, tools });
     if (lastOnKey.size > KEYS_KEPT) lastOnKey.delete(lastOnKey.keys().next().value as string);
   } catch {}
 }

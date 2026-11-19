@@ -1,5 +1,37 @@
 [
   {
+    "tag": "v0.1.338",
+    "date": "2026-11-19T21:33:17Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Prompt cache is always on",
+        "body": "In `@columenlabs/lumen-ai`, `aiModel()` now wraps every model in a `promptCache` middleware, so Claude cache breakpoints and the OpenAI cache key are set for you, and you can opt out with `aiModel(..., { cache: false })`."
+      },
+      {
+        "kinds": [],
+        "title": "`cacheKey` and `cachedTurn` are removed",
+        "body": "In `@columenlabs/lumen-ai`, delete any `cacheKey` option you pass to `turnSettings` and replace `cachedTurn` calls with a normal call, since `aiModel()` now handles caching and keeps a `promptCacheKey` you set yourself."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Compaction reads from the cache",
+        "body": "Compaction now sends the last turn's own prompt (system, messages and tools with `toolChoice: 'none'`) plus one `SUMMARY_ASK` message, so most of that prompt is read from cache instead of paid for again."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Cache misses are logged",
+        "body": "Calls made through `aiModel()` now log a cache miss when a call reads far less from the cache than the call before it, so you can see where caching stops working."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.337",
     "date": "2026-11-19T18:17:12Z",
     "takeaways": [
