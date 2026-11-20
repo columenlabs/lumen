@@ -140,7 +140,10 @@ export interface TierDef {
   about: string;
   model: string;
   out?: number;
-  /** The effort the tier runs at when the person saved none (default: the model's own). */
+  /**
+   * The effort the tier runs at when the person saved none (default: the model's own). With
+   * `pickTier: false` the app picks, so this wins over a person's saved effort.
+   */
   effort?: AssistantEffort;
 }
 
