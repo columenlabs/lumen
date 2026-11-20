@@ -739,7 +739,9 @@ export class Assistant {
     const saved = (await this.state.person(caller.id)).tiers?.[tier.id];
     const model =
       this.modelById(saved?.model) ?? this.modelById(tier.model) ?? (this.models[0] as ModelDef);
-    return { model, effort: saved?.effort ?? ('default' as AssistantEffort) };
+    // When the app picks each turn's tier, the tier's own effort is the app's setting and wins.
+    const own = this.o.pickTier === false ? tier.effort : undefined;
+    return { model, effort: own ?? saved?.effort ?? tier.effort ?? ('default' as AssistantEffort) };
   }
 
   private async session(caller: Caller, tier: TierDef, label?: string): Promise<Session> {
