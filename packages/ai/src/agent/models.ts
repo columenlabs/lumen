@@ -15,7 +15,7 @@ import {
   wrapLanguageModel,
 } from 'ai';
 import { Stream } from 'openai/core/streaming';
-import { type ModelDef, XAI_BASE_URL } from '../assistant/models';
+import { type ModelDef, XAI_BASE_URL, effortFor } from '../assistant/models';
 import { backoffFetch } from './backoff';
 
 /** The one `instructions` line a plan request carries; the system prompt goes in a developer item. */
@@ -458,11 +458,13 @@ export function promptCache(model: ModelDef, plan: boolean): LanguageModelMiddle
       };
     },
     wrapGenerate: async ({ doGenerate, params }) => {
+      logEffort(model, params);
       const r = await doGenerate();
       await watchCache(model, params, r.usage);
       return r;
     },
     wrapStream: async ({ doStream, params }) => {
+      logEffort(model, params);
       const r = await doStream();
       return {
         ...r,
@@ -477,6 +479,20 @@ export function promptCache(model: ModelDef, plan: boolean): LanguageModelMiddle
       };
     },
   };
+}
+
+/**
+ * Each call's effort as sent to the provider, one `ai.effort` line (model, effort; `default` when
+ * none was sent), so an app can show that a saved effort reaches every call. Never throws.
+ */
+function logEffort(model: ModelDef, params: CallParams): void {
+  try {
+    const sent =
+      params.providerOptions?.openai?.reasoningEffort ?? params.providerOptions?.anthropic?.effort;
+    console.log(
+      JSON.stringify({ event: 'ai.effort', model: model.id, effort: String(sent ?? 'default') }),
+    );
+  } catch {}
 }
 
 /** A call's settings as a middleware receives them. */
@@ -567,9 +583,10 @@ export function turnSettings(
   const anthropic: Record<string, JSONValue> = {};
   // A plan keeps nothing, so earlier turns go back as items, not references to stored ones.
   const openai: Record<string, JSONValue> = o.plan ? { store: false } : {};
-  if (o.effort !== 'default') {
-    if (model.provider === 'anthropic') anthropic.effort = o.effort;
-    else openai.reasoningEffort = o.effort;
+  const effort = effortFor(model, o.effort);
+  if (effort !== 'default') {
+    if (model.provider === 'anthropic') anthropic.effort = effort;
+    else openai.reasoningEffort = effort;
   }
   return {
     ...out,

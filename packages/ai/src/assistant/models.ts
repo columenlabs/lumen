@@ -20,7 +20,17 @@ export interface ModelDef {
   in: number;
   out: number;
   read: number;
+  /**
+   * The efforts this model takes (`AssistantEffort`, `default` aside), lowest first. Left out, any
+   * effort is sent as asked; an effort not listed is never sent (the call runs at the model's own).
+   */
+  efforts?: AssistantEffort[];
 }
+
+/** Claude 5.5 efforts (Anthropic's effort docs: low to max on Haiku, Sonnet and Opus 5.5). */
+const CLAUDE_EFFORTS: AssistantEffort[] = ['low', 'medium', 'high', 'max'];
+/** GPT-6 reasoning efforts the kit sends (OpenAI's reasoning guide; `max` is not one of its levels). */
+const OPENAI_EFFORTS: AssistantEffort[] = ['low', 'medium', 'high'];
 
 /** Claude models, smallest first (an advisor is never weaker than the model it advises). */
 export const CLAUDE_MODELS: ModelDef[] = [
@@ -32,6 +42,7 @@ export const CLAUDE_MODELS: ModelDef[] = [
     in: 0.1,
     out: 0.5,
     read: 0.01,
+    efforts: CLAUDE_EFFORTS,
   },
   {
     id: 'claude-sonnet-5-5',
@@ -41,6 +52,7 @@ export const CLAUDE_MODELS: ModelDef[] = [
     in: 2,
     out: 10,
     read: 0.2,
+    efforts: CLAUDE_EFFORTS,
   },
   {
     id: 'claude-opus-5-5',
@@ -50,6 +62,7 @@ export const CLAUDE_MODELS: ModelDef[] = [
     in: 4,
     out: 20,
     read: 0.2,
+    efforts: CLAUDE_EFFORTS,
   },
 ];
 
@@ -68,6 +81,7 @@ export const OPENAI_MODELS: ModelDef[] = [
   in: i as number,
   out: o as number,
   read: r as number,
+  efforts: OPENAI_EFFORTS,
 }));
 
 /**
@@ -87,6 +101,7 @@ export const XAI_MODELS: ModelDef[] = [
   in: i as number,
   out: o as number,
   read: r as number,
+  efforts: [],
 }));
 
 /** xAI's OpenAI-compatible API. */
@@ -125,7 +140,13 @@ export interface TierDef {
   about: string;
   model: string;
   out?: number;
+  /** The effort the tier runs at when the person saved none (default: the model's own). */
+  effort?: AssistantEffort;
 }
+
+/** The effort a call to `model` sends: `want` when the model takes it, else the model's own (`default`). */
+export const effortFor = (model: ModelDef, want: AssistantEffort): AssistantEffort =>
+  want === 'default' || !model.efforts || model.efforts.includes(want) ? want : 'default';
 
 /** A task a person picks a starting tier for (the chat panel, a drafting job, a schedule). */
 export interface TaskDef {

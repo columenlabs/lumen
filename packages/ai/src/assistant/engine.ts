@@ -739,7 +739,7 @@ export class Assistant {
     const saved = (await this.state.person(caller.id)).tiers?.[tier.id];
     const model =
       this.modelById(saved?.model) ?? this.modelById(tier.model) ?? (this.models[0] as ModelDef);
-    return { model, effort: saved?.effort ?? ('default' as AssistantEffort) };
+    return { model, effort: saved?.effort ?? tier.effort ?? ('default' as AssistantEffort) };
   }
 
   private async session(caller: Caller, tier: TierDef, label?: string): Promise<Session> {

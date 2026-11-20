@@ -79,6 +79,9 @@ const assistant = createAssistant({
     { id: 'steady', label: 'Steady', about: 'Most work', model: 'claude-sonnet-5-5' },
     { id: 'deep', label: 'Deep', about: 'Hard judgement', model: 'claude-opus-5-5' },
   ],
+  // A tier's `effort` is what it runs at when the person saved none. Each model lists the efforts
+  // it takes (`ModelDef.efforts`); `effortFor(model, effort)` gives what is sent, and an effort a
+  // model does not take is never sent. Every call logs one `ai.effort` line with the effort sent.
   groups: [
     { id: 'notes', label: 'Notes', about: 'Read and edit notes', tools: (caller) => mcpServerTools(() => notesServer(caller.id)) },
   ],
