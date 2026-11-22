@@ -33,6 +33,7 @@ Every sheet, drawer, dialog, picker and menu can be closed the obvious way, on a
 
 - **A visible close.** A phone's bottom sheet always shows its × top right (`SheetContent` ignores `showCloseButton={false}` there). A dialog shows its × or a Cancel in its top bar; a part that hides the kit's × draws its own in its header.
 - **Tap outside.** A phone's bottom sheet rises from the bottom and stops short of the top, so the dimmed page above it shows; a tap there closes it. Popovers and menus close the same way.
+- **Dim, never blur.** A modal `Sheet`, `Dialog` or `AlertDialog` dims the page behind it a little (black 10%) and never blurs it, so the page stays readable; never add `backdrop-blur` to an overlay.
 - **Swipe down.** The grab handle at a bottom sheet's top drags it down; a pull past 80 px or a flick closes it, a shorter one springs back. The handle comes with the sheet; never add one by hand.
 - **Esc and back.** Esc closes the top overlay. On a phone the back button or gesture closes it too and leaves the page where it was (`useBackClose`); closing any other way pops that history entry again, unless a link inside already moved on.
 - **Safe areas.** Bottom sheets pad the home indicator, side sheets and full-screen dialogs the notch.
