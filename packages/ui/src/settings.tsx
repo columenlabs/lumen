@@ -191,10 +191,10 @@ function Appearance() {
   const prefs = usePrefs();
   return (
     <div className="flex flex-col">
-      <SettingRow label="Theme" description="Light, dark, or follow the device.">
+      <SettingRow label="Theme">
         <ThemeToggle />
       </SettingRow>
-      <SettingRow label="Font" description="The typeface for text. Numbers keep their own.">
+      <SettingRow label="Font">
         <LumenSelector
           label="Font"
           size="sm"
@@ -204,7 +204,7 @@ function Appearance() {
           onChange={(v) => setPref('font', v as FontId)}
         />
       </SettingRow>
-      <SettingRow label="Text size" description="Larger text makes everything a little roomier.">
+      <SettingRow label="Text size">
         <ToggleGroup
           type="single"
           variant="outline"
@@ -221,11 +221,7 @@ function Appearance() {
           ))}
         </ToggleGroup>
       </SettingRow>
-      <SettingRow
-        label="Glass surfaces"
-        description="Frosted cards and panels."
-        htmlFor="settings-glass"
-      >
+      <SettingRow label="Glass surfaces" htmlFor="settings-glass">
         <Switch
           id="settings-glass"
           checked={prefs.glass}
@@ -240,14 +236,10 @@ function Preferences({ extra }: { extra?: ReactNode }) {
   const prefs = usePrefs();
   return (
     <div className="flex flex-col">
-      <SettingRow label="Time zone" description="Every time on every desk shows in this zone.">
+      <SettingRow label="Time zone">
         <TimeZoneSelect />
       </SettingRow>
-      <SettingRow
-        label="Observability details"
-        description="Show how long each card and view took to load, with its rows and when."
-        htmlFor="settings-observability"
-      >
+      <SettingRow label="Observability details" htmlFor="settings-observability">
         <Switch
           id="settings-observability"
           checked={prefs.observability}
@@ -264,27 +256,23 @@ const PROFILE: Omit<SettingsSectionDef, 'content'> = {
   id: 'profile',
   title: 'Profile',
   icon: UserRoundIcon,
-  description: 'Your name and sign-in on every desk.',
 };
 const SECURITY: Omit<SettingsSectionDef, 'content'> = {
   id: 'security',
   title: 'Security',
   icon: ShieldCheckIcon,
-  description: 'How you sign in. Changes ask you to confirm it’s you.',
 };
 const general = (preferences?: ReactNode): SettingsSectionDef[] => [
   {
     id: 'appearance',
     title: 'Appearance',
     icon: PaletteIcon,
-    description: 'How every desk looks, saved in this browser.',
     content: <Appearance />,
   },
   {
     id: 'preferences',
     title: 'Preferences',
     icon: SlidersHorizontalIcon,
-    description: 'Times and details on every desk, saved in this browser.',
     content: <Preferences extra={preferences} />,
   },
 ];

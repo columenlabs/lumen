@@ -636,11 +636,7 @@ function Messages({
         <p className="flex items-center gap-2 text-muted-foreground text-sm">
           <Spinner /> Loading the chat…
         </p>
-      ) : chat.items.length === 0 && !status?.wait ? (
-        <p className="pt-8 text-center text-muted-foreground text-sm">
-          Ask {status?.name ?? 'the assistant'} anything.
-        </p>
-      ) : (
+      ) : chat.items.length === 0 && !status?.wait ? null : (
         <TierNames.Provider value={(id) => status?.tiers.find((t) => t.id === id)?.label ?? id}>
           <UndoWrite.Provider value={chat.undo}>
             {/* Retry waits while an answer runs or nobody can pay: hidden then, never disabled. */}
