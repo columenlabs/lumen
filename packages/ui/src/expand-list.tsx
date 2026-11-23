@@ -44,6 +44,7 @@ export function LumenExpandRow({
   toggle,
   actions,
   icon,
+  end,
   open: openProp,
   onOpenChange,
   defaultOpen = false,
@@ -67,6 +68,9 @@ export function LumenExpandRow({
   actions?: ReactNode;
   /** A logo or icon before the name. */
   icon?: ReactNode;
+  /** One quick action on the whole thing in the header, outside the expand button (an `IconButton`:
+   *  Add a passkey, Sign out everywhere else), before the chevron. */
+  end?: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   defaultOpen?: boolean;
@@ -110,9 +114,21 @@ export function LumenExpandRow({
               )}
             </span>
             {status ?? badge}
-            {!toggle && chevron}
+            {!toggle && !end && chevron}
           </button>
         </CollapsibleTrigger>
+        {end}
+        {end && !toggle && (
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="-mr-1 flex min-h-10 min-w-8 items-center justify-center"
+              aria-label={`${open ? 'Collapse' : 'Expand'}${label ? ` ${label}` : ''}`}
+            >
+              {chevron}
+            </button>
+          </CollapsibleTrigger>
+        )}
         {toggle && (
           <>
             <Switch

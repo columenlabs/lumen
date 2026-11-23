@@ -113,6 +113,8 @@ export {
   type LumenResult,
   LumenSecondStep,
   type LumenSecondStepProps,
+  type LumenSession,
+  LumenSessions,
   LumenSignInMethods,
   type LumenSignInMethodsProps,
 } from './lumen-security';

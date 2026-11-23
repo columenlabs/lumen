@@ -7,7 +7,7 @@ An app's Settings page: one dialog on every host, General first, then a group pe
 - A list of things in a section (providers, channels, accounts, phones): `LumenExpandList` of `LumenExpandRow`s.
 - A few fields that save together: a `LumenForm` (see [form.md](form.md)) in the section's `content`, its Save in `footer`.
 - Shared sections the kit already has: `SchedulesSection`, `NotificationsSettings`, `McpSettings`, `IntegrationRow`, `TimeZoneSelect`. Use them; never rebuild one.
-- One or two per-device choices of the app's own (what scrolling does, a default view): `preferences` on `LumenSettings` or `LumenShell`, `SettingField` rows added under General ▸ Preferences after the kit's. Never a section of its own for a single row.
+- One or two per-device choices of the app's own (what scrolling does, a default view): `preferences` on `LumenSettings` or `LumenShell`, `SettingField` rows added under General ▸ Preferences after the kit's. Never a section of its own for a single row. `observability={false}` hides Preferences ▸ Observability details (each view's load time) from people who don't need it, such as everyone but an app's admins.
 - Alerts split from delivery: `NotificationsSettings parts="channels"` in one section (where messages go: email, ntfy, webhooks, set up once) and `parts="events"` in another (what goes where: one line per event, a column per channel). Events with a `group` sit under its label ("Limits", "Watchdog").
 
 ## Three slots (every thing in a section)
@@ -52,11 +52,14 @@ Rules:
 11. **A section's header is one line, centred**: icon, title, a divider, then the one-line description, all on the same middle line (never baseline aligned, which drops the description under the title's line). On a phone the description goes under the title. The Settings panel draws it; an app never builds its own section header.
 
 ### Built on the slots
+- A row's `end` holds one quick action on the whole thing in its header (Add, Set up, Sign out everywhere else), an `IconButton`, outside the expand button.
 - `LumenConnection` (a key, a sign-in, a relay): one row per way to connect, its value with Replace or Sign in again inside. One way: its last test, Test and Remove sit in the action bar. Several ways: a Use row picks the one that runs, and each way's row ends in its own status, Test and Remove (on a phone the label and those sit above the value).
 - `NotificationsSettings`: email and ntfy turn on and off with the header switch, and each webhook is one row.
 - `McpSettings`: each server's address is a row with Copy, then From picks the app whose steps show.
 - `SchedulesSection`'s editor: each setting is a row (On and Notify end in their switch).
-- `LumenSignInMethods` (Security): passkeys, authenticator app, emailed and backup codes. Add a passkey waits on the device through `usePasskeyWait`: Cancel stays pressable and ends the wait at once, the wait gives up after `PASSKEY_WAIT_MS` (2 min), a closed or refused prompt is a quiet note (`PASSKEY_CANCELLED_TEXT`), never the browser's words. Pass `passkeys.onCancel` to close the browser's prompt (SimpleWebAuthn's `WebAuthnAbortService.cancelCeremony`); `onAdd` may answer the sign-in service's `{ error }` as is. A sign-in screen of the app's own uses the same hook for its passkey button and calls `cancel()` before Google or a code, so a passkey never locks the other ways in.
+- `LumenSignInMethods` (Security): passkeys, authenticator app, emailed and backup codes, each a `LumenExpandRow` under one bordered list, one open at a time. Its steps run inside its own row (a passkey's name box, the app's QR → 6 digits → backup codes), never over the whole section. ＋ (Add a passkey), ⏻ (Set up the app) and ↻ (New backup codes) sit in the row's `end`. `passwordless` (an app with no passwords: passkeys, Google, emailed codes) skips the password step and guards Turn off and new codes with a confirm. On a phone the QR step is an Open in authenticator app link.
+- `LumenSessions` (Security ▸ Devices): where the person is signed in, folded under "Signed in on N"; open, this device first, then one line per kind of device (the same name once, ×N), each with Sign out; the header's `end` signs out everywhere else after a confirm.
+- `LumenSecondStep`'s `trust` adds a Trust this device box under the code. Add a passkey waits on the device through `usePasskeyWait`: Cancel stays pressable and ends the wait at once, the wait gives up after `PASSKEY_WAIT_MS` (2 min), a closed or refused prompt is a quiet note (`PASSKEY_CANCELLED_TEXT`), never the browser's words. Pass `passkeys.onCancel` to close the browser's prompt (SimpleWebAuthn's `WebAuthnAbortService.cancelCeremony`); `onAdd` may answer the sign-in service's `{ error }` as is. A sign-in screen of the app's own uses the same hook for its passkey button and calls `cancel()` before Google or a code, so a passkey never locks the other ways in.
 
 ## Anatomy
 
