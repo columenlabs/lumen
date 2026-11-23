@@ -26,7 +26,12 @@ function Methods() {
             if (name === 'wait') return new Promise(() => {});
             await wait();
             if (name === 'cancel') {
-              return { error: { code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY', message: 'The operation either timed out or was not allowed.' } };
+              return {
+                error: {
+                  code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY',
+                  message: 'The operation either timed out or was not allowed.',
+                },
+              };
             }
             setPasskeys((p) => [...p, { id: String(p.length), name, createdAt: '2026-10-23' }]);
           },
