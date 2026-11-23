@@ -476,6 +476,7 @@ export function LumenSignInMethods({
       open('app-confirm');
     });
   };
+  const [askOff, setAskOff] = useState(false);
   const turnOffApp = () => run(() => app?.onTurnOff?.('') ?? Promise.resolve());
   const renewCodes = () =>
     run(async () => {
@@ -656,6 +657,14 @@ export function LumenSignInMethods({
         </SettingField>
       )}
       <ListLabel>{password ? 'Second step' : 'Sign-in'}</ListLabel>
+      <LumenConfirm
+        open={askOff}
+        onOpenChange={setAskOff}
+        title="Turn off the authenticator app?"
+        description="Sign-in stops asking for its code. Your backup codes stop working."
+        action="Turn off"
+        onConfirm={turnOffApp}
+      />
       <LumenExpandList className="rounded-lg border px-2">
         {passkeys && (
           <LumenExpandRow
@@ -666,15 +675,25 @@ export function LumenSignInMethods({
               </RowIcon>
             }
             name="Passkeys"
-            meta={list.map((p) => p.name || 'Passkey').join(', ') || undefined}
-            status={<SettingStatus count={list.length ? String(list.length) : 'None'} />}
-            end={
-              <IconButton
-                icon={Plus}
-                label="Add a passkey"
-                variant={row === 'passkeys' && flow === 'passkey' ? 'default' : 'ghost'}
-                onClick={() => openRow('passkeys', 'passkey')}
-              />
+            meta={
+              list.length > 1
+                ? `${list.length} passkeys`
+                : list.length === 1
+                  ? list[0]?.name || 'Passkey'
+                  : undefined
+            }
+            status={<SettingStatus health={list.length ? 'on' : 'off'} />}
+            actions={
+              flow === 'passkey' ? undefined : (
+                <SettingActions>
+                  <IconButton
+                    icon={Plus}
+                    label="Add a passkey"
+                    variant="outline"
+                    onClick={() => open('passkey')}
+                  />
+                </SettingActions>
+              )
             }
           >
             <div className="flex min-w-0 flex-col">
@@ -756,17 +775,21 @@ export function LumenSignInMethods({
             }
             name="Authenticator app"
             meta={appFlow ? 'Setting up' : undefined}
-            status={<SettingStatus count={app.on ? 'On' : 'Off'} />}
-            end={
-              app.on ? undefined : (
-                <IconButton
-                  icon={Power}
-                  label="Set up authenticator app"
-                  onClick={startApp}
-                  disabled={busy}
-                />
-              )
-            }
+            status={<SettingStatus health={app.on ? 'on' : 'off'} />}
+            toggle={{
+              checked: app.on || Boolean(appFlow),
+              label: 'Authenticator app',
+              disabled: busy || (app.on && !app.onTurnOff),
+              onCheckedChange: (v) => {
+                if (v) return startApp();
+                if (!app.on) {
+                  setSetup(null);
+                  return open(null);
+                }
+                if (passwordless) return setAskOff(true);
+                openRow('app', 'app-off');
+              },
+            }}
           >
             {passwordStep && row === 'app' ? (
               passwordStep
@@ -785,39 +808,16 @@ export function LumenSignInMethods({
                   </span>
                 </SettingField>
                 <LumenAuthProblem>{row === 'app' ? error : null}</LumenAuthProblem>
-                {app.on && (
-                  <SettingActions
-                    remove={
-                      app.onTurnOff
-                        ? passwordless
-                          ? {
-                              label: 'Turn off authenticator app',
-                              title: 'Turn off the authenticator app?',
-                              description:
-                                'Sign-in stops asking for its code. Your backup codes stop working.',
-                              action: 'Turn off',
-                              run: turnOffApp,
-                            }
-                          : undefined
-                        : undefined
-                    }
-                  >
-                    {app.onTurnOff && !passwordless && (
-                      <IconButton
-                        icon={Power}
-                        label="Turn off authenticator app"
-                        variant="outline"
-                        onClick={() => open('app-off')}
-                      />
-                    )}
-                    {app.replaceable !== false && (
+                {app.on && app.replaceable !== false && (
+                  <SettingActions>
+                    {
                       <IconButton
                         icon={RefreshCw}
                         label="Set up again"
                         variant="outline"
                         onClick={startApp}
                       />
-                    )}
+                    }
                   </SettingActions>
                 )}
               </>
@@ -834,7 +834,7 @@ export function LumenSignInMethods({
             }
             name="Email code"
             meta={email.to}
-            status={email.onToggle ? undefined : <SettingStatus count={email.on ? 'On' : 'Off'} />}
+            status={<SettingStatus health={email.on ? 'on' : 'off'} />}
             toggle={
               email.onToggle
                 ? {
@@ -866,26 +866,35 @@ export function LumenSignInMethods({
               </RowIcon>
             }
             name="Backup codes"
-            status={
-              backup.left === null ? undefined : <SettingStatus count={`${backup.left} left`} />
-            }
-            end={
-              passwordless ? (
-                <LumenConfirm
-                  title="Make new backup codes?"
-                  description="Your old codes stop working."
-                  action="Make new codes"
-                  destructive={false}
-                  onConfirm={renewCodes}
-                >
-                  <IconButton icon={RefreshCw} label="Make new backup codes" disabled={busy} />
-                </LumenConfirm>
-              ) : (
-                <IconButton
-                  icon={RefreshCw}
-                  label="Make new backup codes"
-                  onClick={() => openRow('backup', 'backup')}
-                />
+            meta={backup.left === null ? undefined : `${backup.left} left`}
+            status={<SettingStatus health="on" />}
+            actions={
+              codesStep && backupFlow ? undefined : (
+                <SettingActions>
+                  {passwordless ? (
+                    <LumenConfirm
+                      title="Make new backup codes?"
+                      description="Your old codes stop working."
+                      action="Make new codes"
+                      destructive={false}
+                      onConfirm={renewCodes}
+                    >
+                      <IconButton
+                        icon={RefreshCw}
+                        label="Make new backup codes"
+                        variant="outline"
+                        disabled={busy}
+                      />
+                    </LumenConfirm>
+                  ) : (
+                    <IconButton
+                      icon={RefreshCw}
+                      label="Make new backup codes"
+                      variant="outline"
+                      onClick={() => openRow('backup', 'backup')}
+                    />
+                  )}
+                </SettingActions>
               )
             }
           >

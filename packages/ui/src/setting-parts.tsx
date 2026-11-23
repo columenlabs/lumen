@@ -165,7 +165,9 @@ export function SettingValue({
 }
 
 /** The five words a thing's status takes: Works, Failed, Not tested, Off, or a count. */
-export type SettingHealth = 'works' | 'failed' | 'untested' | 'off';
+/** `on`: set up, with nothing to test (a sign-in method). `works`, `failed`, `untested`: set up, and
+ *  its last test says how it went. `off`: not set up or switched off. */
+export type SettingHealth = 'on' | 'works' | 'failed' | 'untested' | 'off';
 
 /** Where a thing stands from its switch and last test. */
 export function settingHealth(
@@ -180,11 +182,12 @@ export function settingHealth(
 /** A section's health from its things: the worst one wins (Failed, then Not tested, then Works); Off when none is on. */
 export function sectionHealth(items: SettingHealth[]): SettingHealth | null {
   if (!items.length) return null;
-  for (const h of ['failed', 'untested', 'works'] as const) if (items.includes(h)) return h;
+  for (const h of ['failed', 'untested', 'works', 'on'] as const) if (items.includes(h)) return h;
   return 'off';
 }
 
 const HEALTH: Record<SettingHealth, { word: string; cls: string }> = {
+  on: { word: 'On', cls: 'text-gain' },
   works: { word: 'Works', cls: 'text-gain' },
   failed: { word: 'Failed', cls: 'text-loss' },
   untested: { word: 'Not tested', cls: 'text-muted-foreground' },
@@ -219,7 +222,7 @@ export function SettingStatus({
       aria-hidden
       className={cn(
         'size-1.5 shrink-0 rounded-full',
-        health === 'works' && 'bg-gain',
+        (health === 'works' || health === 'on') && 'bg-gain',
         health === 'failed' && 'bg-loss',
         (health === 'untested' || health === 'off') && 'border border-muted-foreground',
       )}

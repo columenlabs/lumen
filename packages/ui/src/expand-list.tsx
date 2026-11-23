@@ -4,14 +4,27 @@
 // turns the whole thing on or off; the body is `SettingField` rows; `actions` is its action bar
 // (`SettingActions`: last result, Test, Remove). See setting-parts.tsx.
 import { ChevronRightIcon } from 'lucide-react';
-import { type ReactNode, createContext, useContext, useState } from 'react';
+import {
+  type ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from 'react';
 import { cn } from './lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Switch } from './ui/switch';
 
-const ListCtx = createContext<{ open: string | null; set: (id: string | null) => void } | null>(
-  null,
-);
+const ListCtx = createContext<{
+  open: string | null;
+  set: (id: string | null) => void;
+  /** Some row has a switch or a quick action, so every row keeps that column. */
+  slot: boolean;
+  mark: (key: string, has: boolean) => void;
+} | null>(null);
 
 /** Rows that start collapsed; opening one closes the others. `defaultOpen` names a row open at first. */
 export function LumenExpandList({
@@ -24,8 +37,15 @@ export function LumenExpandList({
   children: ReactNode;
 }) {
   const [open, set] = useState<string | null>(defaultOpen);
+  const [slots, setSlots] = useState<Record<string, boolean>>({});
+  const mark = useCallback(
+    (key: string, has: boolean) => setSlots((s) => (s[key] === has ? s : { ...s, [key]: has })),
+    [],
+  );
+  const slot = Object.values(slots).some(Boolean);
+  const value = useMemo(() => ({ open, set, slot, mark }), [open, slot, mark]);
   return (
-    <ListCtx.Provider value={{ open, set }}>
+    <ListCtx.Provider value={value}>
       <div className={cn('grid grid-cols-1', className)}>{children}</div>
     </ListCtx.Provider>
   );
@@ -85,18 +105,21 @@ export function LumenExpandRow({
     else if (inList) list.set(o ? id : null);
     else setOwn(o);
   };
-  const chevron = (
-    <ChevronRightIcon
-      className={cn(
-        'size-4 shrink-0 text-muted-foreground transition-transform',
-        open && 'rotate-90',
-      )}
-    />
-  );
+  const key = useId();
+  const has = Boolean(toggle || end);
+  const mark = list?.mark;
+  useEffect(() => {
+    if (!mark) return;
+    mark(key, has);
+    return () => mark(key, false);
+  }, [mark, key, has]);
+  const slot = has || Boolean(list?.slot);
   const label = typeof name === 'string' ? name : undefined;
+  // Every row lays its right side out the same way (status, then the switch or quick action, then
+  // the chevron), each in a column of fixed width, so pills and chevrons line up down the list.
   return (
     <Collapsible open={open} onOpenChange={change} className="border-b last:border-b-0">
-      <div className="flex w-full min-w-0 items-center gap-3 px-1 hover:bg-muted/50">
+      <div className="flex w-full min-w-0 items-center gap-2 px-1 hover:bg-muted/50">
         <CollapsibleTrigger asChild>
           <button type="button" className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left">
             {icon}
@@ -114,40 +137,37 @@ export function LumenExpandRow({
               )}
             </span>
             {status ?? badge}
-            {!toggle && !end && chevron}
           </button>
         </CollapsibleTrigger>
-        {end}
-        {end && !toggle && (
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="-mr-1 flex min-h-10 min-w-8 items-center justify-center"
-              aria-label={`${open ? 'Collapse' : 'Expand'}${label ? ` ${label}` : ''}`}
-            >
-              {chevron}
-            </button>
-          </CollapsibleTrigger>
+        {slot && (
+          <div data-slot="expand-end" className="flex w-9 shrink-0 items-center justify-center">
+            {toggle ? (
+              <Switch
+                checked={toggle.checked}
+                onCheckedChange={toggle.onCheckedChange}
+                disabled={toggle.disabled}
+                aria-label={toggle.label}
+              />
+            ) : (
+              end
+            )}
+          </div>
         )}
-        {toggle && (
-          <>
-            <Switch
-              checked={toggle.checked}
-              onCheckedChange={toggle.onCheckedChange}
-              disabled={toggle.disabled}
-              aria-label={toggle.label}
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            tabIndex={-1}
+            className="-mr-1 flex min-h-10 w-8 shrink-0 items-center justify-center"
+            aria-label={`${open ? 'Collapse' : 'Expand'}${label ? ` ${label}` : ''}`}
+          >
+            <ChevronRightIcon
+              className={cn(
+                'size-4 shrink-0 text-muted-foreground transition-transform',
+                open && 'rotate-90',
+              )}
             />
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="-mr-1 flex min-h-10 min-w-8 items-center justify-center"
-                aria-label={`${open ? 'Collapse' : 'Expand'}${label ? ` ${label}` : ''}`}
-              >
-                {chevron}
-              </button>
-            </CollapsibleTrigger>
-          </>
-        )}
+          </button>
+        </CollapsibleTrigger>
       </div>
       <CollapsibleContent
         data-slot="expand-body"
