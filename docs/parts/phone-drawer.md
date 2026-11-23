@@ -31,6 +31,8 @@ A phone's panel that a toolbar button opens beside a live page (a 3D view, a map
 
 ## Do / Don't
 
+✓ Take `phone` and `sideways` from the kit's `usePhoneLayout()` (media queries only, so they follow every turn of the phone): `const { phone, sideways } = usePhoneLayout();`. Never an app's own width check or `window.innerWidth`, which iOS can report late on a rotation.
+
 ✓ `<LumenPhoneDrawer title="Parameters" icon={SlidersIcon} open={open} sideways={sideways} onClose={() => setOpen(false)}>{panel}</LumenPhoneDrawer>`
 
 ✓ Inside the panel: `<PhoneDrawerHeader><PhoneDrawerFilter options={…} value={filter} onChange={setFilter} /></PhoneDrawerHeader>`
