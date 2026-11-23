@@ -3,6 +3,7 @@
 // brand, pitch, points, illustration and footer links; the kit draws the layout.
 import { Lock, Mail } from 'lucide-react';
 import { type ComponentType, type ReactNode, useId, useState } from 'react';
+import { PASSKEY_CANCELLED_TEXT, passkeyCancelled } from './lumen-passkey';
 import { Alert, AlertDescription } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
 import { Field, FieldDescription, FieldError, FieldLabel } from './ui/field';
@@ -106,12 +107,12 @@ export function LumenAuthProblem({ children }: { children?: ReactNode }) {
   );
 }
 
-/** A plain note over the form, such as "New code sent"; renders nothing when empty. */
-export function LumenAuthNote({ children }: { children?: ReactNode }) {
+/** A plain note over the form, such as "New code sent"; renders nothing when empty. `icon` replaces the mail icon. */
+export function LumenAuthNote({ children, icon }: { children?: ReactNode; icon?: ReactNode }) {
   if (!children) return null;
   return (
     <Alert className="mb-4">
-      <Mail />
+      {icon ?? <Mail />}
       <AlertDescription>{children}</AlertDescription>
     </Alert>
   );
@@ -286,10 +287,14 @@ const AUTH_ERROR_TEXT: Record<string, string> = {
   INVALID_TWO_FACTOR_COOKIE: 'That took too long. Sign in again.',
   MISSING_RESPONSE: 'The bot check didn’t pass. Wait a moment and try again.',
   VERIFICATION_FAILED: 'The bot check didn’t pass. Wait a moment and try again.',
+  PASSKEY_NOT_FOUND: 'No passkey here for this app. Use another way to sign in.',
+  PREVIOUSLY_REGISTERED: 'This device already has a passkey here.',
+  ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED: 'This device already has a passkey here.',
 };
 
 /**
- * A sign-in error in plain words, for `LumenAuthProblem`. Known codes get the kit's line, a 429 asks
+ * A sign-in error in plain words, for `LumenAuthProblem`. A closed, refused or timed-out passkey
+ * prompt gets `PASSKEY_CANCELLED_TEXT` (never the browser's own words). Known codes get the kit's line, a 429 asks
  * the person to wait, and anything else shows the server's message or `fallback`. An app passes
  * `own` for codes of its own, checked first.
  */
@@ -298,7 +303,9 @@ export function authErrorText(
   fallback = 'That didn’t work. Try again.',
   own: Record<string, string> = {},
 ) {
-  const known = e?.code ? (own[e.code] ?? AUTH_ERROR_TEXT[e.code]) : undefined;
+  if (e?.code && own[e.code]) return own[e.code];
+  if (passkeyCancelled(e)) return PASSKEY_CANCELLED_TEXT;
+  const known = e?.code ? AUTH_ERROR_TEXT[e.code] : undefined;
   if (known) return known;
   if (e?.status === 429) return 'Too many tries. Wait a minute and try again.';
   return e?.message || fallback;

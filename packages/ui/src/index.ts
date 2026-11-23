@@ -97,6 +97,16 @@ export {
 } from './lumen-auth';
 export { LumenBotCheck } from './lumen-bot-check';
 export {
+  PASSKEY_CANCELLED_TEXT,
+  PASSKEY_TIMEOUT_TEXT,
+  PASSKEY_WAIT_MS,
+  type LumenPasskeyWait,
+  type LumenPasskeyWaitOptions,
+  passkeyCancelled,
+  passkeyProblem,
+  usePasskeyWait,
+} from './lumen-passkey';
+export {
   LumenBackupCodes,
   type LumenCodeMethod,
   type LumenPasskey,
