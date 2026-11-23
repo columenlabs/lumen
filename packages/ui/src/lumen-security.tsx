@@ -7,16 +7,27 @@ import {
   Check,
   Copy,
   Download,
+  ExternalLink,
   Fingerprint,
+  KeyRound,
+  Laptop,
   Lock,
+  LogOut,
   Mail,
   Plus,
+  Power,
+  RefreshCw,
   Smartphone,
   Ticket,
+  Trash2,
   Undo2,
+  X,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { type FormEvent, type ReactNode, useState } from 'react';
+import { LumenConfirm } from './confirm';
+import { LumenExpandList, LumenExpandRow } from './expand-list';
+import { IconButton } from './icon-button';
 import {
   LumenAuthHeading,
   LumenAuthNote,
@@ -32,14 +43,13 @@ import {
   passkeyProblem,
   usePasskeyWait,
 } from './lumen-passkey';
-import { SettingRow } from './settings';
+import { SettingActions, SettingField, SettingStatus } from './setting-parts';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { FieldSeparator } from './ui/field';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Switch } from './ui/switch';
 
 /** What a callback answers: a problem to show the person (a string), or anything else when it worked. */
 export type LumenResult = Promise<unknown>;
@@ -88,6 +98,9 @@ export interface LumenSecondStepProps {
   onVerify: (method: LumenCodeMethod, code: string) => LumenResult;
   /** Back to the first step; no link without it. */
   onBack?: () => void;
+  /** A "Trust this device" box under the code: when ticked, this browser skips the second step
+   *  for the days the sign-in service keeps the trust. The app passes its choice on with `onVerify`. */
+  trust?: { checked: boolean; onCheckedChange: (on: boolean) => void; days?: number };
 }
 
 /**
@@ -103,6 +116,7 @@ export function LumenSecondStep({
   onSendEmail,
   onVerify,
   onBack,
+  trust,
 }: LumenSecondStepProps) {
   const passkey = usePasskeyWait({ onCancel: onCancelPasskey });
   const [passkeyNote, setPasskeyNote] = useState<string | null>(null);
@@ -226,6 +240,15 @@ export function LumenSecondStep({
                 }
               />
             )}
+            {trust && (
+              <Label className="flex min-h-10 items-center justify-center gap-2 font-normal">
+                <Checkbox
+                  checked={trust.checked}
+                  onCheckedChange={(v) => trust.onCheckedChange(v === true)}
+                />
+                Trust this device{trust.days ? ` for ${trust.days} days` : ''}
+              </Label>
+            )}
             <Button size="lg" variant="outline" type="submit" className="h-10" disabled={busy}>
               Verify
             </Button>
@@ -327,7 +350,7 @@ export interface LumenSignInMethodsProps {
     onCancel?: () => void;
     onRemove: (id: string) => LumenResult;
   };
-  /** The authenticator app (TOTP). Turning it on asks for the password first. */
+  /** The authenticator app (TOTP). Turning it on asks for the password first (not when `passwordless`). */
   app?: {
     on: boolean;
     /** Checks the password and starts setup: the app's otpauth:// link and fresh backup codes. */
@@ -336,7 +359,7 @@ export interface LumenSignInMethodsProps {
     onConfirm: (code: string) => LumenResult;
     /** Turns it off after the password; no Turn off without it. */
     onTurnOff?: (password: string) => LumenResult;
-    /** Whether Replace shows while it is on (set up again over the old one); true when absent. */
+    /** Whether Set up again shows while it is on (over the old one); true when absent. */
     replaceable?: boolean;
   };
   /** A code emailed at each sign-in. */
@@ -355,27 +378,42 @@ export interface LumenSignInMethodsProps {
     /** Checks the password and makes 10 new codes; the old ones stop working. */
     onRenew: (password: string) => Promise<string[] | string>;
   };
+  /**
+   * The app has no passwords (passkeys, Google, emailed codes): setting up or turning off the
+   * authenticator app and making new backup codes skip the password step (a confirm guards turning
+   * off and new codes), and the callbacks get an empty password.
+   */
+  passwordless?: boolean;
 }
 
 type Flow = 'passkey' | 'app' | 'app-confirm' | 'app-off' | 'backup' | 'codes' | null;
+type Row = 'passkeys' | 'app' | 'email' | 'backup';
 
 const when = (d: Date | string | null | undefined) =>
-  d
-    ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-    : '';
+  d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
 
-/** A row's icon, in the same square as the sign-in screen's points. */
+/** A row's icon. */
 function RowIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-4">
+    <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4">
       {children}
     </span>
   );
 }
 
+/** A small uppercase label over a list. */
+function ListLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="pt-4 pb-1 font-semibold text-muted-foreground text-xs uppercase tracking-wide first:pt-0">
+      {children}
+    </p>
+  );
+}
+
 /**
- * Settings ▸ General ▸ Security: the password, then the second-step methods (passkeys, an
- * authenticator app, emailed codes, backup codes). Adding or changing one opens its steps in place.
+ * Settings ▸ General ▸ Security: the password, then the ways to sign in (passkeys, an
+ * authenticator app, emailed codes, backup codes), each a row that opens in place, one at a time.
+ * Adding or changing one runs its steps inside its own row; the other rows stay.
  */
 export function LumenSignInMethods({
   password,
@@ -383,14 +421,15 @@ export function LumenSignInMethods({
   app,
   email,
   backup,
+  passwordless = false,
 }: LumenSignInMethodsProps) {
+  const [row, setRow] = useState<Row | null>(null);
   const [flow, setFlow] = useState<Flow>(null);
   const [name, setName] = useState('');
   const [secret, setSecret] = useState('');
   const [code, setCode] = useState('');
   const [setup, setSetup] = useState<{ uri: string; backupCodes: string[] } | null>(null);
   const [codes, setCodes] = useState<string[]>([]);
-  const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -405,6 +444,15 @@ export function LumenSignInMethods({
     setCode('');
     setName('');
   };
+  /** Opens a row (closing the others) and ends any steps running in another. */
+  const openRow = (r: Row | null, f: Flow = null) => {
+    if (r !== row) {
+      setSetup(null);
+      setCodes([]);
+    }
+    setRow(r);
+    open(f);
+  };
   const run = async (work: () => LumenResult, next?: () => void) => {
     setError(null);
     setBusy(true);
@@ -414,170 +462,164 @@ export function LumenSignInMethods({
     next?.();
   };
   const cancel = (
-    <Button type="button" variant="ghost" onClick={() => open(null)} disabled={busy}>
-      Cancel
-    </Button>
+    <IconButton icon={X} label="Cancel" type="button" onClick={() => open(null)} disabled={busy} />
   );
 
-  if (flow === 'passkey' && passkeys) {
-    return (
-      <form
-        className="flex max-w-md flex-col gap-4 py-2"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setError(null);
-          setNote(null);
-          const r = await passkey.run(() => passkeys.onAdd(name.trim()));
-          const out = waitOutcome(r);
-          if (!out) return open(null);
-          if (out.note) setNote(out.note);
-          if (out.error) setError(out.error);
-        }}
-      >
-        <h4 className="font-semibold">Add a passkey</h4>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="lumen-passkey-name">Name it</Label>
-          <Input
-            id="lumen-passkey-name"
-            placeholder="MacBook, iPhone, YubiKey"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <p className="text-muted-foreground text-xs">
-            So you can tell your passkeys apart later.
-          </p>
-        </div>
-        <p className="text-muted-foreground text-sm">
-          Your device asks for your face, fingerprint or PIN. That never leaves the device.
-        </p>
-        <LumenAuthNote icon={<Undo2 />}>{note}</LumenAuthNote>
-        <LumenAuthProblem>{error}</LumenAuthProblem>
-        <div className="flex gap-2">
-          <Button type="submit" disabled={passkey.waiting}>
-            <Fingerprint /> {passkey.waiting ? 'Waiting for your device…' : 'Add passkey'}
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => open(null)}>
-            Cancel
-          </Button>
-        </div>
-      </form>
-    );
-  }
+  const startApp = () => {
+    if (!app) return;
+    if (!passwordless) return openRow('app', 'app');
+    openRow('app');
+    void run(async () => {
+      const res = await app.onStart('');
+      if (typeof res === 'string') return res;
+      setSetup(res);
+      open('app-confirm');
+    });
+  };
+  const turnOffApp = () => run(() => app?.onTurnOff?.('') ?? Promise.resolve());
+  const renewCodes = () =>
+    run(async () => {
+      const res = await backup?.onRenew('');
+      if (typeof res === 'string') return res;
+      setCodes(res ?? []);
+      setRow('backup');
+      setFlow('codes');
+    });
 
   // The steps that ask for the password first: turning the app on or off, and new backup codes.
-  if (
+  const passwordStep =
     (flow === 'app' && app) ||
     (flow === 'app-off' && app?.onTurnOff) ||
     (flow === 'backup' && backup)
-  ) {
-    const title =
-      flow === 'app'
-        ? 'Set up an authenticator app'
-        : flow === 'app-off'
-          ? 'Turn off the authenticator app'
-          : 'Make new backup codes';
-    const submit = (e: FormEvent) => {
-      e.preventDefault();
-      if (flow === 'app' && app) {
-        return run(async () => {
-          const res = await app.onStart(secret);
-          if (typeof res === 'string') return res;
-          setSetup(res);
-          open('app-confirm');
-        });
-      }
-      if (flow === 'app-off' && app?.onTurnOff)
-        return run(
-          () => app.onTurnOff?.(secret) ?? Promise.resolve(),
-          () => open(null),
-        );
-      if (flow === 'backup' && backup) {
-        return run(async () => {
-          const res = await backup.onRenew(secret);
-          if (typeof res === 'string') return res;
-          setCodes(res);
-          open('codes');
-        });
-      }
-    };
-    return (
-      <form className="flex max-w-md flex-col gap-4 py-2" onSubmit={submit}>
-        {flow === 'app' && <LumenStepBar at={1} of={3} />}
-        <h4 className="font-semibold">{title}</h4>
-        <p className="text-muted-foreground text-sm">First, confirm it’s you with your password.</p>
-        <LumenPasswordField value={secret} onChange={setSecret} autoComplete="current-password" />
-        <LumenAuthProblem>{error}</LumenAuthProblem>
-        <div className="flex gap-2">
-          <Button
-            type="submit"
-            variant={flow === 'app-off' ? 'destructive' : 'default'}
-            disabled={busy || !secret}
-          >
-            {flow === 'app-off' ? 'Turn off' : 'Continue'}
-          </Button>
-          {cancel}
-        </div>
-      </form>
-    );
-  }
-
-  if (flow === 'app-confirm' && app && setup) {
-    const key = new URL(setup.uri).searchParams.get('secret') ?? '';
-    return (
-      <form
-        className="flex max-w-md flex-col gap-4 py-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (code.length !== 6) return setError('Enter all 6 digits.');
-          return run(
-            () => app.onConfirm(code),
-            () => {
-              setCodes(setup.backupCodes);
-              open('codes');
-            },
+      ? (() => {
+          const title =
+            flow === 'app'
+              ? 'Set up an authenticator app'
+              : flow === 'app-off'
+                ? 'Turn off the authenticator app'
+                : 'Make new backup codes';
+          const submit = (e: FormEvent) => {
+            e.preventDefault();
+            if (flow === 'app' && app) {
+              return run(async () => {
+                const res = await app.onStart(secret);
+                if (typeof res === 'string') return res;
+                setSetup(res);
+                open('app-confirm');
+              });
+            }
+            if (flow === 'app-off' && app?.onTurnOff)
+              return run(
+                () => app.onTurnOff?.(secret) ?? Promise.resolve(),
+                () => open(null),
+              );
+            if (flow === 'backup' && backup) {
+              return run(async () => {
+                const res = await backup.onRenew(secret);
+                if (typeof res === 'string') return res;
+                setCodes(res);
+                open('codes');
+              });
+            }
+          };
+          return (
+            <form className="flex max-w-md flex-col gap-3 py-1" onSubmit={submit}>
+              {flow === 'app' && <LumenStepBar at={1} of={3} />}
+              <h4 className="font-semibold">{title}</h4>
+              <LumenPasswordField
+                value={secret}
+                onChange={setSecret}
+                autoComplete="current-password"
+              />
+              <LumenAuthProblem>{error}</LumenAuthProblem>
+              <div className="flex gap-1">
+                <IconButton
+                  icon={flow === 'app-off' ? Power : Check}
+                  label={flow === 'app-off' ? 'Turn off' : 'Continue'}
+                  type="submit"
+                  variant={flow === 'app-off' ? 'destructive' : 'default'}
+                  size="icon"
+                  disabled={busy || !secret}
+                />
+                {cancel}
+              </div>
+            </form>
           );
-        }}
-      >
-        <LumenStepBar at={2} of={3} />
-        <h4 className="font-semibold">Scan this code</h4>
-        <p className="text-muted-foreground text-sm">
-          Open 1Password, Google Authenticator or any authenticator app, then scan it.
-        </p>
-        <QRCodeSVG
-          value={setup.uri}
-          size={160}
-          marginSize={2}
-          className="self-center rounded-md bg-white"
-        />
-        <div className="flex flex-col items-center gap-1 text-sm">
-          <span className="text-muted-foreground">Can’t scan it? Enter this key:</span>
-          <button
-            type="button"
-            className="flex items-center gap-2 break-all font-code"
-            onClick={() => navigator.clipboard?.writeText(key)}
-          >
-            {key.match(/.{1,4}/g)?.join(' ')} <Copy className="size-3.5 shrink-0" />
-          </button>
-        </div>
-        <LumenCodeField
-          value={code}
-          onChange={setCode}
-          error={error}
-          hint="Enter the 6 digits it shows."
-        />
-        <div className="flex gap-2">
-          <Button type="submit" disabled={busy}>
-            Turn on
-          </Button>
-          {cancel}
-        </div>
-      </form>
-    );
-  }
+        })()
+      : null;
 
-  if (flow === 'codes') {
-    return (
-      <div className="flex max-w-md flex-col gap-2 py-2">
+  const appConfirm =
+    flow === 'app-confirm' && app && setup
+      ? (() => {
+          const key = new URL(setup.uri).searchParams.get('secret') ?? '';
+          return (
+            <form
+              className="flex max-w-md flex-col gap-3 py-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (code.length !== 6) return setError('Enter all 6 digits.');
+                return run(
+                  () => app.onConfirm(code),
+                  () => {
+                    setCodes(setup.backupCodes);
+                    open('codes');
+                  },
+                );
+              }}
+            >
+              <LumenStepBar at={2} of={3} />
+              <h4 className="font-semibold">Scan with your authenticator app</h4>
+              <div className="flex flex-wrap items-start gap-4">
+                <QRCodeSVG
+                  value={setup.uri}
+                  size={148}
+                  marginSize={2}
+                  className="shrink-0 rounded-md bg-white max-sm:hidden"
+                  aria-label="QR code to scan"
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <Button asChild className="sm:hidden">
+                    <a href={setup.uri}>
+                      <ExternalLink /> Open in authenticator app
+                    </a>
+                  </Button>
+                  <button
+                    type="button"
+                    className="flex min-h-9 items-center gap-2 self-stretch rounded-md border px-2.5 py-1.5 text-left font-code text-sm"
+                    aria-label="Copy setup key"
+                    title="Copy setup key"
+                    onClick={() => navigator.clipboard?.writeText(key)}
+                  >
+                    <span className="break-all">{key.match(/.{1,4}/g)?.join(' ')}</span>
+                    <Copy className="size-3.5 shrink-0" />
+                  </button>
+                  <LumenCodeField
+                    value={code}
+                    onChange={setCode}
+                    error={error}
+                    hint="Enter the 6 digits it shows."
+                  />
+                  <div className="flex gap-1">
+                    <IconButton
+                      icon={Check}
+                      label="Turn on"
+                      type="submit"
+                      variant="default"
+                      size="icon"
+                      disabled={busy}
+                    />
+                    {cancel}
+                  </div>
+                </div>
+              </div>
+            </form>
+          );
+        })()
+      : null;
+
+  const codesStep =
+    flow === 'codes' ? (
+      <div className="flex max-w-md flex-col gap-2 py-1">
         {setup && <LumenStepBar at={3} of={3} />}
         <h4 className="font-semibold">Save your backup codes</h4>
         <LumenBackupCodes
@@ -589,144 +631,406 @@ export function LumenSignInMethods({
           }}
         />
       </div>
-    );
-  }
+    ) : null;
 
   const list = passkeys?.list ?? [];
+  const appFlow =
+    flow === 'app' || flow === 'app-off' || flow === 'app-confirm' || (flow === 'codes' && setup);
+  const backupFlow = flow === 'backup' || (flow === 'codes' && !setup);
+  const rowProps = (r: Row) => ({
+    id: r,
+    open: row === r,
+    onOpenChange: (o: boolean) => openRow(o ? r : null),
+  });
+
   return (
-    <div className="flex flex-col">
-      <LumenAuthProblem>{error}</LumenAuthProblem>
+    <div className="flex min-w-0 flex-col">
       {password && (
-        <SettingRow label="Password" description="The first step, every time.">
-          <Button size="sm" variant="outline" onClick={password.onChange}>
-            <Lock /> Change
-          </Button>
-        </SettingRow>
+        <SettingField label="Password">
+          <IconButton
+            icon={Lock}
+            label="Change password"
+            variant="outline"
+            onClick={password.onChange}
+          />
+        </SettingField>
       )}
-      <p className="pt-4 pb-1 font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-        Second step · one of these, every time
-      </p>
-      {passkeys && (
-        <>
-          <SettingRow
-            label="Passkeys"
-            description={
-              list.length
-                ? `${list.length} added. The fastest second step, and it can’t be phished.`
-                : 'None yet. The fastest second step, and it can’t be phished.'
+      <ListLabel>{password ? 'Second step' : 'Sign-in'}</ListLabel>
+      <LumenExpandList className="rounded-lg border px-2">
+        {passkeys && (
+          <LumenExpandRow
+            {...rowProps('passkeys')}
+            icon={
+              <RowIcon>
+                <KeyRound />
+              </RowIcon>
+            }
+            name="Passkeys"
+            meta={list.map((p) => p.name || 'Passkey').join(', ') || undefined}
+            status={<SettingStatus count={list.length ? String(list.length) : 'None'} />}
+            end={
+              <IconButton
+                icon={Plus}
+                label="Add a passkey"
+                variant={row === 'passkeys' && flow === 'passkey' ? 'default' : 'ghost'}
+                onClick={() => openRow('passkeys', 'passkey')}
+              />
             }
           >
-            <Button size="sm" onClick={() => open('passkey')}>
-              <Plus /> Add a passkey
-            </Button>
-          </SettingRow>
-          {list.map((p) => (
-            <div key={p.id} className="flex items-center gap-3 border-b py-2 pl-4 text-sm">
-              <Fingerprint className="size-4 shrink-0 text-muted-foreground" />
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-medium">{p.name || 'Passkey'}</span>
-                {p.createdAt && (
-                  <span className="text-muted-foreground text-xs">Added {when(p.createdAt)}</span>
-                )}
-              </div>
-              {removing === p.id ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    disabled={busy}
-                    onClick={() =>
-                      run(
-                        () => passkeys.onRemove(p.id),
-                        () => setRemoving(null),
-                      )
-                    }
-                  >
-                    Remove
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setRemoving(null)}>
-                    Keep
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive"
-                  onClick={() => setRemoving(p.id)}
+            <div className="flex min-w-0 flex-col">
+              {list.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex min-h-10 min-w-0 items-center gap-3 border-t border-border/60 first:border-t-0"
                 >
-                  Remove
-                </Button>
+                  <span className="min-w-0 flex-1 truncate" title={p.name || 'Passkey'}>
+                    {p.name || 'Passkey'}
+                  </span>
+                  {p.createdAt && (
+                    <span className="shrink-0 whitespace-nowrap text-muted-foreground text-sm">
+                      Added {when(p.createdAt)}
+                    </span>
+                  )}
+                  <LumenConfirm
+                    title={`Remove ${p.name || 'this passkey'}?`}
+                    description="You can’t sign in with it after this."
+                    action="Remove"
+                    onConfirm={() => passkeys.onRemove(p.id)}
+                  >
+                    <IconButton
+                      icon={Trash2}
+                      label={`Remove ${p.name || 'passkey'}`}
+                      className="text-loss"
+                    />
+                  </LumenConfirm>
+                </div>
+              ))}
+              {flow === 'passkey' && (
+                <form
+                  className="flex min-w-0 flex-col gap-2 border-t border-border/60 pt-2 first:border-t-0"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setError(null);
+                    setNote(null);
+                    const r = await passkey.run(() => passkeys.onAdd(name.trim()));
+                    const out = waitOutcome(r);
+                    if (!out) return open(null);
+                    if (out.note) setNote(out.note);
+                    if (out.error) setError(out.error);
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-1">
+                    <Input
+                      autoFocus
+                      aria-label="Passkey name"
+                      className="min-w-0 flex-1"
+                      placeholder="MacBook, iPhone, YubiKey"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                    <IconButton
+                      icon={Fingerprint}
+                      busy={passkey.waiting}
+                      label={passkey.waiting ? 'Waiting for your device…' : 'Add passkey'}
+                      type="submit"
+                      variant="default"
+                      size="icon"
+                      disabled={passkey.waiting}
+                    />
+                    <IconButton icon={X} label="Cancel" type="button" onClick={() => open(null)} />
+                  </div>
+                  <LumenAuthNote icon={<Undo2 />}>{note}</LumenAuthNote>
+                  <LumenAuthProblem>{error}</LumenAuthProblem>
+                </form>
               )}
             </div>
-          ))}
-        </>
-      )}
-      {app && (
-        <SettingRow
-          label="Authenticator app"
-          description={
-            app.on
-              ? 'On. A 6-digit code from your app.'
-              : 'A 6-digit code from 1Password, Google Authenticator or similar.'
+          </LumenExpandRow>
+        )}
+        {app && (
+          <LumenExpandRow
+            {...rowProps('app')}
+            icon={
+              <RowIcon>
+                <Smartphone />
+              </RowIcon>
+            }
+            name="Authenticator app"
+            meta={appFlow ? 'Setting up' : undefined}
+            status={<SettingStatus count={app.on ? 'On' : 'Off'} />}
+            end={
+              app.on ? undefined : (
+                <IconButton
+                  icon={Power}
+                  label="Set up authenticator app"
+                  onClick={startApp}
+                  disabled={busy}
+                />
+              )
+            }
+          >
+            {passwordStep && row === 'app' ? (
+              passwordStep
+            ) : appConfirm ? (
+              appConfirm
+            ) : codesStep && setup ? (
+              codesStep
+            ) : (
+              <>
+                <SettingField label="Codes from">
+                  <span
+                    className="min-w-0 truncate text-sm"
+                    title="1Password, Google Authenticator or any app"
+                  >
+                    1Password, Google Authenticator or any app
+                  </span>
+                </SettingField>
+                <LumenAuthProblem>{row === 'app' ? error : null}</LumenAuthProblem>
+                {app.on && (
+                  <SettingActions
+                    remove={
+                      app.onTurnOff
+                        ? passwordless
+                          ? {
+                              label: 'Turn off authenticator app',
+                              title: 'Turn off the authenticator app?',
+                              description:
+                                'Sign-in stops asking for its code. Your backup codes stop working.',
+                              action: 'Turn off',
+                              run: turnOffApp,
+                            }
+                          : undefined
+                        : undefined
+                    }
+                  >
+                    {app.onTurnOff && !passwordless && (
+                      <IconButton
+                        icon={Power}
+                        label="Turn off authenticator app"
+                        variant="outline"
+                        onClick={() => open('app-off')}
+                      />
+                    )}
+                    {app.replaceable !== false && (
+                      <IconButton
+                        icon={RefreshCw}
+                        label="Set up again"
+                        variant="outline"
+                        onClick={startApp}
+                      />
+                    )}
+                  </SettingActions>
+                )}
+              </>
+            )}
+          </LumenExpandRow>
+        )}
+        {email && (
+          <LumenExpandRow
+            {...rowProps('email')}
+            icon={
+              <RowIcon>
+                <Mail />
+              </RowIcon>
+            }
+            name="Email code"
+            meta={email.to}
+            status={email.onToggle ? undefined : <SettingStatus count={email.on ? 'On' : 'Off'} />}
+            toggle={
+              email.onToggle
+                ? {
+                    checked: email.on,
+                    label: 'Email code',
+                    disabled: busy || (email.on && Boolean(email.locked)),
+                    onCheckedChange: (v) =>
+                      void run(() => email.onToggle?.(v) ?? Promise.resolve()),
+                  }
+                : undefined
+            }
+          >
+            <SettingField
+              label="Sent to"
+              info={email.locked && email.on ? email.locked : undefined}
+            >
+              <span className="min-w-0 truncate text-sm" title={email.to}>
+                {email.to}
+              </span>
+            </SettingField>
+          </LumenExpandRow>
+        )}
+        {backup && (
+          <LumenExpandRow
+            {...rowProps('backup')}
+            icon={
+              <RowIcon>
+                <Ticket />
+              </RowIcon>
+            }
+            name="Backup codes"
+            status={
+              backup.left === null ? undefined : <SettingStatus count={`${backup.left} left`} />
+            }
+            end={
+              passwordless ? (
+                <LumenConfirm
+                  title="Make new backup codes?"
+                  description="Your old codes stop working."
+                  action="Make new codes"
+                  destructive={false}
+                  onConfirm={renewCodes}
+                >
+                  <IconButton icon={RefreshCw} label="Make new backup codes" disabled={busy} />
+                </LumenConfirm>
+              ) : (
+                <IconButton
+                  icon={RefreshCw}
+                  label="Make new backup codes"
+                  onClick={() => openRow('backup', 'backup')}
+                />
+              )
+            }
+          >
+            {passwordStep && row === 'backup' ? (
+              passwordStep
+            ) : codesStep && backupFlow ? (
+              codesStep
+            ) : (
+              <>
+                <SettingField label="Each code">
+                  <span className="text-sm">Works once, for when your phone is lost</span>
+                </SettingField>
+                <LumenAuthProblem>{row === 'backup' ? error : null}</LumenAuthProblem>
+              </>
+            )}
+          </LumenExpandRow>
+        )}
+      </LumenExpandList>
+    </div>
+  );
+}
+
+/** One place a person is signed in. */
+export interface LumenSession {
+  id: string;
+  /** What it is, as people say it: "Safari on iPhone". */
+  name: string;
+  lastUsed?: Date | string | null;
+  /** This browser. */
+  current?: boolean;
+}
+
+/**
+ * Settings ▸ Security ▸ Devices: where the person is signed in. Folded at first under "Signed in on
+ * N"; open, this device first, then one line per kind of device (the same name shows once, ×N), each
+ * with Sign out. The header signs out everywhere else.
+ */
+export function LumenSessions({
+  list,
+  onSignOut,
+  onSignOutHere,
+  onSignOutOthers,
+}: {
+  list: LumenSession[];
+  /** Signs out these sessions (one line can stand for several). */
+  onSignOut: (ids: string[]) => LumenResult;
+  /** Signs out this browser. */
+  onSignOutHere?: () => unknown;
+  /** Signs out every session but this one; no header button without it. */
+  onSignOutOthers?: () => LumenResult;
+}) {
+  const here = list.find((s) => s.current);
+  const groups = new Map<string, LumenSession[]>();
+  for (const s of list) {
+    if (s.current) continue;
+    groups.set(s.name, [...(groups.get(s.name) ?? []), s]);
+  }
+  const lines = [...groups.entries()]
+    .map(([name, items]) => ({
+      name,
+      items,
+      last: Math.max(...items.map((i) => (i.lastUsed ? +new Date(i.lastUsed) : 0))),
+    }))
+    .sort((a, b) => b.last - a.last);
+  const others = list.length - (here ? 1 : 0);
+  const signOut = (
+    <IconButton
+      icon={LogOut}
+      label="Sign out everywhere else"
+      disabled={!others || !onSignOutOthers}
+    />
+  );
+  const kinds = new Set(list.map((i) => i.name)).size;
+  return (
+    <div className="flex min-w-0 flex-col">
+      <ListLabel>Devices</ListLabel>
+      <LumenExpandList className="rounded-lg border px-2">
+        <LumenExpandRow
+          id="devices"
+          icon={
+            <RowIcon>
+              <Laptop />
+            </RowIcon>
           }
-        >
-          <div className="flex items-center gap-2">
-            {app.on && (
-              <Badge variant="secondary">
-                <Check /> On
-              </Badge>
-            )}
-            {(!app.on || app.replaceable !== false) && (
-              <Button size="sm" variant="outline" onClick={() => open('app')}>
-                <Smartphone /> {app.on ? 'Replace' : 'Set up'}
-              </Button>
-            )}
-            {app.on && app.onTurnOff && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-destructive"
-                onClick={() => open('app-off')}
+          name={`Signed in on ${Math.max(list.length, 1)}`}
+          meta={kinds > 1 ? `${kinds} kinds of device` : undefined}
+          end={
+            onSignOutOthers && others ? (
+              <LumenConfirm
+                title={`Sign out ${others} other ${others === 1 ? 'device' : 'devices'}?`}
+                description="They need to sign in again."
+                action="Sign out"
+                onConfirm={onSignOutOthers}
               >
-                Turn off
-              </Button>
-            )}
-          </div>
-        </SettingRow>
-      )}
-      {email && (
-        <SettingRow
-          label="Emailed code"
-          description={email.locked && email.on ? email.locked : `A 6-digit code to ${email.to}.`}
-          htmlFor="lumen-email-code"
-        >
-          {email.onToggle ? (
-            <Switch
-              id="lumen-email-code"
-              checked={email.on}
-              disabled={busy || (email.on && Boolean(email.locked))}
-              onCheckedChange={(v) => run(() => email.onToggle?.(v) ?? Promise.resolve())}
-            />
-          ) : (
-            <Mail className="size-4 text-muted-foreground" />
-          )}
-        </SettingRow>
-      )}
-      {backup && (
-        <SettingRow
-          label="Backup codes"
-          description={
-            backup.left === null
-              ? 'Each works once, for when your devices are lost.'
-              : `${backup.left} left. Each works once, for when your devices are lost.`
+                {signOut}
+              </LumenConfirm>
+            ) : undefined
           }
         >
-          <Button size="sm" variant="outline" onClick={() => open('backup')}>
-            <Ticket /> Make new codes
-          </Button>
-        </SettingRow>
-      )}
+          <div className="flex min-w-0 flex-col">
+            {here && (
+              <div className="flex min-h-10 min-w-0 items-center gap-3">
+                <span className="min-w-0 flex-1 truncate" title={here.name}>
+                  {here.name}
+                </span>
+                <Badge variant="secondary" className="shrink-0">
+                  This device
+                </Badge>
+                {onSignOutHere && (
+                  <IconButton icon={LogOut} label="Sign out" onClick={() => onSignOutHere()} />
+                )}
+              </div>
+            )}
+            {lines.map((l) => (
+              <div
+                key={l.name}
+                className="flex min-h-10 min-w-0 items-center gap-3 border-t border-border/60 first:border-t-0"
+              >
+                <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                  <span className="min-w-0 truncate" title={l.name}>
+                    {l.name}
+                  </span>
+                  {l.items.length > 1 && (
+                    <span className="shrink-0 text-muted-foreground text-xs">
+                      ×{l.items.length}
+                    </span>
+                  )}
+                </span>
+                {l.last > 0 && (
+                  <span className="shrink-0 whitespace-nowrap text-muted-foreground text-sm">
+                    {when(new Date(l.last))}
+                  </span>
+                )}
+                <IconButton
+                  icon={LogOut}
+                  label={
+                    l.items.length > 1 ? `Sign out these ${l.items.length}` : 'Sign out this device'
+                  }
+                  onClick={() => void problemOf(() => onSignOut(l.items.map((i) => i.id)))}
+                />
+              </div>
+            ))}
+          </div>
+        </LumenExpandRow>
+      </LumenExpandList>
     </div>
   );
 }

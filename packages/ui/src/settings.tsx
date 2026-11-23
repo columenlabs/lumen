@@ -232,20 +232,25 @@ function Appearance() {
   );
 }
 
-function Preferences({ extra }: { extra?: ReactNode }) {
+function Preferences({
+  extra,
+  observability = true,
+}: { extra?: ReactNode; observability?: boolean }) {
   const prefs = usePrefs();
   return (
     <div className="flex flex-col">
       <SettingRow label="Time zone">
         <TimeZoneSelect />
       </SettingRow>
-      <SettingRow label="Observability details" htmlFor="settings-observability">
-        <Switch
-          id="settings-observability"
-          checked={prefs.observability}
-          onCheckedChange={(v) => setPref('observability', v)}
-        />
-      </SettingRow>
+      {observability && (
+        <SettingRow label="Observability details" htmlFor="settings-observability">
+          <Switch
+            id="settings-observability"
+            checked={prefs.observability}
+            onCheckedChange={(v) => setPref('observability', v)}
+          />
+        </SettingRow>
+      )}
       {extra}
     </div>
   );
@@ -262,7 +267,7 @@ const SECURITY: Omit<SettingsSectionDef, 'content'> = {
   title: 'Security',
   icon: ShieldCheckIcon,
 };
-const general = (preferences?: ReactNode): SettingsSectionDef[] => [
+const general = (preferences?: ReactNode, observability?: boolean): SettingsSectionDef[] => [
   {
     id: 'appearance',
     title: 'Appearance',
@@ -273,7 +278,7 @@ const general = (preferences?: ReactNode): SettingsSectionDef[] => [
     id: 'preferences',
     title: 'Preferences',
     icon: SlidersHorizontalIcon,
-    content: <Preferences extra={preferences} />,
+    content: <Preferences extra={preferences} observability={observability} />,
   },
 ];
 
@@ -281,11 +286,12 @@ function generalSettings(
   profile: ReactNode | undefined,
   security?: ReactNode,
   preferences?: ReactNode,
+  observability?: boolean,
 ): SettingsSectionDef[] {
   return [
     ...(profile ? [{ ...PROFILE, content: profile }] : []),
     ...(security ? [{ ...SECURITY, content: security }] : []),
-    ...general(preferences),
+    ...general(preferences, observability),
   ];
 }
 
@@ -319,6 +325,7 @@ export function LumenSettings({
   sharedLabel = 'All apps',
   groups = [],
   preferences,
+  observability = true,
 }: {
   open: boolean;
   /** The section shown; unknown ids show Profile. */
@@ -340,9 +347,12 @@ export function LumenSettings({
   /** The app's own rows (`SettingField`s), added under General ▸ Preferences after the kit's,
    *  for a per-device choice that belongs with the rest rather than in a section of its own. */
   preferences?: ReactNode;
+  /** Shows Preferences ▸ Observability details (each view's load time); an app hides it from
+   *  people who don't need it, such as everyone but its admins. */
+  observability?: boolean;
 }) {
   const all = allSettings(profile, shared, sections, security, groups, preferences);
-  const general = generalSettings(profile, security, preferences);
+  const general = generalSettings(profile, security, preferences, observability);
   const current = all.find((s) => s.id === section) ?? (all[0] as SettingsSectionDef);
   // The assistant opens Settings at a section (it never changes a setting); Undo puts it back as it was.
   useAssistantMoves('settings', {

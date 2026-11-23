@@ -1,4 +1,4 @@
-import { LumenSecondStep, LumenSignInMethods } from '@columenlabs/lumen-ui';
+import { LumenSecondStep, LumenSessions, LumenSignInMethods } from '@columenlabs/lumen-ui';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
@@ -8,7 +8,7 @@ const wait = (ms = 400) => new Promise((r) => setTimeout(r, ms));
 const SAMPLE_URI = 'otpauth://totp/Example:you@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example';
 const SAMPLE_CODES = Array.from({ length: 10 }, (_, i) => `sample-${String(i).padStart(2, '0')}`);
 
-function Methods() {
+function Methods({ passwordless = false }: { passwordless?: boolean }) {
   const [passkeys, setPasskeys] = useState([
     { id: 'a', name: 'Laptop', createdAt: '2026-10-23' },
     { id: 'b', name: 'Security key', createdAt: '2026-10-23' },
@@ -18,7 +18,8 @@ function Methods() {
   return (
     <div className="max-w-2xl">
       <LumenSignInMethods
-        password={{ onChange: () => {} }}
+        passwordless={passwordless}
+        password={passwordless ? undefined : { onChange: () => {} }}
         passkeys={{
           list: passkeys,
           // Name it "cancel" to see a closed prompt, "wait" for a device that never answers (Cancel ends it).
@@ -54,7 +55,35 @@ function Methods() {
           onTurnOff: async () => setApp(false),
         }}
         email={{ to: 'you@example.com', on: email, onToggle: async (on) => setEmail(on) }}
-        backup={{ left: 8, onRenew: async () => SAMPLE_CODES }}
+        backup={app ? { left: 8, onRenew: async () => SAMPLE_CODES } : undefined}
+      />
+    </div>
+  );
+}
+
+const SESSIONS = [
+  { id: '1', name: 'Chrome on macOS', lastUsed: '2026-11-23', current: true },
+  { id: '2', name: 'Safari on iPhone', lastUsed: '2026-11-22' },
+  { id: '3', name: 'Safari on iPhone', lastUsed: '2026-11-22' },
+  { id: '4', name: 'Safari on iPhone', lastUsed: '2026-11-21' },
+  { id: '5', name: 'Chrome on macOS', lastUsed: '2026-11-21' },
+  { id: '6', name: 'Chrome on macOS', lastUsed: '2026-11-20' },
+  {
+    id: '7',
+    name: 'Firefox on Windows with a very long browser and system name that cuts off',
+    lastUsed: '2026-11-19',
+  },
+];
+
+function Sessions() {
+  const [list, setList] = useState(SESSIONS);
+  return (
+    <div className="max-w-2xl">
+      <LumenSessions
+        list={list}
+        onSignOut={async (ids) => setList((l) => l.filter((s) => !ids.includes(s.id)))}
+        onSignOutHere={() => {}}
+        onSignOutOthers={async () => setList((l) => l.filter((s) => s.current))}
       />
     </div>
   );
@@ -80,6 +109,19 @@ type Story = StoryObj<typeof meta>;
 
 export const SignInMethods: Story = {};
 
+/** An app with no passwords (passkeys, Google, emailed codes): no password step anywhere. */
+export const Passwordless: Story = {
+  render: () => (
+    <div className="flex max-w-2xl flex-col">
+      <Methods passwordless />
+      <Sessions />
+    </div>
+  ),
+};
+
+/** Where the person is signed in: the same device name shows once, ×N. */
+export const Devices: Story = { render: () => <Sessions /> };
+
 export const SecondStep: Story = {
   render: () => (
     <div className="max-w-sm">
@@ -94,6 +136,7 @@ export const SecondStep: Story = {
         onSendEmail={wait}
         onVerify={async (_, code) => (code === '123456' ? undefined : 'That code didn’t work.')}
         onBack={() => {}}
+        trust={{ checked: true, onCheckedChange: () => {}, days: 30 }}
       />
     </div>
   ),

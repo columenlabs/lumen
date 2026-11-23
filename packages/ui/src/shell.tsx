@@ -294,6 +294,8 @@ export interface LumenShellProps {
   security?: ReactNode;
   /** The app's own rows (`SettingField`s) added under Settings ▸ General ▸ Preferences. */
   preferences?: ReactNode;
+  /** Shows Preferences ▸ Observability details; true when absent (LumenSettings). */
+  observability?: boolean;
   /** Reloads the page's data and drops every cached read (TanStack Query `invalidateQueries`);
    *  shows Refresh in the header, which then mounts the page again. */
   onRefresh?: () => Promise<unknown>;
@@ -347,6 +349,7 @@ export function LumenShell({
   profile,
   security,
   preferences,
+  observability,
   onRefresh,
   hideAmounts = false,
   onLogs,
@@ -478,6 +481,7 @@ export function LumenShell({
                           sharedLabel={sharedLabel}
                           groups={settingsGroups}
                           preferences={preferences}
+                          observability={observability}
                         />
                         <Toaster position="bottom-right" />
                       </LumenFinder>
