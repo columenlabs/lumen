@@ -585,7 +585,7 @@ export function LumenSignInMethods({
                   </Button>
                   <button
                     type="button"
-                    className="flex min-h-9 items-center gap-2 self-start rounded-md border px-2.5 font-code text-sm"
+                    className="flex min-h-9 items-center gap-2 self-stretch rounded-md border px-2.5 py-1.5 text-left font-code text-sm"
                     aria-label="Copy setup key"
                     title="Copy setup key"
                     onClick={() => navigator.clipboard?.writeText(key)}
@@ -866,7 +866,7 @@ export function LumenSignInMethods({
               </RowIcon>
             }
             name="Backup codes"
-            status={<SettingStatus count={backup.left === null ? '—' : `${backup.left} left`} />}
+            status={backup.left === null ? undefined : <SettingStatus count={`${backup.left} left`} />}
             end={
               passwordless ? (
                 <LumenConfirm
@@ -956,6 +956,7 @@ export function LumenSessions({
       disabled={!others || !onSignOutOthers}
     />
   );
+  const kinds = new Set(list.map((i) => i.name)).size;
   return (
     <div className="flex min-w-0 flex-col">
       <ListLabel>Devices</ListLabel>
@@ -968,7 +969,7 @@ export function LumenSessions({
             </RowIcon>
           }
           name={`Signed in on ${Math.max(list.length, 1)}`}
-          meta={lines.length ? `${lines.length + (here ? 1 : 0)} kinds of device` : undefined}
+          meta={kinds > 1 ? `${kinds} kinds of device` : undefined}
           end={
             onSignOutOthers && others ? (
               <LumenConfirm
