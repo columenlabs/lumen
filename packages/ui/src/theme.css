@@ -453,6 +453,12 @@
     transparent
   );
 }
+/* A full-screen page's height: what the browser really shows (useScreenHeight keeps the variable),
+   100svh until it is measured. Use it in place of h-svh where the page's bottom row must stay on
+   screen: iOS Safari with its tabs at the bottom counts the strip under its controls in 100svh. */
+@utility lumen-screen {
+  height: var(--lumen-screen-h, 100svh);
+}
 @keyframes intro-page-in {
   from {
     opacity: 0;

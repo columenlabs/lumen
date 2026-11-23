@@ -508,6 +508,7 @@ export {
 export { useIsMobile } from './hooks/use-mobile';
 export { useTell } from './hooks/use-tell';
 export { useBackClose } from './hooks/use-back-close';
+export { SCREEN_HEIGHT_VAR, useScreenHeight } from './hooks/use-screen-height';
 export { VIEW_ICONS, iconOf, viewIcon } from './view-icons';
 export { type AppViewState, useAppView } from './app-views';
 export {
