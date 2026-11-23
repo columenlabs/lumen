@@ -28,7 +28,6 @@ A phone's panel that a toolbar button opens beside a live page (a 3D view, a map
 - Filter chips in the slot are `PhoneDrawerFilter`: one joined group (All | Favorites | Changed), right after the icon.
 - The body fills what is on screen. Rows inside are compact (about 30 px), with no indent a row does not need.
 - Layout: the drawer and the page share one flex box (a column upright, a row sideways); the page is `min-h-0 min-w-0 flex-1`.
-- Screen height: the full-screen box around them is `lumen-screen`, never `h-svh`, with `useScreenHeight()` called once in it. iOS Safari with its tabs at the bottom counts the strip under its own controls in `100svh`, so an `h-svh` page draws the drawer's bottom (a chat's text box) under them. `useScreenHeight` keeps `--lumen-screen-h` to what the browser shows (the visual viewport, so the keyboard too); `lumen-screen` falls back to `100svh` until it is measured.
 
 ## Do / Don't
 
@@ -37,8 +36,6 @@ A phone's panel that a toolbar button opens beside a live page (a 3D view, a map
 ✓ Inside the panel: `<PhoneDrawerHeader><PhoneDrawerFilter options={…} value={filter} onChange={setFilter} /></PhoneDrawerHeader>`
 
 ✗ A row of its own under the header for the panel's count, filter or undo: put it in the slot.
-
-✗ `h-svh` (or `h-screen`, `100dvh`) on the full-screen box around a drawer: `lumen-screen`.
 
 ✗ An app's own Minimize, Maximize or Close buttons, a `ButtonGroup` of them, or chevrons for size.
 
