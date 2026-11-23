@@ -296,6 +296,61 @@ const REMINDERS = [
 ];
 
 /** A chat with a change made at once (Undo) and five drafted cards in one stack. */
+
+/** Guide and reference reads, worded by the app's `stepFold`: they fold into one line each turn. */
+const guide = (id: string, what: string, ms: number): StepItem => ({
+  kind: 'step',
+  id,
+  tool: 'docs__guide_read',
+  title: `Read the ${what.toLowerCase()} guide`,
+  ok: true,
+  ms,
+  fold: { group: 'Guides', what, one: 'the {what} guide', many: '{n} guides' },
+});
+const ref = (id: string, ms: number): StepItem => ({
+  kind: 'step',
+  id,
+  tool: 'docs__api_read',
+  title: 'Checked the API reference',
+  ok: true,
+  ms,
+  fold: { group: 'API reference', one: 'the API reference', many: 'the API reference' },
+});
+const LOOKUPS: AssistantChat = {
+  id: 'c_3',
+  title: 'Add retries to the sync job',
+  at: NOW,
+  items: [
+    { kind: 'user', text: 'Add retries to the sync job', at: NOW - 120_000 },
+    {
+      kind: 'task',
+      id: 't_1',
+      label: 'Retries for the sync job',
+      state: 'open',
+      items: [
+        guide('g1', 'Retries', 71),
+        guide('g2', 'Backoff', 67),
+        guide('g3', 'Rate limits', 77),
+        ...[88, 301, 333, 346, 369, 121, 140, 139].map((ms, n) => ref(`r${n}`, ms)),
+        {
+          kind: 'step',
+          id: 'w1',
+          tool: 'jobs__job_edit',
+          title: 'Edited the sync job: 3 retries',
+          ok: true,
+          ms: 900,
+          write: { undo: true, status: 'done' },
+        },
+        { kind: 'text', text: 'The sync job now retries 3 times with backoff.' },
+      ],
+    },
+    { kind: 'user', text: 'Which limit does it use?', at: NOW - 30_000 },
+    ref('r9', 120),
+    ref('r10', 95),
+    { kind: 'text', text: 'It waits on the 429 limit and backs off from 1 s.' },
+  ],
+};
+
 const MANY: AssistantChat = {
   id: 'c_2',
   title: 'Reminders for the week',
@@ -783,6 +838,14 @@ export const ManyCards: StoryObj = {
   render: () => {
     const [adapter] = useState(() => mockAdapter({ chat: MANY }));
     return <Docked adapter={adapter} openChat chatId="c_2" />;
+  },
+};
+
+/** Lookups: read-only calls in a row fold into one line (in a task's card and a plain turn) that opens to what they read. */
+export const Lookups: StoryObj = {
+  render: () => {
+    const [adapter] = useState(() => mockAdapter({ chat: LOOKUPS }));
+    return <Docked adapter={adapter} openChat chatId="c_3" />;
   },
 };
 

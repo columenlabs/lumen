@@ -40,6 +40,7 @@ import {
   type AssistantTask,
   COMPACT_AT,
   type ChatUsage,
+  type StepFold,
   type UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 import { createCompactFunction } from 'agents/sessions';
@@ -598,7 +599,25 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
         if (line) this.#put(`line:${c.id}`, line.slice(0, 200));
         return line;
       },
+      foldOf: (c) => {
+        if (c.state === 'running') return this.stepFold(c);
+        const kept = this.#get<StepFold>(`fold:${c.id}`);
+        if (kept) return kept;
+        const fold = this.stepFold(c);
+        if (fold) this.#put(`fold:${c.id}`, fold);
+        return fold;
+      },
     };
+  }
+
+  /**
+   * Where a read-only call sits when calls in a row fold into one line: its `group` (the row's
+   * label, "Guides"), the thing it read (`what`, "Retries") and how the line words the group
+   * (`one`, `many`, with `{n}` and `{what}`). Return `undefined` to show the call's own line. Kept
+   * with the chat like its line, so a chat read back folds the same.
+   */
+  protected stepFold(_c: StepCall): StepFold | undefined {
+    return undefined;
   }
 
   /**

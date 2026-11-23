@@ -26,6 +26,7 @@ import {
   type AssistantTask,
   COMPACT_AT,
   type ChatUsage,
+  type StepFold,
 } from '@columenlabs/lumen-ui-types/assistant';
 import {
   type ModelMessage,
@@ -402,6 +403,16 @@ export abstract class LumenSession {
         : `Looked up ${question}`;
   }
 
+  /**
+   * Where a read-only call sits when calls in a row fold into one line: its `group` (the row's
+   * label, "Guides"), the thing it read (`what`, "Retries") and how the line words the group
+   * (`one`, `many`, with `{n}` and `{what}`). Return `undefined` to show the call's own line. Kept
+   * with the chat like its line, so a chat read back folds the same.
+   */
+  protected stepFold(_c: StepCall): StepFold | undefined {
+    return undefined;
+  }
+
   protected stepFailed(_f: { tool: string; error: string; ms: number }): void {}
 
   protected stepTitleOf(name: string, kind?: 'read' | 'draft' | 'write'): string {
@@ -421,6 +432,14 @@ export abstract class LumenSession {
         const line = this.stepLine(c);
         if (line) this.#put(`line:${c.id}`, line.slice(0, 200));
         return line;
+      },
+      foldOf: (c) => {
+        if (c.state === 'running') return this.stepFold(c);
+        const kept = this.#get<StepFold>(`fold:${c.id}`);
+        if (kept) return kept;
+        const fold = this.stepFold(c);
+        if (fold) this.#put(`fold:${c.id}`, fold);
+        return fold;
       },
     };
   }

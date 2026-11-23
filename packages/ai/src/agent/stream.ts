@@ -12,6 +12,7 @@ import type {
   HandOffWhy,
   ScreenItem,
   StepChoices,
+  StepFold,
   StepImage,
   StepItem,
   UsagePart,
@@ -43,6 +44,11 @@ export interface StepNames {
    * (or `undefined`), the line reads the tool's title.
    */
   lineOf?: (c: StepCall) => string | undefined;
+  /**
+   * Where a read-only call sits when calls in a row fold into one line (`LumenAgent.stepFold`):
+   * its group and the thing it read. Left out, the fold shows the call's own line.
+   */
+  foldOf?: (c: StepCall) => StepFold | undefined;
 }
 
 /** One tool call as its line is worded: its name, arguments, answer and where it stands. */
@@ -66,6 +72,26 @@ const oneLine = (t: string | undefined) => {
 function lineFor(names: StepNames, c: StepCall): string | undefined {
   try {
     return oneLine(names.lineOf?.(c));
+  } catch {
+    return undefined;
+  }
+}
+
+const short = (t: unknown, max: number) => {
+  const s = typeof t === 'string' ? t.replace(/\s+/g, ' ').trim() : '';
+  return s ? s.slice(0, max) : undefined;
+};
+
+/** The fold the app gave for this call, kept short; never throws. */
+function foldFor(names: StepNames, c: StepCall): StepFold | undefined {
+  try {
+    const f = names.foldOf?.(c);
+    const group = short(f?.group, 40);
+    if (!f || !group) return undefined;
+    const what = short(f.what, 80);
+    const one = short(f.one, 80);
+    const many = short(f.many, 80);
+    return { group, ...(what ? { what } : {}), ...(one ? { one } : {}), ...(many ? { many } : {}) };
   } catch {
     return undefined;
   }
@@ -260,6 +286,10 @@ function settledCall(
       : { output: o && 'result' in o && o.change !== undefined ? o.result : out.output }),
     state: error ? 'failed' : 'done',
   });
+  const fold =
+    error || wrote
+      ? undefined
+      : foldFor(names, { id, tool: c.name, input: c.input, state: 'done' });
   const step: StepItem = {
     kind: 'step',
     id,
@@ -294,6 +324,7 @@ function settledCall(
     ...(image && !error ? { image } : {}),
     ...(choices && !error ? { choices } : {}),
     ...(apply !== undefined && !error ? { apply } : {}),
+    ...(fold ? { fold } : {}),
   };
   return [{ event: 'step', data: step }];
 }
@@ -346,13 +377,15 @@ export function chunkEvents(
         // changes is being changed now, before the model has finished writing the call.
         const kind = o.kindOf?.(name);
         const write = kind === 'write';
+        // The app's line before the arguments are in ("Adding a part"), else the tool's title.
+        const early = lineFor(names, { id, tool: name, state: 'running' });
         return [
           {
             event: 'step_start',
             data: {
               id,
               tool: name,
-              title: shownTitle(name, names, kind),
+              title: early ?? shownTitle(name, names, kind),
               ...(write ? { write } : {}),
             },
           },
@@ -370,13 +403,21 @@ export function chunkEvents(
           hiddenStep(c.name, names)
         )
           return [];
-        const line = lineFor(names, { id, tool: c.name, input: chunk.input, state: 'running' });
-        if (!line) return [];
+        const running = { id, tool: c.name, input: chunk.input, state: 'running' as const };
+        const line = lineFor(names, running);
         const write = o.kindOf?.(c.name) === 'write';
+        const fold = write ? undefined : foldFor(names, running);
+        if (!line && !fold) return [];
         return [
           {
             event: 'step_start',
-            data: { id, tool: c.name, title: line, ...(write ? { write } : {}) },
+            data: {
+              id,
+              tool: c.name,
+              title: line ?? shownTitle(c.name, names, o.kindOf?.(c.name)),
+              ...(write ? { write } : {}),
+              ...(fold ? { fold } : {}),
+            },
           },
         ];
       }
