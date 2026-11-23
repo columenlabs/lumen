@@ -27,7 +27,7 @@ A phone's panel that a toolbar button opens beside a live page (a 3D view, a map
 - The slot: a panel puts its own top row there with `PhoneDrawerHeader` (a count and Show all; undo, redo and "v6 of 6"; progress), so it never adds a row of its own. While the slot holds something the title hides (it stays the region's name). `usePhoneDrawerHeader()` is the slot, or null outside a drawer: a panel drawn on a desktop too reads it to draw its own row there instead.
 - Filter chips in the slot are `PhoneDrawerFilter`: one joined group (All | Favorites | Changed), right after the icon.
 - The body fills what is on screen. Rows inside are compact (about 30 px), with no indent a row does not need.
-- Layout: the drawer and the page share one flex box (a column upright, a row sideways); the page is `min-h-0 min-w-0 flex-1`.
+- Layout: the drawer and the page share one flex box (a column upright, a row sideways); the page is `min-h-0 min-w-0 flex-1`. The box may hold other rows (an app's header, toolbar or status bar): maximized, the drawer takes only what they leave, so its bottom (a chat's text box) stays on screen.
 
 ## Do / Don't
 
