@@ -866,7 +866,9 @@ export function LumenSignInMethods({
               </RowIcon>
             }
             name="Backup codes"
-            status={backup.left === null ? undefined : <SettingStatus count={`${backup.left} left`} />}
+            status={
+              backup.left === null ? undefined : <SettingStatus count={`${backup.left} left`} />
+            }
             end={
               passwordless ? (
                 <LumenConfirm
