@@ -1,0 +1,33 @@
+# Dependabot keeps the kit's dependencies current. One PR a week for minor and patch bumps across
+# the workspace; a major bump gets its own PR. CI (.github/workflows/ci.yml) runs on each of them:
+# dependabot[bot] is on that workflow's OpenShip access list. Each merge publishes a patch, so
+# bumps are batched weekly rather than daily.
+# Security updates (switched on in the repo's settings) open a PR for any dependency with a known
+# vulnerability at once.
+version: 2
+updates:
+  - package-ecosystem: bun
+    directory: /
+    target-branch: main
+    schedule:
+      interval: weekly
+    ignore:
+      # The kit's own packages are workspace links, not npm dependencies.
+      - dependency-name: "@columenlabs/lumen-*"
+    groups:
+      dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "infra"
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: main
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "infra"
