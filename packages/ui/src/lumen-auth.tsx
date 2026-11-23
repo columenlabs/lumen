@@ -302,8 +302,9 @@ export function authErrorText(
   e: LumenAuthError | null | undefined,
   fallback = 'That didn’t work. Try again.',
   own: Record<string, string> = {},
-) {
-  if (e?.code && own[e.code]) return own[e.code];
+): string {
+  const mine = e?.code ? own[e.code] : undefined;
+  if (mine) return mine;
   if (passkeyCancelled(e)) return PASSKEY_CANCELLED_TEXT;
   const known = e?.code ? AUTH_ERROR_TEXT[e.code] : undefined;
   if (known) return known;
