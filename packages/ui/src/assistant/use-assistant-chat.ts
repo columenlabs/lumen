@@ -170,7 +170,11 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
       const at = sink.findIndex((i) => i.kind === 'step' && i.id === e.data.id);
       const running = at >= 0 ? sink[at] : undefined;
       if (running?.kind === 'step' && 'live' in running && running.live) {
-        sink[at] = { ...running, title: e.data.title };
+        sink[at] = {
+          ...running,
+          title: e.data.title,
+          ...(e.data.fold ? { fold: e.data.fold } : {}),
+        };
         break;
       }
       sink.push({
@@ -182,6 +186,7 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
         ms: 0,
         live: true,
         ...(e.data.write ? { writing: true } : {}),
+        ...(e.data.fold ? { fold: e.data.fold } : {}),
       });
       break;
     }

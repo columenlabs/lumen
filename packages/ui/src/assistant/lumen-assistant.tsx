@@ -88,6 +88,7 @@ import {
   useAssistantHotkey,
 } from '../assistant-panel';
 import { type ScreenApi, screenMapFor, useAssistantScreen } from '../assistant-screen';
+import { FactList } from '../fact-list';
 import { IconButton } from '../icon-button';
 import { errorText } from '../integrations';
 import { lazyPart } from '../lazy-part';
@@ -827,11 +828,19 @@ function Items({
       </div>
     );
   // Cards drafted one after another sit in one stack, so many of them skim as lines.
-  const rows: ({ at: number; item: LiveItem } | { at: number; drafts: DraftItem[] })[] = [];
+  // Read-only calls in a row fold into one line (`StepFoldLine`), as they do in a task's card.
+  const rows: (
+    | { at: number; item: LiveItem }
+    | { at: number; drafts: DraftItem[] }
+    | { at: number; looked: StepItem[] }
+  )[] = [];
   items.forEach((item, at) => {
     const last = rows[rows.length - 1];
-    const prev = items[at - 1];
-    if (item.kind === 'draft' && prev?.kind === 'draft' && last) {
+    const prev = items[at - 1] as LiveItem | undefined;
+    if (lookup(item as LiveItem) && prev && lookup(prev) && last) {
+      if ('looked' in last) last.looked.push(item as StepItem);
+      else rows[rows.length - 1] = { at: last.at, looked: [prev as StepItem, item as StepItem] };
+    } else if (item.kind === 'draft' && prev?.kind === 'draft' && last) {
       if ('drafts' in last) last.drafts.push(item);
       else rows[rows.length - 1] = { at: last.at, drafts: [prev as DraftItem, item] };
     } else rows.push({ at, item: item as LiveItem });
@@ -841,6 +850,8 @@ function Items({
       {rows.map((r) =>
         'drafts' in r ? (
           <DraftStack key={r.at} drafts={r.drafts} onSettle={onSettle} busy={busy} />
+        ) : 'looked' in r ? (
+          <StepFoldLine key={r.at} steps={r.looked} />
         ) : (
           <Item key={r.at} item={r.item} onSettle={onSettle} busy={busy} />
         ),
@@ -1769,7 +1780,111 @@ type TaskRow =
 
 /** A step that only looked something up: several in a row fold into one line. */
 const lookup = (i: LiveItem): boolean =>
-  i.kind === 'step' && i.ok !== false && !i.write && !i.choices && !i.live && !i.image;
+  i.kind === 'step' &&
+  i.ok !== false &&
+  !i.write &&
+  !i.writing &&
+  !i.choices &&
+  !i.image &&
+  (!i.live || !!i.fold);
+
+/** "a", "a and b", "a, b and c". */
+const andList = (parts: string[]): string =>
+  parts.length < 2 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+
+/** A fold's calls by what they read: the app's groups (`StepItem.fold`), else identical lines. */
+function foldGroups(steps: StepItem[]) {
+  const groups = new Map<
+    string,
+    { fold?: StepItem['fold']; line: string; n: number; whats: string[] }
+  >();
+  for (const s of steps) {
+    const key = s.fold ? `g:${s.fold.group}` : `l:${stepLineText(s.title)}`;
+    const g = groups.get(key) ?? { fold: s.fold, line: stepLineText(s.title), n: 0, whats: [] };
+    g.n += 1;
+    if (s.fold?.what && !g.whats.includes(s.fold.what)) g.whats.push(s.fold.what);
+    groups.set(key, g);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * A fold's line in one sentence: what was read ("Read 3 guides and the API reference"), each group
+ * worded by the app (`StepFold.one` / `many`); calls with no group say their own line, ×N when
+ * repeated. While a call in it runs, its own present-tense line.
+ */
+export function foldLine(steps: StepItem[]): string {
+  const live = (steps as LiveItem[]).findLast((x) => x.kind === 'step' && x.live);
+  if (live?.kind === 'step') return stepLineText(live.title);
+  const groups = foldGroups(steps);
+  const read = groups
+    .filter((g) => g.fold)
+    .map((g) => {
+      const f = g.fold as NonNullable<StepItem['fold']>;
+      const form = (g.n === 1 ? f.one : f.many) ?? f.group;
+      return form.replaceAll('{n}', String(g.n)).replaceAll('{what}', g.whats[0] ?? '');
+    });
+  const lines = groups.filter((g) => !g.fold).map((g) => (g.n > 1 ? `${g.line} ×${g.n}` : g.line));
+  return [read.length ? `Read ${andList(read)}` : '', ...lines].filter(Boolean).join(' · ');
+}
+
+/** A fold opened: one row per group (what it read, or how many lookups), no times. */
+function FoldDetail({ steps }: { steps: StepItem[] }) {
+  const done = (steps as LiveItem[]).filter((x) => !(x.kind === 'step' && x.live)) as StepItem[];
+  const groups = foldGroups(done);
+  const facts = groups
+    .filter((g) => g.fold)
+    .map((g) => {
+      const value = g.whats.length ? g.whats.join(' · ') : `${g.n} lookup${g.n === 1 ? '' : 's'}`;
+      return { label: (g.fold as NonNullable<StepItem['fold']>).group, value, title: value };
+    });
+  const lines = groups.filter((g) => !g.fold);
+  return (
+    <div
+      data-slot="chat-fold"
+      className="flex min-w-0 flex-col gap-1.5 text-muted-foreground text-xs"
+    >
+      {facts.length > 0 && <FactList className="text-xs" facts={facts} />}
+      {lines.map((g) => (
+        <p key={g.line} className="truncate" title={g.line}>
+          {g.n > 1 ? `${g.line} ×${g.n}` : g.line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/** Read-only calls in a row in a plain turn: one line that opens to what they read. */
+function StepFoldLine({ steps }: { steps: StepItem[] }) {
+  const [open, setOpen] = useState(false);
+  const live = (steps as LiveItem[]).some((x) => x.kind === 'step' && x.live);
+  const line = foldLine(steps);
+  return (
+    <div data-slot="chat-step-fold" className="flex min-w-0 flex-col gap-1.5">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded text-left text-muted-foreground text-xs hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        {live ? <Spinner className="size-3" /> : <SearchIcon className="size-3.5 shrink-0" />}
+        <span className="truncate" title={line}>
+          {line}
+        </span>
+        {open ? (
+          <ChevronDownIcon className="size-3.5 shrink-0" aria-hidden />
+        ) : (
+          <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden />
+        )}
+      </button>
+      {open && (
+        <div className="pl-5">
+          <FoldDetail steps={steps} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * A task's items as the rows of its card. Each turn's words are a step of their own: before its
@@ -1902,7 +2017,7 @@ function TaskRowView({
   const now = row.kind === 'words' && row.tag === 'Follow-up';
   const title =
     row.kind === 'lookups'
-      ? row.steps.map((x) => x.title).join(' · ')
+      ? foldLine(row.steps)
       : row.kind === 'words'
         ? firstLine(row.text)
         : row.text;
@@ -1921,10 +2036,15 @@ function TaskRowView({
           now && 'bg-primary/5',
         )}
       >
-        <Icon
-          className={cn('size-3.5 shrink-0', now ? 'text-primary' : 'text-muted-foreground')}
-          aria-hidden
-        />
+        {row.kind === 'lookups' &&
+        (row.steps as LiveItem[]).some((x) => x.kind === 'step' && x.live) ? (
+          <Spinner className="size-3.5 text-muted-foreground" />
+        ) : (
+          <Icon
+            className={cn('size-3.5 shrink-0', now ? 'text-primary' : 'text-muted-foreground')}
+            aria-hidden
+          />
+        )}
         {tag && (
           <span
             className={cn(
@@ -1941,11 +2061,6 @@ function TaskRowView({
         >
           {title}
         </span>
-        {row.kind === 'lookups' && (
-          <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
-            {row.steps.length}
-          </span>
-        )}
         {open ? (
           <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         ) : (
@@ -1955,7 +2070,7 @@ function TaskRowView({
       {open && (
         <div className="flex min-w-0 flex-col gap-2 px-3 pt-0.5 pb-2.5">
           {row.kind === 'lookups' ? (
-            <Items items={row.steps as LiveItem[]} onSettle={onSettle} busy={busy} />
+            <FoldDetail steps={row.steps} />
           ) : row.kind === 'words' ? (
             <Item
               item={{ kind: 'text', text: row.text } as LiveItem}
@@ -2015,7 +2130,8 @@ function TaskBlock({
   // The newest row is open unless the person picked another since the rows last changed.
   const [picked, setPicked] = useState<{ at: number; open: number | null } | null>(null);
   const newest = rows.length - 1;
-  const auto = rows[newest]?.kind === 'line' ? null : newest;
+  // A fold of lookups stays one line until tapped; the newest words or message open.
+  const auto = rows[newest]?.kind === 'line' || rows[newest]?.kind === 'lookups' ? null : newest;
   const open = picked && picked.at === rows.length ? picked.open : auto;
   const failed = inner.some((x) => x.kind === 'step' && (!x.ok || x.write?.status === 'failed'));
   const card = (

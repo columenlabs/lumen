@@ -130,6 +130,22 @@ export interface StepItem {
    * lives in the app's page rather than on its server (what a list shows, a view to open).
    */
   apply?: unknown;
+  /** Where this call sits when read-only calls in a row fold into one line (`StepFold`). */
+  fold?: StepFold;
+}
+
+/**
+ * A read-only call's place in a fold: calls in a row fold into one line that says what was read
+ * ("Read 3 guides and the API reference") and opens to one row per `group` ("Guides  Retries ·
+ * Backoff"). `group` is the row's label; `what` the thing read, when the call names one. `one` and
+ * `many` word the group in the line, with `{n}` for how many calls and `{what}` for the thing read
+ * ("the {what} guide", "{n} guides"); left out, the line names the group.
+ */
+export interface StepFold {
+  group: string;
+  what?: string;
+  one?: string;
+  many?: string;
 }
 
 /** The most characters a step's `apply` keeps as JSON; a larger one is left out. */
@@ -381,7 +397,15 @@ export type AssistantEvent =
   | {
       event: 'step_start';
       /** `write`: the tool makes a change at once (its group is on Read + write). */
-      data: { id: string; tool: string; title: string; write?: boolean; handoff?: boolean };
+      data: {
+        id: string;
+        tool: string;
+        title: string;
+        write?: boolean;
+        handoff?: boolean;
+        /** Its place in a fold of read-only calls, once its arguments say (`StepItem.fold`). */
+        fold?: StepFold;
+      };
     }
   | { event: 'step'; data: StepItem & { handoff?: boolean } }
   | { event: 'draft'; data: DraftItem & { handoff?: boolean } }
