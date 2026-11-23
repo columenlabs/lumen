@@ -21,10 +21,21 @@ function Methods() {
         password={{ onChange: () => {} }}
         passkeys={{
           list: passkeys,
+          // Name it "cancel" to see a closed prompt, "wait" for a device that never answers (Cancel ends it).
           onAdd: async (name) => {
+            if (name === 'wait') return new Promise(() => {});
             await wait();
+            if (name === 'cancel') {
+              return {
+                error: {
+                  code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY',
+                  message: 'The operation either timed out or was not allowed.',
+                },
+              };
+            }
             setPasskeys((p) => [...p, { id: String(p.length), name, createdAt: '2026-10-23' }]);
           },
+          onCancel: () => {},
           onRemove: async (id) => setPasskeys((p) => p.filter((k) => k.id !== id)),
         }}
         app={{

@@ -56,6 +56,7 @@ Rules:
 - `NotificationsSettings`: email and ntfy turn on and off with the header switch, and each webhook is one row.
 - `McpSettings`: each server's address is a row with Copy, then From picks the app whose steps show.
 - `SchedulesSection`'s editor: each setting is a row (On and Notify end in their switch).
+- `LumenSignInMethods` (Security): passkeys, authenticator app, emailed and backup codes. Add a passkey waits on the device through `usePasskeyWait`: Cancel stays pressable and ends the wait at once, the wait gives up after `PASSKEY_WAIT_MS` (2 min), a closed or refused prompt is a quiet note (`PASSKEY_CANCELLED_TEXT`), never the browser's words. Pass `passkeys.onCancel` to close the browser's prompt (SimpleWebAuthn's `WebAuthnAbortService.cancelCeremony`); `onAdd` may answer the sign-in service's `{ error }` as is. A sign-in screen of the app's own uses the same hook for its passkey button and calls `cancel()` before Google or a code, so a passkey never locks the other ways in.
 
 ## Anatomy
 

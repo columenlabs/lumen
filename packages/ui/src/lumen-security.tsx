@@ -13,6 +13,7 @@ import {
   Plus,
   Smartphone,
   Ticket,
+  Undo2,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { type FormEvent, type ReactNode, useState } from 'react';
@@ -24,6 +25,13 @@ import {
   LumenPasswordField,
   LumenStepBar,
 } from './lumen-auth';
+import {
+  type LumenPasskeyWait,
+  PASSKEY_TIMEOUT_TEXT,
+  passkeyCancelled,
+  passkeyProblem,
+  usePasskeyWait,
+} from './lumen-passkey';
 import { SettingRow } from './settings';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -43,6 +51,20 @@ const problemOf = (work: () => LumenResult) =>
     () => 'That didn’t work. Try again.',
   );
 
+/** What a passkey wait ended with, for the screen: a quiet note, a problem, or nothing (it worked). */
+function waitOutcome(r: LumenPasskeyWait<unknown>): { note?: string; error?: string } | null {
+  if (r.ended === 'superseded' || r.ended === 'cancelled') return {};
+  if (r.ended === 'timeout') return { error: PASSKEY_TIMEOUT_TEXT };
+  if (r.ended === 'failed') {
+    return passkeyCancelled(r.error)
+      ? { note: passkeyProblem({ error: r.error })?.text }
+      : { error: 'That didn’t work. Try again.' };
+  }
+  const p = passkeyProblem(r.value);
+  if (!p) return null;
+  return p.cancelled ? { note: p.text } : { error: p.text };
+}
+
 /** The ways to pass the second step that take a typed code. */
 export type LumenCodeMethod = 'email' | 'app' | 'backup';
 
@@ -59,6 +81,8 @@ export interface LumenSecondStepProps {
   /** Where emailed codes go, as the app wants it shown (masked or whole). */
   emailTo?: string;
   onPasskey?: () => LumenResult;
+  /** Aborts the browser's passkey prompt (SimpleWebAuthn's `WebAuthnAbortService.cancelCeremony`). */
+  onCancelPasskey?: () => void;
   /** Sends a new emailed code. */
   onSendEmail?: () => LumenResult;
   onVerify: (method: LumenCodeMethod, code: string) => LumenResult;
@@ -75,10 +99,14 @@ export function LumenSecondStep({
   initial,
   emailTo,
   onPasskey,
+  onCancelPasskey,
   onSendEmail,
   onVerify,
   onBack,
 }: LumenSecondStepProps) {
+  const passkey = usePasskeyWait({ onCancel: onCancelPasskey });
+  const [passkeyNote, setPasskeyNote] = useState<string | null>(null);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [method, setMethod] = useState<LumenCodeMethod | null>(
     initial ?? (['app', 'email', 'backup'] as const).find((m) => methods[m]) ?? null,
   );
@@ -87,11 +115,22 @@ export function LumenSecondStep({
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const run = async (work: () => LumenResult) => {
+    passkey.cancel();
+    setPasskeyNote(null);
+    setPasskeyError(null);
     setError(null);
     setBusy(true);
     const problem = await problemOf(work);
     setBusy(false);
     if (problem) setError(problem);
+  };
+  const startPasskey = async () => {
+    if (!onPasskey) return;
+    setPasskeyError(null);
+    setPasskeyNote(null);
+    const out = waitOutcome(await passkey.run(onPasskey));
+    if (out?.note) setPasskeyNote(out.note);
+    if (out?.error) setPasskeyError(out.error);
   };
   const switchTo = async (m: LumenCodeMethod) => {
     setMethod(m);
@@ -131,12 +170,28 @@ export function LumenSecondStep({
       <div className="flex flex-col gap-4">
         {methods.passkey && onPasskey && (
           <>
-            <Button size="lg" className="h-10" disabled={busy} onClick={() => run(onPasskey)}>
-              <Fingerprint /> {busy ? 'Waiting for your passkey…' : 'Use my passkey'}
+            <Button
+              size="lg"
+              className="h-10"
+              disabled={busy || passkey.waiting}
+              onClick={startPasskey}
+            >
+              <Fingerprint /> {passkey.waiting ? 'Waiting for your passkey…' : 'Use my passkey'}
             </Button>
+            {passkey.waiting && (
+              <button
+                type="button"
+                className={`${link} self-center text-sm`}
+                onClick={passkey.cancel}
+              >
+                Cancel
+              </button>
+            )}
+            <LumenAuthProblem>{passkeyError}</LumenAuthProblem>
             {method && <FieldSeparator>or enter the code</FieldSeparator>}
           </>
         )}
+        <LumenAuthNote icon={<Undo2 />}>{passkeyNote}</LumenAuthNote>
         <LumenAuthNote>{note}</LumenAuthNote>
         {method && (
           <form className="flex flex-col gap-4" onSubmit={verify}>
@@ -262,8 +317,14 @@ export interface LumenSignInMethodsProps {
   password?: { onChange: () => void };
   passkeys?: {
     list: LumenPasskey[];
-    /** Adds one under the name the person typed; the device asks for their face, finger or PIN. */
+    /**
+     * Adds one under the name the person typed; the device asks for their face, finger or PIN. It
+     * may answer a message, or the sign-in service's `{ error }` as is: a closed prompt reads as a
+     * quiet note, never the browser's words.
+     */
     onAdd: (name: string) => LumenResult;
+    /** Aborts the browser's passkey prompt (SimpleWebAuthn's `WebAuthnAbortService.cancelCeremony`). */
+    onCancel?: () => void;
     onRemove: (id: string) => LumenResult;
   };
   /** The authenticator app (TOTP). Turning it on asks for the password first. */
@@ -331,11 +392,15 @@ export function LumenSignInMethods({
   const [codes, setCodes] = useState<string[]>([]);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const passkey = usePasskeyWait({ onCancel: passkeys?.onCancel });
 
   const open = (f: Flow) => {
+    passkey.cancel();
     setFlow(f);
     setError(null);
+    setNote(null);
     setSecret('');
     setCode('');
     setName('');
@@ -358,12 +423,15 @@ export function LumenSignInMethods({
     return (
       <form
         className="flex max-w-md flex-col gap-4 py-2"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          run(
-            () => passkeys.onAdd(name.trim()),
-            () => open(null),
-          );
+          setError(null);
+          setNote(null);
+          const r = await passkey.run(() => passkeys.onAdd(name.trim()));
+          const out = waitOutcome(r);
+          if (!out) return open(null);
+          if (out.note) setNote(out.note);
+          if (out.error) setError(out.error);
         }}
       >
         <h4 className="font-semibold">Add a passkey</h4>
@@ -382,12 +450,15 @@ export function LumenSignInMethods({
         <p className="text-muted-foreground text-sm">
           Your device asks for your face, fingerprint or PIN. That never leaves the device.
         </p>
+        <LumenAuthNote icon={<Undo2 />}>{note}</LumenAuthNote>
         <LumenAuthProblem>{error}</LumenAuthProblem>
         <div className="flex gap-2">
-          <Button type="submit" disabled={busy}>
-            <Fingerprint /> {busy ? 'Waiting for your device…' : 'Add passkey'}
+          <Button type="submit" disabled={passkey.waiting}>
+            <Fingerprint /> {passkey.waiting ? 'Waiting for your device…' : 'Add passkey'}
           </Button>
-          {cancel}
+          <Button type="button" variant="ghost" onClick={() => open(null)}>
+            Cancel
+          </Button>
         </div>
       </form>
     );
