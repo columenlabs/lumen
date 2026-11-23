@@ -12,6 +12,7 @@ Each page has the same four headings:
 | Part | Page | Use it for |
 |---|---|---|
 | `LumenDrawer` + `DrawerSection` | [drawer.md](drawer.md) | The details or editor of one row, beside the list |
+| `LumenPhoneDrawer` | [phone-drawer.md](phone-drawer.md) | A phone panel a toolbar button opens beside a live page, with minimize, maximize and close |
 | `LumenBottomSheet` | [bottom-sheet.md](bottom-sheet.md) | A phone panel that rests at peek, half or full beside a live page |
 | `LumenFloatingPanel` | [floating-panel.md](floating-panel.md) | A see-through panel the person drags, resizes and folds over a live page (a phone held sideways) |
 | `LumenForm`, `SaveButton`, `FormIssue` | [form.md](form.md) | Fields that save together |
@@ -43,6 +44,7 @@ Each page has the same four headings:
 | `raw-overlay` | an import of `@columenlabs/lumen-ui/ui/{sheet,dialog,select,command,combobox}` |
 | `tags-text` | tags or labels joined into comma text (`r.tags.join(', ')`) on a line with no `tags: true`: a `tags` field or `TagChips` |
 | `key-input` | a password `Input` in an app: a key, token or secret is a `LumenConnection` field (secret, prefix, Test, Remove), never an `Input` with its own Save button ([settings.md](settings.md)) |
+| `phone-drawer` | an app's own Minimize or Maximize control (a `"Minimize …"` or `"Maximize …"` name): a phone panel with window controls is `LumenPhoneDrawer` ([phone-drawer.md](phone-drawer.md)) |
 | `settings-page` | a route, link or nav item (`path`, `to`, `href`) to a page named `settings`: an app's settings are sections of the one Settings dialog |
 
 `lumen-ship check parts --write-baseline <folders>` writes today's counts (only for a first run; lower a count by hand in the change that removes a break).

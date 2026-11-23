@@ -166,6 +166,15 @@ export { DrawerSection, type DrawerSectionProps } from './drawer-section';
 export { type DrawerAction, LumenDrawer, type LumenDrawerProps } from './lumen-drawer';
 export { LumenBottomSheet, type LumenBottomSheetProps, type SheetSnap } from './lumen-bottom-sheet';
 export {
+  LumenPhoneDrawer,
+  type LumenPhoneDrawerProps,
+  PhoneDrawerFilter,
+  type PhoneDrawerFilterProps,
+  PhoneDrawerHeader,
+  type PhoneDrawerSize,
+  usePhoneDrawerHeader,
+} from './lumen-phone-drawer';
+export {
   type FloatingRect,
   LumenFloatingPanel,
   type LumenFloatingPanelProps,

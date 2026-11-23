@@ -13,6 +13,8 @@
 #                (docs/parts/settings.md, Built on the slots), never an Input with a Save button of its own
 #   tags-text    tags or labels joined into comma text (`r.tags.join(', ')`) on a line with no `tags: true`:
 #                a ViewField with `tags: true` (its value may stay the joined text, for sorting) or TagChips
+#   phone-drawer an app's own Minimize or Maximize control (a "Minimize …" / "Maximize …" name): a phone
+#                panel with window controls is LumenPhoneDrawer (docs/parts/phone-drawer.md)
 set -euo pipefail
 write=0
 if [ "${1:-}" = "--write-baseline" ]; then
@@ -24,7 +26,7 @@ if [ $# -eq 0 ]; then
   exit 1
 fi
 baseline=${LUMEN_SHIP_PARTS_BASELINE:-$(git rev-parse --show-toplevel)/scripts/parts.baseline}
-rules="hint-text text-action raw-overlay settings-page tags-text key-input"
+rules="hint-text text-action raw-overlay settings-page tags-text key-input phone-drawer"
 
 # Prints `file:line` for each break of one rule in one folder.
 hits() {
@@ -41,6 +43,8 @@ hits() {
         $re = qr/^(?![^\n]*\btags:\s*true)[^\n]*?\b(?:tags|labels)\b(?:\s*\?\?\s*\[\])?\)?\s*\??\.join\(\s*[\x27"`],/m;
       } elsif ($rule eq "key-input") {
         $re = qr/<(?:Input|InputGroupInput)\b(?:=>|[^>])*?\btype=(?:"password"|\{[^}]*[\x27"]password[\x27"])/;
+      } elsif ($rule eq "phone-drawer") {
+        $re = qr/[\x27"`](?:Minimize|Maximize)\s/;
       } elsif ($rule eq "settings-page") {
         $re = qr/\b(?:path|to|href)\s*[:=]\s*\{?\s*[\x27"`](?:[^\x27"`]*\/)?settings(?=[\/?#\x27"`])/i;
       } else {
