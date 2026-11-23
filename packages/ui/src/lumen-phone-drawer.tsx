@@ -124,14 +124,16 @@ export function LumenPhoneDrawer({
   const min = size === 'min';
   const max = size === 'max';
   const rail = sideways && min;
+  // Maximized it takes what the box's other rows leave (an app's header, toolbar, status bar), never
+  // the box's full height: `h-full` beside them pushed its bottom (a chat's text box) off the screen.
   const box = sideways
     ? min
       ? 'w-12 border-l'
       : max
-        ? 'w-full'
+        ? 'min-w-0 flex-[1_1_100%]'
         : 'w-(--phone-drawer-width) max-w-[45%] border-l'
     : max
-      ? 'h-full'
+      ? 'min-h-0 flex-[1_1_100%]'
       : cn(min ? 'h-12' : 'h-[55%]', 'rounded-t-2xl border-t shadow-[0_-8px_24px_rgb(0_0_0/0.25)]');
   const control = (
     label: string,
