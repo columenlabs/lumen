@@ -261,6 +261,16 @@ export interface PayingRules {
   /** The app's key, not counted against the person's allowance and never stopped by it. */
   free?: boolean;
 }
+
+/** What `payerReads` read, for `pickPayer`: one round of reads serves every provider. */
+export interface PayerReads {
+  person: Awaited<ReturnType<State['person']>>;
+  appKeys: Awaited<ReturnType<State['keysOf']>>;
+  ownKeys: Awaited<ReturnType<State['keysOf']>>;
+  spend: Awaited<ReturnType<State['spend']>>;
+  ownCap: number;
+  budget: { total: number; used: number };
+}
 /**
  * One task's use of one model this month: what a kind of work cost (a chat answer, a background
  * task), beside `rows`, which stay per tier and payer.
@@ -755,16 +765,35 @@ export class State {
     provider: AssistantProvider,
     rules: PayingRules = {},
   ): Promise<{ paying: Paying | null; wait: AssistantWait | null }> {
+    return this.pickPayer(await this.payerReads(id, rules.ways), provider, rules);
+  }
+
+  /**
+   * The reads behind `paying` that need no provider (the person, the app's and their own keys,
+   * spend, caps): start them before the model is known, then `pickPayer` for each provider.
+   */
+  async payerReads(id: string, ways?: OwnWays): Promise<PayerReads> {
     const [person, appKeys, ownKeys, spend, ownCap] = await Promise.all([
       this.person(id),
       this.keysOf(id, 'app'),
-      this.keysOf(id, 'own', rules.ways),
+      this.keysOf(id, 'own', ways),
       this.spend(id),
       this.ownCap(id),
     ]);
-    const spent = (p: AssistantPayer) =>
-      spend.rows.filter((r) => r.payer === p && !r.free).reduce((a, r) => a + r.usd, 0);
-    const budget = await this.appBudget(id, spent('app'));
+    const appSpent = spend.rows
+      .filter((r) => r.payer === 'app' && !r.free)
+      .reduce((a, r) => a + r.usd, 0);
+    const budget = await this.appBudget(id, appSpent);
+    return { person, appKeys, ownKeys, spend, ownCap, budget };
+  }
+
+  /** Who pays on `provider`'s model, from reads `payerReads` made (`paying` in one step). */
+  pickPayer(
+    reads: PayerReads,
+    provider: AssistantProvider,
+    rules: PayingRules = {},
+  ): { paying: Paying | null; wait: AssistantWait | null } {
+    const { person, appKeys, ownKeys, spend, ownCap, budget } = reads;
     const app = appKeys.keys[provider];
     const own = ownKeys.keys[provider];
     const sources: Record<AssistantPayer, Paying | null> = {
