@@ -605,6 +605,20 @@ interface ToolsSummary {
   outside: boolean;
 }
 
+/**
+ * A turn's reads that need neither its message nor its tier, started by `agentEarly` so an app
+ * can run them beside its own first step and hand them to `agentTurn`.
+ */
+/** The person's own assistant settings, as the state keeps them. */
+type PersonDoc = Awaited<ReturnType<State['person']>>;
+
+export interface AgentEarly {
+  person: Promise<PersonDoc>;
+  system: Promise<string>;
+  rules: Promise<PayingRules>;
+  sources: Promise<SourceAt[]>;
+}
+
 /** What a Think turn calls this turn: what one turn asks besides the message itself. */
 export interface AgentTurnInput {
   message: string;
@@ -770,8 +784,8 @@ export class Assistant {
   }
 
   /** The tier the person's chat runs on: their pick, else the chat task's start tier. */
-  private async mainTier(caller: Caller, task = 'chat') {
-    const p = this.o.pickTier === false ? {} : await this.state.person(caller.id);
+  private async mainTier(caller: Caller, task = 'chat', person?: Promise<PersonDoc>) {
+    const p = this.o.pickTier === false ? {} : await (person ?? this.state.person(caller.id));
     const startId = p.tasks?.[task] ?? this.tasks.find((t) => t.id === task)?.tier;
     return (
       this.tierById(task === 'chat' ? (p.tier ?? startId) : startId) ?? (this.tiers[0] as TierDef)
@@ -830,25 +844,76 @@ export class Assistant {
    * spend and the turn. Throws `AssistantError` when nobody can pay (its text says what to do).
    * Drafts, Undo and compaction stay with `turn` for now.
    */
+  /**
+   * Starts the reads of a turn that need neither its message nor its tier (the person's settings,
+   * the app's system text and paying rules, the tool sources), so an app that first routes the
+   * message (a prompt reviewer) can run them beside it and pass them to `agentTurn`. Nothing here
+   * writes; a turn that never comes just drops them.
+   */
+  agentEarly(caller: Caller): AgentEarly {
+    const person = this.state.person(caller.id);
+    const quiet = <T>(p: Promise<T>) => {
+      p.catch(() => undefined);
+      return p;
+    };
+    return {
+      person: quiet(person),
+      system: quiet(
+        Promise.resolve(typeof this.o.system === 'string' ? this.o.system : this.o.system(caller)),
+      ),
+      rules: quiet(this.payingRules(caller)),
+      sources: quiet(person.then((p) => this.sourcesOf(caller, p))),
+    };
+  }
+
   async agentTurn(
     caller: Caller,
     input: AgentTurnInput,
+    early?: AgentEarly,
   ): Promise<{ plan: AgentTurnPlan; settle: (end: AgentTurnEnd) => Promise<void> }> {
     const message = input.message.trim();
-    const picked = await this.mainTier(caller);
+    const e = early ?? this.agentEarly(caller);
     // The app picks the tier (pickTier: false): any of its tiers, never a hand off.
     const byApp = this.o.pickTier === false;
-    const lower =
-      input.tier && (byApp || !this.above(picked).some((t) => t.id === input.tier))
-        ? this.tierById(input.tier)
-        : undefined;
-    const main = await this.session(caller, lower ?? picked);
-    const { rules, free } = await this.rulesFor(caller, main.tier.id);
-    const { paying, wait } = await this.state.paying(caller.id, main.model.provider, rules);
-    if (!paying) {
-      const code = wait ?? 'not_connected';
-      throw new AssistantError(waitText(code, main.model.provider, !!this.o.allowance), code, 402);
-    }
+    // Who pays, on which model: one read after another, since each needs the one before. The
+    // turn's other reads run beside it (Promise.allSettled below).
+    const paid = (async () => {
+      const picked = await this.mainTier(caller, 'chat', e.person);
+      const lower =
+        input.tier && (byApp || !this.above(picked).some((t) => t.id === input.tier))
+          ? this.tierById(input.tier)
+          : undefined;
+      const main = await this.session(caller, lower ?? picked);
+      const free = await this.freeTier(main.tier.id);
+      const base = await e.rules;
+      const rules: PayingRules = free ? { ...base, only: 'app', free: true } : base;
+      const { paying, wait } = await this.state.paying(caller.id, main.model.provider, rules);
+      if (!paying) {
+        const code = wait ?? 'not_connected';
+        throw new AssistantError(
+          waitText(code, main.model.provider, !!this.o.allowance),
+          code,
+          402,
+        );
+      }
+      return { main, rules, free, paying };
+    })();
+    const told = bearings({
+      timeZone: input.time_zone,
+      fallbackZone: this.o.timeZone,
+      lastAt: input.last_at,
+      app: this.o.app,
+      ...(this.o.bearings ? { extras: (b: BearingsNow) => this.o.bearings?.(b, caller) } : {}),
+    });
+    const [pay, side] = await Promise.allSettled([
+      paid,
+      Promise.all([e.person, e.system, this.expand(caller, message), told, e.sources]),
+    ]);
+    // Who pays decides first, as before: nobody able to pay is the error the person sees.
+    if (pay.status === 'rejected') throw pay.reason;
+    if (side.status === 'rejected') throw side.reason;
+    const { main, rules, free, paying } = pay.value;
+    const [p, appSystem, asked, toldText, sources] = side.value;
     const keyOf = (provider: AssistantProvider): ModelKey | null => {
       const apiKey = paying.keys[provider];
       return apiKey ? { apiKey, ...(paying.plans[provider] ? { plan: true } : {}) } : null;
@@ -874,25 +939,14 @@ export class Assistant {
       if (claude && claudeKey)
         fallback = { model: claude, key: claudeKey, label: `${main.tier.label} · ${claude.label}` };
     }
-    const p = await this.state.person(caller.id);
     const policy: HandOffPolicy = p.hand_off ?? 'next';
     const advisor = await this.advisorFor(caller, p.advice, main);
     const handTo =
       input.tier && !byApp
         ? this.handOffReach(main.tier).find((t) => t.id === input.tier)
         : undefined;
-    const appSystem =
-      typeof this.o.system === 'string' ? this.o.system : await this.o.system(caller);
-    const asked = await this.expand(caller, message);
-    const told = await bearings({
-      timeZone: input.time_zone,
-      fallbackZone: this.o.timeZone,
-      lastAt: input.last_at,
-      app: this.o.app,
-      ...(this.o.bearings ? { extras: (b: BearingsNow) => this.o.bearings?.(b, caller) } : {}),
-    });
     const page =
-      told +
+      toldText +
       (input.refs?.length
         ? `The person points at these parts: they are what "this" means, and when the person asks for a change they are the only parts to change. Read anything else you need (the rest of the page, other records, your tools) for context, but leave it as it is unless they ask.\n${JSON.stringify(input.refs).slice(0, 16000)}\n\n`
         : '') +
@@ -917,7 +971,7 @@ export class Assistant {
           ? `The person handed this message to ${handTo.label}: call escalate {tier: "${handTo.id}", why: "asked"} now, its task the message with every fact from this chat it needs, then answer from its memo. If it answers with an error, do the task yourself with your tools.\n\n`
           : ''
       }${command}`,
-      sources: await this.sourcesOf(caller, p),
+      sources,
       ...(fallback ? { fallback } : {}),
       left: paying.left,
       maxSteps: MAX_ROUNDS,
