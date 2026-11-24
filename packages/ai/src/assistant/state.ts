@@ -363,6 +363,31 @@ export interface Paying {
   cap: number;
 }
 
+/** How each kind of plan sign-in tells it needs a refresh and refreshes. */
+type PlanTokens = ChatgptTokens | GrokTokens;
+const PLAN_WAYS: Record<
+  NonNullable<ReturnType<typeof planOf>>['via'],
+  {
+    stale: (t: PlanTokens) => boolean;
+    refresh: (t: PlanTokens, fetchFn: typeof fetch) => Promise<PlanTokens>;
+  }
+> = {
+  chatgpt: {
+    stale: (t) => staleChatgpt(t as ChatgptTokens),
+    refresh: (t, f) => refreshChatgpt(t as ChatgptTokens, f),
+  },
+  grok: {
+    stale: (t) => staleGrok(t as GrokTokens),
+    refresh: (t, f) => refreshGrok(t as GrokTokens, f),
+  },
+};
+
+/**
+ * Plan refreshes in flight in this isolate, by person and sign-in doc: the refresh token each one
+ * started from (held only in memory, never logged) and its answer. Cleared as each one settles.
+ */
+const REFRESHING = new Map<string, { from: string; token: Promise<string | null> }>();
+
 export class State {
   constructor(
     readonly docs: Docs,
@@ -492,31 +517,76 @@ export class State {
     if (use === 'plan' && plan) return 'plan';
     return plan ? 'plan' : key ? 'key' : null;
   }
-  /** The plan's access token, refreshed first when it is about to run out; null once it fails. */
+  /**
+   * The plan's access token, refreshed first when it is about to run out; null once it fails.
+   *
+   * A refresh token is single use (OpenAI and xAI rotate it, and a reused one can end the whole
+   * sign-in), so at most one refresh per sign-in runs in this isolate: a caller that finds one in
+   * flight for the same refresh token waits for it and gets its answer (`REFRESHING`). The refresh
+   * itself reads the store again first, so a copy another request or isolate already rotated is
+   * never sent.
+   */
   async planToken(id: string, provider: AssistantProvider) {
     const found = await this.ownPlan(id, provider);
-    if (!found) return null;
-    const { doc: d, name } = found;
-    const f = this.o.fetch ?? fetch;
+    const plan = planOf(found?.doc);
+    if (!found || !plan) return null;
+    const way = PLAN_WAYS[plan.via];
+    if (!way.stale(plan.tokens)) return plan.tokens.access_token;
+    const key = `${id}\u0000${found.name}`;
+    // A refresh of this sign-in already running: share it when it started from this copy; else
+    // (this copy is older or newer) let it finish, then read the store afresh below.
+    for (let busy = REFRESHING.get(key); busy; busy = REFRESHING.get(key)) {
+      if (busy.from === plan.tokens.refresh_token) return busy.token;
+      await busy.token.catch(() => null);
+    }
+    const token = this.refreshPlan(id, found.name, provider).finally(() => {
+      if (REFRESHING.get(key)?.token === token) REFRESHING.delete(key);
+    });
+    REFRESHING.set(key, { from: plan.tokens.refresh_token, token });
+    return token;
+  }
+
+  /** One refresh of the plan kept in `name`, from the stored copy; its new tokens written once. */
+  private async refreshPlan(id: string, name: string, provider: AssistantProvider) {
+    const d = await this.docs.readStored<KeyDoc>(id, name);
+    const plan = planOf(d);
+    if (!d || !plan) return null;
+    const way = PLAN_WAYS[plan.via];
+    // Another request or isolate refreshed it since this one read it: use that.
+    if (!way.stale(plan.tokens)) return plan.tokens.access_token;
+    const used = plan.tokens.refresh_token;
+    // Changes the stored doc only while it still holds the refresh token this refresh used.
+    const same = (prev: KeyDoc | null) => planOf(prev)?.tokens.refresh_token === used;
+    const began = Date.now();
+    const log = (ok: boolean) =>
+      console.log(
+        JSON.stringify({
+          event: 'assistant_plan_refresh',
+          provider,
+          via: plan.via,
+          ok,
+          ms: Date.now() - began,
+        }),
+      );
     try {
-      if (d.grok) {
-        if (!staleGrok(d.grok)) return d.grok.access_token;
-        const t = await refreshGrok(d.grok, f);
-        await this.docs.write<KeyDoc>(id, name, { ...d, api_key: t.access_token, grok: t });
-        return t.access_token;
-      }
-      if (!d.chatgpt) return null;
-      if (!staleChatgpt(d.chatgpt)) return d.chatgpt.access_token;
-      const t = await refreshChatgpt(d.chatgpt, f);
-      console.log(JSON.stringify({ event: 'assistant_plan_refresh', provider }));
-      await this.docs.write<KeyDoc>(id, name, { ...d, api_key: t.access_token, chatgpt: t });
+      const t = await way.refresh(plan.tokens, this.o.fetch ?? fetch);
+      log(true);
+      await this.docs.update<KeyDoc>(id, name, (prev) =>
+        prev && same(prev) ? { ...prev, api_key: t.access_token, [plan.via]: t } : prev,
+      );
       return t.access_token;
     } catch (err) {
-      await this.docs.write<KeyDoc>(id, name, {
-        ...d,
-        test: { at: Date.now(), ok: false, detail: (err as Error).message },
-      });
-      return null;
+      log(false);
+      const now = await this.docs.update<KeyDoc>(id, name, (prev) =>
+        prev && same(prev)
+          ? { ...prev, test: { at: Date.now(), ok: false, detail: (err as Error).message } }
+          : prev,
+      );
+      // Rotated by another isolate while this one failed: its token stands.
+      const other = planOf(now);
+      return other && !same(now) && !PLAN_WAYS[other.via].stale(other.tokens)
+        ? other.tokens.access_token
+        : null;
     }
   }
   /** The person's own key or plan, the one in use first, the other when that one fails. */
