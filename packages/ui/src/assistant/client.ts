@@ -5,6 +5,7 @@ import type {
   AssistantChat,
   AssistantChatRow,
   AssistantConnectorInput,
+  AssistantDeviceSignin,
   AssistantEvent,
   AssistantMessage,
   AssistantOwnWay,
@@ -36,8 +37,19 @@ export interface AssistantAdapter {
   ownCap(usd: number): Promise<AssistantStatus>;
   /** Tests the person's key or plan (`way`; by default the one in use). */
   testOwnKey(provider: AssistantProvider, way?: AssistantOwnWay): Promise<Test>;
-  /** Starts a plan sign-in (ChatGPT): the address to open and the one it ends on. */
-  startSignin(provider: AssistantProvider): Promise<{ url: string; redirect: string }>;
+  /**
+   * Starts a plan sign-in: the address to open and, for ChatGPT, the one it ends on; for Grok, the
+   * code to approve there (`device`), finished by `pollSignin`.
+   */
+  startSignin(
+    provider: AssistantProvider,
+  ): Promise<{ url: string; redirect?: string; device?: AssistantDeviceSignin }>;
+  /** Asks once whether a device sign-in (Grok) was approved; its status once it is kept. */
+  pollSignin?(
+    provider: AssistantProvider,
+  ): Promise<
+    { done: false; device: AssistantDeviceSignin } | { done: true; status: AssistantStatus }
+  >;
   /** Finishes it from the address the sign-in tab ended on. */
   finishSignin(provider: AssistantProvider, url: string): Promise<AssistantStatus>;
   /** Signs out of the plan; the person's key, if set, runs on. */
@@ -141,6 +153,7 @@ export function assistantClient(base: string): AssistantAdapter {
     testOwnKey: (p, way) => send('POST', `/my-key/test?provider=${p}${way ? `&way=${way}` : ''}`),
     startSignin: (p) => send('POST', `/my-signin?provider=${p}`),
     finishSignin: (p, url) => send('POST', `/my-signin/finish?provider=${p}`, { url }),
+    pollSignin: (p) => send('POST', `/my-signin/poll?provider=${p}`, {}),
     signOut: (p) => send('DELETE', `/my-signin?provider=${p}`),
     scrapeql: (token) =>
       token ? send('PUT', '/web/scrapeql', token) : send('DELETE', '/web/scrapeql'),

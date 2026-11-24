@@ -79,7 +79,7 @@ Rules:
 
 ### Built on the slots
 - A row's `end` holds one quick action on the whole thing in its header (Add, Set up, Sign out everywhere else), an `IconButton`, outside the expand button.
-- `LumenConnection` (a key, a sign-in, a relay): one row per way to connect, its value with Replace or Sign in again inside. One way: its last test, Test and Remove sit in the action bar. Several ways: a Use row picks the one that runs, and each way's row ends in its own status, Test and Remove (on a phone the label and those sit above the value).
+- `LumenConnection` (a key, a sign-in, a relay): one row per way to connect, its value with Replace or Sign in again inside. One way: its last test, Test and Remove sit in the action bar. Several ways: a Use row picks the one that runs, and each way's row ends in its own status, Test and Remove (on a phone the label and those sit above the value). A device sign-in (its `signin.start` gives a `device`, and `signin.poll` finishes it) shows the code with Copy and Open, waits with the time left and connects by itself; Cancel, and Try again once it ran out or failed.
 - `NotificationsSettings`: email and ntfy turn on and off with the header switch, and each webhook is one row.
 - `McpSettings`: each server's address is a row with Copy, then From picks the app whose steps show.
 - `SchedulesSection`'s editor: each setting is a row (On and Notify end in their switch).

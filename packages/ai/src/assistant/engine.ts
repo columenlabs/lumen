@@ -56,6 +56,15 @@ import {
   testConnector,
 } from './connectors';
 import {
+  type GrokPending,
+  GrokSigninError,
+  pollGrok,
+  revokeGrok,
+  shownOf,
+  startGrok,
+  testGrok,
+} from './grok';
+import {
   ALL_MODELS,
   DEFAULT_OUT,
   Meter,
@@ -450,6 +459,12 @@ function shownError(err: unknown, plan = false): { message: string; code: string
         : /rate_limit/.test(call.code)
           ? 'rate_limited'
           : 'model_error',
+    };
+  // xAI decides per account whether a Grok plan may run models over the API; a 403 there says so.
+  if (call && plan && call.status === 403 && /x\.ai/.test(call.url))
+    return {
+      message: "xAI doesn't let this Grok plan run models here. Use an xAI API key instead.",
+      code: 'key_refused',
     };
   if (call) {
     console.error(
@@ -2012,11 +2027,25 @@ export class Assistant {
 
   // ---------------------------------------------------------------- keys
 
-  /** Starts a person's ChatGPT plan sign-in: the address to open in a new tab. */
+  /**
+   * Starts a person's plan sign-in. ChatGPT: the address to open in a new tab, which ends on one the
+   * person pastes back. Grok: a code to approve at xAI's link; `pollSignin` finishes it.
+   */
   async startSignin(caller: Caller, provider: AssistantProvider) {
-    if (PROVIDERS[provider].signin !== 'chatgpt')
+    const kind = PROVIDERS[provider].signin;
+    if (!kind)
       throw new AssistantError(`${PROVIDERS[provider].label} has no sign-in.`, 'no_signin', 404);
     const name = `signin:${provider}`;
+    if (kind === 'grok') {
+      try {
+        const { pending, shown } = await startGrok(this.o.fetch ?? fetch);
+        await this.state.docs.write<{ grok: GrokPending }>(caller.id, name, { grok: pending });
+        return { url: shown.url, device: shown };
+      } catch (err) {
+        if (err instanceof GrokSigninError) throw new AssistantError(err.message, 'signin_failed');
+        throw err;
+      }
+    }
     const { url, reg } = await startChatgpt(
       await this.state.docs.read<ChatgptRegistration>(caller.id, name),
       this.name,
@@ -2058,10 +2087,58 @@ export class Assistant {
     }
   }
 
-  /** Signs the person out of their plan; their key, if any, runs from then on. */
+  /**
+   * Asks xAI once whether the person approved a Grok sign-in (never sooner than xAI's interval).
+   * `done: false` while it waits, with the code still to approve; once approved the plan is kept
+   * beside the person's key, as a ChatGPT sign-in is.
+   */
+  async pollSignin(caller: Caller, provider: AssistantProvider) {
+    if (PROVIDERS[provider].signin !== 'grok')
+      throw new AssistantError(
+        `${PROVIDERS[provider].label} has no device sign-in.`,
+        'no_signin',
+        404,
+      );
+    const name = `signin:${provider}`;
+    const pending = (await this.state.docs.read<{ grok?: GrokPending }>(caller.id, name))?.grok;
+    if (!pending) throw new AssistantError('Start the sign-in again.', 'signin_failed');
+    const f = this.o.fetch ?? fetch;
+    let r: Awaited<ReturnType<typeof pollGrok>>;
+    try {
+      r = await pollGrok(pending, f);
+    } catch (err) {
+      await this.state.docs.remove(caller.id, name);
+      if (err instanceof GrokSigninError) throw new AssistantError(err.message, 'signin_failed');
+      throw err;
+    }
+    if ('wait' in r) {
+      if (r.wait.asked_at !== pending.asked_at || r.wait.interval !== pending.interval)
+        await this.state.docs.write<{ grok: GrokPending }>(caller.id, name, { grok: r.wait });
+      return { done: false as const, device: shownOf(r.wait) };
+    }
+    await this.state.docs.remove(caller.id, name);
+    const test = await testGrok(r.done, f, XAI_BASE_URL);
+    const legacy = await this.state.ownPlan(caller.id, provider);
+    if (legacy?.doc.grok) await revokeGrok(legacy.doc.grok, f);
+    await this.state.docs.write<KeyDoc>(caller.id, planDocName(provider), {
+      api_key: r.done.access_token,
+      saved_at: Date.now(),
+      test,
+      grok: r.done,
+    });
+    if (await this.state.ownKey(caller.id, provider))
+      await this.state.setPerson(caller.id, (d) =>
+        d.own_use?.[provider] ? d : { ...d, own_use: { ...d.own_use, [provider]: 'key' } },
+      );
+    return { done: true as const };
+  }
+
+  /** Signs the person out of their plan (and of xAI's sign-in); their key, if any, runs from then on. */
   async signOut(caller: Caller, provider: AssistantProvider) {
     const found = await this.state.ownPlan(caller.id, provider);
-    if (found) await this.state.docs.remove(caller.id, found.name);
+    if (!found) return;
+    if (found.doc.grok) await revokeGrok(found.doc.grok, this.o.fetch ?? fetch);
+    await this.state.docs.remove(caller.id, found.name);
   }
 
   /**
@@ -2082,7 +2159,11 @@ export class Assistant {
     const now = await this.state.ownPlan(caller.id, provider);
     if (!token || !now)
       return now?.doc.test ?? { ok: false, detail: 'Sign in again.', at: Date.now() };
-    const test = await testChatgpt(now.doc.chatgpt, this.o.fetch ?? fetch);
+    const test = now.doc.grok
+      ? await testGrok(now.doc.grok, this.o.fetch ?? fetch, XAI_BASE_URL)
+      : now.doc.chatgpt
+        ? await testChatgpt(now.doc.chatgpt, this.o.fetch ?? fetch)
+        : { ok: false, detail: 'Sign in again.', at: Date.now() };
     await this.state.docs.write<KeyDoc>(caller.id, now.name, { ...now.doc, test });
     return test;
   }

@@ -6,6 +6,7 @@
 import type {
   AssistantEffort,
   AssistantProvider,
+  AssistantSignin,
   UsagePart,
 } from '@columenlabs/lumen-ui-types/assistant';
 
@@ -113,7 +114,7 @@ export const ALL_MODELS: ModelDef[] = [...CLAUDE_MODELS, ...OPENAI_MODELS];
 /** How Settings names each provider, how its keys start and where a person makes one. */
 export const PROVIDERS: Record<
   AssistantProvider,
-  { label: string; prefix: string; keysUrl: string; signin?: 'chatgpt' }
+  { label: string; prefix: string; keysUrl: string; signin?: AssistantSignin }
 > = {
   anthropic: {
     label: 'Anthropic',
@@ -130,6 +131,7 @@ export const PROVIDERS: Record<
     label: 'xAI',
     prefix: 'xai-',
     keysUrl: 'https://console.x.ai/team/default/api-keys',
+    signin: 'grok',
   },
 };
 

@@ -177,6 +177,28 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
 }
 
 /**
+ * xAI keeps a prompt cache per server and picks the server by the request's `prompt_cache_key` or
+ * its `x-grok-conv-id` header (docs.x.ai, prompt caching: "functions identically"). Both carry the
+ * same key, so every call of a conversation reaches the server that holds its start, on a key and on
+ * a Grok plan sign-in alike (the plan's token is the request's key).
+ */
+export function xaiFetch(base: typeof fetch = fetch): typeof fetch {
+  return async (input, init) => {
+    if (typeof init?.body !== 'string') return base(input, init);
+    let key: unknown;
+    try {
+      key = (JSON.parse(init.body) as Record<string, unknown>).prompt_cache_key;
+    } catch {
+      return base(input, init);
+    }
+    if (typeof key !== 'string') return base(input, init);
+    const headers = new Headers(init.headers);
+    if (!headers.has('x-grok-conv-id')) headers.set('x-grok-conv-id', key);
+    return base(input, { ...init, headers });
+  };
+}
+
+/**
  * Reads a plan's streamed answer for its final usage and logs it as sent (`assistant_plan_usage`):
  * whether a plan reads its prompt from the cache shows in its own numbers. Never throws.
  */
@@ -311,7 +333,9 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
     model.provider === 'anthropic'
       ? createAnthropic({ apiKey: key.apiKey, fetch: f })(model.id)
       : model.provider === 'xai'
-        ? createOpenAI({ apiKey: key.apiKey, baseURL: XAI_BASE_URL, fetch: f }).responses(model.id)
+        ? createOpenAI({ apiKey: key.apiKey, baseURL: XAI_BASE_URL, fetch: xaiFetch(f) }).responses(
+            model.id,
+          )
         : createOpenAI({
             apiKey: key.apiKey,
             fetch: key.plan ? planFetch(f, o.name) : f,

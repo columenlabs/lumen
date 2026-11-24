@@ -100,7 +100,8 @@ function useApply(client: AssistantAdapter) {
     }
   };
   const refresh = () => qc.invalidateQueries({ queryKey: assistantStatusKey(client) });
-  return { apply, busy, refresh };
+  const keep = (status: AssistantStatus) => qc.setQueryData(assistantStatusKey(client), status);
+  return { apply, busy, refresh, keep };
 }
 
 /** The section's body once the status loads. */
@@ -296,9 +297,36 @@ const ownUsable = (p: AssistantProviderRow) =>
 
 /** One provider, collapsed to a row: the person's own key and, where it has one, their plan sign-in. */
 function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantProviderRow }) {
-  const { apply, refresh } = useApply(client);
+  const { apply, refresh, keep } = useApply(client);
   const ways: ConnectionWay[] = [];
   const may = (w: AssistantOwnWay) => mayOwn(p, w);
+  const poll = client.pollSignin?.bind(client);
+  if (p.signin === 'grok' && poll && may('plan'))
+    ways.push({
+      id: 'plan',
+      label: 'Grok plan',
+      icon: LogInIcon,
+      info: 'Run Grok models on your own SuperGrok or X Premium plan instead of an API key.',
+      set: !!p.plan?.set,
+      ident: p.plan?.hint,
+      test: wayTest(p.plan, true),
+      signin: {
+        start: () => client.startSignin(p.id),
+        provider: 'Grok',
+        poll: async () => {
+          const r = await poll(p.id);
+          if (!r.done) return false;
+          keep(r.status);
+          lumenToast.success('Signed in');
+          return true;
+        },
+      },
+      onTest: () => client.testOwnKey(p.id, 'plan').finally(refresh),
+      onRemove: () => apply(`plan:${p.id}`, () => client.signOut(p.id), 'Signed out'),
+      removeTitle: 'Sign out of your Grok plan?',
+      removeText: 'Your API key, if you set one, runs from then on.',
+      removeLabel: 'Sign out',
+    });
   if (p.signin === 'chatgpt' && may('plan'))
     ways.push({
       id: 'plan',

@@ -516,8 +516,11 @@ export interface AssistantProviderRow {
   prefix: string;
   /** Where a person makes a key. */
   keys_url: string;
-  /** A person may sign in with their plan in place of their own key (`chatgpt`). */
-  signin?: 'chatgpt';
+  /**
+   * A person may sign in with their plan in place of their own key: `chatgpt` ends on an address
+   * the person pastes back, `grok` is a device code they approve (nothing to paste).
+   */
+  signin?: AssistantSignin;
   /** The app's key: its state for admins; for others only whether one is set. */
   app: KeyState & { from_env?: boolean };
   /** The person's own API key. */
@@ -533,6 +536,19 @@ export interface AssistantProviderRow {
   own_ways?: AssistantOwnWay[];
 }
 
+/** A provider's plan sign-in. */
+export type AssistantSignin = 'chatgpt' | 'grok';
+
+/** A started device-code sign-in (`grok`): the code to approve at `url`; never the device code. */
+export interface AssistantDeviceSignin {
+  url: string;
+  code: string;
+  /** ms */
+  expires_at: number;
+  /** Seconds between asks. */
+  interval: number;
+}
+
 /** A person's own way to a provider: their API key or their plan sign-in. */
 export const ASSISTANT_OWN_WAYS = ['key', 'plan'] as const;
 export type AssistantOwnWay = (typeof ASSISTANT_OWN_WAYS)[number];
@@ -543,7 +559,7 @@ export interface KeyState {
   /** `sk-ant-…7Qx2`, or the signed-in account's email */
   hint?: string;
   /** Set when it is a plan sign-in, not a key. */
-  via?: 'chatgpt';
+  via?: AssistantSignin;
   saved_at?: number;
   test?: { at: number; ok: boolean; detail: string };
 }
