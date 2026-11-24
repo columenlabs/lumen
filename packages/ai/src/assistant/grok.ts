@@ -19,22 +19,71 @@ const EARLY_MS = 5 * 60_000;
 /** The model a sign-in's test runs: the smallest Grok, one short answer. */
 const TEST_MODEL = 'grok-4.3';
 
-/** The Grok CLI release whose headers plan calls carry (the proxy checks for a known client). */
-const CLI_VERSION = '0.2.101';
-
 /**
- * The headers xAI's Grok CLI sends its proxy, which every plan call carries: the proxy reads a plan
- * token only with them (xai-org/grok-build, as pi-xai sends them).
+ * The Grok CLI release plan calls name. The proxy refuses an outdated one (426), so the version is read
+ * from xAI's own release feed (what its installer reads), kept for `VERSION_MS`, and read again at once
+ * when the proxy says it is outdated. This one is only the start until the feed answers.
  */
-export const grokPlanHeaders = (model: string): Record<string, string> => ({
-  'user-agent': `grok-shell/${CLI_VERSION}`,
+let cliVersion = { v: '1.0.92', at: 0 };
+const VERSION_FEEDS = [
+  'https://x.ai/cli/stable',
+  'https://storage.googleapis.com/grok-build-public-artifacts/cli/stable',
+];
+const VERSION_MS = 6 * 3_600_000;
+
+async function currentCliVersion(fetchFn: typeof fetch, fresh = false): Promise<string> {
+  if (!fresh && Date.now() - cliVersion.at < VERSION_MS) return cliVersion.v;
+  for (const url of VERSION_FEEDS) {
+    const text = await fetchFn(url, { signal: AbortSignal.timeout(5_000) })
+      .then((r) => (r.ok ? r.text() : ''))
+      .catch(() => '');
+    const v = text.trim().split(/\s/)[0] ?? '';
+    if (/^\d+\.\d+\.\d+(-[A-Za-z0-9._]+)?$/.test(v)) {
+      cliVersion = { v, at: Date.now() };
+      return v;
+    }
+  }
+  // The feed is down: keep the last version and ask again in a minute, not on every call.
+  cliVersion = { v: cliVersion.v, at: Date.now() - VERSION_MS + 60_000 };
+  return cliVersion.v;
+}
+
+/** The headers xAI's Grok CLI sends its proxy; the proxy reads a plan token only with them. */
+const planHeaders = (model: string, version: string): Record<string, string> => ({
+  'user-agent': `grok-shell/${version}`,
   'x-grok-client-identifier': 'grok-shell',
-  'x-grok-client-version': CLI_VERSION,
+  'x-grok-client-version': version,
   'x-grok-client-mode': 'interactive',
   'x-xai-token-auth': 'xai-grok-cli',
   'x-authenticateresponse': 'authenticate-response',
   'x-grok-model-override': model,
 });
+
+/**
+ * A fetch for Grok plan calls: each carries the Grok CLI's headers at xAI's current CLI version, and
+ * a 426 (CLI outdated) reads the version again and sends the call once more.
+ */
+export function grokPlanFetch(base: typeof fetch = fetch): typeof fetch {
+  return async (input, init) => {
+    let model = '';
+    try {
+      const b = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+      if (b && typeof b.model === 'string') model = b.model;
+    } catch {}
+    const send = (version: string) => {
+      const headers = new Headers(init?.headers);
+      for (const [k, v] of Object.entries(planHeaders(model, version))) headers.set(k, v);
+      return base(input, { ...init, headers });
+    };
+    const sent = await currentCliVersion(base);
+    const res = await send(sent);
+    if (res.status !== 426) return res;
+    const now = await currentCliVersion(base, true);
+    if (now === sent) return res;
+    console.log(JSON.stringify({ event: 'grok_cli_version', from: sent, to: now }));
+    return send(now);
+  };
+}
 
 /** A started sign-in, kept sealed until it is approved or runs out. */
 export interface GrokPending {
@@ -232,10 +281,9 @@ async function xaiSaid(res: Response): Promise<string> {
  */
 export async function testGrok(t: GrokTokens, fetchFn: typeof fetch, base: string) {
   const at = Date.now();
-  const res = await fetchFn(`${base}/responses`, {
+  const res = await grokPlanFetch(fetchFn)(`${base}/responses`, {
     method: 'POST',
     headers: {
-      ...grokPlanHeaders(TEST_MODEL),
       authorization: `Bearer ${t.access_token}`,
       'content-type': 'application/json',
     },

@@ -110,7 +110,7 @@ export const XAI_BASE_URL = 'https://api.x.ai/v1';
 /**
  * Where a Grok plan sign-in runs models: xAI's Grok CLI proxy, which bills the person's SuperGrok
  * plan. The same token on `XAI_BASE_URL` bills the account's API credits instead (402 when it has
- * none, 2026-11-24). It takes the Grok CLI's own headers (`grokPlanHeaders`).
+ * none, 2026-11-24). It takes the Grok CLI's own headers at xAI's current CLI version (`grokPlanFetch`).
  */
 export const GROK_PLAN_BASE_URL = 'https://cli-chat-proxy.grok.com/v1';
 
