@@ -19,6 +19,12 @@ export interface ToolDef {
   read: boolean;
   /** A find tool (`findTool`): one query per question, so the assistant puts every condition in it. */
   find?: boolean;
+  /**
+   * Its result may carry pictures for the model to look at (a render, a frame): an object with
+   * `images: [{ media_type, data }]` (base64 PNG, JPEG or WebP). They reach the model as images, never
+   * as text, and never count toward the result's cut (`AiToolsOptions.maxChars`).
+   */
+  images?: boolean;
 }
 
 /** Tools opened for one answer: what they are, how to call one, and how to let them go. */

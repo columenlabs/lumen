@@ -68,6 +68,34 @@ export interface OpenedTools {
   close(): Promise<void>;
 }
 
+/** A picture a tool result carries for the model (`ToolDef.images`). */
+export interface ToolImage {
+  media_type: string;
+  data: string;
+}
+
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+/** Most pictures one result hands the model, and their total base64 size. */
+export const TOOL_IMAGES_MAX = 8;
+export const TOOL_IMAGE_CHARS = 4_000_000;
+
+/** A result's pictures (a `ToolDef.images` tool), checked and capped, and the rest of it. */
+export function splitImages(out: unknown): { rest: unknown; images: ToolImage[] } {
+  if (!out || typeof out !== 'object' || Array.isArray(out) || !('images' in out))
+    return { rest: out, images: [] };
+  const { images: raw, ...rest } = out as { images?: unknown };
+  const images: ToolImage[] = [];
+  let chars = 0;
+  for (const i of Array.isArray(raw) ? raw : []) {
+    const img = i as Partial<ToolImage> | null;
+    if (!img || typeof img.data !== 'string' || !IMAGE_TYPES.has(String(img.media_type))) continue;
+    if (images.length >= TOOL_IMAGES_MAX || chars + img.data.length > TOOL_IMAGE_CHARS) break;
+    chars += img.data.length;
+    images.push({ media_type: String(img.media_type), data: img.data });
+  }
+  return { rest, images };
+}
+
 const withoutMeta = (schema: Record<string, unknown>) => {
   const { $schema: _, ...rest } = schema;
   return { type: 'object', ...rest };
@@ -81,6 +109,31 @@ function describe(def: ToolDef, kind: 'read' | 'draft' | 'write') {
         ? 'WRITES AT ONCE: this call makes the change now; the person can undo it. '
         : '';
   return `${lead}${def.title ? `${def.title}. ` : ''}${def.description ?? ''}`.slice(0, 4000);
+}
+
+/** A `ToolDef.images` tool's output as the model gets it: its words as JSON, then each picture. */
+function imageOutput(output: unknown) {
+  const o = output as { result?: unknown; images?: ToolImage[] } | null;
+  const images = o && typeof o === 'object' && Array.isArray(o.images) ? o.images : [];
+  if (!images.length)
+    return typeof output === 'string'
+      ? { type: 'text' as const, value: output }
+      : { type: 'json' as const, value: (output ?? null) as never };
+  const words = o?.result;
+  return {
+    type: 'content' as const,
+    value: [
+      {
+        type: 'text' as const,
+        text: typeof words === 'string' ? words : JSON.stringify(words ?? null),
+      },
+      ...images.map((i) => ({
+        type: 'image-data' as const,
+        data: i.data,
+        mediaType: i.media_type,
+      })),
+    ],
+  };
 }
 
 /** Opens every source at once; one that fails is counted and left out. */
@@ -126,8 +179,11 @@ export async function openAiTools(
           try {
             const out = await open.call(def.name, args);
             o.called?.({ group: s.group, tool: def.name, ok: true, ms: Date.now() - t0 });
-            const text = typeof out === 'string' ? out : JSON.stringify(out);
-            const shown = text.length > max ? `${text.slice(0, max)} …(cut)` : out;
+            // Pictures never count toward the cut: the rest is cut, then they go back with it.
+            const { rest, images } = def.images ? splitImages(out) : { rest: out, images: [] };
+            const text = typeof rest === 'string' ? rest : JSON.stringify(rest);
+            const cut = text.length > max ? `${text.slice(0, max)} …(cut)` : rest;
+            const shown = images.length ? { result: cut, images } : cut;
             if (kind === 'write' && o.wrote) {
               const change = await o.wrote({
                 call,
@@ -145,6 +201,11 @@ export async function openAiTools(
             return { error };
           }
         },
+        // A tool with pictures hands them to the model as images; the same output always maps to the
+        // same parts, so a later turn's prompt is the same and stays cached.
+        ...(def.images
+          ? { toModelOutput: ({ output }: { output: unknown }) => imageOutput(output) }
+          : {}),
       });
     }
   return {
