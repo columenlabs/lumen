@@ -194,6 +194,29 @@ const HEALTH: Record<SettingHealth, { word: string; cls: string }> = {
   off: { word: 'Off', cls: 'text-muted-foreground' },
 };
 
+/**
+ * The health dot on a row's icon (`LumenExpandRow health`): green working (`works`, `on`), red
+ * failed, a grey ring not checked yet (`untested`). Nothing for `off`. Hover tells when and what.
+ */
+export function SettingHealthDot({ health, title }: { health: SettingHealth; title?: string }) {
+  if (health === 'off') return null;
+  const h = HEALTH[health];
+  return (
+    <span
+      role="img"
+      aria-label={title ? `${h.word}: ${title}` : h.word}
+      title={title ?? h.word}
+      className={cn(
+        'absolute -right-1 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background',
+        (health === 'works' || health === 'on') && 'bg-gain',
+        health === 'failed' && 'bg-loss',
+        health === 'untested' &&
+          'bg-background shadow-[inset_0_0_0_1.5px_var(--color-muted-foreground)]',
+      )}
+    />
+  );
+}
+
 /** The status pill in a thing's header (or a section's title). Hover tells when and what. */
 export function SettingStatus({
   health,

@@ -10,12 +10,37 @@ An app's Settings page: one dialog on every host, General first, then a group pe
 - One or two per-device choices of the app's own (what scrolling does, a default view): `preferences` on `LumenSettings` or `LumenShell`, `SettingField` rows added under General ▸ Preferences after the kit's. Never a section of its own for a single row. `observability={false}` hides Preferences ▸ Observability details (each view's load time) from people who don't need it, such as everyone but an app's admins.
 - Alerts split from delivery: `NotificationsSettings parts="channels"` in one section (where messages go: email, ntfy, webhooks, set up once) and `parts="events"` in another (what goes where: one line per event, a column per channel). Events with a `group` sit under its label ("Limits", "Watchdog").
 
-## Three slots (every thing in a section)
+## One row standard (every setting, every app)
 
-A thing you connect or turn on (a provider, a channel, a key, an account) is one `LumenExpandRow` with three slots, built on shadcn's `Field` and `InputGroup`:
+Three kinds of row, and two questions decide the rest, so a new setting needs no new design.
+
+- **Value**: one setting, label left, control right (`SettingField`).
+- **Thing**: something you connect or turn on (a provider, a channel, a sign-in method). A `LumenExpandRow` that folds open to its settings.
+- **List**: things of one kind (passkeys, devices, webhooks). A `LumenExpandRow` that folds open to its items, with Add as the last line on the right.
+
+The two questions:
+
+1. **Can it be turned on or off?** Then `toggle`: a switch just left of the chevron. Nothing else says on or off.
+2. **Can it work or break?** Then `health`: a dot on the row's icon. Green works (or is on and set up), red failed (its `healthTitle` says why on hover), a grey ring not checked yet, no dot when it is off or empty.
 
 ```
-[icon] Plaid  Production · keys ••91        ● Works  [on]  ›     header: status pill, on/off for the whole thing
+[icon●] Name   grey detail ………………………………… [switch] ›     every row, in this order
+[🔑●] Passkeys   2 passkeys                              ›     a list: no switch
+      MacBook               Last used 2 days ago     🗑        items: actions on the right, trash grey, red on hover
+      iPhone                Added Nov 3              🗑
+                                        [🔑 Add passkey]       Add: the last line, on the right
+[📱●] Authenticator app   8 backup codes left    [on]   ›     a thing that turns on and off
+[✉ ] Email code   name@example.com               [off]  ›     off: no dot
+```
+
+No chips or pills in the header and no empty columns: counts and names go in the grey detail (`meta`). The dot sits on the icon, so the right edge (switch, chevron) lines up down the list whatever each row has.
+
+## Three slots (every thing in a section)
+
+Inside, a thing is built on shadcn's `Field` and `InputGroup`:
+
+```
+[icon●] Plaid  Production · keys ••91                 [on]  ›     header: health on the icon, on/off for the whole thing
        Environment   [Production|Sandbox]                          SettingField rows: one setting each
        Keys          [••••91            ✎]                          a value's own buttons sit inside it
        Webhook       [https://money…    ⧉]                [on]      a switch for one setting at the row's end
@@ -25,7 +50,7 @@ A thing you connect or turn on (a provider, a channel, a key, an account) is one
 ```tsx
 <LumenExpandRow
   id="plaid" icon={<LinkIcon />} name="Plaid" meta="Production · keys ••91"
-  status={<SettingStatus health={settingHealth(on, test)} title={`Tested ${when}`} />}
+  health={settingHealth(on, test)} healthTitle={`Tested ${when}`}
   toggle={{ checked: on, onCheckedChange: setOn, label: 'Plaid on' }}
   actions={<SettingActions test={test} onTest={runTest} remove={{ label: 'Remove keys', run: removeKeys }} />}
 >
@@ -43,8 +68,8 @@ Rules:
 2. **A label names the setting, not the thing**: "Keys" inside Plaid, never "Plaid keys".
 3. **On/off for the whole thing is `toggle`** in the header; on/off for one setting is that row's `end`. Never a "Turn on" button or a trash icon for "off".
 4. **Actions on the whole thing are in `SettingActions`**: Test, then Remove (trash, confirms) at the far right; anything else (Sync now, Sign in again) as an icon before them. Actions on one value sit inside its `SettingValue` (Copy, Replace).
-5. **Status is the header pill only, and it always says a state with its dot** (`SettingStatus health`): ● On (set up, nothing to test, such as a sign-in method), ● Works, ● Failed, ○ Not tested (things with a test), ○ Off (not set up or switched off). A count or a name is never the pill: it goes in the row's `meta` ("2 passkeys", "8 left"); `count` is only for a section's total. The action bar adds just the time or the error.
-6a. **The header's right side is the same columns on every row**: the pill, then the switch or one quick action (`toggle` or `end`), then the chevron. A list keeps that middle column on every row once any row has one, so pills and chevrons line up down the list. Adding to or renewing the thing (＋ Add a passkey, ↻ New codes) is an action in the open row's `actions`, never in the header.
+5. **Health is a dot on the icon** (`health`, `healthTitle`; `SettingHealthDot` draws it): `works` or `on` green, `failed` red, `untested` a grey ring, none for `off`, empty or a thing that can't break. A count or a name is never a pill: it goes in the row's `meta` ("2 passkeys", "8 backup codes left"); `count` is only for a section's total. The action bar adds just the time or the error. `status` (a pill in the header) is deprecated.
+6a. **The header's right side is the same on every row**: the switch or one quick action (`toggle` or `end`), then the chevron. A switch only when the thing turns on and off; a list has none. Adding to a list is its last line, an outline icon + text button on the right ("🔑 Add passkey"), lined up with its items' actions. An item's trash is grey and turns red on hover.
 6. **Several controls on one row are one group** and never wrap. A long value takes `stack`: on a phone its label goes above it.
 7. **A section's pill** is `health` on its `SettingsSectionDef`: `sectionHealth(items)`, the worst thing wins. The Settings list shows it as a dot.
 8. **A row with only an `end`** (a switch or a status pill, no control) gives its label the whole row, so a short name never cuts off on a phone. A row with a control starts its label column at 8rem (6rem on a phone) and widens it for a longer name, so a label is never cut; on a phone it takes at most half the row and wraps there. The control sits flush to the row's right edge, its label on the left (a `stack` row's control starts at the left on a phone, under its label); never align a field by hand.
@@ -58,7 +83,7 @@ Rules:
 - `NotificationsSettings`: email and ntfy turn on and off with the header switch, and each webhook is one row.
 - `McpSettings`: each server's address is a row with Copy, then From picks the app whose steps show.
 - `SchedulesSection`'s editor: each setting is a row (On and Notify end in their switch).
-- `LumenSignInMethods` (Security): passkeys, authenticator app, emailed and backup codes, each a `LumenExpandRow` under one bordered list, one open at a time. Its steps run inside its own row (a passkey's name box, the app's QR → 6 digits → backup codes), never over the whole section. Each row's pill is ● On or ○ Off; the app's header switch starts setup (on) or turns it off after a confirm; ＋ (Add a passkey) and ↻ (New backup codes) sit in the open row's action bar; counts ("2 passkeys", "8 left") are the row's meta. `passwordless` (an app with no passwords: passkeys, Google, emailed codes) skips the password step and guards Turn off and new codes with a confirm. On a phone the QR step is an Open in authenticator app link.
+- `LumenSignInMethods` (Security): passkeys (a list), authenticator app and emailed codes (things with a switch), each a `LumenExpandRow` under one bordered list, one open at a time. Its steps run inside its own row (a passkey's name box, the app's QR → 6 digits → backup codes), never over the whole section. The icon's dot is green when the method is set up; passkeys have no switch, and Add passkey is the list's last line on the right; each passkey shows Last used (`lastUsed`) or Added. Backup codes fold into the authenticator app's row ("8 backup codes left" in its meta, ↻ new codes inside); they get a row of their own only when there is no app. The app's switch starts setup (on) or turns it off after a confirm. `passwordless` (an app with no passwords: passkeys, Google, emailed codes) skips the password step and guards Turn off and new codes with a confirm. On a phone the QR step is an Open in authenticator app link.
 - `LumenSessions` (Security ▸ Devices): where the person is signed in, folded under "Signed in on N"; open, this device first, then one line per kind of device (the same name once, ×N), each with Sign out; the header's `end` signs out everywhere else after a confirm.
 - `LumenSecondStep`'s `trust` adds a Trust this device box under the code. Add a passkey waits on the device through `usePasskeyWait`: Cancel stays pressable and ends the wait at once, the wait gives up after `PASSKEY_WAIT_MS` (2 min), a closed or refused prompt is a quiet note (`PASSKEY_CANCELLED_TEXT`), never the browser's words. Pass `passkeys.onCancel` to close the browser's prompt (SimpleWebAuthn's `WebAuthnAbortService.cancelCeremony`); `onAdd` may answer the sign-in service's `{ error }` as is. A sign-in screen of the app's own uses the same hook for its passkey button and calls `cancel()` before Google or a code, so a passkey never locks the other ways in.
 
@@ -66,15 +91,15 @@ Rules:
 
 ```
 ⚙ Email                            one-line description (≤ 64 chars)
-  ▸ Relay A       tunnel                 Works      LumenExpandRow: name · meta · badge
-  ▾ Relay B       public internet        Failed
+  ▸ ●Relay A      tunnel                       ›   LumenExpandRow: health on the icon · name · meta
+  ▾ ●Relay B      public internet              ⌄   (red dot: failed, hover says why)
       fields of this row …                           opens in place, one row at a time
 ──────────────────────────────────────────────────
   Passed                                       ↺  ✓  footer: a word or two, then icons
 ```
 
 - `description` is one plain line of 64 characters or less, drawn beside the title (`Email | How the app sends mail`) and under it on a phone; nothing else under the title.
-- Every row starts collapsed and shows its name, its one-line `meta` beside it, and its `status`. Opening one closes the others.
+- Every row starts collapsed and shows its icon with its health dot, its name and its one-line `meta` beside it. Opening one closes the others.
 - The footer's status is a word or two ("Passed", "Test to save"). Actions are icons.
 
 ## Do / Don't

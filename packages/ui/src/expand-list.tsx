@@ -1,30 +1,19 @@
-// A stack of rows that start collapsed and expand in place: a settings page's providers, channels or
-// accounts, each row's name, a line about it and a badge, its own settings inside. One row is open
-// at a time within a LumenExpandList. The header holds the thing's `status` pill and the `toggle` that
-// turns the whole thing on or off; the body is `SettingField` rows; `actions` is its action bar
-// (`SettingActions`: last result, Test, Remove). See setting-parts.tsx.
+// A stack of rows that start collapsed and expand in place: one way to draw every setting that is a
+// "thing" (a provider, a sign-in method, a channel) or a "list" (passkeys, devices, keys). Every row
+// reads [icon with its health dot] Name, grey detail ... [switch] chevron. Two questions decide the
+// rest: can it be turned on or off (`toggle`: a switch), and can it work or break (`health`: a dot on
+// the icon). Counts and names go in `meta`. The body is `SettingField` rows or a list's items with
+// its Add last; `actions` is its action bar (`SettingActions`). See docs/parts/settings.md.
 import { ChevronRightIcon } from 'lucide-react';
-import {
-  type ReactNode,
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useId,
-  useMemo,
-  useState,
-} from 'react';
+import { type ReactNode, createContext, useContext, useMemo, useState } from 'react';
 import { cn } from './lib/utils';
+import { type SettingHealth, SettingHealthDot } from './setting-parts';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Switch } from './ui/switch';
 
-const ListCtx = createContext<{
-  open: string | null;
-  set: (id: string | null) => void;
-  /** Some row has a switch or a quick action, so every row keeps that column. */
-  slot: boolean;
-  mark: (key: string, has: boolean) => void;
-} | null>(null);
+const ListCtx = createContext<{ open: string | null; set: (id: string | null) => void } | null>(
+  null,
+);
 
 /** Rows that start collapsed; opening one closes the others. `defaultOpen` names a row open at first. */
 export function LumenExpandList({
@@ -37,13 +26,7 @@ export function LumenExpandList({
   children: ReactNode;
 }) {
   const [open, set] = useState<string | null>(defaultOpen);
-  const [slots, setSlots] = useState<Record<string, boolean>>({});
-  const mark = useCallback(
-    (key: string, has: boolean) => setSlots((s) => (s[key] === has ? s : { ...s, [key]: has })),
-    [],
-  );
-  const slot = Object.values(slots).some(Boolean);
-  const value = useMemo(() => ({ open, set, slot, mark }), [open, slot, mark]);
+  const value = useMemo(() => ({ open, set }), [open]);
   return (
     <ListCtx.Provider value={value}>
       <div className={cn('grid grid-cols-1', className)}>{children}</div>
@@ -61,6 +44,8 @@ export function LumenExpandRow({
   meta,
   badge,
   status,
+  health,
+  healthTitle,
   toggle,
   actions,
   icon,
@@ -75,8 +60,13 @@ export function LumenExpandRow({
   meta?: ReactNode;
   /** Old name for `status`. */
   badge?: ReactNode;
-  /** The thing's status pill (`SettingStatus`): Works, Failed, Not tested, Off, or a count. */
+  /** Deprecated: give `health` instead. A pill drawn before the switch. */
   status?: ReactNode;
+  /** Can it work or break? A dot on the icon: green working, red failed, a grey ring not checked
+   *  yet. Leave it out (or null, 'off') when it is off, empty, or can't break. */
+  health?: SettingHealth | null;
+  /** Hover on the dot: when it was checked and what went wrong. */
+  healthTitle?: string;
   /** Turns the whole thing on or off: a switch in the header, outside the expand button. */
   toggle?: {
     checked: boolean;
@@ -88,8 +78,8 @@ export function LumenExpandRow({
   actions?: ReactNode;
   /** A logo or icon before the name. */
   icon?: ReactNode;
-  /** One quick action on the whole thing in the header, outside the expand button (an `IconButton`:
-   *  Add a passkey, Sign out everywhere else), before the chevron. */
+  /** One quick action on the whole thing in the header where no switch fits (an `IconButton`:
+   *  Sign out everywhere else), before the chevron. Adding to a list goes in its body, last. */
   end?: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -105,24 +95,19 @@ export function LumenExpandRow({
     else if (inList) list.set(o ? id : null);
     else setOwn(o);
   };
-  const key = useId();
-  const has = Boolean(toggle || end);
-  const mark = list?.mark;
-  useEffect(() => {
-    if (!mark) return;
-    mark(key, has);
-    return () => mark(key, false);
-  }, [mark, key, has]);
-  const slot = has || Boolean(list?.slot);
   const label = typeof name === 'string' ? name : undefined;
-  // Every row lays its right side out the same way (status, then the switch or quick action, then
-  // the chevron), each in a column of fixed width, so pills and chevrons line up down the list.
+  const dot = health && health !== 'off' ? health : null;
   return (
     <Collapsible open={open} onOpenChange={change} className="border-b last:border-b-0">
       <div className="flex w-full min-w-0 items-center gap-2 px-1 hover:bg-muted/50">
         <CollapsibleTrigger asChild>
           <button type="button" className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left">
-            {icon}
+            {(icon || dot) && (
+              <span data-slot="expand-icon" className="relative flex shrink-0 items-center">
+                {icon}
+                {dot && <SettingHealthDot health={dot} title={healthTitle} />}
+              </span>
+            )}
             <span className="flex min-w-0 flex-1 items-baseline gap-2">
               <span className="shrink-0 truncate font-medium" title={label}>
                 {name}
@@ -139,19 +124,15 @@ export function LumenExpandRow({
             {status ?? badge}
           </button>
         </CollapsibleTrigger>
-        {slot && (
-          <div data-slot="expand-end" className="flex w-9 shrink-0 items-center justify-center">
-            {toggle ? (
-              <Switch
-                checked={toggle.checked}
-                onCheckedChange={toggle.onCheckedChange}
-                disabled={toggle.disabled}
-                aria-label={toggle.label}
-              />
-            ) : (
-              end
-            )}
-          </div>
+        {toggle ? (
+          <Switch
+            checked={toggle.checked}
+            onCheckedChange={toggle.onCheckedChange}
+            disabled={toggle.disabled}
+            aria-label={toggle.label}
+          />
+        ) : (
+          end
         )}
         <CollapsibleTrigger asChild>
           <button
@@ -171,7 +152,7 @@ export function LumenExpandRow({
       </div>
       <CollapsibleContent
         data-slot="expand-body"
-        className="grid grid-cols-1 gap-5 px-1 pt-1 pb-5 has-[[data-slot=setting-field]]:gap-0 has-[[data-slot=setting-field]]:pb-3 has-[[data-slot=setting-field]]:pl-8"
+        className="grid grid-cols-1 gap-3 px-1 pt-0 pb-3 has-[[data-slot=setting-field]]:gap-0 has-[[data-slot=setting-field]]:pb-3 has-[[data-slot=setting-field]]:pl-8"
       >
         {children}
         {actions}

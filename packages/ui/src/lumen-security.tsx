@@ -14,7 +14,6 @@ import {
   Lock,
   LogOut,
   Mail,
-  Plus,
   Power,
   RefreshCw,
   Smartphone,
@@ -43,7 +42,7 @@ import {
   passkeyProblem,
   usePasskeyWait,
 } from './lumen-passkey';
-import { SettingActions, SettingField, SettingStatus } from './setting-parts';
+import { SettingActions, SettingField } from './setting-parts';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
@@ -333,6 +332,8 @@ export interface LumenPasskey {
   id: string;
   name?: string | null;
   createdAt?: Date | string | null;
+  /** When it last signed in: shown instead of when it was added, so one that stopped working stands out. */
+  lastUsed?: Date | string | null;
 }
 
 export interface LumenSignInMethodsProps {
@@ -477,13 +478,15 @@ export function LumenSignInMethods({
     });
   };
   const [askOff, setAskOff] = useState(false);
+  // Backup codes fold into the authenticator app's row; a row of their own only without one.
+  const backupRow: Row = app ? 'app' : 'backup';
   const turnOffApp = () => run(() => app?.onTurnOff?.('') ?? Promise.resolve());
   const renewCodes = () =>
     run(async () => {
       const res = await backup?.onRenew('');
       if (typeof res === 'string') return res;
       setCodes(res ?? []);
-      setRow('backup');
+      setRow(backupRow);
       setFlow('codes');
     });
 
@@ -680,34 +683,19 @@ export function LumenSignInMethods({
                 ? `${list.length} passkeys`
                 : list.length === 1
                   ? list[0]?.name || 'Passkey'
-                  : undefined
+                  : 'None yet'
             }
-            status={<SettingStatus health={list.length ? 'on' : 'off'} />}
-            actions={
-              flow === 'passkey' ? undefined : (
-                <SettingActions>
-                  <IconButton
-                    icon={Plus}
-                    label="Add a passkey"
-                    variant="outline"
-                    onClick={() => open('passkey')}
-                  />
-                </SettingActions>
-              )
-            }
+            health={list.length ? 'on' : null}
           >
-            <div className="flex min-w-0 flex-col">
+            <div className="flex min-w-0 flex-col pl-7">
               {list.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex min-h-10 min-w-0 items-center gap-3 border-t border-border/60 first:border-t-0"
-                >
+                <div key={p.id} className="flex min-h-10 min-w-0 items-center gap-3">
                   <span className="min-w-0 flex-1 truncate" title={p.name || 'Passkey'}>
                     {p.name || 'Passkey'}
                   </span>
-                  {p.createdAt && (
+                  {(p.lastUsed || p.createdAt) && (
                     <span className="shrink-0 whitespace-nowrap text-muted-foreground text-sm">
-                      Added {when(p.createdAt)}
+                      {p.lastUsed ? `Last used ${when(p.lastUsed)}` : `Added ${when(p.createdAt)}`}
                     </span>
                   )}
                   <LumenConfirm
@@ -719,14 +707,21 @@ export function LumenSignInMethods({
                     <IconButton
                       icon={Trash2}
                       label={`Remove ${p.name || 'passkey'}`}
-                      className="text-loss"
+                      className="text-muted-foreground hover:bg-loss/10 hover:text-loss"
                     />
                   </LumenConfirm>
                 </div>
               ))}
+              {flow !== 'passkey' && (
+                <div className="flex justify-end pt-1">
+                  <Button type="button" variant="outline" size="sm" onClick={() => open('passkey')}>
+                    <KeyRound /> Add passkey
+                  </Button>
+                </div>
+              )}
               {flow === 'passkey' && (
                 <form
-                  className="flex min-w-0 flex-col gap-2 border-t border-border/60 pt-2 first:border-t-0"
+                  className="flex min-w-0 flex-col gap-2 pt-1"
                   onSubmit={async (e) => {
                     e.preventDefault();
                     setError(null);
@@ -774,8 +769,14 @@ export function LumenSignInMethods({
               </RowIcon>
             }
             name="Authenticator app"
-            meta={appFlow ? 'Setting up' : undefined}
-            status={<SettingStatus health={app.on ? 'on' : 'off'} />}
+            meta={
+              appFlow
+                ? 'Setting up'
+                : app.on && backup && backup.left !== null
+                  ? `${backup.left} backup codes left`
+                  : undefined
+            }
+            health={app.on ? 'on' : null}
             toggle={{
               checked: app.on || Boolean(appFlow),
               label: 'Authenticator app',
@@ -795,7 +796,7 @@ export function LumenSignInMethods({
               passwordStep
             ) : appConfirm ? (
               appConfirm
-            ) : codesStep && setup ? (
+            ) : codesStep && (setup || backupFlow) ? (
               codesStep
             ) : (
               <>
@@ -807,6 +808,39 @@ export function LumenSignInMethods({
                     1Password, Google Authenticator or any app
                   </span>
                 </SettingField>
+                {app.on && backup && (
+                  <SettingField
+                    label="Backup codes"
+                    info="Each works once, for when your phone is lost."
+                  >
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span className="num truncate text-sm">
+                        {backup.left === null ? 'Saved' : `${backup.left} left`}
+                      </span>
+                      {passwordless ? (
+                        <LumenConfirm
+                          title="Make new backup codes?"
+                          description="Your old codes stop working."
+                          action="Make new codes"
+                          destructive={false}
+                          onConfirm={renewCodes}
+                        >
+                          <IconButton
+                            icon={RefreshCw}
+                            label="Make new backup codes"
+                            disabled={busy}
+                          />
+                        </LumenConfirm>
+                      ) : (
+                        <IconButton
+                          icon={RefreshCw}
+                          label="Make new backup codes"
+                          onClick={() => openRow(backupRow, 'backup')}
+                        />
+                      )}
+                    </span>
+                  </SettingField>
+                )}
                 <LumenAuthProblem>{row === 'app' ? error : null}</LumenAuthProblem>
                 {app.on && app.replaceable !== false && (
                   <SettingActions>
@@ -834,7 +868,7 @@ export function LumenSignInMethods({
             }
             name="Email code"
             meta={email.to}
-            status={<SettingStatus health={email.on ? 'on' : 'off'} />}
+            health={email.on ? 'on' : null}
             toggle={
               email.onToggle
                 ? {
@@ -857,7 +891,7 @@ export function LumenSignInMethods({
             </SettingField>
           </LumenExpandRow>
         )}
-        {backup && (
+        {backup && !app && (
           <LumenExpandRow
             {...rowProps('backup')}
             icon={
@@ -867,7 +901,7 @@ export function LumenSignInMethods({
             }
             name="Backup codes"
             meta={backup.left === null ? undefined : `${backup.left} left`}
-            status={<SettingStatus health="on" />}
+            health="on"
             actions={
               codesStep && backupFlow ? undefined : (
                 <SettingActions>
@@ -891,7 +925,7 @@ export function LumenSignInMethods({
                       icon={RefreshCw}
                       label="Make new backup codes"
                       variant="outline"
-                      onClick={() => openRow('backup', 'backup')}
+                      onClick={() => openRow(backupRow, 'backup')}
                     />
                   )}
                 </SettingActions>
