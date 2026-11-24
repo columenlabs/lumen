@@ -632,6 +632,16 @@ export {
   useAssistantHotkey,
 } from './assistant-panel';
 export {
+  type ExplorerApi,
+  type ExplorerField,
+  type ExplorerItem,
+  type ExplorerStatus,
+  type ExplorerStatusTone,
+  type ExplorerToggle,
+  LumenExplorer,
+  type LumenExplorerProps,
+} from './lumen-explorer';
+export {
   LumenTree,
   LumenTreeItem,
   type LumenTreeItemProps,
