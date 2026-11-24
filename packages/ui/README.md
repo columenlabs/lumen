@@ -57,6 +57,16 @@ Your own parts go in `LumenShell`'s slots: `brand`, `headerActions`, `panel` (a 
 
 Use `createDeskQueryClient()` for the app's TanStack Query client: data stays fresh 5 minutes and cached 30.
 
+Keep the first load working across deploys: add the boot guard to `vite.config.ts`, and call `watchNewBuilds()` (with your router, if you have one) at start.
+
+```ts
+import { bootGuard } from '@columenlabs/lumen-ui/boot';
+
+plugins: [bootGuard({ splash: '#splash', name: 'My app' })]
+```
+
+Until the app draws (the `splash` element is gone), a script or stylesheet of the site that fails to load, or nothing drawn in 30 s, reloads the page after 1, 3 and 9 s; after 3 tries in 2 minutes the splash says the app couldn't load, with Reload. Never a page stuck on its splash, never a reload loop. Once the app has drawn, `watchNewBuilds` takes over.
+
 ## What's inside
 
 **Frame.** `LumenShell` (sidebar with icons-only collapse and a drawer on phone, header, status bar, Settings, profile menu, ⌘K Find; `LumenFinder` mounts Find on its own for an app that draws its own frame, with commands from `useLumenFinderRows`), `LumenAppSwitcher` and `LumenSuiteSwitcher` (groups, apps on other sites, a list read from an address), `WhatsNew` (release notes in a drawer), `TasksButton` and `TasksProvider` (background work in the header), `NotificationsSettings`, `McpSettings`, sign-in screens (`LumenAuthStage`, `LumenSecondStep`, `LumenSignInMethods`, `LumenBackupCodes`, `LumenBotCheck` for Cloudflare Turnstile, `authErrorText` for errors in plain words), `StatusHealth`, `LumenBoundary` (keeps a crash inside its card), `LumenPageState` (loading, empty and error), `lumenToast`.
