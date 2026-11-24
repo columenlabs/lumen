@@ -3,6 +3,7 @@ import type { UsagePart } from '@columenlabs/lumen-ui-types/assistant';
 import type { LanguageModelUsage } from 'ai';
 import {
   type CallContext,
+  type CallExtra,
   type ModelDef,
   type TokenUsage,
   logCall,
@@ -39,13 +40,14 @@ export class UsageMeter {
   ) {
     this.p = { label, calls: 0, in: 0, read: 0, out: 0, usd: 0, model: model.id };
   }
-  add(u: LanguageModelUsage) {
-    return this.addTokens(tokenUsage(u));
+  /** `extra`: the call's step and its cache check (`cacheCheckOf` its provider metadata). */
+  add(u: LanguageModelUsage, extra?: CallExtra) {
+    return this.addTokens(tokenUsage(u), extra);
   }
   /** Tokens a provider reports apart from the step's usage (Claude's advisor calls). */
-  addTokens(u: TokenUsage) {
+  addTokens(u: TokenUsage, extra?: CallExtra) {
     const t = priced(this.model, u);
-    logCall(this.model, this.p.label, u, t, this.free, this.ctx);
+    logCall(this.model, this.p.label, u, t, this.free, this.ctx, extra);
     this.p.calls += 1;
     this.p.in += t.in;
     this.p.read += t.read;

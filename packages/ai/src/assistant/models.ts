@@ -196,6 +196,26 @@ export function priced(model: ModelDef, usage: TokenUsage) {
 export interface CallContext {
   task?: string;
   run?: string;
+  /** The session the call ran in (a plan's session-id is its cache key, `key`). */
+  session?: string;
+}
+
+/**
+ * What one call adds to its record: its step in the turn (`compact` for a compaction) and how it
+ * read the cache against the previous call (lumen-ai/agent `CacheCheck`).
+ */
+export interface CallExtra {
+  step?: number | 'compact';
+  cache?: {
+    key: string;
+    session?: string;
+    expected?: number;
+    miss?: string;
+    changed?: number;
+    gapS?: number;
+    effortBefore?: string;
+    toolsChanged?: true;
+  };
 }
 
 /**
@@ -213,7 +233,22 @@ export interface CallRecord extends CallContext {
   out: number;
   hit: number;
   usd: number;
+  /** The call's cost at list price, also when a plan paid $0. */
+  list: number;
   free: boolean;
+  /** The prompt cache key the call was sent on. */
+  key?: string;
+  step?: number | 'compact';
+  /** Tokens the call should have read from the cache (the previous call's, as far as it matches). */
+  expected?: number;
+  /** Why it read short of `expected`: gap, key, prefix (`changed`), evicted, extension or compact. */
+  miss?: string;
+  /** For a compaction that read short: the cause found under it. */
+  under?: string;
+  changed?: number;
+  gapS?: number;
+  effortBefore?: string;
+  toolsChanged?: true;
 }
 
 let callLog: ((r: CallRecord) => void) | null = (r) => console.log(JSON.stringify(r));
@@ -234,20 +269,35 @@ export function logCall(
   p: ReturnType<typeof priced>,
   free: boolean,
   ctx?: CallContext,
+  extra: CallExtra = {},
 ) {
   try {
+    const c = extra.cache;
+    const session = c?.session ?? ctx?.session;
+    const miss = c?.miss && extra.step === 'compact' ? 'compact' : c?.miss;
     callLog?.({
       event: 'ai.call',
       model: model.id,
       label,
       ...(ctx?.task && { task: ctx.task }),
       ...(ctx?.run && { run: ctx.run }),
+      ...(session && { session }),
+      ...(c?.key && { key: c.key }),
+      ...(extra.step !== undefined && { step: extra.step }),
+      ...(c?.expected !== undefined && { expected: c.expected }),
+      ...(miss && { miss }),
+      ...(miss === 'compact' && c?.miss && { under: c.miss }),
+      ...(c?.changed !== undefined && { changed: c.changed }),
+      ...(c?.gapS !== undefined && { gapS: c.gapS }),
+      ...(c?.effortBefore && { effortBefore: c.effortBefore }),
+      ...(c?.toolsChanged && { toolsChanged: true as const }),
       in: p.in,
       read: p.read,
       written: usage.cache_creation_input_tokens ?? 0,
       out: p.out,
       hit: p.in ? Math.round((p.read / p.in) * 1000) / 1000 : 0,
       usd: free ? 0 : Math.round(p.usd * 1e6) / 1e6,
+      list: Math.round(p.usd * 1e6) / 1e6,
       free,
     });
   } catch {

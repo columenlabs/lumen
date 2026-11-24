@@ -39,6 +39,12 @@ export interface AiModelOptions {
   name?: string;
   /** `false` sends the call with no prompt cache. The one way to turn it off; it is on otherwise. */
   cache?: false;
+  /**
+   * Where each call's mark is kept, so the next call is checked against it (`CacheCheck`). A
+   * session passes its own object's storage, so the check holds across isolates and restarts;
+   * without one the marks live in this isolate only.
+   */
+  calls?: CallMemory;
 }
 
 /**
@@ -311,7 +317,10 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
             fetch: key.plan ? planFetch(f, o.name) : f,
           }).responses(model.id);
   if (o.cache === false) return base;
-  return wrapLanguageModel({ model: base, middleware: promptCache(model, !!key.plan) });
+  return wrapLanguageModel({
+    model: base,
+    middleware: promptCache(model, !!key.plan, o.calls),
+  });
 }
 
 /** What a compaction asks the model, after the conversation itself. */
@@ -411,11 +420,16 @@ function unmarked(m: LanguageModelV4Message): LanguageModelV4Message {
  *   request's own after the newest block (a turn's later steps read the earlier ones).
  * - OpenAI: the cache key, named for the model and the system line, so every conversation that
  *   starts the same way shares that start. On a ChatGPT plan the key is also the request's
- *   `session-id`, and a plan keeps one cached prompt per id (the last request's), so there the key
- *   also names the conversation by its first message: two conversations never take each other's.
+ *   `session-id`. A plan keeps more than one prompt per id: two chats on one key, their calls
+ *   taking turns, each read 98-100% of its own (plan, 4 runs, 2026-11-24), and a new chat read 96%
+ *   of the shared start. So a new chat on a plan reads the start too, as on a key.
  * A key the caller set itself (`providerOptions.openai.promptCacheKey`) is kept.
  */
-export function promptCache(model: ModelDef, plan: boolean): LanguageModelMiddleware {
+export function promptCache(
+  model: ModelDef,
+  plan: boolean,
+  calls: CallMemory = isolateCalls,
+): LanguageModelMiddleware {
   return {
     specificationVersion: 'v4',
     transformParams: async ({ params }) => {
@@ -424,7 +438,6 @@ export function promptCache(model: ModelDef, plan: boolean): LanguageModelMiddle
         .filter((m) => m.role === 'system')
         .map(wordsOf)
         .join('\n\n');
-      const first = prompt.find((m) => m.role !== 'system');
       let newest = prompt.length - 1;
       while (newest >= 0 && prompt[newest]?.role !== 'user') newest -= 1;
       const lastSystem = prompt.findLastIndex((m) => m.role === 'system');
@@ -433,11 +446,7 @@ export function promptCache(model: ModelDef, plan: boolean): LanguageModelMiddle
       );
       const openai = { ...params.providerOptions?.openai };
       if (typeof openai.promptCacheKey !== 'string')
-        openai.promptCacheKey = promptCacheKey(
-          plan
-            ? prefixCacheKey(model.id, system, wordsOf(first))
-            : prefixCacheKey(model.id, system),
-        );
+        openai.promptCacheKey = promptCacheKey(prefixCacheKey(model.id, system));
       return {
         ...params,
         prompt: marks,
@@ -451,8 +460,8 @@ export function promptCache(model: ModelDef, plan: boolean): LanguageModelMiddle
     wrapGenerate: async ({ doGenerate, params }) => {
       logEffort(model, params);
       const r = await doGenerate();
-      await watchCache(model, params, r.usage);
-      return r;
+      const check = await watchCache(model, params, r.usage, calls);
+      return check ? { ...r, providerMetadata: withCheck(r.providerMetadata, check) } : r;
     },
     wrapStream: async ({ doStream, params }) => {
       logEffort(model, params);
@@ -462,7 +471,14 @@ export function promptCache(model: ModelDef, plan: boolean): LanguageModelMiddle
         stream: r.stream.pipeThrough(
           new TransformStream({
             async transform(part, ctl) {
-              if (part.type === 'finish') await watchCache(model, params, part.usage);
+              if (part.type === 'finish') {
+                const check = await watchCache(model, params, part.usage, calls);
+                if (check)
+                  return ctl.enqueue({
+                    ...part,
+                    providerMetadata: withCheck(part.providerMetadata, check),
+                  });
+              }
               ctl.enqueue(part);
             },
           }),
@@ -493,15 +509,66 @@ type CallUsage = {
   inputTokens: { total: number | undefined; cacheRead: number | undefined };
 };
 
-/** The last call of each conversation (cache key and first message) in this isolate: its messages' hashes, size and time. */
-const lastOnKey = new Map<
-  string,
-  { hashes: string[]; in: number; at: number; effort: string; tools: string }
->();
-/** How many keys are remembered, oldest dropped first. */
-const KEYS_KEPT = 200;
-/** How long after a call a later one on its key should still read it (OpenAI keeps 5 to 60 min). */
-const WATCH_MS = 30 * 60_000;
+/**
+ * What a call left for the next one to be checked against: its messages' hashes and running sizes
+ * (characters), its tokens in, when it ran, its effort and tools, its session and cache key.
+ */
+export interface CallMark {
+  hashes: string[];
+  sizes: number[];
+  in: number;
+  at: number;
+  effort: string;
+  tools: string;
+  session: string;
+  key: string;
+}
+
+/**
+ * Where call marks are kept: `s:<session>` is a session's last call, `k:<key>` the last call sent on
+ * a cache key from any session. `session` names the calls this model makes.
+ */
+export interface CallMemory {
+  session?: string;
+  get(id: string): CallMark | null | Promise<CallMark | null>;
+  put(id: string, mark: CallMark): void | Promise<void>;
+}
+
+/** Why a call read less from the cache than the previous call left for it. */
+export type CacheMiss = 'gap' | 'key' | 'prefix' | 'evicted' | 'extension' | 'compact';
+
+/**
+ * One call checked against the previous: its key and session, the tokens it should have read
+ * (`expected`, when a previous call exists) and, when it read short, why (`miss`; `changed` is the
+ * first message that differs, for `prefix`).
+ */
+export interface CacheCheck {
+  key: string;
+  session?: string;
+  expected?: number;
+  miss?: CacheMiss;
+  changed?: number;
+  gapS?: number;
+  effortBefore?: string;
+  toolsChanged?: true;
+}
+
+/** The longest a provider keeps a prompt (OpenAI up to 1 h, Claude 5 min or 1 h). */
+export const CACHE_TTL_MS = 60 * 60_000;
+/** A call reads short when it reads under this share of what it should, by more than `SHORT_BY`. */
+const SHORT_SHARE = 0.9;
+const SHORT_BY = 1024;
+
+/** Marks kept in this isolate, for a model made without a session's memory. */
+const isolateMarks = new Map<string, CallMark>();
+const isolateCalls: CallMemory = {
+  get: (id) => isolateMarks.get(id) ?? null,
+  put: (id, m) => {
+    isolateMarks.delete(id);
+    isolateMarks.set(id, m);
+    if (isolateMarks.size > 400) isolateMarks.delete(isolateMarks.keys().next().value as string);
+  },
+};
 
 /** A message's hash by what the model reads: its role and content, not the cache marks on it. */
 async function hashOf(m: LanguageModelV4Message): Promise<string> {
@@ -510,23 +577,51 @@ async function hashOf(m: LanguageModelV4Message): Promise<string> {
   return [...new Uint8Array(d).slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** A step result's metadata with the cache check under `lumen.cache`. */
+function withCheck<M extends object | undefined>(meta: M, check: CacheCheck): M {
+  const lumen = (meta as { lumen?: object } | undefined)?.lumen;
+  return {
+    ...meta,
+    lumen: { ...lumen, cache: JSON.parse(JSON.stringify(check)) as JSONValue },
+  } as M;
+}
+
+/** The cache check a step's provider metadata carries, if any. */
+export function cacheCheckOf(meta: unknown): CacheCheck | undefined {
+  const c = (meta as { lumen?: { cache?: unknown } } | undefined)?.lumen?.cache;
+  return c && typeof c === 'object' && typeof (c as CacheCheck).key === 'string'
+    ? (c as CacheCheck)
+    : undefined;
+}
+
 /**
- * Misses are never silent: a call that reads less than half of the previous call of its
- * conversation (same key and first message, within `WATCH_MS`) logs `ai.cache_miss`, with the first message that differs from that call
- * (`changed`, or none when the new prompt only adds to it), and `effortBefore` / `toolsChanged` when
- * the call's effort or offered tools differ from that call's.
+ * Misses are never silent. Each call is checked against its session's last call (or, as a
+ * session's first, the last call on its cache key, so a shared start counts): what it should have
+ * read is that call's input where the prompt only adds to it, else the part before the first message
+ * that differs. A call that reads short of it says why, first match wins: `gap` (over `CACHE_TTL_MS`),
+ * `key` (another cache key), `prefix` (a message, the effort or the tools changed), `evicted`
+ * (another session sent on the same key in between) or
+ * `extension` (the prompt only added, and still missed: a provider-side cause to find). The marks are
+ * kept in `calls`, so the check holds across isolates. Never throws.
  */
-async function watchCache(model: ModelDef, params: CallParams, usage: CallUsage): Promise<void> {
+async function watchCache(
+  model: ModelDef,
+  params: CallParams,
+  usage: CallUsage,
+  calls: CallMemory,
+): Promise<CacheCheck | undefined> {
   try {
     const key = params.providerOptions?.openai?.promptCacheKey;
-    if (typeof key !== 'string') return;
+    if (typeof key !== 'string') return undefined;
     const hashes = await Promise.all(params.prompt.map(hashOf));
-    // One conversation: the same key and the same first message (a compaction starts a new one).
+    const sizes: number[] = [];
+    for (const m of params.prompt)
+      sizes.push((sizes.at(-1) ?? 0) + JSON.stringify(m.content).length);
+    // Without a session, a conversation is its key and first message (a compaction starts a new one).
     const first = params.prompt.findIndex((m) => m.role !== 'system');
-    const id = `${key}:${first >= 0 ? hashes[first] : ''}`;
+    const session = calls.session ?? `${key}:${first >= 0 ? hashes[first] : ''}`;
     const total = usage.inputTokens.total ?? 0;
     const read = usage.inputTokens.cacheRead ?? 0;
-    const was = lastOnKey.get(id);
     const effort = String(
       params.providerOptions?.openai?.reasoningEffort ??
         params.providerOptions?.anthropic?.effort ??
@@ -537,32 +632,61 @@ async function watchCache(model: ModelDef, params: CallParams, usage: CallUsage)
       params.toolChoice ?? null,
     ]);
     const at = Date.now();
-    if (was && at - was.at < WATCH_MS && read < was.in / 2) {
+    const [mine, onKey] = await Promise.all([calls.get(`s:${session}`), calls.get(`k:${key}`)]);
+    const fresh = onKey && at - onKey.at < CACHE_TTL_MS ? onKey : null;
+    const was = mine ?? fresh;
+    const check: CacheCheck = { key, ...(calls.session ? { session } : {}) };
+    if (was) {
+      const lead = was.effort === effort && was.tools === tools;
       let same = 0;
-      while (same < was.hashes.length && hashes[same] === was.hashes[same]) same += 1;
+      if (lead) while (same < was.hashes.length && hashes[same] === was.hashes[same]) same += 1;
+      const whole = was.sizes.at(-1) || 1;
+      const expected =
+        was.key !== key
+          ? 0
+          : same === was.hashes.length
+            ? was.in
+            : same
+              ? Math.round((was.in * (was.sizes[same - 1] ?? 0)) / whole)
+              : 0;
+      const gap = at - was.at;
+      check.expected = expected;
+      check.gapS = Math.round(gap / 1000);
+      if (effort !== was.effort) check.effortBefore = was.effort;
+      if (tools !== was.tools) check.toolsChanged = true;
+      const short =
+        was.key !== key
+          ? read < was.in * SHORT_SHARE
+          : read < expected * SHORT_SHARE && expected - read > SHORT_BY;
+      if (short) {
+        if (gap > CACHE_TTL_MS) check.miss = 'gap';
+        else if (was.key !== key) check.miss = 'key';
+        else if (same < was.hashes.length) {
+          check.miss = 'prefix';
+          check.changed = same;
+        } else if (mine && onKey && onKey.session !== session && onKey.at > mine.at)
+          check.miss = 'evicted';
+        else check.miss = 'extension';
+      }
+    }
+    const mark: CallMark = { hashes, sizes, in: total, at, effort, tools, session, key };
+    await Promise.all([calls.put(`s:${session}`, mark), calls.put(`k:${key}`, mark)]);
+    if (check.miss)
       console.log(
         JSON.stringify({
           event: 'ai.cache_miss',
           model: model.id,
-          key,
           in: total,
           read,
-          before: was.in,
-          gapS: Math.round((at - was.at) / 1000),
           messages: hashes.length,
           effort,
-          ...(effort !== was.effort ? { effortBefore: was.effort } : {}),
-          ...(tools !== was.tools ? { toolsChanged: true } : {}),
-          ...(same < was.hashes.length
-            ? { changed: same, role: params.prompt[same]?.role ?? 'none' }
-            : {}),
+          ...check,
         }),
       );
-    }
-    lastOnKey.delete(id);
-    lastOnKey.set(id, { hashes, in: total, at, effort, tools });
-    if (lastOnKey.size > KEYS_KEPT) lastOnKey.delete(lastOnKey.keys().next().value as string);
-  } catch {}
+    return check;
+  } catch {
+    return undefined;
+  }
 }
 
 /** A tier's effort and output cap as a call's settings (the prompt cache is `aiModel`'s own). */
