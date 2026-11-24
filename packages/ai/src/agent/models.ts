@@ -559,7 +559,7 @@ export interface CallMemory {
 }
 
 /** Why a call read less from the cache than the previous call left for it. */
-export type CacheMiss = 'gap' | 'key' | 'prefix' | 'evicted' | 'extension' | 'compact';
+export type CacheMiss = 'gap' | 'key' | 'cold' | 'prefix' | 'evicted' | 'extension' | 'compact';
 
 /**
  * One call checked against the previous: its key and session, the tokens it should have read
@@ -623,7 +623,7 @@ export function cacheCheckOf(meta: unknown): CacheCheck | undefined {
  * session's first, the last call on its cache key, so a shared start counts): what it should have
  * read is that call's input where the prompt only adds to it, else the part before the first message
  * that differs. A call that reads short of it says why, first match wins: `gap` (over `CACHE_TTL_MS`),
- * `key` (another cache key), `prefix` (a message, the effort or the tools changed), `evicted`
+ * `key` (another cache key), `cold` (nothing read though the shared start was cached), `prefix` (a message, the effort or the tools changed), `evicted`
  * (another session sent on the same key in between) or
  * `extension` (the prompt only added, and still missed: a provider-side cause to find). The marks are
  * kept in `calls`, so the check holds across isolates. Never throws.
@@ -685,7 +685,12 @@ async function watchCache(
       if (short) {
         if (gap > CACHE_TTL_MS) check.miss = 'gap';
         else if (was.key !== key) check.miss = 'key';
-        else if (same < was.hashes.length) {
+        // Nothing read at all, though the start it shares with the last call was cached moments ago:
+        // the provider served it cold (same key, same headers, same leading bytes).
+        else if (read < SHORT_BY && expected > SHORT_BY) {
+          check.miss = 'cold';
+          if (same < was.hashes.length) check.changed = same;
+        } else if (same < was.hashes.length) {
           check.miss = 'prefix';
           check.changed = same;
         } else if (mine && onKey && onKey.session !== session && onKey.at > mine.at)
