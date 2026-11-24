@@ -5,25 +5,56 @@ const MOBILE = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 /** A phone held sideways: short and under a finger. Its panels dock at the right. */
 const SIDEWAYS = '(max-height: 500px) and (pointer: coarse)';
 
+/** One shared watcher per query: every component reading it adds to one set, never listeners of its own. */
+interface MediaWatch {
+  list: MediaQueryList;
+  subs: Set<() => void>;
+  fire: () => void;
+}
+const watches = new Map<string, MediaWatch>();
+
+function watchOf(query: string): MediaWatch {
+  let w = watches.get(query);
+  if (!w) {
+    const subs = new Set<() => void>();
+    w = {
+      list: window.matchMedia(query),
+      subs,
+      fire: () => {
+        for (const on of subs) on();
+      },
+    };
+    watches.set(query, w);
+  }
+  return w;
+}
+
 /**
  * Follows one media query from the query's own answer. Never from `window.innerWidth`: iOS can still
  * report the old width when a rotation fires the change, which left the layout on the old orientation.
+ * Every reader of a query shares one `MediaQueryList` and one set of window listeners, so a page with
+ * hundreds of readers (a table's cells) holds three listeners per query, not three per reader.
  */
 function useMedia(query: string) {
   return React.useSyncExternalStore(
     (on) => {
-      const q = window.matchMedia(query);
-      q.addEventListener('change', on);
-      // Belt and braces: a rotation or resize re-reads the query too.
-      window.addEventListener('resize', on);
-      window.addEventListener('orientationchange', on);
+      const w = watchOf(query);
+      if (!w.subs.size) {
+        w.list.addEventListener('change', w.fire);
+        // Belt and braces: a rotation or resize re-reads the query too.
+        window.addEventListener('resize', w.fire);
+        window.addEventListener('orientationchange', w.fire);
+      }
+      w.subs.add(on);
       return () => {
-        q.removeEventListener('change', on);
-        window.removeEventListener('resize', on);
-        window.removeEventListener('orientationchange', on);
+        w.subs.delete(on);
+        if (w.subs.size) return;
+        w.list.removeEventListener('change', w.fire);
+        window.removeEventListener('resize', w.fire);
+        window.removeEventListener('orientationchange', w.fire);
       };
     },
-    () => window.matchMedia(query).matches,
+    () => watchOf(query).list.matches,
     () => false,
   );
 }
