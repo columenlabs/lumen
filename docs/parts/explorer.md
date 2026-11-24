@@ -16,19 +16,22 @@ Built on react-arborist: rows are virtualized, and the keyboard (arrows, Enter, 
 
 One line a row, 26px (36px with `touch`). Slots from the left, each a fixed width:
 
-1. **Indent and chevron.** A `folder` (or a row with `children`) has a chevron and folds.
+1. **Indent and chevron.** A `folder` (or a row with `children`) has a chevron and folds. A flat list (no folder at the top) keeps no chevron room.
 2. **Icon.** The item's type `icon` (a lucide icon, or the app's own small control such as a colour swatch), coloured by `tint`. Its `status` is a dot on the icon, its words in the hover; `busy` spins in its place. `statusAt="end"` moves the status to the row's end.
-3. **Name.** One line; a long name ends in an ellipsis, the full name in its hover. `display` shows a shorter text. `info` turns the hover into a card: what it does (`text`), what it touches (`tags`, under `tagsLabel`, default "Rebuilds"), and the field's usual range. Never a second line.
-4. **Marks.** Small fixed-width things right after the name (a spinner and its time, a retry).
-5. **Meta.** Grey detail: a count, a material, ×3. A folder's meta is set by `groupMeta`: the `count` of items under it, `none`, or the app's words.
-6. **Field.** A value (`number`, `text`, `switch`), `fieldWidth` wide so values line up. It commits on Enter, on leaving it, or when a switch flips. `hint` is the usual range: outside it the field turns amber and says so, and the value is still taken. Only `limit` refuses a value; the field then goes back.
-7. **Toggles.** Each `ExplorerToggle` (visibility, pin) has a slot:
+3. **Swatch.** An optional 12px control after the icon (a part's colour or material). When any row has one, the others keep its room, so names line up.
+4. **Name.** One line; a long name ends in an ellipsis, the full name in its hover. `display` shows a shorter text. `info` turns the hover into a card: what it does (`text`), what it touches (`tags`, under `tagsLabel`, default "Rebuilds"), and the field's usual range. Never a second line.
+5. **Marks.** Small fixed-width things right after the name (a spinner and its time, a retry).
+6. **Meta.** Grey detail: a count, a material, ×3. A folder's meta is set by `groupMeta`: the `count` of items under it, `none`, or the app's words.
+7. **Field.** A value (`number`, `text`, `switch`), `fieldWidth` wide so values line up. It commits on Enter, on leaving it, or when a switch flips. `hint` is the usual range: outside it the field turns amber and says so, and the value is still taken. Only `limit` refuses a value; the field then goes back.
+8. **Toggles.** Each `ExplorerToggle` (visibility, pin) has a slot:
    - `rail` (the default): its own button at the row's end. Its slot is kept on every row, so the column lines up, even where `when` leaves it out.
    - `icon`: no extra column. The icon slot turns into the toggle on hover, and shows it while it is on (a pinned parameter).
    - `menu`: only in the ⋯ menu, with a small mark after the name while it is on.
    - `quiet`: at rest, the toggle shows only on hover. Otherwise it is faint at rest.
 
-**The ⋯ menu has no slot.** On hover it floats just left of the field and toggles, on a fade of the row's colour, over the end of the name or meta. It never covers a value. Right-click opens the same menu. A row whose `menu` returns nothing has no ⋯ (a group of parameters). `renameInMenu` adds Rename. With `touch` there is no hover: the ⋯ gets a slot of its own and is always shown.
+**The ⋯ menu has no slot.** On hover it floats just left of the field and toggles, on a fade of the row's colour, over the end of the name or meta. It never covers a value. Right-click opens the same menu. Opening it picks the row first when it is not picked, because the menu acts on what is picked. A row whose `menu` returns nothing has no ⋯ (a group of parameters). `renameInMenu` adds Rename. With `touch` there is no hover: the ⋯ gets a slot of its own and is always shown, a long press shows the full name, and a tap on a picked row unpicks it.
+
+`locked` rows take no rename and no drops (a group the app builds itself); drag needs `onMove`.
 
 **Nothing moves.** Hover, focus, selection and an open menu change opacity, never width.
 

@@ -19,6 +19,8 @@ import {
 import {
   type ComponentType,
   type HTMLAttributes,
+  type MouseEvent,
+  type PointerEvent,
   type ReactNode,
   type Ref,
   createContext,
@@ -43,6 +45,7 @@ import {
 } from './ui/dropdown-menu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 import { Input } from './ui/input';
+import { Popover, PopoverAnchor, PopoverContent } from './ui/popover';
 import { Switch } from './ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
@@ -78,6 +81,9 @@ export interface ExplorerItem<D = unknown> {
   icon?: Icon | ReactNode;
   /** The icon's colour (a folder's amber, a part's swatch). */
   tint?: string;
+  /** A small control right after the icon (a part's colour or material swatch, 12px). Rows without one
+   *  keep its room when any row in the list has one, so names line up. */
+  swatch?: ReactNode;
   /** Shown on the icon as a dot (or at the row's end, `statusAt="end"`), its words in the hover. */
   status?: ExplorerStatus;
   /** Grey detail before the field: a count, a material, ×3. One line, short. */
@@ -93,7 +99,7 @@ export interface ExplorerItem<D = unknown> {
   on?: Record<string, boolean>;
   /** A folder: has a chevron and takes drops. */
   folder?: boolean;
-  /** No rename and no drag (a group the app builds itself). */
+  /** No rename, and nothing is dropped into it (a group the app builds itself). */
   locked?: boolean;
   children?: ExplorerItem<D>[];
   /** The app's own record, handed back in every callback. */
@@ -174,6 +180,9 @@ export interface LumenExplorerProps<D = unknown> {
   apiRef?: Ref<ExplorerApi<D> | null>;
   className?: string;
 }
+
+/** How long a finger rests on a row before its full name shows (touch). */
+const LONG_PRESS_MS = 500;
 
 const DOT: Record<ExplorerStatusTone, string> = {
   error: 'bg-destructive',
@@ -279,7 +288,15 @@ function Name({
   item,
   side,
   editing,
-}: { item: ExplorerItem<unknown>; side: 'left' | 'right'; editing: boolean }) {
+  open,
+  onClose,
+}: {
+  item: ExplorerItem<unknown>;
+  side: 'left' | 'right';
+  editing: boolean;
+  open: boolean;
+  onClose: () => void;
+}) {
   const cls = cn(
     'min-w-0 truncate',
     item.dim && 'text-muted-foreground opacity-60',
@@ -287,6 +304,21 @@ function Name({
   );
   const text = item.display ?? item.name;
   if (editing) return null;
+  if (open)
+    // Touch: the long press's full name, in a popover at the name.
+    return (
+      <Popover open onOpenChange={(o) => !o && onClose()}>
+        <PopoverAnchor asChild>
+          <span className={cls}>{text}</span>
+        </PopoverAnchor>
+        <PopoverContent
+          align="start"
+          className="w-auto max-w-[calc(100vw-2rem)] px-3 py-2 text-sm break-words"
+        >
+          {item.name}
+        </PopoverContent>
+      </Popover>
+    );
   if (!item.info)
     return (
       <span title={item.name} className={cls}>
@@ -440,6 +472,11 @@ interface RowContext<D> {
   onActivate?: (item: ExplorerItem<D>) => void;
   fieldWidth: number;
   infoSide: 'left' | 'right';
+  hasSwatch: boolean;
+  flat: boolean;
+  onSelect?: (ids: string[]) => void;
+  nameFor: string | null;
+  setNameFor: (id: string | null) => void;
   rowProps?: (
     item: ExplorerItem<D>,
     node: NodeApi<ExplorerItem<D>>,
@@ -475,10 +512,20 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     fieldWidth,
     infoSide,
     rowProps,
+    hasSwatch,
+    flat,
+    onSelect,
+    nameFor,
+    setNameFor,
   } = useContext(RowCtx) as RowContext<D>;
+  // Touch: a long press shows the full name (the tap that ends it does nothing else); a tap on a picked row
+  // unpicks it.
+  const hold = useRef<{ timer?: number; fired: boolean }>({ fired: false });
+  useEffect(() => () => window.clearTimeout(hold.current.timer), []);
   const it = node.data;
   const menuOpen = menuFor === it.id;
-  const showAll = touch || node.isSelected || menuOpen;
+  // Selected rows too show the ⋯ only on hover, so the meta stays readable.
+  const showAll = touch || menuOpen;
   const hoverOnly = showAll
     ? 'opacity-100'
     : 'opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100';
@@ -553,7 +600,10 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     <DropdownMenu
       open={menuOpen}
       onOpenChange={(o) => {
-        if (o) onMenuOpen?.(it);
+        if (o) {
+          if (!node.isSelected) node.select();
+          onMenuOpen?.(it);
+        }
         setMenuFor(o ? it.id : null);
       }}
     >
@@ -660,9 +710,46 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
         own.onContextMenu?.(e);
         if (!dots || e.defaultPrevented) return;
         e.preventDefault();
+        if (!node.isSelected) node.select();
         onMenuOpen?.(it);
         setMenuFor(it.id);
       }}
+      {...(touch && {
+        onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+          own.onPointerDown?.(e);
+          window.clearTimeout(hold.current.timer);
+          hold.current.fired = false;
+          hold.current.timer = window.setTimeout(() => {
+            hold.current.fired = true;
+            setNameFor(it.id);
+          }, LONG_PRESS_MS);
+        },
+        onPointerUp: (e: PointerEvent<HTMLDivElement>) => {
+          own.onPointerUp?.(e);
+          window.clearTimeout(hold.current.timer);
+        },
+        onPointerLeave: (e: PointerEvent<HTMLDivElement>) => {
+          own.onPointerLeave?.(e);
+          window.clearTimeout(hold.current.timer);
+        },
+        onPointerCancel: (e: PointerEvent<HTMLDivElement>) => {
+          own.onPointerCancel?.(e);
+          window.clearTimeout(hold.current.timer);
+        },
+        onClickCapture: (e: MouseEvent<HTMLDivElement>) => {
+          own.onClickCapture?.(e);
+          if (hold.current.fired) {
+            hold.current.fired = false;
+            e.stopPropagation();
+            return;
+          }
+          if (node.isSelected && !(e.target as HTMLElement).closest('button, input')) {
+            e.stopPropagation();
+            node.deselect();
+            onSelect?.([...node.tree.selectedIds]);
+          }
+        },
+      })}
     >
       {it.folder || it.children?.length ? (
         <button
@@ -678,10 +765,15 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
             className={cn('size-3 transition-transform', node.isOpen && 'rotate-90')}
           />
         </button>
-      ) : (
+      ) : flat ? null : (
         <span className={cn('flex-none', touch ? 'w-6' : 'w-4')} />
       )}
       {lead}
+      {it.swatch ? (
+        <span className="flex size-3 flex-none items-center justify-center">{it.swatch}</span>
+      ) : (
+        hasSwatch && <span aria-hidden className="size-3 flex-none" />
+      )}
       {node.isEditing && (
         <Input
           autoFocus
@@ -696,7 +788,13 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
           }}
         />
       )}
-      <Name item={it as ExplorerItem<unknown>} side={infoSide} editing={node.isEditing} />
+      <Name
+        item={it as ExplorerItem<unknown>}
+        side={infoSide}
+        editing={node.isEditing}
+        open={nameFor === it.id}
+        onClose={() => setNameFor(null)}
+      />
       {menuMarks.map((t) => (
         <t.icon
           key={t.id}
@@ -769,6 +867,12 @@ export function LumenExplorer<D = unknown>({
   const tree = useRef<ExplorerApi<D> | null>(null);
   useImperativeHandle(apiRef, () => tree.current as ExplorerApi<D>, []);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [nameFor, setNameFor] = useState<string | null>(null);
+  const anySwatch = (xs: ExplorerItem<D>[]): boolean =>
+    xs.some((x) => !!x.swatch || anySwatch(x.children ?? []));
+  const hasSwatch = anySwatch(data);
+  // A flat list (no folder or children anywhere at the top) keeps no chevron room.
+  const flat = !data.some((d) => d.folder || !!d.children?.length);
   const renameNext = useRef<string | null>(null);
 
   // Fill the parent when no height is given.
@@ -852,6 +956,11 @@ export function LumenExplorer<D = unknown>({
     fieldWidth,
     infoSide,
     rowProps,
+    hasSwatch,
+    flat,
+    onSelect,
+    nameFor,
+    setNameFor,
   };
 
   const fill = height === undefined;
@@ -871,7 +980,7 @@ export function LumenExplorer<D = unknown>({
       aria-label={label}
       rowClassName="!min-w-0 outline-none"
       disableEdit={(d) => !onRename || !!d.locked}
-      disableDrag={(d) => !onMove || !!d.locked}
+      disableDrag={!onMove}
       disableDrop={({ parentNode, dragNodes }) => {
         if (!onMove) return true;
         const parent = parentNode && !parentNode.isRoot ? parentNode.data : null;
