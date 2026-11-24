@@ -3,6 +3,7 @@ import {
   LumenExpandList,
   LumenExpandRow,
   LumenLoading,
+  LumenPending,
   LumenView,
   SettingField,
   SettingValue,
@@ -61,6 +62,41 @@ function Screen({ loading }: { loading: boolean }) {
           <SettingValue value="11/25/2026, 5:34 AM" label="Session ends" />
         </SettingField>
         <SettingField label="Email alerts" end={<Switch checked aria-label="Email alerts" />} />
+      </div>
+      <div className="rounded-lg border px-3 py-1">
+        <LumenPending
+          id="story-pending"
+          shape="ffr"
+          load={{
+            loading,
+            fetching: loading,
+            refreshing: false,
+            background: false,
+            error: null,
+            stale: null,
+            refresh: async () => {},
+            tookMs: null,
+            cached: false,
+            at: null,
+          }}
+          data={loading ? undefined : { tier: 'Steady' }}
+        >
+          {(s) => (
+            <>
+              <SettingField label="Tier">
+                <SettingValue value={s.tier} label="Tier" />
+              </SettingField>
+              <SettingField label="Hand off the work">
+                <SettingValue value="Never" label="Hand off the work" />
+              </SettingField>
+              <LumenExpandList>
+                <LumenExpandRow id="openai" name="OpenAI" meta="Your key">
+                  <SettingField label="Key">sk-…</SettingField>
+                </LumenExpandRow>
+              </LumenExpandList>
+            </>
+          )}
+        </LumenPending>
       </div>
       <FactList
         facts={[

@@ -18,7 +18,9 @@ import { LumenConfirm } from './confirm';
 import { LumenExpandRow } from './expand-list';
 import { fetchWithin } from './fetch-within';
 import { ErrorLine, type KeyTestResult } from './integrations';
+import { useLumenLoad } from './lumen-source';
 import { IconButton } from './page';
+import { LumenPending } from './pending';
 import {
   SettingActions,
   SettingField,
@@ -724,19 +726,24 @@ export function NotificationsSettings({
   const api = useNotifications(base, product, sender);
   const [open, setOpen] = useState<string | null>(null);
   const toggle = (id: string) => (o: boolean) => setOpen(o ? id : null);
-  if (api.q.isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (api.q.isError) return <ErrorLine error={api.q.error} />;
-  const s = api.q.data;
-  if (parts === 'events') return <Events status={s} api={api} />;
+  const load = useLumenLoad(api.q);
   return (
-    <div className="grid grid-cols-1 gap-6">
-      <Channels s={s} api={api} open={open} toggle={toggle} />
-      {parts === 'all' ? (
-        <section className="grid grid-cols-1 gap-2">
-          <h4 className="font-medium">Events</h4>
+    <LumenPending id={`notifications:${parts}`} load={load} data={api.q.data}>
+      {(s) =>
+        parts === 'events' ? (
           <Events status={s} api={api} />
-        </section>
-      ) : null}
-    </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6">
+            <Channels s={s} api={api} open={open} toggle={toggle} />
+            {parts === 'all' ? (
+              <section className="grid grid-cols-1 gap-2">
+                <h4 className="font-medium">Events</h4>
+                <Events status={s} api={api} />
+              </section>
+            ) : null}
+          </div>
+        )
+      }
+    </LumenPending>
   );
 }

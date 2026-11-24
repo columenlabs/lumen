@@ -47,7 +47,9 @@ import { type FormIssue, SaveButton } from '../form-issues';
 import { InfoLabel } from '../info-tip';
 import { errorText } from '../integrations';
 import { LumenSelector } from '../lumen-selector';
+import { useLumenLoad } from '../lumen-source';
 import { lumenToast } from '../lumen-toast';
+import { LumenPending } from '../pending';
 import { SettingField } from '../setting-parts';
 import type { SettingsSectionDef } from '../settings';
 import { ShareMeter } from '../share-meter';
@@ -104,20 +106,24 @@ function useApply(client: AssistantAdapter) {
   return { apply, busy, refresh, keep };
 }
 
-/** The section's body once the status loads. */
+/** The section's body once the status loads; until then its last shape as bars (`LumenPending`). */
 function WithStatus({
+  id,
   client,
   children,
 }: {
+  /** Names the section, so its loading shape is kept per device. */
+  id: string;
   client: AssistantAdapter;
   children: (s: AssistantStatus) => ReactNode;
 }) {
   const q = useAssistantStatus(client);
-  if (!q.data)
-    return (
-      <p className="text-muted-foreground text-sm">{q.isError ? errorText(q.error) : 'Loading…'}</p>
-    );
-  return <>{children(q.data)}</>;
+  const load = useLumenLoad(q);
+  return (
+    <LumenPending id={`assistant:${id}`} load={load} data={q.data}>
+      {children}
+    </LumenPending>
+  );
 }
 
 /** One setting: its label (with an (i) when `info` says more) and its control. */
@@ -128,7 +134,7 @@ function General({ client }: { client: AssistantAdapter }) {
   const { apply } = useApply(client);
   const set = (patch: AssistantSettingsPatch) => apply('settings', () => client.settings(patch));
   return (
-    <WithStatus client={client}>
+    <WithStatus id="general" client={client}>
       {(s) => {
         const above = s.tiers.slice(s.tiers.findIndex((t) => t.id === s.tier) + 1);
         return (
@@ -377,7 +383,7 @@ function OwnProviderKey({ client, p }: { client: AssistantAdapter; p: AssistantP
 function Providers({ client, usage }: { client: AssistantAdapter; usage?: boolean }) {
   const { apply } = useApply(client);
   return (
-    <WithStatus client={client}>
+    <WithStatus id="providers" client={client}>
       {(s) => {
         // A provider the app gives this person no way of their own on shows no row: what shows here
         // is exactly what the server may pay with.
@@ -532,7 +538,7 @@ function SharedCap({ client, s }: { client: AssistantAdapter; s: AssistantStatus
 /** Admins only: the app's shared keys and what each person may spend on them. */
 function SharedKeys({ client }: { client: AssistantAdapter }) {
   return (
-    <WithStatus client={client}>
+    <WithStatus id="shared-keys" client={client}>
       {(s) =>
         s.admin ? (
           <div className="flex flex-col">
@@ -554,7 +560,7 @@ function SharedKeys({ client }: { client: AssistantAdapter }) {
 /** Admins only: one provider's shared key on a section of its own, open. */
 function SharedKey({ client, id }: { client: AssistantAdapter; id: string }) {
   return (
-    <WithStatus client={client}>
+    <WithStatus id={`shared-key:${id}`} client={client}>
       {(s) => {
         const p = s.providers.find((x) => x.id === id);
         if (!s.admin) return adminOnly;
@@ -572,7 +578,7 @@ function SharedKey({ client, id }: { client: AssistantAdapter; id: string }) {
 /** Admins only: the allowance alone, for apps that give each provider its own section. */
 function SharedAllowance({ client }: { client: AssistantAdapter }) {
   return (
-    <WithStatus client={client}>
+    <WithStatus id="shared-allowance" client={client}>
       {(s) => (s.admin ? <SharedCap client={client} s={s} /> : adminOnly)}
     </WithStatus>
   );
@@ -585,7 +591,7 @@ function Models({ client }: { client: AssistantAdapter }) {
   const set = (patch: AssistantSettingsPatch) =>
     void apply('settings', () => client.settings(patch));
   return (
-    <WithStatus client={client}>
+    <WithStatus id="models" client={client}>
       {(s) => {
         const models = s.models.map((m) => ({ value: m.id, label: m.label, group: m.group }));
         const tiers = s.tiers.map((t) => ({ value: t.id, label: t.label }));
@@ -643,7 +649,7 @@ function Models({ client }: { client: AssistantAdapter }) {
 function Tools({ client }: { client: AssistantAdapter }) {
   const { apply } = useApply(client);
   return (
-    <WithStatus client={client}>
+    <WithStatus id="tools" client={client}>
       {(s) =>
         s.groups.length ? (
           <div className="flex flex-col">
@@ -760,7 +766,7 @@ function ScrapeqlBlock({ client, s }: { client: AssistantAdapter; s: AssistantSt
 function Web({ client }: { client: AssistantAdapter }) {
   const { apply } = useApply(client);
   return (
-    <WithStatus client={client}>
+    <WithStatus id="web" client={client}>
       {(s) => (
         <div className="flex flex-col">
           <SettingField
@@ -908,7 +914,7 @@ function ConnectorRow({ client, c }: { client: AssistantAdapter; c: AssistantCon
 function Connectors({ client }: { client: AssistantAdapter }) {
   const { apply } = useApply(client);
   return (
-    <WithStatus client={client}>
+    <WithStatus id="connectors" client={client}>
       {(s) => (
         <LumenExpandList>
           {(s.connectors ?? []).map((c) => (
@@ -956,7 +962,7 @@ function Connectors({ client }: { client: AssistantAdapter }) {
 
 function Spend({ client }: { client: AssistantAdapter }) {
   return (
-    <WithStatus client={client}>
+    <WithStatus id="spend" client={client}>
       {(s) => {
         const sp = s.spend;
         // With the history route: each month, model, chat and run (`UsageHistoryView`).
@@ -1028,7 +1034,7 @@ function Allowance({ client }: { client: AssistantAdapter }) {
   const [why, setWhy] = useState('');
   const whyId = useId();
   return (
-    <WithStatus client={client}>
+    <WithStatus id="allowance" client={client}>
       {(s) => {
         const a = s.allowance;
         const requestMore = client.requestMore;
@@ -1201,40 +1207,41 @@ function AllowanceRequests({ client }: { client: AssistantAdapter }) {
     queryFn: () => client.allowanceRequests?.() ?? Promise.resolve([]),
     enabled: !!client.allowanceRequests,
   });
+  const requests = useLumenLoad(q);
   return (
-    <WithStatus client={client}>
+    <WithStatus id="allowance-requests" client={client}>
       {(s) => {
         const a = s.allowance;
         if (!a || !client.allowanceRequests)
           return <p className="text-muted-foreground text-sm">This app sets no allowance.</p>;
         if (!a.approver)
           return <p className="text-muted-foreground text-sm">Only an approver can see these.</p>;
-        if (!q.data)
-          return (
-            <p className="text-muted-foreground text-sm">
-              {q.isError ? errorText(q.error) : 'Loading…'}
-            </p>
-          );
-        if (!q.data.length)
-          return <p className="text-muted-foreground text-sm">No requests yet.</p>;
-        const rows = [...q.data].sort(
-          (x, y) => Number(y.status === 'open') - Number(x.status === 'open') || y.at - x.at,
-        );
-        const done = () => {
-          void qc.invalidateQueries({ queryKey: assistantStatusKey(client) });
-        };
         return (
-          <LumenExpandList>
-            {rows.map((r) => (
-              <RequestRow
-                key={r.id}
-                client={client}
-                r={r}
-                n={(x) => allowanceAmount(a.unit, x)}
-                onDone={done}
-              />
-            ))}
-          </LumenExpandList>
+          <LumenPending id="assistant:allowance-requests:list" load={requests} data={q.data}>
+            {(list) => {
+              if (!list.length)
+                return <p className="text-muted-foreground text-sm">No requests yet.</p>;
+              const rows = [...list].sort(
+                (x, y) => Number(y.status === 'open') - Number(x.status === 'open') || y.at - x.at,
+              );
+              const done = () => {
+                void qc.invalidateQueries({ queryKey: assistantStatusKey(client) });
+              };
+              return (
+                <LumenExpandList>
+                  {rows.map((r) => (
+                    <RequestRow
+                      key={r.id}
+                      client={client}
+                      r={r}
+                      n={(x) => allowanceAmount(a.unit, x)}
+                      onDone={done}
+                    />
+                  ))}
+                </LumenExpandList>
+              );
+            }}
+          </LumenPending>
         );
       }}
     </WithStatus>

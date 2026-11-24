@@ -2100,7 +2100,7 @@ function LumenTableRows<T extends RowData>({
       <TableRow key={`${key}:more`} data-more>
         <TableCell colSpan={span} className="py-1">
           {g.loading ? (
-            <span className="px-2 text-xs text-muted-foreground">Loading…</span>
+            <LoadingBar className="mx-2 my-1 w-32" />
           ) : (
             <Button variant="ghost" size="xs" onClick={g.more}>
               <ChevronsDownIcon />

@@ -53,7 +53,7 @@ export function LumenExpandList({
 
 /** A row while it loads: the same header, its name and icon kept when they are fixed, every slot
  *  that comes from data a bar; no dot, no switch and nothing to open. */
-function ExpandRowSkeleton({
+export function ExpandRowSkeleton({
   name,
   icon,
   meta = true,
