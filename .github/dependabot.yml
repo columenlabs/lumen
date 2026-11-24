@@ -1,5 +1,5 @@
-# Dependency updates, weekly (Monday, Pacific). Each merge to main publishes a release, so
-# updates come grouped: one PR for minor and patch bumps, majors one at a time.
+# Dependabot opens grouped update PRs once a week; nothing merges on its own.
+# A person reviews and merges each one like any other PR (CI runs on OpenShip).
 version: 2
 updates:
   - package-ecosystem: bun
@@ -11,11 +11,12 @@ updates:
       timezone: America/Los_Angeles
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "infra:"
+      prefix: infra
     groups:
+      # Patches and minors land together as one PR.
       minor-and-patch:
         update-types: [minor, patch]
-
+      # Each major comes on its own so its breaking changes are read on their own.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -23,8 +24,9 @@ updates:
       day: monday
       time: "06:00"
       timezone: America/Los_Angeles
+    open-pull-requests-limit: 2
     commit-message:
-      prefix: "infra:"
+      prefix: infra
     groups:
       actions:
         patterns: ["*"]
