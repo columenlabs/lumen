@@ -33,6 +33,8 @@ One line a row, 26px (36px with `touch`). Slots from the left, each a fixed widt
 
 `locked` rows take no rename and no drops (a group the app builds itself); drag needs `onMove`.
 
+`attrs` puts the app's own `data-*` attributes on the ⋯ button and the Rename item (`attrs={{ menu: {...}, rename: {...} }}`), and a toggle's `attrs` on its button, so an app can tag them for its own checks.
+
 **Nothing moves.** Hover, focus, selection and an open menu change opacity, never width.
 
 ## Do / Don't

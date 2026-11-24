@@ -125,6 +125,8 @@ export interface ExplorerToggle<D = unknown> {
    *  column, the icon turns into the toggle on hover and shows it while on); or only in the ⋯ menu
    *  (`menu`: a small mark after the name while it is on). */
   slot?: 'rail' | 'icon' | 'menu';
+  /** Data attributes for the toggle's button or menu item (an app's own action registry or tests). */
+  attrs?: Record<`data-${string}`, string>;
 }
 
 /** The tree's handle: open, select, scroll to or rename a row from the app (keyboard shortcuts). */
@@ -142,6 +144,8 @@ export interface LumenExplorerProps<D = unknown> {
   onMenuOpen?: (item: ExplorerItem<D>) => void;
   /** Adds Rename to every unlocked row's menu (needs `onRename`). */
   renameInMenu?: boolean;
+  /** Data attributes for the parts the explorer draws itself: the ⋯ button and the menu's Rename. */
+  attrs?: { menu?: Record<`data-${string}`, string>; rename?: Record<`data-${string}`, string> };
   /** Where the status shows: a dot on the icon (default) or a mark at the row's end. */
   statusAt?: 'icon' | 'end';
   /** Width of the field column, so values line up down the list. */
@@ -469,6 +473,7 @@ interface RowContext<D> {
   onMenuOpen?: (item: ExplorerItem<D>) => void;
   onRename?: (id: string, name: string) => void;
   renameInMenu?: boolean;
+  attrs?: LumenExplorerProps<D>['attrs'];
   onActivate?: (item: ExplorerItem<D>) => void;
   fieldWidth: number;
   infoSide: 'left' | 'right';
@@ -508,6 +513,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     onMenuOpen,
     onRename,
     renameInMenu,
+    attrs,
     onActivate,
     fieldWidth,
     infoSide,
@@ -542,6 +548,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     return (
       <IconButton
         key={t.id}
+        {...t.attrs}
         icon={!on && t.offIcon ? t.offIcon : t.icon}
         label={t.label(it, on)}
         size="icon-xs"
@@ -567,6 +574,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     <Tip label={iconT.label(it, isOn(it, iconT))}>
       <button
         type="button"
+        {...iconT.attrs}
         aria-label={iconT.label(it, isOn(it, iconT))}
         aria-pressed={iconOn}
         className={cn(
@@ -614,6 +622,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
             size="icon-xs"
             aria-label={`More for ${it.name}`}
             data-explorer-menu-button
+            {...attrs?.menu}
             className={cn(slot, 'flex-none', glyph, hoverOnly)}
             onClick={(e) => e.stopPropagation()}
           >
@@ -640,7 +649,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
           .map((t) => {
             const on = isOn(it, t);
             return (
-              <DropdownMenuItem key={t.id} onSelect={() => flip(it, t)}>
+              <DropdownMenuItem key={t.id} {...t.attrs} onSelect={() => flip(it, t)}>
                 {!on && t.offIcon ? <t.offIcon /> : <t.icon />}
                 {t.label(it, on)}
               </DropdownMenuItem>
@@ -652,6 +661,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
           <>
             {items && <DropdownMenuSeparator />}
             <DropdownMenuItem
+              {...attrs?.rename}
               onSelect={() => {
                 renameNext.current = it.id;
               }}
@@ -844,6 +854,7 @@ export function LumenExplorer<D = unknown>({
   menu,
   onMenuOpen,
   renameInMenu,
+  attrs,
   statusAt = 'icon',
   fieldWidth = 92,
   infoSide = 'right',
@@ -952,6 +963,7 @@ export function LumenExplorer<D = unknown>({
     onMenuOpen,
     onRename,
     renameInMenu,
+    attrs,
     onActivate,
     fieldWidth,
     infoSide,
