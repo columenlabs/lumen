@@ -139,20 +139,24 @@ export function activeWay(ways: ConnectionWay[], use?: string) {
   return ways.find((w) => w.id === use && w.set) ?? ways.find((w) => w.set);
 }
 
+/** A status as the health dot on a row's icon. */
+export function connectionHealth(status: ConnectionStatus): SettingHealth {
+  return status === 'connected'
+    ? 'works'
+    : status === 'untested'
+      ? 'untested'
+      : status === 'off'
+        ? 'off'
+        : 'failed';
+}
+
 /** The row's pill for a status: Works, Failed, Not tested or Off; hover says to sign in again. */
 export function ConnectionBadge({
   status,
   signin,
   title,
 }: { status: ConnectionStatus; signin?: boolean; title?: string }) {
-  const health: SettingHealth =
-    status === 'connected'
-      ? 'works'
-      : status === 'untested'
-        ? 'untested'
-        : status === 'off'
-          ? 'off'
-          : 'failed';
+  const health = connectionHealth(status);
   return (
     <SettingStatus
       health={health}
@@ -264,12 +268,10 @@ export function LumenConnection({
       meta={line}
       icon={logo}
       defaultOpen={defaultOpen}
-      status={
-        <ConnectionBadge
-          status={status}
-          signin={!!active?.signin}
-          title={t ? (t.ok ? (t.detail ?? undefined) : (t.error ?? undefined)) : undefined}
-        />
+      health={connectionHealth(status)}
+      healthTitle={
+        (t ? (t.ok ? t.detail : t.error) : undefined) ??
+        (status === 'expired' ? (active?.signin ? 'Sign in again' : 'Key expired') : undefined)
       }
       actions={
         solo?.set && !solo.note && (solo.onTest || removeOf(solo)) ? (

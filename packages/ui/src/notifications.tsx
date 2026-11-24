@@ -659,12 +659,8 @@ function Channels({
         meta={s.email.connected ? s.email.address : 'To your sign-in address'}
         open={open === 'email'}
         onOpenChange={toggle('email')}
-        status={
-          <SettingStatus
-            health={settingHealth(s.email.connected, emailTest)}
-            title={emailTest?.error ?? ago(emailTest)}
-          />
-        }
+        health={settingHealth(s.email.connected, emailTest)}
+        healthTitle={emailTest?.error ?? ago(emailTest)}
         toggle={email.toggle}
         actions={
           s.email.connected ? <SettingActions test={emailTest} onTest={testEmail} /> : undefined
@@ -678,12 +674,8 @@ function Channels({
         meta="Phone push through the ntfy app"
         open={open === 'ntfy'}
         onOpenChange={toggle('ntfy')}
-        status={
-          <SettingStatus
-            health={settingHealth(s.ntfy.connected, ntfyTest)}
-            title={ntfyTest?.error ?? ago(ntfyTest)}
-          />
-        }
+        health={settingHealth(s.ntfy.connected, ntfyTest)}
+        healthTitle={ntfyTest?.error ?? ago(ntfyTest)}
         toggle={ntfy.toggle}
         actions={
           s.ntfy.connected ? <SettingActions test={ntfyTest} onTest={testNtfy} /> : undefined
@@ -701,17 +693,8 @@ function Channels({
         }
         open={open === 'webhooks'}
         onOpenChange={toggle('webhooks')}
-        status={
-          hooksFailed.length ? (
-            <SettingStatus health="failed" title={hooksFailed.map((h) => h.name).join(', ')} />
-          ) : s.webhooks.length ? (
-            <SettingStatus
-              count={`${s.webhooks.length} webhook${s.webhooks.length === 1 ? '' : 's'}`}
-            />
-          ) : (
-            <SettingStatus health="off" />
-          )
-        }
+        health={hooksFailed.length ? 'failed' : s.webhooks.length ? 'on' : null}
+        healthTitle={hooksFailed.length ? hooksFailed.map((h) => h.name).join(', ') : undefined}
       >
         <Webhooks hooks={s.webhooks} api={api} />
       </LumenExpandRow>

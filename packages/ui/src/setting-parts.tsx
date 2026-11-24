@@ -165,7 +165,9 @@ export function SettingValue({
 }
 
 /** The five words a thing's status takes: Works, Failed, Not tested, Off, or a count. */
-export type SettingHealth = 'works' | 'failed' | 'untested' | 'off';
+/** `on`: set up, with nothing to test (a sign-in method). `works`, `failed`, `untested`: set up, and
+ *  its last test says how it went. `off`: not set up or switched off. */
+export type SettingHealth = 'on' | 'works' | 'failed' | 'untested' | 'off';
 
 /** Where a thing stands from its switch and last test. */
 export function settingHealth(
@@ -180,16 +182,40 @@ export function settingHealth(
 /** A section's health from its things: the worst one wins (Failed, then Not tested, then Works); Off when none is on. */
 export function sectionHealth(items: SettingHealth[]): SettingHealth | null {
   if (!items.length) return null;
-  for (const h of ['failed', 'untested', 'works'] as const) if (items.includes(h)) return h;
+  for (const h of ['failed', 'untested', 'works', 'on'] as const) if (items.includes(h)) return h;
   return 'off';
 }
 
 const HEALTH: Record<SettingHealth, { word: string; cls: string }> = {
+  on: { word: 'On', cls: 'text-gain' },
   works: { word: 'Works', cls: 'text-gain' },
   failed: { word: 'Failed', cls: 'text-loss' },
   untested: { word: 'Not tested', cls: 'text-muted-foreground' },
   off: { word: 'Off', cls: 'text-muted-foreground' },
 };
+
+/**
+ * The health dot on a row's icon (`LumenExpandRow health`): green working (`works`, `on`), red
+ * failed, a grey ring not checked yet (`untested`). Nothing for `off`. Hover tells when and what.
+ */
+export function SettingHealthDot({ health, title }: { health: SettingHealth; title?: string }) {
+  if (health === 'off') return null;
+  const h = HEALTH[health];
+  return (
+    <span
+      role="img"
+      aria-label={title ? `${h.word}: ${title}` : h.word}
+      title={title ?? h.word}
+      className={cn(
+        'absolute -right-1 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background',
+        (health === 'works' || health === 'on') && 'bg-gain',
+        health === 'failed' && 'bg-loss',
+        health === 'untested' &&
+          'bg-background shadow-[inset_0_0_0_1.5px_var(--color-muted-foreground)]',
+      )}
+    />
+  );
+}
 
 /** The status pill in a thing's header (or a section's title). Hover tells when and what. */
 export function SettingStatus({
@@ -219,7 +245,7 @@ export function SettingStatus({
       aria-hidden
       className={cn(
         'size-1.5 shrink-0 rounded-full',
-        health === 'works' && 'bg-gain',
+        (health === 'works' || health === 'on') && 'bg-gain',
         health === 'failed' && 'bg-loss',
         (health === 'untested' || health === 'off') && 'border border-muted-foreground',
       )}

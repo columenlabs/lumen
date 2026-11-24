@@ -295,6 +295,7 @@ export {
   SettingField,
   type SettingHealth,
   SettingStatus,
+  SettingHealthDot,
   SettingValue,
   sectionHealth,
   settingHealth,
