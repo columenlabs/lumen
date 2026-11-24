@@ -1,5 +1,59 @@
 [
   {
+    "tag": "v0.1.360",
+    "date": "2026-11-24T16:03:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Sign in with a Grok plan using a device code",
+        "body": "In `@columenlabs/lumen-ai`, `POST /my-signin?provider=xai` now starts a device-code sign-in and returns `{url, device}`, and `POST /my-signin/poll?provider=xai` returns `{done:false, device}` or `{done:true, status}`, so a person can run Grok models on their own plan instead of an app-wide key."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Device sign-in in LumenConnection",
+        "body": "In `@columenlabs/lumen-ui`, `LumenConnection` now supports a device sign-in way, where `signin.start` returns `device` and `signin.poll` checks progress, so you can show a code and a link and wait for the person to approve."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Conversations stay on one cache server",
+        "body": "In `@columenlabs/lumen-ai`, `aiModel` now sends its cache key as the `x-grok-conv-id` header on every `xai` call, so a conversation stays on the server that holds its start and can reuse the cached prompt."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.359",
+    "date": "2026-11-24T09:58:22Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tools can hand pictures to the model",
+        "body": "In `@columenlabs/lumen-ai`, set the new `images: true` flag on a `ToolDef` and return `images: [{ media_type, data }]` (base64 PNG, JPEG or WebP) from the tool, and `openAiTools` passes them to the model as `image-data` parts so the assistant can look at what the tool made."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Image results are capped and skip the text cut",
+        "body": "For a tool with `images` set, `openAiTools` sends at most 8 pictures and 4 MB per result, and the pictures are not counted against the tool's `maxChars` limit, so long text results no longer crowd them out."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Same output, same prompt",
+        "body": "The same tool output always maps to the same image parts, so a later turn's prompt stays identical and stays cached, and tools without the `images` flag are unchanged."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.358",
     "date": "2026-11-24T08:45:58Z",
     "takeaways": [
