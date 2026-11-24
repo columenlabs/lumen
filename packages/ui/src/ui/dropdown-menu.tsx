@@ -1,6 +1,7 @@
 import { cn } from '../lib/utils';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 import type * as React from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import { CheckIcon, ChevronRightIcon } from 'lucide-react';
 
@@ -205,15 +206,51 @@ function DropdownMenuSubTrigger({
   );
 }
 
+/** Room a submenu keeps from the screen's edge. */
+const SUB_EDGE = 8;
+
+/**
+ * Radix opens a submenu only beside its parent (it flips sides, and shifts it up or down, never sideways).
+ * On a narrow screen there is room on neither side, so Radix squeezed it to the gap and cut its labels.
+ * Before paint this measures the submenu's own width; when it fits on neither side it passes Radix a
+ * negative `sideOffset`, so the submenu overlaps its parent and ends SUB_EDGE inside the screen.
+ * An app's own `sideOffset` wins.
+ */
 function DropdownMenuSubContent({
   className,
+  sideOffset,
+  collisionPadding = SUB_EDGE,
+  ref,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  const own = useRef<HTMLDivElement | null>(null);
+  const [overlap, setOverlap] = useState<number>();
+  useLayoutEffect(() => {
+    const el = own.current;
+    if (sideOffset !== undefined || !el) return;
+    const id = el.getAttribute('aria-labelledby');
+    const trigger = id ? document.getElementById(id) : null;
+    if (!trigger) return;
+    const t = trigger.getBoundingClientRect();
+    const width = el.offsetWidth;
+    const right = document.documentElement.clientWidth - SUB_EDGE - t.right;
+    const left = t.left - SUB_EDGE;
+    if (width <= Math.max(right, left)) return;
+    const rtl = getComputedStyle(el).direction === 'rtl';
+    setOverlap((rtl ? left : right) - width);
+  }, [sideOffset]);
   return (
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
+      ref={(node) => {
+        own.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref) ref.current = node;
+      }}
+      sideOffset={sideOffset ?? overlap}
+      collisionPadding={collisionPadding}
       className={cn(
-        'data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground min-w-[96px] rounded-lg p-1 shadow-lg ring-1 duration-100 cn-menu-target cn-menu-translucent z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
+        'data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground min-w-[96px] w-max max-w-[calc(100vw-1rem)] rounded-lg p-1 shadow-lg ring-1 duration-100 cn-menu-target cn-menu-translucent z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
         className,
       )}
       {...props}
