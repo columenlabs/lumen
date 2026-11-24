@@ -268,6 +268,13 @@ export class Docs {
     return t === null ? null : (JSON.parse(t) as T);
   }
 
+  /** One doc from the store, never the request's copy (which it then replaces). */
+  async readStored<T>(scope: string, key: string): Promise<T | null> {
+    const text = await this.fresh(scope, key);
+    this.memo?.set(this.id(scope, key), Promise.resolve(text));
+    return text === null ? null : (JSON.parse(text) as T);
+  }
+
   async write<T>(scope: string, key: string, value: T, meta?: string) {
     const text = JSON.stringify(value);
     await this.store.put(
