@@ -5,25 +5,57 @@ const MOBILE = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 /** A phone held sideways: short and under a finger. Its panels dock at the right. */
 const SIDEWAYS = '(max-height: 500px) and (pointer: coarse)';
 
+/** One shared watch per query: every hook on it hears the same three listeners. */
+const watches = new Map<
+  string,
+  { mql: MediaQueryList; subs: Set<() => void>; stop?: () => void }
+>();
+
+function watchOf(query: string) {
+  let w = watches.get(query);
+  if (!w) {
+    w = { mql: window.matchMedia(query), subs: new Set() };
+    watches.set(query, w);
+  }
+  return w;
+}
+
 /**
  * Follows one media query from the query's own answer. Never from `window.innerWidth`: iOS can still
  * report the old width when a rotation fires the change, which left the layout on the old orientation.
+ * Every component on one query shares one set of listeners, so a table of many rows adds none per row.
  */
+function subscribe(query: string, on: () => void) {
+  const w = watchOf(query);
+  w.subs.add(on);
+  if (!w.stop) {
+    const fire = () => {
+      for (const s of [...w.subs]) s();
+    };
+    w.mql.addEventListener('change', fire);
+    // Belt and braces: a rotation or resize re-reads the query too.
+    window.addEventListener('resize', fire);
+    window.addEventListener('orientationchange', fire);
+    w.stop = () => {
+      w.mql.removeEventListener('change', fire);
+      window.removeEventListener('resize', fire);
+      window.removeEventListener('orientationchange', fire);
+    };
+  }
+  return () => {
+    w.subs.delete(on);
+    if (!w.subs.size) {
+      w.stop?.();
+      w.stop = undefined;
+    }
+  };
+}
+
 function useMedia(query: string) {
+  const sub = React.useCallback((on: () => void) => subscribe(query, on), [query]);
   return React.useSyncExternalStore(
-    (on) => {
-      const q = window.matchMedia(query);
-      q.addEventListener('change', on);
-      // Belt and braces: a rotation or resize re-reads the query too.
-      window.addEventListener('resize', on);
-      window.addEventListener('orientationchange', on);
-      return () => {
-        q.removeEventListener('change', on);
-        window.removeEventListener('resize', on);
-        window.removeEventListener('orientationchange', on);
-      };
-    },
-    () => window.matchMedia(query).matches,
+    sub,
+    () => watchOf(query).mql.matches,
     () => false,
   );
 }
