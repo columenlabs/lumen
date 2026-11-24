@@ -4,6 +4,7 @@
  * payer rules; Think keeps the loop, the messages, streaming, resume and compaction.
  */
 export * from './agent';
+export { type ModelAttempt, onModelRequest } from './backoff';
 export * from './models';
 export * from './respond';
 export * from './screen';
