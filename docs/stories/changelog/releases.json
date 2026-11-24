@@ -1,5 +1,243 @@
 [
   {
+    "tag": "v0.1.358",
+    "date": "2026-11-24T08:45:58Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Every model call says why it missed the cache",
+        "body": "`ai.call` (`logCall`, from `@columenlabs/lumen-ai/assistant`) now takes optional `miss`, `expected`, `list`, `key`, `session` and `step` fields, plus `changed`, `gapS`, `effortBefore`, `toolsChanged` and `under`, so you can see why a call did not read the cache."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Cache checks survive restarts",
+        "body": "`promptCache` now compares each call against a mark that persists, and `LumenSession` passes `aiModel(..., { calls })` to keep those marks in the host's SQLite, so misses are no longer lost when an isolate restarts."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Read the cache check from usage metadata",
+        "body": "the result reaches `UsageMeter` through the SDK's `providerMetadata` under `lumen.cache`, and you read it with `cacheCheckOf`."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "New plan chats read the shared start",
+        "body": "the plan cache key no longer includes the first message, so new plan chats can reuse the cached shared start of the prompt instead of missing on it."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.357",
+    "date": "2026-11-24T08:19:42Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tab stops no longer hide under the sticky status bar",
+        "body": "With the Lumen theme stylesheet from `@columenlabs/lumen-ui`, the `html` element now sets `scroll-padding-bottom` (status bar, phone tab bar and gutter), so a focused control near the bottom of a document-scrolled page stays on screen and uncovered."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tab stops no longer hide under the sticky header",
+        "body": "The same stylesheet now sets `scroll-padding-top` (header plus gutter) on `html`, so tabbing backwards to a control near the top of the page scrolls it clear of the header."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Scroll-into-view respects the shell chrome",
+        "body": "Anything that scrolls an element into view on a document-scrolled page, such as keyboard focus or anchor jumps, now stops clear of the header and status bar with no extra CSS in your app."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.356",
+    "date": "2026-11-24T08:11:01Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Hear every model HTTP attempt",
+        "body": "From `@columenlabs/lumen-ai`, the new `onModelRequest(fn)` export registers a listener that is called after each real HTTP attempt a provider call makes, so an app can trace what happened inside a slow model call."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "See refusals and retries as their own steps",
+        "body": "Each `onModelRequest` event carries `{ host, model, attempt, at, ms, status, retried, error? }`, so an app can show a refused field (such as a 400) and the resend that followed, instead of one unexplained slow call."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "No cost when unused, safe when used",
+        "body": "With no `onModelRequest` listener registered, `backoffFetch` does no extra work, and a listener that throws is ignored, so tracing can't break a model call."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.355",
+    "date": "2026-11-24T07:33:15Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance",
+          "fix"
+        ],
+        "title": "Plan requests no longer trigger a refused first call",
+        "body": "In @columenlabs/lumen-ai, `planFetch` no longer adds `prompt_cache_options` to plan requests, so turns on models that reject the field skip the 400 and the second request before the first word; cache affinity still comes from the `session-id` header, and a caller that sets the field itself still gets the retry on refusal."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Name a message before the turn runs",
+        "body": "In @columenlabs/lumen-ai, `AskInput` has a new optional `id` field, so your app can choose the id of the person's message (`u_` followed by 16 characters) up front."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "User chat items carry their turn id",
+        "body": "From @columenlabs/lumen-ui-types, the user `ChatItem` has a new optional `id` field, which `itemsOf` fills from the stored message."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Copied chats show turn ids",
+        "body": "Copy chat and Copy this turn now print `## You · turn u_…` on the user heading, and Copy chat also prints `Chat <id>` under its title, so you can match a copied transcript to a stored turn."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.354",
+    "date": "2026-11-24T07:19:57Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Tag icons in ColorChip no longer trigger a React key error",
+        "body": "In `@columenlabs/lumen-ui`, `ColorChip` draws tag icons by name, and they no longer log \"Each child in a list should have a unique key\", so pages full of tag chips keep a clean console."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "EditManyCell icons render without missing-key warnings",
+        "body": "In `@columenlabs/lumen-ui`, `EditManyCell` now draws its by-name icons with stable keys, so editing many-value cells no longer adds console errors."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Keys are added once, when the icon map loads",
+        "body": "Any icon you draw by name from `@columenlabs/lumen-ui` now gets a `${tag}-${index}` key when the icon map first loads, with no change to how icons look and nothing to change in your app."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.353",
+    "date": "2026-11-24T07:06:05Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "One shared listener set per media query",
+        "body": "In `@columenlabs/lumen-ui`, `useIsMobile` and `usePhoneLayout` now share one set of `change`, `resize` and `orientationchange` listeners per query, however many components call the hook."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Listener count no longer grows with every table row",
+        "body": "Calling `useIsMobile` or `usePhoneLayout` once per row, as table cells do, no longer adds listeners per row, so a page that had climbed from 768 to 2,433 listeners drops back down."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Listeners detach when the last subscriber leaves",
+        "body": "Both hooks now remove their shared listeners once no mounted component uses the query, so you can use them freely in lists without manual cleanup."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.352",
+    "date": "2026-11-24T06:57:54Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Weekly grouped dependency updates",
+        "body": "Across the Lumen repo and all its workspaces, minor and patch dependency bumps now arrive as one automated pull request every Monday at 6 AM PT, so contributors review one update instead of many."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Major bumps one at a time",
+        "body": "Major version updates to workspace dependencies open as separate pull requests, capped at 5 open at once, so you can review a breaking upgrade to a package such as `@columenlabs/lumen-ui` on its own."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Workflow actions updated in one PR",
+        "body": "The CI workflow actions the repo uses are now bumped weekly in a single grouped pull request, and the automated commits use the `infra:` prefix so they are easy to spot in the history."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.351",
+    "date": "2026-11-24T06:04:10Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Messages with images or refs are never steered",
+        "body": "In `useAssistantChat` from `@columenlabs/lumen-ui/assistant`, `send` and `steerQueued` now queue any message that has `images` or `refs` and deliver it whole, instead of steering it with words only, and `LumenComposer` and the queue hide **Steer now** for such a message."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Pasted images are no longer ignored",
+        "body": "`LumenComposer` now accepts a pasted image even when the clipboard also holds text, such as a copied file's name or a drawing copied from a document."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Tell the person which images were left out",
+        "body": "`imagesLeftOut(images)` from `@columenlabs/lumen-ai` names the images dropped for exceeding `ASSISTANT_IMAGES_MAX` or `ASSISTANT_IMAGE_CHARS`, so your agent can add that line to the user message and the assistant can say so."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Images keep their names, and copied chats list them",
+        "body": "`AssistantImage` from `@columenlabs/lumen-ui-types/assistant` has a new optional `name`, which is kept as the file part's `filename` and returned as `imageNames` on the user `ChatItem`, so copied chats list attachments by name."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.350",
     "date": "2026-11-24T03:17:14Z",
     "takeaways": [
