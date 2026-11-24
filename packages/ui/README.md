@@ -65,7 +65,7 @@ import { bootGuard } from '@columenlabs/lumen-ui/boot';
 plugins: [bootGuard({ splash: '#splash', name: 'My app' })]
 ```
 
-Until the app draws (the `splash` element is gone), a script or stylesheet of the site that fails to load, or nothing drawn in 30 s, reloads the page after 1, 3 and 9 s; after 3 tries in 2 minutes the splash says the app couldn't load, with Reload. Never a page stuck on its splash, never a reload loop. Once the app has drawn, `watchNewBuilds` takes over.
+Until the app draws (the `splash` element is gone), a script or stylesheet of the site that fails to load, or nothing drawn 30 s after its files have loaded, reloads the page after 1, 3 and 9 s; after 3 tries in 2 minutes the splash says the app couldn't load, with Reload. Never a page stuck on its splash, never a reload loop. Once the app has drawn, `watchNewBuilds` takes over.
 
 ## What's inside
 

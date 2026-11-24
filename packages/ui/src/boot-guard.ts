@@ -8,7 +8,8 @@
  *
  * The plugin puts a small plain script at the top of `index.html`. Until the app draws (the splash is
  * gone, or the app calls `window.__lumenBooted = true`), a stylesheet or script of this site that fails
- * to load, or nothing drawn within `timeoutMs`, reloads the page onto the build the server has now,
+ * to load, or nothing drawn `timeoutMs` after every file has loaded (a slow connection still downloading
+ * never counts as stuck), reloads the page onto the build the server has now,
  * after 1, 3 and then 9 s. Past 3 tries in 2 minutes it stops and the splash says the app could not load,
  * with a Reload button: never a page stuck on a logo, and never a reload loop. It does nothing once the
  * app has drawn; from then on the kit's in-app recovery takes over.
@@ -19,7 +20,7 @@ export interface BootGuardOptions {
   splash: string;
   /** The app's name, for "<name> couldn't load". */
   name: string;
-  /** How long the page may take to draw before it counts as stuck. Default 30 s. */
+  /** How long after every file has loaded the page may take to draw before it counts as stuck. Default 30 s. */
   timeoutMs?: number;
 }
 
@@ -39,7 +40,7 @@ function fail(){if(done||booted())return;done=true;var t=tries();if(t.length>=B.
 t.push(Date.now());try{sessionStorage.setItem(K,JSON.stringify(t))}catch(e){}setTimeout(function(){location.reload()},B[t.length-1])}
 addEventListener('error',function(e){var x=e.target;if(!x||(x.tagName!=='SCRIPT'&&x.tagName!=='LINK'))return;
 if(x.tagName==='LINK'&&!/stylesheet|modulepreload/.test(x.rel))return;var u=x.src||x.href||'';if(u.indexOf(location.origin)===0)fail()},true);
-setTimeout(fail,c.timeoutMs);var iv=setInterval(function(){if(booted()){clearInterval(iv);try{sessionStorage.removeItem(K)}catch(e){}}},1e3)})(${cfg});`;
+function arm(){setTimeout(fail,c.timeoutMs)}if(document.readyState==='complete')arm();else addEventListener('load',arm);var iv=setInterval(function(){if(booted()){clearInterval(iv);try{sessionStorage.removeItem(K)}catch(e){}}},1e3)})(${cfg});`;
 }
 
 /** The Vite plugin: injects `bootGuardScript` first in `<head>`. */
