@@ -15,6 +15,11 @@
 #                a ViewField with `tags: true` (its value may stay the joined text, for sorting) or TagChips
 #   phone-drawer an app's own Minimize or Maximize control (a "Minimize …" / "Maximize …" name): a phone
 #                panel with window controls is LumenPhoneDrawer (docs/parts/phone-drawer.md)
+#   loading-as-empty a read still running drawn as text or nothing: a "Loading…" line, or `return null`
+#                while a query is pending or has no data. A LumenLoading scope or LumenPending instead
+#                (docs/parts/loading.md)
+#   hand-skeleton a skeleton of the app's own (the kit's ui/skeleton, or LumenSkeleton's generic bars):
+#                the parts draw their own shape inside LumenLoading (docs/parts/loading.md)
 set -euo pipefail
 write=0
 if [ "${1:-}" = "--write-baseline" ]; then
@@ -26,7 +31,7 @@ if [ $# -eq 0 ]; then
   exit 1
 fi
 baseline=${LUMEN_SHIP_PARTS_BASELINE:-$(git rev-parse --show-toplevel)/scripts/parts.baseline}
-rules="hint-text text-action raw-overlay settings-page tags-text key-input phone-drawer"
+rules="hint-text text-action raw-overlay settings-page tags-text key-input phone-drawer loading-as-empty hand-skeleton"
 
 # Prints `file:line` for each break of one rule in one folder.
 hits() {
@@ -45,6 +50,10 @@ hits() {
         $re = qr/<(?:Input|InputGroupInput)\b(?:=>|[^>])*?\btype=(?:"password"|\{[^}]*[\x27"]password[\x27"])/;
       } elsif ($rule eq "phone-drawer") {
         $re = qr/[\x27"`](?:Minimize|Maximize)\s/;
+      } elsif ($rule eq "loading-as-empty") {
+        $re = qr/[>\x27"`]\s*Loading(?:\x{2026}|\.\.\.|…)\s*[<\x27"`]|\bif\s*\(\s*(?:\w+\.)*(?:isPending|isLoading)\s*\)\s*return\s+null\b|\bif\s*\(\s*!\s*(?:\w+\.)*data\s*\)\s*return\s+null\b/;
+      } elsif ($rule eq "hand-skeleton") {
+        $re = qr/from\s+[\x27"]\@columenlabs\/lumen-ui\/ui\/skeleton[\x27"]|<LumenSkeleton\b/;
       } elsif ($rule eq "settings-page") {
         $re = qr/\b(?:path|to|href)\s*[:=]\s*\{?\s*[\x27"`](?:[^\x27"`]*\/)?settings(?=[\/?#\x27"`])/i;
       } else {

@@ -52,4 +52,8 @@ if (keys.isPending) return <p>Loading…</p>;
 
 ## Checked by
 
-The `lumen-ship check parts` rules `loading-as-empty` and `hand-skeleton` are planned. Until they land, a reviewer checks it: a screen read with every `/api` call slowed by 1.5 s shows no empty state, no Add, no count and no blank or "Loading…" frame before its data, and its rows do not move when the data lands.
+`lumen-ship check parts` rules:
+- `loading-as-empty`: a `Loading…` line, or `return null` while a query is pending or has no data.
+- `hand-skeleton`: an app's own skeleton (`ui/skeleton`, `LumenSkeleton`).
+
+Both counts may only fall. They can't see every way loading is drawn as empty (`q.data ?? []` handed to an empty state), so a reviewer still reads a screen with every `/api` call slowed by 1.5 s: no empty state, Add, count, or blank or `Loading…` frame before its data, and no row that moves when the data lands.
