@@ -78,6 +78,7 @@ import {
   DEFAULT_CAP,
   type KeyDoc,
   type OwnWays,
+  type PayerReads,
   type Paying,
   type PayingRules,
   State,
@@ -616,6 +617,8 @@ export interface AgentEarly {
   person: Promise<PersonDoc>;
   system: Promise<string>;
   rules: Promise<PayingRules>;
+  /** Who can pay, read once for every provider (`State.payerReads`). */
+  payers: Promise<PayerReads>;
   sources: Promise<SourceAt[]>;
 }
 
@@ -856,12 +859,14 @@ export class Assistant {
       p.catch(() => undefined);
       return p;
     };
+    const rules = this.payingRules(caller);
     return {
       person: quiet(person),
       system: quiet(
         Promise.resolve(typeof this.o.system === 'string' ? this.o.system : this.o.system(caller)),
       ),
-      rules: quiet(this.payingRules(caller)),
+      rules: quiet(rules),
+      payers: quiet(rules.then((r) => this.state.payerReads(caller.id, r.ways))),
       sources: quiet(person.then((p) => this.sourcesOf(caller, p))),
     };
   }
@@ -887,7 +892,8 @@ export class Assistant {
       const free = await this.freeTier(main.tier.id);
       const base = await e.rules;
       const rules: PayingRules = free ? { ...base, only: 'app', free: true } : base;
-      const { paying, wait } = await this.state.paying(caller.id, main.model.provider, rules);
+      const reads = await e.payers;
+      const { paying, wait } = this.state.pickPayer(reads, main.model.provider, rules);
       if (!paying) {
         const code = wait ?? 'not_connected';
         throw new AssistantError(
@@ -896,7 +902,7 @@ export class Assistant {
           402,
         );
       }
-      return { main, rules, free, paying };
+      return { main, rules, free, paying, reads };
     })();
     const told = bearings({
       timeZone: input.time_zone,
@@ -912,7 +918,7 @@ export class Assistant {
     // Who pays decides first, as before: nobody able to pay is the error the person sees.
     if (pay.status === 'rejected') throw pay.reason;
     if (side.status === 'rejected') throw side.reason;
-    const { main, rules, free, paying } = pay.value;
+    const { main, rules, free, paying, reads } = pay.value;
     const [p, appSystem, asked, toldText, sources] = side.value;
     const keyOf = (provider: AssistantProvider): ModelKey | null => {
       const apiKey = paying.keys[provider];
@@ -927,7 +933,7 @@ export class Assistant {
     if (key.plan && this.o.planFallback === 'shared') {
       const shared =
         rules.fallback !== false
-          ? (await this.state.paying(caller.id, main.model.provider, { only: 'app' })).paying
+          ? this.state.pickPayer(reads, main.model.provider, { only: 'app' }).paying
           : null;
       if (shared) {
         sharedLabel = `${main.meter.label} · shared key`;
