@@ -329,7 +329,8 @@ function requestShape(body: Record<string, unknown>, headers: Headers) {
     headers: [...headers.keys()].filter((k) => k !== 'authorization').sort(),
     session: shapeHash(headers.get('session-id') ?? ''),
     // Which sign-in token sent it, as a short one-way hash (a refreshed token shows as a new one).
-    auth: shapeHash(headers.get('authorization') ?? '').split(':')[0],
+    // Not named `auth`: Workers Logs masks a field of that name.
+    signin: shapeHash(headers.get('authorization') ?? '').split(':')[0],
     fields,
     instructions: shapeHash(instructions),
     tools: shapeHash(tools),
