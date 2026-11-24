@@ -56,6 +56,7 @@ import {
   type SentLeads,
   cardNews,
   cardOf,
+  cardResult,
   chatUsage,
   imageParts,
   imagesLeftOut,
@@ -622,7 +623,7 @@ export abstract class LumenSession {
       d.group,
       d.tool,
       JSON.stringify(d.args ?? null),
-      result === undefined ? null : JSON.stringify(result).slice(0, 20_000),
+      cardResult(result),
       kind === 'draft' ? 'open' : 'done',
       Date.now(),
     );
@@ -642,7 +643,7 @@ export abstract class LumenSession {
     this.sql(
       'UPDATE lumen_s_cards SET status = ?, result = COALESCE(?, result), error = ?, told = 0 WHERE session = ? AND id = ?',
       status,
-      o.result === undefined ? null : JSON.stringify(o.result).slice(0, 20_000),
+      o.result === undefined ? null : cardResult(o.result),
       o.error ?? null,
       this.name,
       id,

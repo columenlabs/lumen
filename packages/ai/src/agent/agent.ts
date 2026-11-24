@@ -259,13 +259,37 @@ export interface CardRow {
   at: number;
 }
 
+/** Longest stored card result. Past it the result is kept as its cut text, so the row stays valid JSON. */
+export const CARD_RESULT_MAX = 20_000;
+
+/** A card's result as stored: JSON, pictures' data left out, and still valid JSON when it is cut. */
+export function cardResult(result: unknown): string | null {
+  if (result === undefined) return null;
+  const text = JSON.stringify(result, (k, v) =>
+    k === 'data' && typeof v === 'string' && v.length > 1_000 ? `(${v.length} chars left out)` : v,
+  );
+  if (text === undefined) return null;
+  return text.length > CARD_RESULT_MAX
+    ? JSON.stringify({ cut: true, text: text.slice(0, CARD_RESULT_MAX - 100) })
+    : text;
+}
+
+/** A stored value read back; a row written cut by an older release comes back as its text, never a throw. */
+const parsed = (s: string): unknown => {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return { cut: true, text: s };
+  }
+};
+
 export const cardOf = (r: CardRow): AgentCard => ({
   id: r.id,
   kind: r.kind as AgentCard['kind'],
   group: r.grp,
   tool: r.tool,
-  args: JSON.parse(r.args),
-  ...(r.result === null ? {} : { result: JSON.parse(r.result) }),
+  args: parsed(r.args),
+  ...(r.result === null ? {} : { result: parsed(r.result) }),
   status: r.status as AgentCard['status'],
   ...(r.error ? { error: r.error } : {}),
   at: r.at,
@@ -969,7 +993,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     if (this.#turn) this.#turn.changes = (this.#turn.changes ?? 0) + 1;
     const id = d.call ?? `card_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
     this
-      .sql`INSERT OR REPLACE INTO lumen_cards (id, kind, grp, tool, args, result, status, at) VALUES (${id}, ${kind}, ${d.group}, ${d.tool}, ${JSON.stringify(d.args ?? null)}, ${result === undefined ? null : JSON.stringify(result).slice(0, 20_000)}, ${kind === 'draft' ? 'open' : 'done'}, ${Date.now()})`;
+      .sql`INSERT OR REPLACE INTO lumen_cards (id, kind, grp, tool, args, result, status, at) VALUES (${id}, ${kind}, ${d.group}, ${d.tool}, ${JSON.stringify(d.args ?? null)}, ${cardResult(result)}, ${kind === 'draft' ? 'open' : 'done'}, ${Date.now()})`;
     return id;
   }
 
@@ -981,7 +1005,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
 
   #setCard(id: string, status: AgentCard['status'], o: { result?: unknown; error?: string } = {}) {
     this
-      .sql`UPDATE lumen_cards SET status = ${status}, result = COALESCE(${o.result === undefined ? null : JSON.stringify(o.result).slice(0, 20_000)}, result), error = ${o.error ?? null}, told = 0 WHERE id = ${id}`;
+      .sql`UPDATE lumen_cards SET status = ${status}, result = COALESCE(${o.result === undefined ? null : cardResult(o.result)}, result), error = ${o.error ?? null}, told = 0 WHERE id = ${id}`;
   }
 
   #screensTabled = false;
