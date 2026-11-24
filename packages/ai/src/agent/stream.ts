@@ -471,6 +471,14 @@ export function chunkEvents(
 }
 
 /** A stored UI message, as much of it as a chat's items need. */
+/**
+ * How a turn ended when it did not end well: the same item the live stream drew (an error with its
+ * plain words and code, or Stopped with its reason), kept so a reload draws it again.
+ */
+export type TurnEnd =
+  | { kind: 'error'; text: string; code?: string }
+  | { kind: 'stopped'; reason?: 'cap' | 'limit' };
+
 interface StoredMessage {
   id?: string;
   role: string;
@@ -506,12 +514,20 @@ export function itemsOf(
   taskOf: Record<string, string> = {},
   /** Each message's turn label (`AgentTurnPlan.title`), by id. */
   labels: Record<string, string> = {},
+  /** How each turn that did not end well ended (`TurnEnd`), by the person's message id. */
+  ends: Record<string, TurnEnd> = {},
 ): (ChatItem & { _task?: string })[] {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const items: (ChatItem & { _task?: string })[] = [];
   let asked: string | undefined;
+  // A turn's end goes after everything it said and did, as the live stream drew it.
+  const close = () => {
+    const end = asked ? ends[asked] : undefined;
+    if (end) items.push({ ...end });
+  };
   for (const m of messages) {
     if (m.role === 'user') {
+      close();
       asked = m.id;
       const meta = (obj(m.metadata) ?? {}) as AskMeta;
       const text = m.parts
@@ -602,5 +618,6 @@ export function itemsOf(
     }
     steerTo(Number.POSITIVE_INFINITY);
   }
+  close();
   return items;
 }

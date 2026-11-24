@@ -410,6 +410,8 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       const sent = [...(outcomes.current?.values() ?? [])];
       outcomes.current?.clear();
       keepOutcomes(new Map());
+      // The app was updated while the answer ran: the server carries it on or keeps how it ended.
+      let updated = false;
       try {
         await client.send(
           {
@@ -439,10 +441,17 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
                 steeredInto(p, { kind: 'user', text: e.data.text, at: e.data.at, steered: true }),
               );
             } else if (e.event === 'unsteered') unsteer(e.data.texts);
-            else setItems((p) => applyEvent(p, e));
+            else {
+              if (e.event === 'error' && e.data.code === 'app_updated') updated = true;
+              setItems((p) => applyEvent(p, e));
+            }
           },
           ctl.signal,
         );
+        // So the panel shows what the server holds (the answer carried on, or its end kept), never
+        // only what this stream saw before it was cut.
+        const id = idRef.current;
+        if (updated && id && !ctl.signal.aborted) await resumed(id, ctl.signal);
       } catch (err) {
         // The stream was cut (the network dropped, not Stop): the answer goes on on the server, so the
         // panel reads the chat again until it ends and shows it as saved, never a cut-off error.

@@ -35,6 +35,7 @@ import {
   type UIMessage,
   convertToModelMessages,
   generateText,
+  readUIMessageStream,
   stepCountIs,
   streamText,
 } from 'ai';
@@ -79,7 +80,7 @@ import {
   planFallback,
   turnSettings,
 } from './models';
-import { errorData } from './respond';
+import { errorData, updatedMidAnswer } from './respond';
 import {
   type ScreenCall,
   screenMapOf,
@@ -93,6 +94,7 @@ import {
   type SteerNote,
   type StepCall,
   type StepNames,
+  type TurnEnd,
   chunkEvents,
   itemsOf,
   shownTitle,
@@ -110,6 +112,23 @@ import {
 } from './tasks';
 import { openAiTools } from './tools';
 import { UsageMeter } from './usage';
+
+/**
+ * The parts of an answer in progress that have ended: its text, and each tool call that has its
+ * result or its error. A call still running is left out (a cut makes it never ran).
+ */
+function endedParts(m: UIMessage): UIMessage['parts'] {
+  return m.parts.filter((p) => {
+    const t = p.type;
+    if (t === 'step-start') return true;
+    if (t === 'text') return (p as { state?: string }).state !== 'streaming';
+    if (t === 'dynamic-tool' || t.startsWith('tool-')) {
+      const st = (p as { state?: string }).state;
+      return st === 'output-available' || st === 'output-error';
+    }
+    return false;
+  });
+}
 
 /** The longest one turn of any session runs before it stops and keeps what it made (5 minutes). */
 export const TURN_LIMIT_MS = 5 * 60_000;
@@ -369,6 +388,76 @@ export abstract class LumenSession {
     return (r?.n ?? 0) + 1;
   }
 
+  /**
+   * Writes the answer in progress over its own row (by id), or adds it: each step that ends is kept
+   * as it ends, so a cut (a deploy, a restart) loses none of them.
+   */
+  #keep(m: UIMessage) {
+    const [r] = this.sql<{ seq: number }>(
+      'SELECT seq FROM lumen_s_msgs WHERE session = ? AND id = ? ORDER BY seq DESC LIMIT 1',
+      this.name,
+      m.id,
+    );
+    if (!r) return this.#append(m);
+    this.sql(
+      'UPDATE lumen_s_msgs SET json = ? WHERE session = ? AND seq = ?',
+      JSON.stringify(m),
+      this.name,
+      r.seq,
+    );
+  }
+
+  /** How each turn that did not end well ended, by the person's message id (`TurnEnd`). */
+  #ends(): Record<string, TurnEnd> {
+    return this.#get<Record<string, TurnEnd>>('ends') ?? {};
+  }
+
+  #setEnd(asked: string, end: TurnEnd | null) {
+    const ends = this.#ends();
+    if (end) ends[asked] = end;
+    else if (asked in ends) delete ends[asked];
+    else return;
+    this.#put('ends', ends);
+  }
+
+  /**
+   * A turn a deploy or restart cut off, found on a read: it is never left looking like nothing
+   * happened. It carries on at once when it may (`resume`, and `resumeOnRead`), so the read says it
+   * runs; otherwise it is kept as ended by the update, as the live stream told the person.
+   */
+  #healCut() {
+    if (this.#busy) return;
+    const r = this.#get<{ asked: string; at: number; tries?: number }>('running');
+    if (!r) return;
+    const may = (r.tries ?? 0) < 1 && Date.now() - r.at <= 2 * this.turnLimitMs();
+    if (may && this.resumeOnRead()) {
+      // `resume` marks the session busy before it first waits, so this read already says it runs.
+      const going = this.resume().catch((err) =>
+        console.error(
+          JSON.stringify({
+            event: 'session_resume_failed',
+            session: this.name,
+            error: String(err).slice(0, 300),
+          }),
+        ),
+      );
+      this.host.waitUntil?.(going);
+      return;
+    }
+    if (may) return;
+    this.#del('running');
+    const { message, code } = errorData({ durableObjectReset: true });
+    this.#setEnd(r.asked, { kind: 'error', text: message, ...(code ? { code } : {}) });
+  }
+
+  /**
+   * Whether a turn a restart cut off carries on when the session is next read (the person opened the
+   * chat again). False leaves it to the host (an alarm, or the page asking again).
+   */
+  protected resumeOnRead(): boolean {
+    return true;
+  }
+
   #append(m: UIMessage) {
     this.sql(
       'INSERT INTO lumen_s_msgs (session, seq, id, json) VALUES (?, ?, ?, ?)',
@@ -483,6 +572,7 @@ export abstract class LumenSession {
   }
 
   async view(id = this.name): Promise<AssistantChat & { running?: boolean }> {
+    this.#healCut();
     const open = openTask(this.#tasks());
     return {
       id,
@@ -497,6 +587,7 @@ export abstract class LumenSession {
           this.#names(),
           this.#get<Record<string, string>>('task_of') ?? {},
           this.#get<Record<string, string>>('turn_labels') ?? {},
+          this.#ends(),
         ),
         this.#tasks(),
       ),
@@ -1036,6 +1127,8 @@ export abstract class LumenSession {
     this.#abort = abort;
     const limit = setTimeout(() => abort.abort(new Error('turn limit')), this.turnLimitMs());
     let failed = false;
+    // The error the person was shown last, kept as the turn's end when it failed.
+    let shown = null as { message: string; code?: string } | null;
     let outcome: AgentTurnEnd['outcome'] = 'ok';
     const work = (async () => {
       try {
@@ -1090,35 +1183,55 @@ export abstract class LumenSession {
           onStepFinish: (e) => this.onStepFinish(e as never),
         });
         let saved = false;
-        const stream = result.toUIMessageStream({
+        const full = result.toUIMessageStream({
           generateMessageId: () => `a_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
           onError: (err) => {
             failed = true;
             if ((err as Error)?.name === 'TimeoutError') return QUIET_TEXT;
+            // An app update has its own plain words and code, live and read back alike.
+            if (updatedMidAnswer(err)) {
+              shown = errorData(err);
+              return shown.message;
+            }
             return String((err as Error)?.message ?? err).slice(0, 500);
           },
           onFinish: ({ responseMessage }) => {
-            if (responseMessage.parts.length) this.#append(responseMessage);
             saved = true;
+            if (responseMessage.parts.length) this.#keep(responseMessage);
           },
         });
+        // The same answer read a second time as one message that grows: each time a step ends it is
+        // written down, so a cut keeps every step that ended (and the model carries on from them).
+        const [stream, copy] = full.tee();
+        let marks = '';
+        const keeping = (async () => {
+          for await (const m of readUIMessageStream<UIMessage>({ stream: copy as never })) {
+            if (saved) return;
+            const kept = endedParts(m);
+            const mark = kept.map((p) => (p as { state?: string }).state ?? p.type).join(',');
+            if (!kept.some((p) => p.type !== 'step-start') || mark === marks) continue;
+            marks = mark;
+            this.#keep({ ...m, parts: kept });
+          }
+        })().catch(() => undefined);
         for await (const chunk of stream as AsyncIterable<{ type: string; [k: string]: unknown }>) {
           if (chunk.type === 'error') {
             failed = true;
-            await out.event({
-              event: 'error',
-              data: { message: String(chunk.errorText ?? 'The answer failed.').slice(0, 500) },
-            });
+            const text = String(chunk.errorText ?? 'The answer failed.').slice(0, 500);
+            shown = shown?.message === text ? shown : { message: text };
+            await out.event({ event: 'error', data: shown });
             continue;
           }
           for (const e of toEvents(chunk)) await out.event(e);
         }
+        await keeping;
         if (!saved) failed = true;
       } catch (err) {
         failed = true;
+        shown = errorData(err);
         await out.event({
           event: 'error',
-          data: errorData(err),
+          data: shown,
         });
       }
     })();
@@ -1130,6 +1243,22 @@ export abstract class LumenSession {
       const timedOut = abort.signal.aborted && !this.#stopping;
       outcome = this.#stopping || timedOut ? 'stopped' : failed ? 'error' : 'ok';
       await this.#end(outcome);
+      // How it ended is kept with the person's message, so a reload draws the same end.
+      const said = shown as { message: string; code?: string } | null;
+      const end: TurnEnd | null = this.#capped
+        ? { kind: 'stopped', reason: 'cap' }
+        : timedOut
+          ? { kind: 'stopped', reason: 'limit' }
+          : this.#stopping
+            ? { kind: 'stopped' }
+            : failed
+              ? {
+                  kind: 'error',
+                  text: said?.message ?? 'The answer failed.',
+                  ...(said?.code ? { code: said.code } : {}),
+                }
+              : null;
+      this.#setEnd(userId, end);
       this.#del('running');
       this.#input = null;
       this.#sink = null;
