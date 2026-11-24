@@ -420,8 +420,9 @@ function unmarked(m: LanguageModelV4Message): LanguageModelV4Message {
  *   request's own after the newest block (a turn's later steps read the earlier ones).
  * - OpenAI: the cache key, named for the model and the system line, so every conversation that
  *   starts the same way shares that start. On a ChatGPT plan the key is also the request's
- *   `session-id`, and a plan keeps one cached prompt per id (the last request's), so there the key
- *   also names the conversation by its first message: two conversations never take each other's.
+ *   `session-id`. A plan keeps more than one prompt per id: two chats on one key, their calls
+ *   taking turns, each read 98-100% of its own (plan, 4 runs, 2026-11-24), and a new chat read 96%
+ *   of the shared start. So a new chat on a plan reads the start too, as on a key.
  * A key the caller set itself (`providerOptions.openai.promptCacheKey`) is kept.
  */
 export function promptCache(
@@ -437,7 +438,6 @@ export function promptCache(
         .filter((m) => m.role === 'system')
         .map(wordsOf)
         .join('\n\n');
-      const first = prompt.find((m) => m.role !== 'system');
       let newest = prompt.length - 1;
       while (newest >= 0 && prompt[newest]?.role !== 'user') newest -= 1;
       const lastSystem = prompt.findLastIndex((m) => m.role === 'system');
@@ -446,11 +446,7 @@ export function promptCache(
       );
       const openai = { ...params.providerOptions?.openai };
       if (typeof openai.promptCacheKey !== 'string')
-        openai.promptCacheKey = promptCacheKey(
-          plan
-            ? prefixCacheKey(model.id, system, wordsOf(first))
-            : prefixCacheKey(model.id, system),
-        );
+        openai.promptCacheKey = promptCacheKey(prefixCacheKey(model.id, system));
       return {
         ...params,
         prompt: marks,
@@ -604,7 +600,7 @@ export function cacheCheckOf(meta: unknown): CacheCheck | undefined {
  * read is that call's input where the prompt only adds to it, else the part before the first message
  * that differs. A call that reads short of it says why, first match wins: `gap` (over `CACHE_TTL_MS`),
  * `key` (another cache key), `prefix` (a message, the effort or the tools changed), `evicted`
- * (another session sent on the same key in between: a plan keeps one prompt per key) or
+ * (another session sent on the same key in between) or
  * `extension` (the prompt only added, and still missed: a provider-side cause to find). The marks are
  * kept in `calls`, so the check holds across isolates. Never throws.
  */
