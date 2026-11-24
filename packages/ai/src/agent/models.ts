@@ -15,7 +15,7 @@ import {
   wrapLanguageModel,
 } from 'ai';
 import { Stream } from 'openai/core/streaming';
-import { grokPlanHeaders } from '../assistant/grok';
+import { grokPlanFetch } from '../assistant/grok';
 import { GROK_PLAN_BASE_URL, type ModelDef, XAI_BASE_URL, effortFor } from '../assistant/models';
 import { backoffFetch } from './backoff';
 
@@ -189,30 +189,20 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
  * a Grok plan sign-in alike (the plan's token is the request's key).
  */
 export function xaiFetch(base: typeof fetch = fetch, plan = false): typeof fetch {
-  return async (input, sent) => {
-    let init = sent;
-    if (plan) {
-      // A Grok plan call carries the Grok CLI's headers, which name the model it runs.
-      let model = '';
-      try {
-        const b = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
-        if (b && typeof b.model === 'string') model = b.model;
-      } catch {}
-      const headers = new Headers(init?.headers);
-      for (const [k, v] of Object.entries(grokPlanHeaders(model))) headers.set(k, v);
-      init = { ...init, headers };
-    }
-    if (typeof init?.body !== 'string') return base(input, init);
+  // A Grok plan call carries the Grok CLI's headers at its current version (`grokPlanFetch`).
+  const send = plan ? grokPlanFetch(base) : base;
+  return async (input, init) => {
+    if (typeof init?.body !== 'string') return send(input, init);
     let key: unknown;
     try {
       key = (JSON.parse(init.body) as Record<string, unknown>).prompt_cache_key;
     } catch {
-      return base(input, init);
+      return send(input, init);
     }
-    if (typeof key !== 'string') return base(input, init);
+    if (typeof key !== 'string') return send(input, init);
     const headers = new Headers(init.headers);
     if (!headers.has('x-grok-conv-id')) headers.set('x-grok-conv-id', key);
-    return base(input, { ...init, headers });
+    return send(input, { ...init, headers });
   };
 }
 
