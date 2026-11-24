@@ -195,6 +195,28 @@ const HEALTH: Record<SettingHealth, { word: string; cls: string }> = {
 };
 
 /**
+ * A settings row's mark: the app's icon or logo on a tile, else the name's first letter. Every
+ * row has one, so names line up down a list and the health dot always has an icon to sit on.
+ */
+export function SettingIcon({
+  icon: Icon,
+  text,
+}: {
+  icon?: ComponentType<{ className?: string }>;
+  text?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      data-slot="setting-icon"
+      className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted font-semibold text-muted-foreground text-sm"
+    >
+      {Icon ? <Icon className="size-4" /> : text?.trim().charAt(0)}
+    </span>
+  );
+}
+
+/**
  * The health dot on a row's icon (`LumenExpandRow health`): green working (`works`, `on`), red
  * failed, a grey ring not checked yet (`untested`). Nothing for `off`. Hover tells when and what.
  */

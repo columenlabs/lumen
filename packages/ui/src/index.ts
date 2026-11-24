@@ -296,6 +296,7 @@ export {
   type SettingHealth,
   SettingStatus,
   SettingHealthDot,
+  SettingIcon,
   SettingValue,
   sectionHealth,
   settingHealth,
