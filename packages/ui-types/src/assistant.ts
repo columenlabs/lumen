@@ -327,6 +327,8 @@ export interface ScreenItem {
 export type ChatItem =
   | {
       kind: 'user';
+      /** The turn's id (the stored message's, `u_…`): copies of the chat show it so a turn can be found again. */
+      id?: string;
       text: string;
       at: number;
       /** The images sent with it, as `data:` addresses to show. */

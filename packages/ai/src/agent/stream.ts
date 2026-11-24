@@ -526,6 +526,7 @@ export function itemsOf(
       const imageNames = files.map((p) => (typeof p.filename === 'string' ? p.filename : ''));
       items.push({
         kind: 'user',
+        ...(m.id ? { id: m.id } : {}),
         text,
         at: meta.at ?? 0,
         ...(images.length ? { images } : {}),
