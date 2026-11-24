@@ -366,9 +366,25 @@ export function leadAt(messages: ModelMessage[], i: number, lead: string): Model
   return [...messages.slice(0, i), { ...m, content }, ...messages.slice(i + 1)];
 }
 
+/** A turn id as the app may give one (`AskInput.id`): `u_` and 16 lowercase letters or digits. */
+export const TURN_ID = /^u_[a-z0-9]{16}$/;
+
+/** The id the person's message is stored under: the app's own when it gave a valid one, else a new one. */
+export function turnIdOf(given: unknown): string {
+  return typeof given === 'string' && TURN_ID.test(given)
+    ? given
+    : `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+}
+
 /** One message the person sent, with the page, refs and tier the composer added. */
 export interface AskInput {
   message: string;
+  /**
+   * The id to store the person's message under (`u_` + 16 letters or digits), so the app can name the
+   * turn before it runs (a trace id, a log line). Left out or malformed, a new one is made. Copies of
+   * the chat show it on the turn's heading.
+   */
+  id?: string;
   /** Images to look at with the message; kept to the allowed types, count and size. */
   images?: AssistantImage[];
   context?: { label: string; note?: unknown };
@@ -859,7 +875,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
       failed: (f) => this.stepFailed(f),
     });
     const map = screenMapOf(input.screen);
-    const userId = `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+    const userId = turnIdOf(input.id);
     this.#sink = sink;
     this.#stopping = false;
     this.#asked = userId;

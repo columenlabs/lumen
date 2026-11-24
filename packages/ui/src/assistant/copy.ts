@@ -7,9 +7,13 @@ import {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { lumenToast } from '../lumen-toast';
 
-/** The whole chat, its title as the heading. */
-export function chatMarkdown(title: string, items: ChatItem[], name: string): string {
-  return [`# ${title || `${name} chat`}`, ...items.map((i) => itemMarkdown(i, 2, name))]
+/** The whole chat, its title as the heading and its id (when it has one) under it. */
+export function chatMarkdown(title: string, items: ChatItem[], name: string, id?: string): string {
+  return [
+    `# ${title || `${name} chat`}`,
+    id ? `Chat ${id}` : '',
+    ...items.map((i) => itemMarkdown(i, 2, name)),
+  ]
     .filter(Boolean)
     .join('\n\n')
     .concat('\n');
@@ -62,7 +66,9 @@ function itemMarkdown(i: ChatItem, depth: number, name: string): string {
       const attached = n
         ? `\n\nAttached: ${i.imageNames?.some(Boolean) ? attachmentNames(i.imageNames, n).join(', ') : `${n} image${n === 1 ? '' : 's'}`}`
         : '';
-      return `${h} You\n\n${quote}${i.text}${refs}${attached}`;
+      // The turn's id on its heading, so a pasted turn can be found again (a log, a trace).
+      const turn = i.id ? ` · turn ${i.id}` : '';
+      return `${h} You${turn}\n\n${quote}${i.text}${refs}${attached}`;
     }
     case 'text':
       return `${h} ${name}\n\n${i.text}`;

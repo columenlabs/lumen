@@ -464,7 +464,12 @@ export function LumenAssistant({
           icon={CopyIcon}
           label="Copy chat"
           disabled={!chat.items.length}
-          onClick={() => copyMarkdown(chatMarkdown(chat.title, chat.items, name), 'Chat')}
+          onClick={() =>
+            copyMarkdown(
+              chatMarkdown(chat.title, chat.items, name, chat.chatId ?? undefined),
+              'Chat',
+            )
+          }
         />
         <IconButton
           icon={PlusIcon}

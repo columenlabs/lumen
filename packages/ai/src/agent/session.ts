@@ -63,6 +63,7 @@ import {
   quoteLead,
   quoteOf,
   stickyLeads,
+  turnIdOf,
 } from './agent';
 import {
   SUMMARY_ASK,
@@ -937,7 +938,7 @@ export abstract class LumenSession {
       ...(input.tier ? { tier: input.tier } : {}),
     };
     const map = screenMapOf(input.screen);
-    const userId = `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+    const userId = turnIdOf(input.id);
     const { images: _images, ...asked } = input;
     const pictures = imageParts(input.images);
     const leftOut = imagesLeftOut(input.images);

@@ -21,9 +21,6 @@ import { backoffFetch } from './backoff';
 /** The one `instructions` line a plan request carries; the system prompt goes in a developer item. */
 const PLAN_INSTRUCTIONS = 'Follow the developer message.';
 
-/** Models a ChatGPT plan refused `prompt_cache_options` for ("not supported on this model"). */
-const noCacheTtl = new Set<string>();
-
 /** Claude's advisor tool: provider imports live here only, beside `aiModel`. */
 export const advisorTool = (
   o: Parameters<typeof anthropic.tools.advisor_20260301>[0],
@@ -123,14 +120,10 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       headers.set('session-id', body.prompt_cache_key);
       headers.set('thread-id', body.prompt_cache_key);
     }
-    // A plan wrote nothing to its cache (cache_write_tokens 0, live 2026-11-14): ask for the default
-    // 30-minute cache in so many words, and ask again without it if the plan refuses the field.
-    if (
-      typeof body.prompt_cache_key === 'string' &&
-      !noCacheTtl.has(model) &&
-      !body.prompt_cache_options
-    )
-      body.prompt_cache_options = { ttl: '30m' };
+    // A plan's prompt cache is kept by its session-id (above). `prompt_cache_options` is never added:
+    // the plan refuses it on every model it was sent to ("not supported on this model", Terra and
+    // Sol, 2026-11-24), and each new isolate paid that refusal and a second request (about 1.7 s)
+    // before the first answer. A caller that sets it itself still gets the retry below.
     // The request's shape, one line a call: every field but the token, each text as its length and a
     // short hash, never its words. Two calls' lines side by side show what one changed (the prompt
     // cache reads a request only as far as it matches an earlier one).
@@ -138,13 +131,11 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
       JSON.stringify({ event: 'assistant_plan_request', ...requestShape(body, headers) }),
     );
     let res = await base(input, { ...init, headers, body: JSON.stringify(body) });
-    // A plan refuses some fields on some models. Each 400 that names one drops that field for the
-    // model (kept for this isolate) and asks again, whichever order the refusals come in, so one
-    // refusal never leaves the person with an error: a field the model refused is never sent again.
+    // A plan refuses some fields on some models. A 400 that names one drops that field and asks
+    // again, so one refusal never leaves the person with an error.
     for (let tries = 0; res.status === 400 && tries < 3; tries++) {
       const text = await res.clone().text();
       if (body.prompt_cache_options && /prompt_cache_options/i.test(text)) {
-        noCacheTtl.add(model);
         body = { ...body, prompt_cache_options: undefined };
       } else break;
       console.error(
