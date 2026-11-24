@@ -91,6 +91,10 @@ export interface ExplorerItem<D = unknown> {
   /** Small marks right after the name (a progress spinner with its time, a retry). Fixed width. */
   marks?: ReactNode;
   field?: ExplorerField;
+  /** The app's own control in the field slot, when the kit's field can't hold the value (a list, a
+   *  vector, a value in the app's units with limits of its own). `fieldWidth` wide; clicks and keys in
+   *  it stay with it. Ignored when `field` is set. */
+  control?: ReactNode;
   /** A card on the name's hover: what it does and what it touches. Never a second line. */
   info?: { text?: string; tags?: string[]; tagsLabel?: string };
   /** Dimmed: hidden, turned off, past the rollback bar. */
@@ -688,7 +692,20 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     ) : null;
   const endStatus =
     statusAt === 'end' && it.status ? <StatusMark s={it.status} size={slot} /> : null;
-  const field = it.field ? <FieldCell f={it.field} width={fieldWidth} name={it.name} /> : null;
+  const field = it.field ? (
+    <FieldCell f={it.field} width={fieldWidth} name={it.name} />
+  ) : it.control ? (
+    <fieldset
+      aria-label={it.name}
+      className="m-0 flex min-w-0 flex-none items-center justify-end border-0 p-0"
+      style={{ width: fieldWidth }}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+    >
+      {it.control}
+    </fieldset>
+  ) : null;
   const own = rowProps?.(it, node) ?? {};
 
   return (
