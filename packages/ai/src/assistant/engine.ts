@@ -67,6 +67,7 @@ import {
 import {
   ALL_MODELS,
   DEFAULT_OUT,
+  GROK_PLAN_BASE_URL,
   Meter,
   type ModelDef,
   PROVIDERS,
@@ -462,10 +463,17 @@ function shownError(err: unknown, plan = false): { message: string; code: string
           : 'model_error',
     };
   // xAI decides per account whether a Grok plan may run models over the API; a 403 there says so.
-  if (call && plan && call.status === 403 && /x\.ai/.test(call.url))
+  if (call && plan && call.status === 403 && /x\.ai|grok\.com/.test(call.url))
     return {
       message: "xAI doesn't let this Grok plan run models here. Use an xAI API key instead.",
       code: 'key_refused',
+    };
+  // The proxy answers 402 when the plan's Grok use is spent for now.
+  if (call && plan && call.status === 402 && /grok\.com/.test(call.url))
+    return {
+      message:
+        'Your Grok plan has no use left for now. Check it on grok.com, or use an xAI API key.',
+      code: 'usage_limit',
     };
   if (call) {
     console.error(
@@ -2177,7 +2185,7 @@ export class Assistant {
       return { done: false as const, device: shownOf(r.wait) };
     }
     await this.state.docs.remove(caller.id, name);
-    const test = await testGrok(r.done, f, XAI_BASE_URL);
+    const test = await testGrok(r.done, f, GROK_PLAN_BASE_URL);
     const legacy = await this.state.ownPlan(caller.id, provider);
     if (legacy?.doc.grok) await revokeGrok(legacy.doc.grok, f);
     await this.state.docs.write<KeyDoc>(caller.id, planDocName(provider), {
@@ -2220,7 +2228,7 @@ export class Assistant {
     if (!token || !now)
       return now?.doc.test ?? { ok: false, detail: 'Sign in again.', at: Date.now() };
     const test = now.doc.grok
-      ? await testGrok(now.doc.grok, this.o.fetch ?? fetch, XAI_BASE_URL)
+      ? await testGrok(now.doc.grok, this.o.fetch ?? fetch, GROK_PLAN_BASE_URL)
       : now.doc.chatgpt
         ? await testChatgpt(now.doc.chatgpt, this.o.fetch ?? fetch)
         : { ok: false, detail: 'Sign in again.', at: Date.now() };
