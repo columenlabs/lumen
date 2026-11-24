@@ -15,7 +15,8 @@ import {
   wrapLanguageModel,
 } from 'ai';
 import { Stream } from 'openai/core/streaming';
-import { type ModelDef, XAI_BASE_URL, effortFor } from '../assistant/models';
+import { grokPlanHeaders } from '../assistant/grok';
+import { GROK_PLAN_BASE_URL, type ModelDef, XAI_BASE_URL, effortFor } from '../assistant/models';
 import { backoffFetch } from './backoff';
 
 /** The one `instructions` line a plan request carries; the system prompt goes in a developer item. */
@@ -26,7 +27,7 @@ export const advisorTool = (
   o: Parameters<typeof anthropic.tools.advisor_20260301>[0],
 ): ToolSet[string] => anthropic.tools.advisor_20260301(o) as ToolSet[string];
 
-/** The key a model runs on. `plan`: an OpenAI access token from a ChatGPT plan sign-in. */
+/** The key a model runs on. `plan`: an access token from a ChatGPT or Grok plan sign-in. */
 export interface ModelKey {
   apiKey: string;
   plan?: boolean;
@@ -187,8 +188,20 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
  * same key, so every call of a conversation reaches the server that holds its start, on a key and on
  * a Grok plan sign-in alike (the plan's token is the request's key).
  */
-export function xaiFetch(base: typeof fetch = fetch): typeof fetch {
-  return async (input, init) => {
+export function xaiFetch(base: typeof fetch = fetch, plan = false): typeof fetch {
+  return async (input, sent) => {
+    let init = sent;
+    if (plan) {
+      // A Grok plan call carries the Grok CLI's headers, which name the model it runs.
+      let model = '';
+      try {
+        const b = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+        if (b && typeof b.model === 'string') model = b.model;
+      } catch {}
+      const headers = new Headers(init?.headers);
+      for (const [k, v] of Object.entries(grokPlanHeaders(model))) headers.set(k, v);
+      init = { ...init, headers };
+    }
     if (typeof init?.body !== 'string') return base(input, init);
     let key: unknown;
     try {
@@ -366,9 +379,11 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
     model.provider === 'anthropic'
       ? createAnthropic({ apiKey: key.apiKey, fetch: f })(model.id)
       : model.provider === 'xai'
-        ? createOpenAI({ apiKey: key.apiKey, baseURL: XAI_BASE_URL, fetch: xaiFetch(f) }).responses(
-            model.id,
-          )
+        ? createOpenAI({
+            apiKey: key.apiKey,
+            baseURL: key.plan ? GROK_PLAN_BASE_URL : XAI_BASE_URL,
+            fetch: xaiFetch(f, !!key.plan),
+          }).responses(model.id)
         : createOpenAI({
             apiKey: key.apiKey,
             fetch: key.plan ? planFetch(f, o.name) : f,

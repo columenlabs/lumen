@@ -5,8 +5,8 @@
  * xAI's token endpoint at its interval until the approval lands. Nothing is pasted back, so it works
  * from an app on any host. Endpoints are from https://auth.x.ai/.well-known/openid-configuration
  * (checked 2026-11-24). xAI offers no client registration, so this is the one public client xAI's own
- * Grok CLI and the other tools that sign in to Grok use; no client secret. Tokens run models at
- * https://api.x.ai/v1, the same API as a key.
+ * Grok CLI and the other tools that sign in to Grok use; no client secret. Tokens run models on
+ * xAI's Grok CLI proxy (`GROK_PLAN_BASE_URL`), the route that bills the plan, with the CLI's headers.
  */
 
 const AUTH = 'https://auth.x.ai/oauth2';
@@ -18,6 +18,23 @@ const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
 const EARLY_MS = 5 * 60_000;
 /** The model a sign-in's test runs: the smallest Grok, one short answer. */
 const TEST_MODEL = 'grok-4.3';
+
+/** The Grok CLI release whose headers plan calls carry (the proxy checks for a known client). */
+const CLI_VERSION = '0.2.101';
+
+/**
+ * The headers xAI's Grok CLI sends its proxy, which every plan call carries: the proxy reads a plan
+ * token only with them (xai-org/grok-build, as pi-xai sends them).
+ */
+export const grokPlanHeaders = (model: string): Record<string, string> => ({
+  'user-agent': `grok-shell/${CLI_VERSION}`,
+  'x-grok-client-identifier': 'grok-shell',
+  'x-grok-client-version': CLI_VERSION,
+  'x-grok-client-mode': 'interactive',
+  'x-xai-token-auth': 'xai-grok-cli',
+  'x-authenticateresponse': 'authenticate-response',
+  'x-grok-model-override': model,
+});
 
 /** A started sign-in, kept sealed until it is approved or runs out. */
 export interface GrokPending {
@@ -193,6 +210,22 @@ export async function revokeGrok(t: GrokTokens, fetchFn: typeof fetch): Promise<
   }).catch(() => null);
 }
 
+/** xAI's own words on a refused call, short and on one line (its errors carry no token). */
+async function xaiSaid(res: Response): Promise<string> {
+  const b = await json(res);
+  const e = b.error;
+  const m =
+    typeof e === 'string'
+      ? e
+      : e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string'
+        ? (e as { message: string }).message
+        : typeof b.message === 'string'
+          ? b.message
+          : '';
+  const one = m.replace(/\s+/g, ' ').trim().slice(0, 160);
+  return one ? `: ${one}` : '';
+}
+
 /**
  * One short answer from the smallest Grok on the plan: xAI decides per account whether a plan may run
  * models over the API, and a list of models answers even when it may not, so only a real call tells.
@@ -201,7 +234,11 @@ export async function testGrok(t: GrokTokens, fetchFn: typeof fetch, base: strin
   const at = Date.now();
   const res = await fetchFn(`${base}/responses`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${t.access_token}`, 'content-type': 'application/json' },
+    headers: {
+      ...grokPlanHeaders(TEST_MODEL),
+      authorization: `Bearer ${t.access_token}`,
+      'content-type': 'application/json',
+    },
     body: JSON.stringify({
       model: TEST_MODEL,
       input: 'Say OK.',
@@ -218,6 +255,15 @@ export async function testGrok(t: GrokTokens, fetchFn: typeof fetch, base: strin
         "Signed in, but xAI doesn't let this plan run models here. Use an xAI API key instead.",
       at,
     };
-  if (!res.ok) return { ok: false, detail: `xAI refused the sign-in (HTTP ${res.status}).`, at };
+  if (res.status === 402)
+    return {
+      ok: false,
+      detail: 'Signed in, but xAI says the plan has no Grok use left. Check the plan on grok.com.',
+      at,
+    };
+  if (!res.ok) {
+    const said = await xaiSaid(res);
+    return { ok: false, detail: `xAI refused the call (HTTP ${res.status}${said}).`, at };
+  }
   return { ok: true, detail: 'Grok plan sign-in works.', at };
 }
