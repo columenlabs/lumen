@@ -25,8 +25,8 @@
     "./assistant": "./src/assistant.ts"
   },
   "dependencies": {
-    "@date-fns/utc": "2.1.0",
-    "date-fns": "4.1.0",
+    "@date-fns/utc": "2.1.1",
+    "date-fns": "4.4.0",
     "jexl": "2.3.0",
     "zod": "^4.3.6"
   },
