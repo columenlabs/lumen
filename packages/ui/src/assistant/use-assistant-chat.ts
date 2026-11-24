@@ -119,9 +119,10 @@ export interface AssistantChatState {
 
 /** What a sent message carried besides its words, to send it again (Retry, a fresh chat). */
 function resendOf(user: Extract<ChatItem, { kind: 'user' }>): Extra {
-  const images = (user.images ?? []).flatMap((src) => {
+  const images = (user.images ?? []).flatMap((src, i) => {
     const m = /^data:([^;]+);base64,(.*)$/.exec(src);
-    return m ? [{ media_type: m[1], data: m[2] } as AssistantImage] : [];
+    const name = user.imageNames?.[i];
+    return m ? [{ media_type: m[1], data: m[2], ...(name ? { name } : {}) } as AssistantImage] : [];
   });
   return {
     ...(user.refs?.length ? { refs: user.refs } : {}),
@@ -400,6 +401,9 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             ...(extra?.images?.length
               ? { images: extra.images.map((i) => `data:${i.media_type};base64,${i.data}`) }
               : {}),
+            ...(extra?.images?.some((i) => i.name)
+              ? { imageNames: extra.images.map((i) => i.name ?? '') }
+              : {}),
           },
         ]);
       // Every screen outcome not yet sent goes with this message; kept again if it fails.
@@ -497,7 +501,10 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       const text = message.trim();
       if (!text) return;
       if (!abort.current) return void run(text, extra);
-      const steer = (how ?? 'steer') === 'steer' && canSteer && !!idRef.current;
+      // A steer carries words only: a message with images or pointed-at things waits for the answer
+      // to end and goes whole, so none of them is lost.
+      const carries = !!extra?.images?.length || !!extra?.refs?.length;
+      const steer = (how ?? 'steer') === 'steer' && !carries && canSteer && !!idRef.current;
       const m: QueuedMessage = {
         id: queuedId(),
         message: text,
@@ -557,6 +564,8 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     (id: string) => {
       const m = queueRef.current.find((x) => x.id === id && !x.steering);
       if (!m || !abort.current) return;
+      // Images and pointed-at things cannot ride a steer: it stays queued and goes whole.
+      if (m.extra?.images?.length || m.extra?.refs?.length) return;
       const on = { ...m, steering: true };
       setQueue((q) => [
         ...q.filter((x) => x.steering),

@@ -519,16 +519,17 @@ export function itemsOf(
         .slice(meta.quote ? 1 : 0)
         .map((p) => String(p.text ?? ''))
         .join('');
-      const images = m.parts
-        .filter(
-          (p) => p.type === 'file' && typeof p.url === 'string' && p.url.startsWith('data:image/'),
-        )
-        .map((p) => p.url as string);
+      const files = m.parts.filter(
+        (p) => p.type === 'file' && typeof p.url === 'string' && p.url.startsWith('data:image/'),
+      );
+      const images = files.map((p) => p.url as string);
+      const imageNames = files.map((p) => (typeof p.filename === 'string' ? p.filename : ''));
       items.push({
         kind: 'user',
         text,
         at: meta.at ?? 0,
         ...(images.length ? { images } : {}),
+        ...(imageNames.some(Boolean) ? { imageNames } : {}),
         ...(meta.context?.label ? { context: meta.context.label } : {}),
         ...(meta.refs?.length ? { refs: meta.refs } : {}),
         ...(meta.quote ? { quote: meta.quote } : {}),
