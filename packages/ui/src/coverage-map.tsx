@@ -548,7 +548,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
     edge.update();
   }, [strip]);
 
-  const sums = mobile ? summary.filter((s) => s === 'complete') : summary;
+  const sums = summary;
   const rowsHead = `${unit[0]?.toUpperCase() ?? ''}${unit.slice(1)}`;
   const levels = new Set<CoverageLevel>();
   const unitLabel = (have: number, expected: number) =>
@@ -861,7 +861,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
             </span>
           ))}
           {sums.map((s) => (
-            <span key={s} className="pl-3 text-right text-xs text-muted-foreground">
+            <span key={s} data-sum={s} className="pl-3 text-right text-xs text-muted-foreground">
               {s === 'rows' || s === 'counts' ? rowsHead : SUMMARY_HEAD[s]}
             </span>
           ))}
@@ -1142,21 +1142,37 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   );
 }
 
-/** Scrolls a sideways strip to its end (today) so its left edge falls on a whole block, not mid
- *  block with its label cut: the strip's content takes just enough room at its end to land there. */
+/** Opens a sideways strip at today: the newest block and the first summary column in view, the other
+ *  summaries a scroll to the right when the strip is too wide for them (the same on every device). Its
+ *  left edge falls on a whole block, not mid block with its label cut. */
 function snapToEnd(el: HTMLElement) {
   const content = el.firstElementChild as HTMLElement | null;
   if (!content) return;
   content.style.paddingRight = '';
   el.scrollLeft = el.scrollWidth;
-  const box = el.getBoundingClientRect().left;
-  const lefts = [...el.querySelectorAll<HTMLElement>('[data-col]')].map(
-    (c) => c.getBoundingClientRect().left - box,
-  );
-  // The first block cut by the left edge; the strip moves on to the block after it.
-  const cut = lefts.find((x, i) => x < -0.5 && (lefts[i + 1] ?? 1) > 0.5);
-  if (cut === undefined) return;
-  const next = lefts[lefts.indexOf(cut) + 1];
+  const box = () => el.getBoundingClientRect().left;
+  const lefts = () =>
+    [...el.querySelectorAll<HTMLElement>('[data-col]')].map(
+      (c) => c.getBoundingClientRect().left - box(),
+    );
+  // The first block cut by the left edge.
+  const cutOf = (xs: number[]) => xs.findIndex((x, i) => x < -0.5 && (xs[i + 1] ?? 1) > 0.5);
+  const second = el.querySelectorAll<HTMLElement>('[data-sum]')[1];
+  const past = second ? second.getBoundingClientRect().left - box() - el.clientWidth : 0;
+  if (past < -0.5) {
+    // The summaries after the first wait off the right edge (the edge of the next shows they are there);
+    // the strip moves on past a block the left edge cuts.
+    el.scrollLeft += past;
+    const xs = lefts();
+    const i = cutOf(xs);
+    const next = xs[i + 1];
+    if (i >= 0 && next !== undefined && next > 0.5) el.scrollLeft += next;
+    return;
+  }
+  const xs = lefts();
+  const i = cutOf(xs);
+  if (i < 0) return;
+  const next = xs[i + 1];
   if (next === undefined || next <= 0.5) return;
   content.style.paddingRight = `${Math.ceil(next)}px`;
   el.scrollLeft = el.scrollWidth;
