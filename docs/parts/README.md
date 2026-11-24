@@ -47,5 +47,7 @@ Each page has the same four headings:
 | `key-input` | a password `Input` in an app: a key, token or secret is a `LumenConnection` field (secret, prefix, Test, Remove), never an `Input` with its own Save button ([settings.md](settings.md)) |
 | `phone-drawer` | an app's own Minimize or Maximize control (a `"Minimize …"` or `"Maximize …"` name): a phone panel with window controls is `LumenPhoneDrawer` ([phone-drawer.md](phone-drawer.md)) |
 | `settings-page` | a route, link or nav item (`path`, `to`, `href`) to a page named `settings`: an app's settings are sections of the one Settings dialog |
+| `loading-as-empty` | a read still running drawn as text or nothing: a `Loading…` line, or `return null` while a query is pending or has no data. A `LumenLoading` scope or `LumenPending` instead ([loading.md](loading.md)) |
+| `hand-skeleton` | an app's own skeleton: an import of `ui/skeleton` or a `LumenSkeleton`. The parts draw their own shape inside `LumenLoading` ([loading.md](loading.md)) |
 
 `lumen-ship check parts --write-baseline <folders>` writes today's counts (only for a first run; lower a count by hand in the change that removes a break).
