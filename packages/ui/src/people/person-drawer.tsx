@@ -26,6 +26,7 @@ import { DrawerSection } from '../drawer-section';
 import { FactList } from '../fact-list';
 import { InfoLabel, InfoTip } from '../info-tip';
 import { errorText } from '../integrations';
+import { LoadingBar } from '../loading';
 import { LumenDrawer } from '../lumen-drawer';
 import { LumenSelector } from '../lumen-selector';
 import { NoteLine } from '../note-line';
@@ -307,8 +308,14 @@ function ActivitySection({ adapter, person }: { adapter: PeopleAdapter; person: 
             </li>
           ))}
         </ul>
+      ) : q.isPending ? (
+        <div className="grid gap-2" aria-busy="true">
+          <LoadingBar className="w-full" />
+          <LoadingBar className="w-full" />
+          <LoadingBar className="w-full" />
+        </div>
       ) : (
-        <p className="text-muted-foreground text-sm">{q.isPending ? 'Loading…' : 'Nothing yet.'}</p>
+        <p className="text-muted-foreground text-sm">Nothing yet.</p>
       )}
     </DrawerSection>
   );

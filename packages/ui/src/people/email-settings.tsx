@@ -21,7 +21,9 @@ import { IconButton } from '../icon-button';
 import { InfoLabel } from '../info-tip';
 import { errorText } from '../integrations';
 import { LumenChoice } from '../lumen-choice';
+import { useLumenLoad } from '../lumen-source';
 import { lumenToast } from '../lumen-toast';
+import { LumenPending } from '../pending';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Spinner } from '../ui/spinner';
@@ -62,9 +64,13 @@ export function LumenEmailSettings({
     queryKey: key,
     queryFn: () => api?.view() ?? Promise.reject(new Error('Email settings are not set up here.')),
   });
+  const load = useLumenLoad(q);
   if (!q.data || !api)
+    // The email row while its read runs, or the kit's error with Retry when it fails.
     return (
-      <p className="text-muted-foreground text-sm">{q.isError ? errorText(q.error) : 'Loading…'}</p>
+      <LumenPending id="people:email" shape="r" load={load} data={undefined}>
+        {() => null}
+      </LumenPending>
     );
   const view = q.data;
   const cur = view.current;

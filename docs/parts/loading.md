@@ -22,6 +22,8 @@ What each part draws inside a loading scope:
 | `FactList` | Its labels stay; each value is a bar |
 | `LumenView`, `LumenTable` | Its own header, then the rows it showed last as bars in each column, numbers on the right edge. No empty state, "No rows match", count, pager or Total |
 
+A section built from its data (it cannot draw its rows before the read answers) uses `LumenPending` instead: `<LumenPending id="…" load={load} data={q.data}>{(data) => …}</LumenPending>`. Until the read answers it draws the order of field rows and expand rows the section showed last time on this device, each as bars (`shape` fixes it when the caller knows it, such as `"r"` for one row). A failed read shows the kit's error with Retry. The kit's own assistant, notification and email settings use it.
+
 A part that draws data reads the scope with `useLumenLoading()` and draws a `LoadingBar` in each slot. A new data part does the same.
 
 ## Do / Don't
