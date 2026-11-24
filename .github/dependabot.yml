@@ -1,0 +1,30 @@
+# Dependency updates, weekly (Monday, Pacific). Each merge to main publishes a release, so
+# updates come grouped: one PR for minor and patch bumps, majors one at a time.
+version: 2
+updates:
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "infra:"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Los_Angeles
+    commit-message:
+      prefix: "infra:"
+    groups:
+      actions:
+        patterns: ["*"]
