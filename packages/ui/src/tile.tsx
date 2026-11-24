@@ -6,6 +6,7 @@
 // A tile with `spark` is a metric card: its daily history as a small line under the number.
 import type { ReactNode } from 'react';
 import { cn } from './lib/utils';
+import { LoadingBar, useLumenLoading } from './loading';
 import { Card } from './ui/card';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 
@@ -70,6 +71,24 @@ function TileBody({
   spark?: number[];
   sparkColor?: string;
 }) {
+  // Inside a loading scope the label stays and the number, its lines and its spark are bars of
+  // the same heights, so the tile keeps its size when the data lands.
+  const loading = useLumenLoading();
+  if (loading)
+    return (
+      <>
+        <span className="w-full truncate text-xs text-muted-foreground">{label}</span>
+        <span className="flex h-7 items-center">
+          <LoadingBar className="h-5 w-16" />
+        </span>
+        {caption ? <LoadingBar className="my-0.5 h-3 w-24" /> : null}
+        {lines?.map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: placeholders in the lines' order
+          <LoadingBar key={i} className="my-0.5 h-3 w-24" />
+        ))}
+        {spark ? <LoadingBar className="mt-1 h-6 w-full self-stretch" /> : null}
+      </>
+    );
   return (
     <>
       <span className="w-full truncate text-xs text-muted-foreground">{label}</span>

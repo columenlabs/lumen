@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import { cn } from './lib/utils';
+import { LoadingBar, useLumenLoading } from './loading';
 
 export interface Fact {
   label: string;
@@ -21,6 +22,8 @@ export interface FactListProps {
  * of room ends in an ellipsis, the whole of it on hover, so a time or an email never breaks.
  */
 export function FactList({ facts, className }: FactListProps) {
+  // Inside a loading scope the labels stay and each value is a bar.
+  const loading = useLumenLoading();
   return (
     <dl className={cn('grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm', className)}>
       {facts.map(
@@ -28,16 +31,22 @@ export function FactList({ facts, className }: FactListProps) {
           f && (
             <Fragment key={f.label}>
               <dt className="whitespace-nowrap text-muted-foreground">{f.label}</dt>
-              <dd
-                className={cn('min-w-0', f.wrap ? 'break-words' : 'truncate')}
-                title={
-                  f.wrap
-                    ? undefined
-                    : (f.title ?? (typeof f.value === 'string' ? f.value : undefined))
-                }
-              >
-                {f.value}
-              </dd>
+              {loading ? (
+                <dd className="flex min-w-0 items-center">
+                  <LoadingBar className={f.wrap ? 'w-48' : 'w-28'} />
+                </dd>
+              ) : (
+                <dd
+                  className={cn('min-w-0', f.wrap ? 'break-words' : 'truncate')}
+                  title={
+                    f.wrap
+                      ? undefined
+                      : (f.title ?? (typeof f.value === 'string' ? f.value : undefined))
+                  }
+                >
+                  {f.value}
+                </dd>
+              )}
             </Fragment>
           ),
       )}

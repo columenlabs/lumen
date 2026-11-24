@@ -37,6 +37,8 @@ No chips or pills in the header and no empty columns: counts and names go in the
 
 Every row has an icon. Give `icon` the thing's logo or icon (`SettingIcon icon={…}` draws it on a tile); left out, the row draws the name's first letter on that tile. So names start on one edge down a list, and the health dot never draws without an icon to sit on.
 
+While a section's reads run, wrap it in `LumenLoading` ([loading.md](loading.md)): each row keeps its name and icon, its detail and switch are bars, no dot shows, and a list of data rows (`LumenExpandList id`) draws as many bar rows as it had last time. Never draw a section's empty, Add or "Not set up" state before its reads answer.
+
 ## Three slots (every thing in a section)
 
 Inside, a thing is built on shadcn's `Field` and `InputGroup`:
