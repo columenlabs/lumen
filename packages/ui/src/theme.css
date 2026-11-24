@@ -84,6 +84,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* `text-row`: an explorer row's name (LumenExplorer); `text-row-meta`: its grey meta and units. */
+  --text-row: 0.8125rem;
+  --text-row-meta: 0.6875rem;
   --font-heading: var(--font-sans);
   --font-sans: var(--app-font);
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
