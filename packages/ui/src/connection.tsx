@@ -25,6 +25,7 @@ import {
   SettingActions,
   SettingField,
   type SettingHealth,
+  SettingIcon,
   SettingStatus,
   SettingValue,
 } from './setting-parts';
@@ -189,23 +190,8 @@ export function ConnectionBadge({
   );
 }
 
-/** A connection's mark: an icon or a letter on a tile. */
-export function ConnectionLogo({
-  icon: Icon,
-  text,
-}: {
-  icon?: ComponentType<{ className?: string }>;
-  text?: string;
-}) {
-  return (
-    <span
-      aria-hidden
-      className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted font-semibold text-muted-foreground text-sm"
-    >
-      {Icon ? <Icon className="size-4" /> : text}
-    </span>
-  );
-}
+/** A connection's mark: an icon or a letter on a tile (`SettingIcon`). */
+export const ConnectionLogo = SettingIcon;
 
 /** `Service token` → `service token`; `API key` stays. */
 const lower = (label: string) =>

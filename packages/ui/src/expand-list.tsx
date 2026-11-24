@@ -7,7 +7,7 @@
 import { ChevronRightIcon } from 'lucide-react';
 import { type ReactNode, createContext, useContext, useMemo, useState } from 'react';
 import { cn } from './lib/utils';
-import { type SettingHealth, SettingHealthDot } from './setting-parts';
+import { type SettingHealth, SettingHealthDot, SettingIcon } from './setting-parts';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Switch } from './ui/switch';
 
@@ -76,7 +76,8 @@ export function LumenExpandRow({
   };
   /** The action bar under the rows (`SettingActions`). */
   actions?: ReactNode;
-  /** A logo or icon before the name. */
+  /** A logo or icon before the name (`SettingIcon`). Left out, the row draws the name's first
+   *  letter on a tile, so every name lines up and the health dot sits on an icon. */
   icon?: ReactNode;
   /** One quick action on the whole thing in the header where no switch fits (an `IconButton`:
    *  Sign out everywhere else), before the chevron. Adding to a list goes in its body, last. */
@@ -102,12 +103,10 @@ export function LumenExpandRow({
       <div className="flex w-full min-w-0 items-center gap-2 px-1 hover:bg-muted/50">
         <CollapsibleTrigger asChild>
           <button type="button" className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left">
-            {(icon || dot) && (
-              <span data-slot="expand-icon" className="relative flex shrink-0 items-center">
-                {icon}
-                {dot && <SettingHealthDot health={dot} title={healthTitle} />}
-              </span>
-            )}
+            <span data-slot="expand-icon" className="relative flex shrink-0 items-center">
+              {icon ?? <SettingIcon text={label} />}
+              {dot && <SettingHealthDot health={dot} title={healthTitle} />}
+            </span>
             <span className="flex min-w-0 flex-1 items-baseline gap-2">
               <span className="shrink-0 truncate font-medium" title={label}>
                 {name}

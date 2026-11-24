@@ -35,6 +35,8 @@ The two questions:
 
 No chips or pills in the header and no empty columns: counts and names go in the grey detail (`meta`). The dot sits on the icon, so the right edge (switch, chevron) lines up down the list whatever each row has.
 
+Every row has an icon. Give `icon` the thing's logo or icon (`SettingIcon icon={…}` draws it on a tile); left out, the row draws the name's first letter on that tile. So names start on one edge down a list, and the health dot never draws without an icon to sit on.
+
 ## Three slots (every thing in a section)
 
 Inside, a thing is built on shadcn's `Field` and `InputGroup`:
