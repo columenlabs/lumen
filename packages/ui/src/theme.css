@@ -729,6 +729,15 @@ tr[aria-selected="true"]:focus-visible {
   }
   html {
     @apply font-sans;
+    /* The header and status bar are sticky over the page: a control that Tab or a scroll-to
+       brings into view stops clear of both, never under them (UI gate 5: every Tab stop is
+       uncovered). */
+    scroll-padding-top: calc(var(--shell-header-height) + var(--shell-gutter));
+    scroll-padding-bottom: calc(
+      var(--shell-status-height) +
+      var(--shell-tabbar-offset) +
+      var(--shell-gutter)
+    );
   }
 
   .num {
