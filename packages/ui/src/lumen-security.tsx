@@ -15,6 +15,7 @@ import {
   LogOut,
   Mail,
   Power,
+  QrCode,
   RefreshCw,
   Smartphone,
   Ticket,
@@ -814,7 +815,7 @@ export function LumenSignInMethods({
                     info="Each works once, for when your phone is lost."
                   >
                     <span className="flex min-w-0 items-center gap-1">
-                      <span className="num truncate text-sm">
+                      <span className="truncate text-sm tabular-nums">
                         {backup.left === null ? 'Saved' : `${backup.left} left`}
                       </span>
                       {passwordless ? (
@@ -846,7 +847,7 @@ export function LumenSignInMethods({
                   <SettingActions>
                     {
                       <IconButton
-                        icon={RefreshCw}
+                        icon={QrCode}
                         label="Set up again"
                         variant="outline"
                         onClick={startApp}
