@@ -498,6 +498,7 @@ export class State {
       if (!d.chatgpt) return null;
       if (!staleChatgpt(d.chatgpt)) return d.chatgpt.access_token;
       const t = await refreshChatgpt(d.chatgpt, f);
+      console.log(JSON.stringify({ event: 'assistant_plan_refresh', provider }));
       await this.docs.write<KeyDoc>(id, name, { ...d, api_key: t.access_token, chatgpt: t });
       return t.access_token;
     } catch (err) {

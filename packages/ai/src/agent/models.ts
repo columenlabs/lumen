@@ -166,7 +166,12 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
     if (!res.ok || !res.body) return res;
     // The plan's own usage numbers, as it sent them (cache reads included), one line a call.
     const [mine, theirs] = res.body.tee();
-    void logPlanUsage(theirs, String(body.model ?? ''), typeof body.prompt_cache_key === 'string');
+    void logPlanUsage(
+      theirs,
+      String(body.model ?? ''),
+      typeof body.prompt_cache_key === 'string',
+      responseRoute(res.headers),
+    );
     const seen = new Response(mine, {
       status: res.status,
       statusText: res.statusText,
@@ -202,12 +207,18 @@ export function xaiFetch(base: typeof fetch = fetch): typeof fetch {
  * Reads a plan's streamed answer for its final usage and logs it as sent (`assistant_plan_usage`):
  * whether a plan reads its prompt from the cache shows in its own numbers. Never throws.
  */
-async function logPlanUsage(stream: ReadableStream<Uint8Array>, model: string, keyed: boolean) {
+async function logPlanUsage(
+  stream: ReadableStream<Uint8Array>,
+  model: string,
+  keyed: boolean,
+  route: Record<string, string>,
+) {
   try {
     const reader = stream.getReader();
     const text = new TextDecoder();
     let buf = '';
     let usage: unknown;
+    let served: Record<string, unknown> = {};
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -216,12 +227,20 @@ async function logPlanUsage(stream: ReadableStream<Uint8Array>, model: string, k
       buf = lines.pop() ?? '';
       for (const line of lines) {
         if (!line.startsWith('data:') || !line.includes('"usage"')) continue;
-        const e = JSON.parse(line.slice(5)) as { type?: string; response?: { usage?: unknown } };
-        if (e.type === 'response.completed' || e.type === 'response.incomplete')
+        const e = JSON.parse(line.slice(5)) as {
+          type?: string;
+          response?: { usage?: unknown; model?: unknown; service_tier?: unknown };
+        };
+        if (e.type === 'response.completed' || e.type === 'response.incomplete') {
           usage = e.response?.usage;
+          served = { model: e.response?.model, tier: e.response?.service_tier };
+        }
       }
     }
-    if (usage) console.log(JSON.stringify({ event: 'assistant_plan_usage', model, keyed, usage }));
+    if (usage)
+      console.log(
+        JSON.stringify({ event: 'assistant_plan_usage', model, keyed, served, route, usage }),
+      );
   } catch {
     // A log line is never worth a failed answer.
   }
@@ -271,6 +290,17 @@ async function whole(res: Response, signal?: AbortSignal | null): Promise<Respon
   });
 }
 
+/**
+ * Where a plan's answer came from, as its response headers say: every header but cookies, each
+ * value cut to 80 characters. Two calls' lines side by side show whether one went somewhere else
+ * (a cache miss on a request that matched its neighbours byte for byte is looked for here).
+ */
+function responseRoute(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of headers) if (!/cookie|authorization/i.test(k)) out[k] = v.slice(0, 80);
+  return out;
+}
+
 /** A message's text, whether a string or a list of text parts. */
 /** A short, stable hash of a value as JSON: equal values give equal hashes. */
 function shapeHash(v: unknown): string {
@@ -283,7 +313,7 @@ function shapeHash(v: unknown): string {
 /**
  * A plan request with every field kept but its texts: each one as `hash:length`, and each input
  * item as its role or type with its parts. The headers are named, the session id hashed, the
- * token left out.
+ * token only as a short one-way hash.
  */
 function requestShape(body: Record<string, unknown>, headers: Headers) {
   const items = Array.isArray(body.input) ? (body.input as Record<string, unknown>[]) : [];
@@ -298,6 +328,8 @@ function requestShape(body: Record<string, unknown>, headers: Headers) {
   return {
     headers: [...headers.keys()].filter((k) => k !== 'authorization').sort(),
     session: shapeHash(headers.get('session-id') ?? ''),
+    // Which sign-in token sent it, as a short one-way hash (a refreshed token shows as a new one).
+    auth: shapeHash(headers.get('authorization') ?? '').split(':')[0],
     fields,
     instructions: shapeHash(instructions),
     tools: shapeHash(tools),
@@ -559,7 +591,7 @@ export interface CallMemory {
 }
 
 /** Why a call read less from the cache than the previous call left for it. */
-export type CacheMiss = 'gap' | 'key' | 'cold' | 'prefix' | 'evicted' | 'extension' | 'compact';
+export type CacheMiss = 'gap' | 'key' | 'prefix' | 'evicted' | 'extension' | 'compact';
 
 /**
  * One call checked against the previous: its key and session, the tokens it should have read
@@ -623,7 +655,7 @@ export function cacheCheckOf(meta: unknown): CacheCheck | undefined {
  * session's first, the last call on its cache key, so a shared start counts): what it should have
  * read is that call's input where the prompt only adds to it, else the part before the first message
  * that differs. A call that reads short of it says why, first match wins: `gap` (over `CACHE_TTL_MS`),
- * `key` (another cache key), `cold` (nothing read though the shared start was cached), `prefix` (a message, the effort or the tools changed), `evicted`
+ * `key` (another cache key), `prefix` (a message, the effort or the tools changed), `evicted`
  * (another session sent on the same key in between) or
  * `extension` (the prompt only added, and still missed: a provider-side cause to find). The marks are
  * kept in `calls`, so the check holds across isolates. Never throws.
@@ -685,12 +717,7 @@ async function watchCache(
       if (short) {
         if (gap > CACHE_TTL_MS) check.miss = 'gap';
         else if (was.key !== key) check.miss = 'key';
-        // Nothing read at all, though the start it shares with the last call was cached moments ago:
-        // the provider served it cold (same key, same headers, same leading bytes).
-        else if (read < SHORT_BY && expected > SHORT_BY) {
-          check.miss = 'cold';
-          if (same < was.hashes.length) check.changed = same;
-        } else if (same < was.hashes.length) {
+        else if (same < was.hashes.length) {
           check.miss = 'prefix';
           check.changed = same;
         } else if (mine && onKey && onKey.session !== session && onKey.at > mine.at)
