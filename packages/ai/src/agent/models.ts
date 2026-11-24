@@ -184,11 +184,13 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
 
 /**
  * xAI keeps a prompt cache per server and picks the server by the request's `prompt_cache_key` or
- * its `x-grok-conv-id` header (docs.x.ai, prompt caching: "functions identically"). Both carry the
- * same key, so every call of a conversation reaches the server that holds its start, on a key and on
- * a Grok plan sign-in alike (the plan's token is the request's key).
+ * its `x-grok-conv-id` header (docs.x.ai, prompt caching: "functions identically"). The body keeps
+ * the shared start's key; the header names the conversation (`conv`, the session's id) when there is
+ * one, as the Grok CLI names its own, else the same key. On a Grok plan, one header shared by every
+ * chat left some calls of a chat reading 1.2k of 29k with no other chat in between (grok-4.7, 3
+ * six-turn chats, 2026-11-24).
  */
-export function xaiFetch(base: typeof fetch = fetch, plan = false): typeof fetch {
+export function xaiFetch(base: typeof fetch = fetch, plan = false, conv?: string): typeof fetch {
   // A Grok plan call carries the Grok CLI's headers at its current version (`grokPlanFetch`).
   const send = plan ? grokPlanFetch(base) : base;
   return async (input, init) => {
@@ -201,7 +203,7 @@ export function xaiFetch(base: typeof fetch = fetch, plan = false): typeof fetch
     }
     if (typeof key !== 'string') return send(input, init);
     const headers = new Headers(init.headers);
-    if (!headers.has('x-grok-conv-id')) headers.set('x-grok-conv-id', key);
+    if (!headers.has('x-grok-conv-id')) headers.set('x-grok-conv-id', conv ?? key);
     return send(input, { ...init, headers });
   };
 }
@@ -372,7 +374,7 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
         ? createOpenAI({
             apiKey: key.apiKey,
             baseURL: key.plan ? GROK_PLAN_BASE_URL : XAI_BASE_URL,
-            fetch: xaiFetch(f, !!key.plan),
+            fetch: xaiFetch(f, !!key.plan, o.calls?.session),
           }).responses(model.id)
         : createOpenAI({
             apiKey: key.apiKey,
