@@ -19,6 +19,7 @@ import { IconButton } from './icon-button';
 import { InfoTip } from './info-tip';
 import { type KeyTestResult, errorText, useClock } from './integrations';
 import { cn } from './lib/utils';
+import { LoadingBar, useLumenLoading } from './loading';
 import { Badge } from './ui/badge';
 import { InputGroup, InputGroupAddon, InputGroupButton } from './ui/input-group';
 import { Label } from './ui/label';
@@ -52,7 +53,12 @@ export function SettingField({
   children?: ReactNode;
 }) {
   const query = useContext(SettingsSearch);
+  // Inside a loading scope the label stays; the control and the switch are bars in their places.
+  const loading = useLumenLoading();
   if (query && !settingMatches(query, label, info)) return null;
+  const control =
+    loading && children !== undefined ? <LoadingBar className="h-8 w-full max-w-56" /> : children;
+  const tail = loading && end ? <LoadingBar className="h-5 w-9 rounded-full" /> : end;
   return (
     <div
       data-slot="setting-field"
@@ -70,7 +76,7 @@ export function SettingField({
           'flex min-w-32 shrink-0 items-center gap-1.5 max-sm:min-w-24 max-sm:max-w-[50%] max-sm:shrink',
           stack && 'max-sm:w-auto max-sm:flex-1',
           // Nothing beside it but `end`: the label takes the row, so a short name never cuts off.
-          children === undefined && 'w-auto min-w-0 flex-1 shrink max-sm:w-auto',
+          control === undefined && 'w-auto min-w-0 flex-1 shrink max-sm:w-auto',
         )}
       >
         <Label
@@ -82,7 +88,7 @@ export function SettingField({
         </Label>
         {info && <InfoTip label={`About ${label}`}>{info}</InfoTip>}
       </div>
-      {children !== undefined && (
+      {control !== undefined && (
         <div
           className={cn(
             // Label on the left, control flush to the row's right edge.
@@ -90,10 +96,10 @@ export function SettingField({
             stack && 'max-sm:order-2 max-sm:max-w-none max-sm:basis-full max-sm:justify-start',
           )}
         >
-          {children}
+          {control}
         </div>
       )}
-      {end && <div className={cn('ml-auto shrink-0', stack && 'max-sm:order-1')}>{end}</div>}
+      {tail && <div className={cn('ml-auto shrink-0', stack && 'max-sm:order-1')}>{tail}</div>}
     </div>
   );
 }

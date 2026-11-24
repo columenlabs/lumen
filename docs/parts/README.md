@@ -17,6 +17,7 @@ Each page has the same four headings:
 | `LumenFloatingPanel` | [floating-panel.md](floating-panel.md) | A see-through panel the person drags, resizes and folds over a live page (a phone held sideways) |
 | `LumenForm`, `SaveButton`, `FormIssue` | [form.md](form.md) | Fields that save together |
 | `LumenSettings`, `LumenExpandList` | [settings.md](settings.md) | An app's Settings page |
+| `LumenLoading` | [loading.md](loading.md) | Every screen whose data is still on its way: each part draws its own shape, never an empty |
 | `LumenShell bar`, `useStatus` | [status-bar.md](status-bar.md) | What is true right now, nobody has to act on |
 | `LumenSelector` | [selector.md](selector.md) | Every picker |
 | `LumenView`, `LumenLayout` | [table.md](table.md) | Every list of rows |

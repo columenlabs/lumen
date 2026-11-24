@@ -331,6 +331,13 @@ export {
   useLumenSource,
   useLiveLoad,
 } from './lumen-source';
+export {
+  LoadingBar,
+  LumenLoading,
+  useLumenLoading,
+  useLumenScopeLoad,
+  useRememberedCount,
+} from './loading';
 export { LumenBoundary } from './lumen-boundary';
 export {
   type CalendarCategory,

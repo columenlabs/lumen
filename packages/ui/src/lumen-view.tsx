@@ -55,6 +55,8 @@ import {
 import {
   Fragment,
   type ReactNode,
+  cloneElement,
+  isValidElement,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -75,6 +77,7 @@ import { IconButton } from './icon-button';
 import { KIT } from './kit-config';
 import { lazyPart } from './lazy-part';
 import { cn } from './lib/utils';
+import { LoadingBar, useLumenLoading, useLumenScopeLoad, useRememberedCount } from './loading';
 import { useGridCell } from './lumen-grid';
 import { LumenSelector } from './lumen-selector';
 import { type LumenLoad, LumenSkeleton, LumenStates, useLiveLoad } from './lumen-source';
@@ -827,8 +830,10 @@ export function LumenView<T extends RowData>({
   useTell(groupBy?.key ?? null, server?.groups?.onGroup);
   const pivot = server ? false : pickedPivot;
   // Live columns on screen keep their source reading while the market trades (#861).
+  // A view inside a loading scope (`LumenLoading`) loads with it when it has no load of its own.
+  const scopeLoad = useLumenScopeLoad();
   const load = useLiveLoad(
-    sourceLoad,
+    sourceLoad ?? scopeLoad ?? undefined,
     columns.some((c) => {
       const r = freshnessOf(domain, c);
       return r === 'live' || r === 'calc';
@@ -874,7 +879,9 @@ export function LumenView<T extends RowData>({
   // An empty state replaces the table, its filter and tools, unless a filter is on: then it sits
   // in the table's body, under the headers, with the filter still there to change or clear.
   const filtered = !!filterCount;
-  const blank = filtered ? null : state;
+  // Nothing is empty while the rows load: no empty state, count or pager until they answer.
+  const loadingRows = !!load?.loading;
+  const blank = filtered || loadingRows ? null : state;
   // Folded lines and their rows stay on one page, so a fold shows every row like a grouping.
   const paging =
     !server && pagination.on && on('pager') && !state && !groupBy && !pivot && !sub?.under;
@@ -882,6 +889,12 @@ export function LumenView<T extends RowData>({
   // A phone has no width to fit to: every table scrolls sideways there.
   const fit = config.width === 'fit' && !pivot && !isMobile;
   const pages = Math.max(1, Math.ceil(tableRows.length / pageSize));
+  const skeletonRows = useRememberedCount(
+    `${domain.id}:${cardId}`,
+    Math.min(tableRows.length, pageSize),
+    loadingRows,
+    6,
+  );
   const page = Math.min(pageIndex, pages - 1);
   const count = rows.length === total ? `${total} rows` : `${rows.length} of ${total} rows`;
   // The page holds while rows change in place (a tick, a label edit, a refresh, a bulk apply): only
@@ -1034,7 +1047,7 @@ export function LumenView<T extends RowData>({
           <>
             {tools}
             {compare}
-            {pager}
+            {!loadingRows && pager}
             {onColumns && on('columns') && (
               <ColumnPicker domain={domain} columns={columns} onColumns={onColumns} />
             )}
@@ -1056,7 +1069,23 @@ export function LumenView<T extends RowData>({
     >
       {blank ??
         (load ? (
-          <LumenStates load={load} skeleton={<LumenSkeleton rows={10} />}>
+          <LumenStates
+            load={load}
+            skeleton={
+              isValidElement<LumenTableProps<T>>(table) && table.type === LumenTable ? (
+                // The table's own header and rows, each cell a bar, as many rows as it showed last.
+                cloneElement(table, {
+                  rows: [],
+                  loading: skeletonRows,
+                  serverGroups: null,
+                  emptyState: undefined,
+                  onClearFilter: undefined,
+                })
+              ) : (
+                <LumenSkeleton rows={skeletonRows} />
+              )
+            }
+          >
             {table}
           </LumenStates>
         ) : (
@@ -1254,7 +1283,10 @@ export function LumenTable<T extends RowData>({
   if (!load) return <LumenTableRows {...props} />;
   return (
     <div className="relative">
-      <LumenStates load={load}>
+      <LumenStates
+        load={load}
+        skeleton={<LumenTableRows {...props} rows={[]} loading={props.loading ?? true} />}
+      >
         <LumenTableRows {...props} />
       </LumenStates>
     </div>
@@ -1300,6 +1332,9 @@ export interface LumenTableProps<T> {
   serverGroups?: ServerGroups | null;
   /** What the body says when no row shows (an app's empty state); left out: "No rows match." */
   emptyState?: ReactNode;
+  /** The rows are on their way: the header and this many rows of bars, no empty state or Total
+   *  (`true`: 6). Inside a `LumenLoading` scope a table with no rows loads by itself. */
+  loading?: boolean | number;
   /** Takes every filter off: the empty body offers Clear filters. */
   onClearFilter?: () => void;
   /** A grip on each header's right edge resizes its column (desktop, not a `fit` table); left
@@ -1345,8 +1380,12 @@ function LumenTableRows<T extends RowData>({
   onClearFilter,
   resizable = KIT.resizableColumns,
   widthsKey,
+  loading: loadingProp,
 }: LumenTableProps<T>) {
   const isMobile = useIsMobile();
+  const scoped = useLumenLoading();
+  const loading = loadingProp ?? (scoped && !rows.length);
+  const skeletonCount = loading === true ? 6 : loading || 0;
   // Widths a person dragged (desktop only: a phone's rows are cards, and a fit table wraps instead).
   const resizing = resizable && !isMobile && !fit;
   const colWidths = useColumnWidths(resizing ? (widthsKey ?? '') || undefined : undefined);
@@ -2224,7 +2263,26 @@ function LumenTableRows<T extends RowData>({
             ))}
           </TableHeader>
           <TableBody>
-            {!rows.length && !serverGroups?.list?.length && (
+            {Array.from({ length: skeletonCount }, (_, r) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: placeholder rows
+              <TableRow key={`skeleton:${r}`} data-slot="table-skeleton" aria-hidden="true">
+                {selection && <TableCell data-card="select" className="w-8 pr-0" />}
+                {shown.map((f, i) => (
+                  <TableCell key={f.key} {...col(f)}>
+                    <LoadingBar
+                      className={cn(
+                        // A text line's height (h-4 and its margin make 20px), so rows land in place.
+                        'my-0.5',
+                        i === 0 ? 'w-32' : 'w-14',
+                        f.format !== 'text' && i > 0 && 'ml-auto',
+                      )}
+                    />
+                  </TableCell>
+                ))}
+                {add && <TableCell />}
+              </TableRow>
+            ))}
+            {!skeletonCount && !rows.length && !serverGroups?.list?.length && (
               <TableRow data-slot="table-empty" className="hover:bg-transparent">
                 <TableCell
                   colSpan={span}

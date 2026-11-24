@@ -5,8 +5,9 @@
 // the icon). Counts and names go in `meta`. The body is `SettingField` rows or a list's items with
 // its Add last; `actions` is its action bar (`SettingActions`). See docs/parts/settings.md.
 import { ChevronRightIcon } from 'lucide-react';
-import { type ReactNode, createContext, useContext, useMemo, useState } from 'react';
+import { Children, type ReactNode, createContext, useContext, useMemo, useState } from 'react';
 import { cn } from './lib/utils';
+import { LoadingBar, useLumenLoading, useRememberedCount } from './loading';
 import { type SettingHealth, SettingHealthDot, SettingIcon } from './setting-parts';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Switch } from './ui/switch';
@@ -15,22 +16,81 @@ const ListCtx = createContext<{ open: string | null; set: (id: string | null) =>
   null,
 );
 
-/** Rows that start collapsed; opening one closes the others. `defaultOpen` names a row open at first. */
+/**
+ * Rows that start collapsed; opening one closes the others. `defaultOpen` names a row open at
+ * first. A list whose rows come from data (passkeys, devices) gives an `id`: inside a loading
+ * scope it draws as many rows of bars as it showed last time on this device.
+ */
 export function LumenExpandList({
+  id,
   defaultOpen = null,
   className,
   children,
 }: {
+  /** Names a list of data rows, so its loading skeleton keeps their count (see `LumenLoading`). */
+  id?: string;
   defaultOpen?: string | null;
   className?: string;
   children: ReactNode;
 }) {
   const [open, set] = useState<string | null>(defaultOpen);
   const value = useMemo(() => ({ open, set }), [open]);
+  const loading = useLumenLoading();
+  const rows = useRememberedCount(id, Children.count(children), loading && !!id);
   return (
     <ListCtx.Provider value={value}>
-      <div className={cn('grid grid-cols-1', className)}>{children}</div>
+      <div className={cn('grid grid-cols-1', className)}>
+        {loading && id
+          ? Array.from({ length: rows }, (_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: placeholder rows
+              <ExpandRowSkeleton key={i} />
+            ))
+          : children}
+      </div>
     </ListCtx.Provider>
+  );
+}
+
+/** A row while it loads: the same header, its name and icon kept when they are fixed, every slot
+ *  that comes from data a bar; no dot, no switch and nothing to open. */
+function ExpandRowSkeleton({
+  name,
+  icon,
+  meta = true,
+  end = false,
+}: {
+  name?: ReactNode;
+  icon?: ReactNode;
+  meta?: boolean;
+  end?: boolean;
+}) {
+  return (
+    <div data-slot="expand-skeleton" aria-hidden="true" className="border-b last:border-b-0">
+      <div className="flex w-full min-w-0 items-center gap-2 px-1">
+        <div className="flex min-w-0 flex-1 items-center gap-3 py-3">
+          <span data-slot="expand-icon" className="relative flex shrink-0 items-center">
+            {icon ??
+              (typeof name === 'string' ? (
+                <SettingIcon text={name} />
+              ) : (
+                <LoadingBar className="size-8 rounded-md" />
+              ))}
+          </span>
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            {name ? (
+              <span className="shrink-0 truncate font-medium">{name}</span>
+            ) : (
+              <LoadingBar className="w-28" />
+            )}
+            {meta && <LoadingBar className="h-3.5 w-20" />}
+          </span>
+        </div>
+        {end && <LoadingBar className="h-5 w-9 rounded-full" />}
+        <span className="-mr-1 flex min-h-10 w-8 shrink-0 items-center justify-center">
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/50" />
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -88,6 +148,7 @@ export function LumenExpandRow({
   children: ReactNode;
 }) {
   const list = useContext(ListCtx);
+  const loading = useLumenLoading();
   const [own, setOwn] = useState(defaultOpen);
   const inList = list && id !== undefined;
   const open = openProp ?? (inList ? list.open === id : own);
@@ -98,6 +159,10 @@ export function LumenExpandRow({
   };
   const label = typeof name === 'string' ? name : undefined;
   const dot = health && health !== 'off' ? health : null;
+  // Inside a loading scope: the row keeps its name and icon, its line and switch are bars, and
+  // it has no dot and does not open until its data has answered.
+  if (loading)
+    return <ExpandRowSkeleton name={name} icon={icon} meta={!!meta} end={!!(toggle || end)} />;
   return (
     <Collapsible open={open} onOpenChange={change} className="border-b last:border-b-0">
       <div className="flex w-full min-w-0 items-center gap-2 px-1 hover:bg-muted/50">

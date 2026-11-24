@@ -44,6 +44,12 @@ Off by default. `configureLumen({ resizableColumns: true })` turns it on for eve
 - Widths are kept on the device per table (`localStorage`, key `lumen:col-widths:<domain id>:<cardId>`); storage off, they last the visit.
 - Every column still shows: a wider column makes the table scroll sideways, never drops another.
 
+## Loading
+
+Give a view its rows' `load` (`useLumenLoad`), or put it inside a `LumenLoading` scope. While the rows load, the table draws its own header and as many rows of bars as it showed last time on this device, each column's bar on that column's edge. No empty state, "No rows match", count, pager or Total shows until the rows answer. `LumenTable` takes `loading` (a row count, or `true` for 6) to draw it by hand. See [loading.md](loading.md).
+
+- ✗ `rows={q.data ?? []}` with no `load`: "No rows match" shows until the read lands. ✓ `rows={q.data ?? []} load={useLumenLoad(q)}`.
+
 ## Export
 
 The header's Export (`download` control) downloads or copies the table as CSV: the rows shown, or with a filter on, Filtered or All. A table a server pages (`paging`) shows one page, so give `paging.all`, which fetches every row for the filter (the server may cap it), and Export saves those instead of the page.
