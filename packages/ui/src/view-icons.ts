@@ -105,7 +105,15 @@ function loadLucide(): Promise<Lucide> {
       for (const [pascal, node] of Object.entries(icons)) {
         const key = iconKey(pascal);
         if (nodes.has(key)) continue;
-        nodes.set(key, node as IconNode);
+        // lucide's own nodes carry no `key`, which lucide-react's `Icon` needs on each child: React
+        // warns about a missing key on every icon drawn by name (a console error in every app).
+        nodes.set(
+          key,
+          (node as IconNode).map(([tag, attrs], i) => [
+            tag,
+            { ...attrs, key: `${tag}-${i}` },
+          ]) as IconNode,
+        );
         iconNames.push(kebab(pascal));
       }
       lucide = { iconNames: iconNames.sort(), nodes };
