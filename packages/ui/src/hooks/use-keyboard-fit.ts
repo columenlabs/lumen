@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useIsMobile } from './use-mobile';
+import { useDevice } from './use-device';
 
 /** The visual viewport while a phone's keyboard covers part of the layout viewport. */
 export interface KeyboardFit {
@@ -46,7 +46,7 @@ export function useKeyboardFit(): KeyboardFit | undefined {
  * The classes are `phoneScreen`; this gives the style.
  */
 export function usePhoneScreen(style?: React.CSSProperties): React.CSSProperties | undefined {
-  const phone = useIsMobile();
+  const phone = useDevice().narrow;
   const kb = useKeyboardFit();
   return phone && kb ? { ...style, top: kb.top, height: kb.height, maxHeight: kb.height } : style;
 }

@@ -7,7 +7,7 @@ import { EMPTY_VALUE } from '@columenlabs/lumen-ui-types/views';
 // phone the same body opens in a bottom sheet.
 import { BanIcon, FilterIcon, PanelLeftCloseIcon, RotateCcwIcon, SearchIcon } from 'lucide-react';
 import { type ReactNode, useCallback, useId, useMemo, useState } from 'react';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { IconButton } from './icon-button';
 import { InfoTip } from './info-tip';
 import { cn } from './lib/utils';
@@ -52,7 +52,7 @@ const fmt = (n: number) => n.toLocaleString();
  * a phone closed (its sheet opens from the filter icon).
  */
 export function useFilterPanel(id: string) {
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const storeKey = `lumen:filter-panel:${id}`;
   const [kept, setKept] = useState<boolean | null>(() => {
     try {
@@ -86,7 +86,7 @@ export function LumenFilterPanelButton<T>({
   open,
   onOpenChange,
 }: Pick<LumenFilterPanelProps<T>, 'filter' | 'open' | 'onOpenChange'>) {
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const on = new Set(filter.tokens.map((t) => t.key)).size;
   if (open && !mobile) return null;
   return (
@@ -119,7 +119,7 @@ export function LumenFilterPanel<T>({
   title = 'Filters',
   className,
 }: LumenFilterPanelProps<T>) {
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const fields = useMemo(() => {
     if (!order) return filter.fields;
     return order

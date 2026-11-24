@@ -27,6 +27,7 @@ Each page has the same four headings:
 | `LumenPlayer` | [player.md](player.md) | A video, an audio file, or slides over audio |
 | `LumenShell tabs` | [tab-bar.md](tab-bar.md) | The main pages at the bottom of a phone screen |
 | `VoiceButton` | [voice.md](voice.md) | Talking instead of typing into a message or note box |
+| `useDevice`, `deviceNow` | [device.md](device.md) | The one answer to "what device is this": how a part looks, never what it can do |
 
 ## Three rules every page shares
 

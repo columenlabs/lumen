@@ -1,7 +1,7 @@
 import { PanelRightCloseIcon, PanelRightOpenIcon, XIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { IconButton, type IconButtonProps } from './icon-button';
 import { lazyPart } from './lazy-part';
 import { ResizeEdge, tabState, useDockSlot } from './side-dock';
@@ -84,7 +84,7 @@ export function LumenDrawer({
   maxSize = '60%',
   dock,
 }: LumenDrawerProps) {
-  const isMobile = useIsMobile();
+  const isMobile = useDevice().narrow;
   const slot = useDockSlot();
   // Fetched once the page is idle, so the first drawer opened on a desktop has its panels ready.
   useEffect(() => {

@@ -516,6 +516,7 @@ export {
   useFilterPanel,
 } from './lumen-filter-panel';
 export { useIsMobile, usePhoneLayout } from './hooks/use-mobile';
+export { type Device, deviceNow, useDevice } from './hooks/use-device';
 export { useTell } from './hooks/use-tell';
 export { useBackClose } from './hooks/use-back-close';
 export { VIEW_ICONS, iconOf, viewIcon } from './view-icons';

@@ -9,6 +9,7 @@
  */
 import { useEffect } from 'react';
 import { type Metric, onCLS, onINP, onLCP } from 'web-vitals';
+import { deviceNow } from './hooks/use-device';
 
 export type ClientPointKind = 'view' | 'error' | 'fetch_fail' | 'vital';
 
@@ -56,10 +57,7 @@ export function stackFingerprint(error: unknown): string {
   return fnv(frames.join('\n'));
 }
 
-const device = (): 'phone' | 'desktop' =>
-  typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches
-    ? 'phone'
-    : 'desktop';
+const device = (): 'phone' | 'desktop' => (deviceNow().narrow ? 'phone' : 'desktop');
 
 const code = (s: string | undefined) => (s && CODE.test(s) ? s : undefined);
 

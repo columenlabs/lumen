@@ -6,7 +6,7 @@
 // product fills the body (the product's assistant: its chat, composer, cards and spend).
 import { HistoryIcon, SparklesIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { cn } from './lib/utils';
 import { LumenBoundary } from './lumen-boundary';
 import { LumenSelector } from './lumen-selector';
@@ -107,7 +107,7 @@ export function LumenAssistantPanel({
   closedBar?: ReactNode;
   children: (phone: boolean) => ReactNode;
 }) {
-  const phone = useIsMobile();
+  const phone = useDevice().narrow;
   if (phone)
     return (
       <>

@@ -5,7 +5,7 @@
 import type { MeterLevels } from '@columenlabs/lumen-ui-types/views';
 import { ZapIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { cn } from './lib/utils';
 import { LumenSelector } from './lumen-selector';
 import { METER_LEVEL_COLOR, METER_LEVEL_TEXT, meterLevel } from './meter-level';
@@ -15,7 +15,7 @@ import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 /** Picks the pace window (6h, 12h, 24h, 7d) for every page at once; a header action. */
 export function PaceWindowPicker({ className }: { className?: string }) {
   const [w, setW] = usePaceWindow();
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   if (mobile)
     return (
       <LumenSelector

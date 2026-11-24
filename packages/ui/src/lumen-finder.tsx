@@ -29,7 +29,7 @@ import {
 } from 'react';
 import { useAssistant } from './assistant-context';
 import { useAssistantScreen } from './assistant-screen';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { IconButton } from './icon-button';
 import { cn } from './lib/utils';
 import {
@@ -374,7 +374,7 @@ function FinderDialog({
   placeholder: string;
   groups: LumenOptionGroup[];
 }) {
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   // Optional: an app without TanStack Router (a single-screen tool) still gets Find; its rows run or
   // go by plain links.
   const router = useRouter({ warn: false }) as ReturnType<typeof useRouter> | undefined;

@@ -27,7 +27,7 @@ import {
   firstJobState,
 } from './coverage-cells';
 import { FoldChevron, useFolds, usePageKey } from './fold';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { cn } from './lib/utils';
 import { LumenStates, useLumenSource } from './lumen-source';
 import { LumenWidget } from './lumen-widget';
@@ -507,7 +507,7 @@ export function LumenCoverageMap<TRaw, TKey extends QueryKey>({
   // A coverage map refreshes in place: any refresh, asked for or a poll, only spins its ↻; no bar or dimming over the cells.
   const load = { ...raw, fetching: raw.fetching || raw.background };
   const cells = { ...raw, fetching: false, refreshing: false };
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const [block, setBlock] = useState<CoverageBlock>(layout === 'months' ? 'month' : initialBlock);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [queueing, setQueueing] = useState(false);

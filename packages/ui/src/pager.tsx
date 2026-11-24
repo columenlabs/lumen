@@ -9,7 +9,7 @@ import {
   ChevronsRightIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { IconButton } from './icon-button';
 import { cn } from './lib/utils';
 import { Button } from './ui/button';
@@ -135,7 +135,7 @@ export function LumenPageFooter({
   more?: boolean;
   className?: string;
 }) {
-  const isMobile = useIsMobile();
+  const isMobile = useDevice().narrow;
   const pages = Math.max(1, Math.ceil(total / size)) + (more ? 1 : 0);
   const to = (p: number) => onPage(Math.max(0, Math.min(p, pages - 1)));
   const from = Math.min(page * size + 1, total);

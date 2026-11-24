@@ -26,7 +26,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { cn } from './lib/utils';
 import { spotlight } from './spotlight';
 import { Button } from './ui/button';
@@ -433,7 +433,7 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
       spotlight(null);
     }
   };
-  const phone = useIsMobile();
+  const phone = useDevice().narrow;
   const sheetTitle = useId();
   const { all, shown, count, flat, expand } = useSelectorRows(options, groups, query, picked);
   const searchable = search === true || (search === 'auto' && count > SEARCH_PAST) || !!create;

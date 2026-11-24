@@ -16,7 +16,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { cn } from './lib/utils';
 import {
   SIGNAL_LEVELS,
@@ -458,7 +458,7 @@ export function LumenStatusBar({
   /** Health, What's new, the app's end items and the time zone, in that order. */
   end: ReactNode;
 }) {
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const entries = useEntries(model, app);
   const [open, setOpen] = useState(false);
   const urgent = [...entries].sort((a, b) => a.rank - b.rank)[0];

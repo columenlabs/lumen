@@ -71,7 +71,7 @@ import { ColumnResizer, useColumnWidths } from './column-widths';
 import { DrawerSection } from './drawer-section';
 import { useFloatingHead } from './floating-head';
 import { FreshnessMark, freshnessLine, freshnessOf } from './freshness';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { useTell } from './hooks/use-tell';
 import { IconButton } from './icon-button';
 import { KIT } from './kit-config';
@@ -854,7 +854,7 @@ export function LumenView<T extends RowData>({
   // Flat tables page their rows, 25 a page unless the view says otherwise; the size picker and
   // the page buttons sit in the card's header. Views saved before then
   // carry no pagination, so they read the defaults.
-  const isMobile = useIsMobile();
+  const isMobile = useDevice().narrow;
   const everyRow = useMemo(
     () => (allRows && !server && !groupRows ? mergeRows(domain, allRows, groupBy) : undefined),
     [allRows, server, groupRows, domain, groupBy],
@@ -1382,7 +1382,7 @@ function LumenTableRows<T extends RowData>({
   widthsKey,
   loading: loadingProp,
 }: LumenTableProps<T>) {
-  const isMobile = useIsMobile();
+  const isMobile = useDevice().narrow;
   const scoped = useLumenLoading();
   const loading = loadingProp ?? (scoped && !rows.length);
   const skeletonCount = loading === true ? 6 : loading || 0;
