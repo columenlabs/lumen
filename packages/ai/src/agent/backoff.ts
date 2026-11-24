@@ -38,6 +38,78 @@ const sleep = (ms: number, signal?: AbortSignal | null) =>
     );
   });
 
+/** One HTTP attempt at a model provider, as `onModelRequest` listeners see it. */
+export interface ModelAttempt {
+  /** The provider's host (api.openai.com, api.anthropic.com, chatgpt.com). */
+  host: string;
+  /** The model the request names, when its body says. */
+  model?: string;
+  /** 0 for the first send of this request, 1 and on for this policy's own retries. */
+  attempt: number;
+  /** When it was sent (ms since the epoch) and how long until its answer's headers came back. */
+  at: number;
+  ms: number;
+  status: number;
+  /** Sent again after this answer, by this policy. */
+  retried: boolean;
+  /** A non-OK answer's message, its first 300 characters (never the request). */
+  error?: string;
+}
+
+const listeners = new Set<(a: ModelAttempt) => void>();
+
+/**
+ * Hears every HTTP attempt a model call makes (each send, each retry), so an app can show where a
+ * turn's time went (a trace span for each). Returns its removal. A listener that throws is ignored.
+ */
+export function onModelRequest(fn: (a: ModelAttempt) => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+const modelOf = (body: unknown): string | undefined =>
+  typeof body === 'string'
+    ? /"model"\s*:\s*"([^"]{1,80})"/.exec(body.slice(0, 4000))?.[1]
+    : undefined;
+
+async function tell(
+  input: RequestInfo | URL,
+  body: unknown,
+  attempt: number,
+  at: number,
+  res: Response,
+  retried: boolean,
+) {
+  if (!listeners.size) return;
+  let host = '';
+  try {
+    host = new URL(input instanceof Request ? input.url : String(input)).host;
+  } catch {}
+  const error = res.ok
+    ? undefined
+    : (
+        await res
+          .clone()
+          .text()
+          .catch(() => '')
+      ).slice(0, 300);
+  const a: ModelAttempt = {
+    host,
+    model: modelOf(body),
+    attempt,
+    at,
+    ms: Date.now() - at,
+    status: res.status,
+    retried,
+    ...(error !== undefined ? { error } : {}),
+  };
+  for (const fn of listeners) {
+    try {
+      fn(a);
+    } catch {}
+  }
+}
+
 /** `base` with the retry policy above. */
 export function backoffFetch(base: typeof fetch = fetch): typeof fetch {
   return async (input, init) => {
@@ -49,14 +121,21 @@ export function backoffFetch(base: typeof fetch = fetch): typeof fetch {
       ArrayBuffer.isView(body) ||
       body instanceof URLSearchParams ||
       body instanceof Blob;
-    if (!resendable || input instanceof Request) return base(input, init);
+    if (!resendable || input instanceof Request) {
+      const at = Date.now();
+      const res = await base(input, init);
+      await tell(input, body, 0, at, res, false);
+      return res;
+    }
     let waited = 0;
     for (let n = 0; ; n += 1) {
+      const at = Date.now();
       const res = await base(input, init);
-      if (!RETRY.has(res.status) || n >= TRIES) return res;
       const asked = retryAfterMs(res.headers);
       const wait = asked ?? BASE_MS * 2 ** n * (0.75 + Math.random() * 0.5);
-      if (waited + wait > BUDGET_MS) return res;
+      const again = RETRY.has(res.status) && n < TRIES && waited + wait <= BUDGET_MS;
+      await tell(input, body, n, at, res, again);
+      if (!again) return res;
       await res.body?.cancel().catch(() => undefined);
       await sleep(wait, init?.signal);
       waited += wait;
