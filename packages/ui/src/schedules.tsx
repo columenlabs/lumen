@@ -16,7 +16,7 @@ import { useAssistant, useAssistantName } from './assistant-context';
 // list and the editor sheet. An app without schedules adds no section. The assistant briefs are schedules too: ✦ rows with their instructions, spend cap and Notify switch, ＋ Brief
 // to add one, and their last run's chat opens in the assistant.
 import { LumenConfirm } from './confirm';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { LumenSelector } from './lumen-selector';
 import { IconButton } from './page';
 import { usePrefs, zoneAbbr } from './prefs';
@@ -606,7 +606,7 @@ export function SchedulesSection({
   /** The assistant briefs: their own fields in the editor, and ＋ Brief. */
   briefs?: BriefActions;
 }) {
-  const isMobile = useIsMobile();
+  const isMobile = useDevice().narrow;
   const { timeZone } = usePrefs();
   const { closeSettings } = useShell();
   const [open, setOpen] = useState<string | null>(null);

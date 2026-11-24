@@ -68,7 +68,7 @@ import { LumenConfirm } from './confirm';
 import { dateFields } from './date-fields';
 import { FoldChevron, useFolded, usePageKey } from './fold';
 import type { GrowthChart as GrowthChartPart } from './growth-chart';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { IconButton } from './icon-button';
 import { useDomainReads } from './joins';
 import { lazyPart } from './lazy-part';
@@ -503,7 +503,7 @@ export function LumenWidget({
   const folded = stored && !layout && !bare && !headless;
   const toggle = () => setFolded(!folded);
   const own = kind !== null;
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const [head, headWidth] = useWidth();
   const [filterOpen, setFilterOpen] = useState(false);
   const showFilter = !!filter && !layout && !folded && on('filter');

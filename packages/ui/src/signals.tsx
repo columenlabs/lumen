@@ -23,7 +23,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { IconButton } from './icon-button';
 import { cn } from './lib/utils';
 import { LumenDrawer } from './lumen-drawer';
@@ -601,7 +601,7 @@ type Filter = 'all' | SignalLevel | 'muted';
 /** The Signals panel: a docked drawer on desktop, a bottom sheet on a phone. */
 function SignalsPanel() {
   const ctx = useSignals() as SignalsValue;
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const [filter, setFilter] = useState<Filter>('all');
   const [by, setBy] = useState<'level' | 'group'>('level');
   const [picked, setPicked] = useState<string | null>(null);

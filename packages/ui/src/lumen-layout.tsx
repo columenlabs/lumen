@@ -56,7 +56,7 @@ import { useAssistantMoves } from './assistant-screen';
 import { ConnectOffer } from './connections';
 import { usePageKey } from './fold';
 import { useGroup } from './group-button';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { useTell } from './hooks/use-tell';
 import { SourceStatusItems, useJoins } from './joins';
 import { useYourData } from './joins';
@@ -819,7 +819,7 @@ function ViewLayout<T extends RowData>({
   };
   const mergeFlat = useCallback((rs: T[]) => mergeRows(domain, rs, null), [domain]);
   const { pivot } = group;
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   // A phone has no width to fit to: the table scrolls sideways there.
   const fit = config.width === 'fit' && !pivot && !mobile;
 

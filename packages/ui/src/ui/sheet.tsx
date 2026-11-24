@@ -6,7 +6,7 @@ import { XIcon } from 'lucide-react';
 import * as React from 'react';
 import { useOverlayOpen } from '../hooks/use-back-close';
 import { useKeyboardFit } from '../hooks/use-keyboard-fit';
-import { useIsMobile } from '../hooks/use-mobile';
+import { useDevice } from '../hooks/use-device';
 import { escapeToPicker } from './overlay-guard';
 
 /** Closes the sheet from inside it (the grab handle's swipe). */
@@ -128,7 +128,7 @@ function SheetContent({
   // X and the safe areas. With the keyboard up a sheet ends at the keyboard; a top sheet or a phone
   // bottom sheet starts at the top of what is visible.
   const kb = useKeyboardFit();
-  const phone = useIsMobile();
+  const phone = useDevice().narrow;
   const card = side === 'bottom' && phone;
   const closable = showCloseButton || card;
   const style = !kb

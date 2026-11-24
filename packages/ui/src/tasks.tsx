@@ -34,7 +34,7 @@ import { toast } from 'sonner';
 // shell's slots; where the API answers 404 nothing shows.
 import { LumenConfirm } from './confirm';
 import { fetchWithin } from './fetch-within';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { cn } from './lib/utils';
 import { IconButton } from './page';
 import { useShell } from './shell';
@@ -283,7 +283,7 @@ function endedToast(t: Task, open: (t: Task) => void) {
 /** The header button: a ring while anything runs, the count, a gold dot for ended unseen tasks. */
 export function TasksButton() {
   const tasks = useTasks();
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const [open, setOpen] = useState(false);
   const list = tasks?.list;
   if (!tasks || !list || list.tasks.length === 0) return null;

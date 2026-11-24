@@ -27,7 +27,7 @@ import {
   XIcon,
 } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { cn } from './lib/utils';
 import {
   type FilterLink,
@@ -593,7 +593,7 @@ export function LumenTokenizedFilter<T>({
   // A box its card passes no link takes the card's own (every card carries a square).
   const link = useAutoFilterLink(tokens, given);
   // Phone: the box is one tappable row and the menu is a bottom sheet.
-  const mobile = useIsMobile();
+  const mobile = useDevice().narrow;
   const [open, setOpen] = useState(false);
   // The field the menu is in (a chip's tap opens its field), with its own search text.
   const [field, setField] = useState<string | null>(null);

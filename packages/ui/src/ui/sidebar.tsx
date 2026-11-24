@@ -15,7 +15,7 @@ import {
 } from './sheet';
 import { Skeleton } from './skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
-import { useIsMobile } from '../hooks/use-mobile';
+import { useDevice } from '../hooks/use-device';
 import { PanelLeftIcon } from 'lucide-react';
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state';
@@ -59,7 +59,7 @@ function SidebarProvider({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const isMobile = useIsMobile();
+  const isMobile = useDevice().narrow;
   const [openMobile, setOpenMobile] = React.useState(false);
 
   // This is the internal state of the sidebar.

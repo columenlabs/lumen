@@ -105,7 +105,7 @@ import {
 } from './connections';
 import { DrawerSection } from './drawer-section';
 import { type FormIssue, SaveButton } from './form-issues';
-import { useIsMobile } from './hooks/use-mobile';
+import { useDevice } from './hooks/use-device';
 import { IconButton } from './icon-button';
 import { IconPicker } from './icon-picker';
 import {
@@ -380,7 +380,7 @@ export function ViewEditDialog<T>({
   onDuplicate,
   onDelete,
 }: ViewEditDialogProps<T>) {
-  const isMobile = useIsMobile();
+  const isMobile = useDevice().narrow;
   // A widget's main data (`source`): null is the page's rows, '' none yet (all cleared).
   const [source, setSource] = useState<string | null>(card?.source ?? null);
   const start = () =>

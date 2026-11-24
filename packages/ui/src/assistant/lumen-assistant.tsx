@@ -90,6 +90,7 @@ import {
 } from '../assistant-panel';
 import { type ScreenApi, screenMapFor, useAssistantScreen } from '../assistant-screen';
 import { FactList } from '../fact-list';
+import { deviceNow } from '../hooks/use-device';
 import { IconButton } from '../icon-button';
 import { errorText } from '../integrations';
 import { lazyPart } from '../lazy-part';
@@ -340,8 +341,7 @@ export function LumenAssistant({
       void screen.run(i.id, i.moves).then((o) => {
         ended({ id: i.id, ...o });
         // On a phone the panel covers the page: it steps aside so the move shows.
-        if (o.status === 'done' && onClose && window.matchMedia('(max-width: 767px)').matches)
-          onClose();
+        if (o.status === 'done' && onClose && deviceNow().narrow) onClose();
       });
     }
   }, [chat.items, screen, ended, onClose]);
@@ -2757,7 +2757,7 @@ export function LumenComposer({
   // Point at…: on a phone the sheet covers the page, so it steps aside while the person picks and
   // comes back with the pick as a chip and the words typed so far.
   const point = async () => {
-    const phone = window.matchMedia('(max-width: 767px)').matches;
+    const phone = deviceNow().narrow;
     const typed = text.slice(0, caret - 1 - asked.length) + text.slice(caret).replace(/^ /, '');
     if (phone) assistantOpen.write(false);
     const p = await pointAt();

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useIsMobile } from './use-mobile';
+import { useDevice } from './use-device';
 
 const KEY = '__lumenOverlay';
 
@@ -10,7 +10,7 @@ const KEY = '__lumenOverlay';
  * the current one, so a link followed from inside the overlay keeps its navigation.
  */
 export function useBackClose(open: boolean, close: () => void) {
-  const phone = useIsMobile();
+  const phone = useDevice().narrow;
   const closeRef = React.useRef(close);
   closeRef.current = close;
   React.useEffect(() => {
