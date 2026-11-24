@@ -66,10 +66,14 @@ import {
   turnIdOf,
 } from './agent';
 import {
+  CACHE_TTL_MS,
+  type CallMark,
+  type CallMemory,
   SUMMARY_ASK,
   type SentPrompt,
   advisorTool,
   aiModel,
+  cacheCheckOf,
   lockedEffort,
   planFallback,
   turnSettings,
@@ -119,6 +123,9 @@ const QUIET_TEXT =
 
 /** Messages kept whole after a compaction: the newest turns stay as they were. */
 const KEEP_AFTER_COMPACT = 6;
+
+/** The kv rows that hold the last call on each cache key, apart from any session's own. */
+const CALLS_SESSION = '~cache';
 
 /** A value SQLite hands back or takes (the Workers runtime's `SessionSqlValue`). */
 export type SessionSqlValue = ArrayBuffer | string | number | null;
@@ -846,7 +853,7 @@ export abstract class LumenSession {
             : {}),
         })
       : await generateText({ ...settings, prompt });
-    meter.add(r.usage);
+    meter.add(r.usage, { step: 'compact', cache: cacheCheckOf(r.providerMetadata) });
     return r.text;
   }
 
@@ -867,8 +874,46 @@ export abstract class LumenSession {
     return this.#get<{ effort: AssistantEffort }>('effort')?.effort ?? 'default';
   }
 
+  /**
+   * Call marks kept in the host's SQLite, so every call is checked against the one before it across
+   * isolates and restarts: the session's own last call in its kv, and the last call on each cache key
+   * (any session of this host) under `~cache`, dropped after `CACHE_TTL_MS`.
+   */
+  #calls(): CallMemory {
+    return {
+      session: this.name,
+      get: (id) => {
+        if (id.startsWith('s:')) return this.#get<CallMark>('last_call');
+        const r = this.sql<{ v: string }>(
+          'SELECT v FROM lumen_s_kv WHERE session = ? AND k = ? LIMIT 1',
+          CALLS_SESSION,
+          id,
+        )[0];
+        return r ? (JSON.parse(r.v) as CallMark) : null;
+      },
+      put: (id, mark) => {
+        if (id.startsWith('s:')) return this.#put('last_call', mark);
+        this.sql(
+          'INSERT OR REPLACE INTO lumen_s_kv (session, k, v) VALUES (?, ?, ?)',
+          CALLS_SESSION,
+          id,
+          JSON.stringify(mark),
+        );
+        this.sql(
+          "DELETE FROM lumen_s_kv WHERE session = ? AND CAST(json_extract(v, '$.at') AS INTEGER) < ?",
+          CALLS_SESSION,
+          Date.now() - CACHE_TTL_MS,
+        );
+      },
+    };
+  }
+
   #model(plan: AgentTurnPlan, onSwitch: () => void) {
-    const o = { ...(plan.fetch ? { fetch: plan.fetch } : {}), name: this.constructor.name };
+    const o = {
+      ...(plan.fetch ? { fetch: plan.fetch } : {}),
+      name: this.constructor.name,
+      calls: this.#calls(),
+    };
     const model = aiModel(plan.model, plan.key, o);
     if (!plan.key.plan || !plan.fallback) return model;
     return planFallback(model, aiModel(plan.fallback.model, plan.fallback.key, o), onSwitch);
@@ -1320,11 +1365,15 @@ export abstract class LumenSession {
   protected onStepFinish(ctx: {
     usage: Parameters<UsageMeter['add']>[0];
     providerMetadata?: unknown;
+    stepNumber?: number;
   }): void {
     const t = this.#turn;
     if (!t) return;
     t.steps += 1;
-    const p = t.main.add(ctx.usage);
+    const p = t.main.add(ctx.usage, {
+      step: ctx.stepNumber ?? t.steps - 1,
+      cache: cacheCheckOf(ctx.providerMetadata),
+    });
     t.context = p.in + p.out;
     const meta = ctx.providerMetadata as
       | { anthropic?: { iterations?: AdvisorIteration[] } }

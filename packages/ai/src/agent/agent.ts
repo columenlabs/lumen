@@ -53,6 +53,7 @@ import {
   type SentPrompt,
   advisorTool,
   aiModel,
+  cacheCheckOf,
   lockedEffort,
   planFallback,
   turnSettings,
@@ -1181,7 +1182,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
             : {}),
         })
       : await generateText({ ...settings, prompt });
-    meter.add(r.usage);
+    meter.add(r.usage, { step: 'compact', cache: cacheCheckOf(r.providerMetadata) });
     return r.text;
   }
 
@@ -1431,7 +1432,11 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     const t = this.#turn;
     if (!t) return;
     t.steps += 1;
-    const p = t.main.add(ctx.usage);
+    const step = ctx as { providerMetadata?: unknown; stepNumber?: number };
+    const p = t.main.add(ctx.usage, {
+      step: step.stepNumber ?? t.steps - 1,
+      cache: cacheCheckOf(step.providerMetadata),
+    });
     t.context = p.in + p.out;
     // Claude's advisor bills apart from the step's own usage: its calls are listed one by one.
     const meta = (ctx as { providerMetadata?: { anthropic?: { iterations?: AdvisorIteration[] } } })
