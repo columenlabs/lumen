@@ -6,6 +6,7 @@
 import {
   ASSISTANT_IMAGES_MAX,
   ASSISTANT_IMAGE_CHARS,
+  ASSISTANT_IMAGE_NAME_MAX,
   type AllowanceState,
   type AllowanceUnit,
   type AssistantImage,
@@ -901,7 +902,11 @@ function Item({
           {item.images?.length ? (
             <span className="mb-1 flex flex-wrap gap-1.5">
               {item.images.map((src, i) => (
-                <ChatImage key={`${i}:${src.length}`} src={src} alt={`Pasted ${i + 1}`} />
+                <ChatImage
+                  key={`${i}:${src.length}`}
+                  src={src}
+                  alt={item.imageNames?.[i] || `Image ${i + 1}`}
+                />
               ))}
             </span>
           ) : null}
@@ -2392,7 +2397,10 @@ const IMAGE_EDGE = 1568;
  * A pasted, dropped or picked image, ready to send: scaled to `IMAGE_EDGE` on a canvas and saved as JPEG
  * (PNG when it has few pixels to lose), as base64. `null` when the browser cannot read it.
  */
-export async function readAssistantImage(file: File): Promise<AssistantImage | null> {
+export async function readAssistantImage(
+  file: File,
+  name?: string,
+): Promise<AssistantImage | null> {
   try {
     const bmp = await createImageBitmap(file);
     const k = Math.min(1, IMAGE_EDGE / Math.max(bmp.width, bmp.height));
@@ -2409,7 +2417,8 @@ export async function readAssistantImage(file: File): Promise<AssistantImage | n
     const url = png.length < 400_000 ? png : canvas.toDataURL('image/jpeg', 0.85);
     const [head, data] = url.split(',');
     const media_type = head?.includes('png') ? 'image/png' : 'image/jpeg';
-    return data ? { media_type, data } : null;
+    const named = (name ?? file.name ?? '').trim().slice(0, ASSISTANT_IMAGE_NAME_MAX);
+    return data ? { media_type, data, ...(named ? { name: named } : {}) } : null;
   } catch {
     return null;
   }
@@ -2551,13 +2560,20 @@ export function LumenComposer({
     setUse(null);
   };
   /** Adds the image files among `files`; says so when one is left out. Returns whether any was an image. */
-  const attach = (files: FileList | File[]): boolean => {
+  const attach = (files: FileList | File[], pasted = false): boolean => {
     const picked = [...files].filter((f) => f.type.startsWith('image/'));
     if (!canAttach || !picked.length) return false;
     void (async () => {
-      const read = (await Promise.all(picked.map(readAssistantImage))).filter(
-        (x): x is AssistantImage => !!x,
-      );
+      const read = (
+        await Promise.all(
+          picked.map((f) =>
+            readAssistantImage(
+              f,
+              pasted && (!f.name || /^image\.\w+$/i.test(f.name)) ? 'Pasted image' : undefined,
+            ),
+          ),
+        )
+      ).filter((x): x is AssistantImage => !!x);
       if (read.length < picked.length)
         lumenToast.error("That image couldn't be read. Try a PNG or JPEG.");
       setImages((p) => {
@@ -2886,9 +2902,9 @@ export function LumenComposer({
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
           onPaste={(e) => {
-            // An image on the clipboard becomes a chip; text pastes as usual.
-            if (!e.clipboardData.getData('text/plain') && attach(e.clipboardData.files))
-              e.preventDefault();
+            // An image on the clipboard becomes a chip, even when the clipboard has its text too
+            // (a copied file's name, a drawing from a document); text alone pastes as usual.
+            if (attach(e.clipboardData.files, true)) e.preventDefault();
           }}
           onDragOver={(e) => {
             if (canAttach && [...e.dataTransfer.items].some((x) => x.type.startsWith('image/')))
@@ -2971,7 +2987,7 @@ export function LumenComposer({
                   disabled={disabled}
                   onClick={() => send('queue')}
                 />
-                {canSteer && (
+                {canSteer && !images.length && !refs.length && (
                   <IconButton
                     icon={CornerDownRightIcon}
                     label="Steer now (↩)"
@@ -3042,7 +3058,7 @@ function ComposerQueue({
           >
             {q.message}
           </span>
-          {!q.steering && canSteer && (
+          {!q.steering && canSteer && !q.extra?.images?.length && !q.extra?.refs?.length && (
             <IconButton
               icon={CornerDownRightIcon}
               label="Steer now"

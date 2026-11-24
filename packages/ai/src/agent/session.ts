@@ -58,6 +58,7 @@ import {
   cardOf,
   chatUsage,
   imageParts,
+  imagesLeftOut,
   leadAt,
   quoteLead,
   quoteOf,
@@ -939,6 +940,7 @@ export abstract class LumenSession {
     const userId = `u_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
     const { images: _images, ...asked } = input;
     const pictures = imageParts(input.images);
+    const leftOut = imagesLeftOut(input.images);
     this.#append({
       id: userId,
       role: 'user',
@@ -946,6 +948,7 @@ export abstract class LumenSession {
         ...(quote ? [{ type: 'text' as const, text: quoteLead(quote) }] : []),
         { type: 'text', text: input.message },
         ...pictures,
+        ...(leftOut ? [{ type: 'text' as const, text: `\n\n${leftOut}` }] : []),
       ],
       metadata: meta,
     } as UIMessage);

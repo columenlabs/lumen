@@ -27,6 +27,7 @@ import {
 import {
   ASSISTANT_IMAGES_MAX,
   ASSISTANT_IMAGE_CHARS,
+  ASSISTANT_IMAGE_NAME_MAX,
   ASSISTANT_IMAGE_TYPES,
   ASSISTANT_QUOTE_MAX,
   type AssistantChat,
@@ -414,20 +415,48 @@ export function quoteLead(q: AssistantQuote): string {
 
 /**
  * The images a message may carry, as file parts: allowed types only, at most `ASSISTANT_IMAGES_MAX`,
- * and no more than `ASSISTANT_IMAGE_CHARS` of base64 together; the rest are left out.
+ * and no more than `ASSISTANT_IMAGE_CHARS` of base64 together; the rest are left out (`imagesLeftOut`
+ * says which, so the message can say so). A named image keeps its name as the part's `filename`.
  */
-export function imageParts(images: unknown): { type: 'file'; mediaType: string; url: string }[] {
-  if (!Array.isArray(images)) return [];
-  const out: { type: 'file'; mediaType: string; url: string }[] = [];
+export function imageParts(
+  images: unknown,
+): { type: 'file'; mediaType: string; url: string; filename?: string }[] {
+  return sortImages(images).kept;
+}
+
+/**
+ * A line for the message when some of its images could not go (over the count or the size), naming
+ * them, so the model tells the person instead of answering as if they came. '' when all went.
+ */
+export function imagesLeftOut(images: unknown): string {
+  const { left } = sortImages(images);
+  if (!left.length) return '';
+  const names = left.map((i) => i.name || `image ${i.at}`);
+  return `(Not attached, too many or too large for one message: ${names.join(', ')}. Tell the person to send ${left.length === 1 ? 'it' : 'them'} in another message.)`;
+}
+
+function sortImages(images: unknown) {
+  const kept: { type: 'file'; mediaType: string; url: string; filename?: string }[] = [];
+  const left: { name?: string; at: number }[] = [];
+  if (!Array.isArray(images)) return { kept, left };
   let chars = 0;
-  for (const i of images.slice(0, ASSISTANT_IMAGES_MAX) as Partial<AssistantImage>[]) {
+  (images as Partial<AssistantImage>[]).forEach((i, n) => {
     const type = ASSISTANT_IMAGE_TYPES.find((t) => t === i?.media_type);
-    if (!type || typeof i?.data !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(i.data)) continue;
-    if (chars + i.data.length > ASSISTANT_IMAGE_CHARS) break;
+    if (!type || typeof i?.data !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(i.data)) return;
+    const name = typeof i.name === 'string' ? i.name.trim().slice(0, ASSISTANT_IMAGE_NAME_MAX) : '';
+    if (kept.length >= ASSISTANT_IMAGES_MAX || chars + i.data.length > ASSISTANT_IMAGE_CHARS) {
+      left.push({ ...(name ? { name } : {}), at: n + 1 });
+      return;
+    }
     chars += i.data.length;
-    out.push({ type: 'file', mediaType: type, url: `data:${type};base64,${i.data}` });
-  }
-  return out;
+    kept.push({
+      type: 'file',
+      mediaType: type,
+      url: `data:${type};base64,${i.data}`,
+      ...(name ? { filename: name } : {}),
+    });
+  });
+  return { kept, left };
 }
 
 /** Where an answer's events go: the app's route, over RPC. */
@@ -839,6 +868,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
     // The images go in the message's parts; the turn's plan reads the rest.
     const { images: _images, ...asked } = input;
     const pictures = imageParts(input.images);
+    const leftOut = imagesLeftOut(input.images);
     this.#input = {
       ...asked,
       ...(map ? { screen: map } : {}),
@@ -855,6 +885,7 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
             ...(quote ? [{ type: 'text' as const, text: quoteLead(quote) }] : []),
             { type: 'text', text: input.message },
             ...pictures,
+            ...(leftOut ? [{ type: 'text' as const, text: `\n\n${leftOut}` }] : []),
           ],
           metadata: meta,
         },

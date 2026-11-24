@@ -331,6 +331,8 @@ export type ChatItem =
       at: number;
       /** The images sent with it, as `data:` addresses to show. */
       images?: string[];
+      /** Each image's name, in the same order ('' for one sent without a name): copied chats list them. */
+      imageNames?: string[];
       context?: string;
       refs?: AssistantRefNote[];
       /** The piece of the chat this message replies to. */
@@ -446,6 +448,17 @@ export const ASSISTANT_IMAGE_CHARS = 1_400_000;
 export interface AssistantImage {
   media_type: (typeof ASSISTANT_IMAGE_TYPES)[number];
   data: string;
+  /** What the person calls it (a file's name, "Pasted image", a close-up's pick): copied chats list it. */
+  name?: string;
+}
+/** The longest image name kept. */
+export const ASSISTANT_IMAGE_NAME_MAX = 120;
+/** Attachment names as a copied chat lists them: each name, else "image N". */
+export function attachmentNames(
+  names: readonly (string | undefined)[],
+  count = names.length,
+): string[] {
+  return Array.from({ length: count }, (_, i) => names[i]?.trim() || `image ${i + 1}`);
 }
 
 export interface AssistantMessage {
