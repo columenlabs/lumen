@@ -713,7 +713,7 @@ function SignalsPanel() {
                 </ToggleGroupItem>
               )}
             </ToggleGroup>
-            {hasGroups && !mobile && (
+            {hasGroups && (
               <ToggleGroup
                 type="single"
                 size="sm"
