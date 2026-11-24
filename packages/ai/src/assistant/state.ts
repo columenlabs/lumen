@@ -37,6 +37,7 @@ import type {
 } from '@columenlabs/lumen-ui-types/assistant';
 import { type ChatgptTokens, refreshChatgpt, staleChatgpt } from './chatgpt';
 import type { ConnectorsDoc } from './connectors';
+import { type GrokTokens, refreshGrok, staleGrok } from './grok';
 import { ALL_MODELS, PROVIDERS, XAI_MODELS, keyHint } from './models';
 import { APP_SCOPE, type Docs } from './store';
 
@@ -54,7 +55,17 @@ export interface KeyDoc {
   cap_usd?: number;
   /** A ChatGPT plan sign-in in place of an API key (`api_key` is then its access token). */
   chatgpt?: ChatgptTokens;
+  /** A Grok plan sign-in in place of an API key (`api_key` is then its access token). */
+  grok?: GrokTokens;
 }
+
+/** The plan sign-in a key doc holds, if it holds one. */
+export const planOf = (d: KeyDoc | null | undefined) =>
+  d?.chatgpt
+    ? ({ via: 'chatgpt', tokens: d.chatgpt } as const)
+    : d?.grok
+      ? ({ via: 'grok', tokens: d.grok } as const)
+      : null;
 
 /** Where a provider's key is kept: `key` for Anthropic, `key:<provider>` for the rest. */
 export const keyDocName = (provider: AssistantProvider) =>
@@ -317,11 +328,13 @@ export function monthIn(timeZone: string, at = new Date()) {
 
 export function keyState(d: KeyDoc | TokenDoc | null, secret: (d: KeyDoc | TokenDoc) => string) {
   if (!d) return { set: false } satisfies KeyState;
-  const plan = 'chatgpt' in d ? d.chatgpt : undefined;
+  const plan = 'api_key' in d ? planOf(d) : null;
   return {
     set: true,
-    hint: plan ? (plan.email ?? 'ChatGPT plan') : keyHint(secret(d)),
-    ...(plan ? { via: 'chatgpt' as const } : {}),
+    hint: plan
+      ? (plan.tokens.email ?? (plan.via === 'grok' ? 'Grok plan' : 'ChatGPT plan'))
+      : keyHint(secret(d)),
+    ...(plan ? { via: plan.via } : {}),
     saved_at: d.saved_at,
     ...(d.test ? { test: d.test } : {}),
   } satisfies KeyState;
@@ -447,13 +460,13 @@ export class State {
   /** The person's own API key (a key doc that holds a plan sign-in is their plan). */
   async ownKey(id: string, provider: AssistantProvider) {
     const d = await this.docs.read<KeyDoc>(id, keyDocName(provider));
-    return d && !d.chatgpt ? d : null;
+    return d && !planOf(d) ? d : null;
   }
   /** The person's plan sign-in and the doc it is kept in (the key's, for a sign-in from before). */
   async ownPlan(id: string, provider: AssistantProvider) {
     for (const name of [planDocName(provider), keyDocName(provider)]) {
       const doc = await this.docs.read<KeyDoc>(id, name);
-      if (doc?.chatgpt) return { doc: doc as KeyDoc & { chatgpt: ChatgptTokens }, name };
+      if (planOf(doc)) return { doc: doc as KeyDoc, name };
     }
     return null;
   }
@@ -474,9 +487,17 @@ export class State {
     const found = await this.ownPlan(id, provider);
     if (!found) return null;
     const { doc: d, name } = found;
-    if (!staleChatgpt(d.chatgpt)) return d.chatgpt.access_token;
+    const f = this.o.fetch ?? fetch;
     try {
-      const t = await refreshChatgpt(d.chatgpt, this.o.fetch ?? fetch);
+      if (d.grok) {
+        if (!staleGrok(d.grok)) return d.grok.access_token;
+        const t = await refreshGrok(d.grok, f);
+        await this.docs.write<KeyDoc>(id, name, { ...d, api_key: t.access_token, grok: t });
+        return t.access_token;
+      }
+      if (!d.chatgpt) return null;
+      if (!staleChatgpt(d.chatgpt)) return d.chatgpt.access_token;
+      const t = await refreshChatgpt(d.chatgpt, f);
       await this.docs.write<KeyDoc>(id, name, { ...d, api_key: t.access_token, chatgpt: t });
       return t.access_token;
     } catch (err) {

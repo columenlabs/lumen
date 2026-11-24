@@ -220,3 +220,89 @@ export const Connections: StoryObj = {
     </div>
   ),
 };
+
+/**
+ * A device sign-in (xAI's Grok plan): Sign in opens the provider's page and shows a short code to
+ * type there; the row asks the server at its interval and connects by itself once approved, with
+ * nothing to paste. `ttl` short shows the ran-out state with Try again.
+ */
+function Device({ ttl = 1_800_000, approveAfter = 3 }: { ttl?: number; approveAfter?: number }) {
+  const [test, setTest] = useState<ConnectionWay['test'] | null>(null);
+  const [asks, setAsks] = useState(0);
+  return (
+    <LumenConnection
+      id="xai"
+      name="xAI"
+      logo={<ConnectionLogo text="x" />}
+      ways={[
+        {
+          id: 'plan',
+          label: 'Grok plan',
+          icon: LogInIcon,
+          info: 'Run Grok models on your own plan instead of an API key.',
+          set: !!test,
+          ident: test ? 'ada@example.com' : undefined,
+          test,
+          signin: {
+            provider: 'Grok',
+            start: async () => {
+              await wait(200);
+              setAsks(0);
+              return {
+                url: 'about:blank',
+                device: {
+                  url: 'about:blank',
+                  code: 'XB5S-GXZW',
+                  expires_at: Date.now() + ttl,
+                  interval: 1,
+                },
+              };
+            },
+            poll: async () => {
+              await wait(100);
+              const n = asks + 1;
+              setAsks(n);
+              if (n < approveAfter) return false;
+              setTest(works('Grok plan sign-in works.'));
+              return true;
+            },
+          },
+          onTest: async () => setTest(works('Grok plan sign-in works.')),
+          onRemove: async () => setTest(null),
+          removeTitle: 'Sign out of your Grok plan?',
+          removeLabel: 'Sign out',
+        },
+      ]}
+    />
+  );
+}
+
+export const DeviceSignin: StoryObj = {
+  render: () => (
+    <div className="max-w-2xl">
+      <LumenExpandList defaultOpen="xai">
+        <Device approveAfter={1_000} />
+      </LumenExpandList>
+    </div>
+  ),
+};
+
+export const DeviceSigninApproved: StoryObj = {
+  render: () => (
+    <div className="max-w-2xl">
+      <LumenExpandList defaultOpen="xai">
+        <Device approveAfter={3} />
+      </LumenExpandList>
+    </div>
+  ),
+};
+
+export const DeviceSigninExpired: StoryObj = {
+  render: () => (
+    <div className="max-w-2xl">
+      <LumenExpandList defaultOpen="xai">
+        <Device ttl={1_500} approveAfter={1_000} />
+      </LumenExpandList>
+    </div>
+  ),
+};

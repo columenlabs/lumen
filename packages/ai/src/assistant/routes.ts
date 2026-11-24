@@ -12,8 +12,11 @@
  *   DELETE /key, POST /key/test     admin, `?provider=` the same
  *   PUT    /my-key {api_key}, DELETE /my-key, POST /my-key/test   the person's own, `?provider=`
  *   PUT    /my-key/cap {cap_usd}    what the person may spend a month on their own keys
- *   POST   /my-signin               starts a ChatGPT plan sign-in (`?provider=openai`): {url, redirect}
- *   POST   /my-signin/finish {url}  finishes it from the 127.0.0.1 address the sign-in ended on
+ *   POST   /my-signin               starts a plan sign-in: ChatGPT (`?provider=openai`) {url, redirect};
+ *                                   Grok (`?provider=xai`) {url, device: {url, code, expires_at, interval}}
+ *   POST   /my-signin/finish {url}  finishes a ChatGPT one from the 127.0.0.1 address it ended on
+ *   POST   /my-signin/poll          asks once whether a Grok one was approved: {done: false, device}
+ *                                   while it waits, {done: true, status} once kept
  *   DELETE /my-signin               signs out of the plan (the person's key, if set, runs on)
  *                                   (`POST /my-key/test?way=key|plan` tests one; the plan and the
  *                                   key are kept side by side, `own_use` in /settings picks)
@@ -204,7 +207,9 @@ export function assistantRoutes(
     const status = async () => json(await a.status(caller));
     const asked = url.searchParams.get('provider') ?? 'anthropic';
     const provider = a.providers.find((p) => p === asked) as AssistantProvider | undefined;
-    const keyRoute = /^(PUT|DELETE|POST) \/(my-)?(key|signin)(\/test|\/finish)?$/.test(route);
+    const keyRoute = /^(PUT|DELETE|POST) \/(my-)?(key|signin)(\/test|\/finish|\/poll)?$/.test(
+      route,
+    );
     if (keyRoute && !provider) return fail(`This app runs no ${asked} models.`, 404);
     const prov = provider ?? 'anthropic';
     const docName = keyDocName(prov);
@@ -213,7 +218,9 @@ export function assistantRoutes(
     const addsOwn =
       route === 'PUT /my-key'
         ? 'key'
-        : route === 'POST /my-signin' || route === 'POST /my-signin/finish'
+        : route === 'POST /my-signin' ||
+            route === 'POST /my-signin/finish' ||
+            route === 'POST /my-signin/poll'
           ? 'plan'
           : null;
     if (addsOwn && !(await a.mayOwn(caller, prov, addsOwn)))
@@ -287,6 +294,11 @@ export function assistantRoutes(
         case 'DELETE /my-signin':
           await a.signOut(caller, prov);
           return status();
+
+        case 'POST /my-signin/poll': {
+          const r = await a.pollSignin(caller, prov);
+          return r.done ? json({ done: true, status: await a.status(caller) }) : json(r);
+        }
 
         case 'POST /my-signin/finish': {
           const pasted = str((await body(req)).url, 4000);

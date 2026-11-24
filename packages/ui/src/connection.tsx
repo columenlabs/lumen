@@ -5,8 +5,15 @@
 // value. Several ways add a Use row, so a person who has both an API key and a plan sign-in picks which
 // one runs, and each way's row ends in its own status, Test and Remove; one way puts its last test,
 // Test and Remove in the action bar. `lines` and `children` are the app's own rows below the ways.
-import { ExternalLinkIcon, LogInIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from 'lucide-react';
-import { type ComponentType, type ReactNode, useId, useState } from 'react';
+import {
+  CopyIcon,
+  ExternalLinkIcon,
+  LogInIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+} from 'lucide-react';
+import { type ComponentType, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { LumenConfirm } from './confirm';
 import { LumenExpandRow } from './expand-list';
 import { type FormIssue, SaveButton } from './form-issues';
@@ -49,10 +56,25 @@ export interface ConnectionField {
   info?: ReactNode;
 }
 
-/** A sign-in that opens in a new tab and ends on an address the person pastes back. */
+/** A device sign-in's code: approved at `url`, while the app asks the server every `interval` s. */
+export interface ConnectionDevice {
+  url: string;
+  code: string;
+  /** ms */
+  expires_at: number;
+  interval: number;
+}
+
+/**
+ * A sign-in that opens in a new tab. Either it ends on an address the person pastes back, or (a
+ * device sign-in, when `start` gives a `device`) the person approves a short code there and `poll`
+ * finishes it by itself: nothing to paste.
+ */
 export interface ConnectionSignin {
   /** Starts it on the server: the address to open and, when it varies, the one it ends on. */
-  start: () => Promise<{ url: string; redirect?: string }>;
+  start: () => Promise<{ url: string; redirect?: string; device?: ConnectionDevice }>;
+  /** A device sign-in: asks once whether it was approved; true once kept, a throw when it failed. */
+  poll?: () => Promise<boolean>;
   /** Where it ends when `start` does not say (`http://localhost:8765/`). */
   redirect?: string;
   /** Whose sign-in, for the button: `Sign in with ChatGPT`. */
@@ -530,10 +552,11 @@ function FieldsForm({ way, close }: { way: ConnectionWay; close: () => void }) {
   );
 }
 
-/** Open the sign-in in a new tab, then paste back the address it ended on. */
+/** Open the sign-in in a new tab, then paste back the address it ended on (or approve its code). */
 function SigninForm({ way, close }: { way: ConnectionWay; close: () => void }) {
   const id = useId();
   const signin = way.signin as ConnectionSignin;
+  const [device, setDevice] = useState<ConnectionDevice | null>(null);
   const [redirect, setRedirect] = useState<string | null>(null);
   const [pasted, setPasted] = useState('');
   const [busy, setBusy] = useState(false);
@@ -547,7 +570,8 @@ function SigninForm({ way, close }: { way: ConnectionWay; close: () => void }) {
       const r = await signin.start();
       if (tab) tab.location.href = r.url;
       else window.open(r.url, '_blank', 'noopener');
-      setRedirect(r.redirect ?? signin.redirect ?? '');
+      if (r.device) setDevice(r.device);
+      else setRedirect(r.redirect ?? signin.redirect ?? '');
     } catch (e) {
       tab?.close();
       setError(e);
@@ -570,6 +594,16 @@ function SigninForm({ way, close }: { way: ConnectionWay; close: () => void }) {
     if (await keep(() => Promise.resolve(way.onFinish?.(p)), setError)) close();
     setBusy(false);
   };
+  if (device && signin.poll)
+    return (
+      <DeviceWait
+        way={way}
+        device={device}
+        poll={signin.poll}
+        again={() => void open()}
+        close={close}
+      />
+    );
   return (
     <div className="flex flex-col">
       <SettingField label={way.label} info={way.info}>
@@ -610,6 +644,102 @@ function SigninForm({ way, close }: { way: ConnectionWay; close: () => void }) {
           label="Finish"
           onSave={() => void finish()}
         />
+      </FormFooter>
+    </div>
+  );
+}
+
+/**
+ * A device sign-in waiting for its approval: the code to type at the link (copied with one click),
+ * asked about at the server's interval until it is kept, runs out or fails. Leaving it stops asking.
+ */
+function DeviceWait({
+  way,
+  device,
+  poll,
+  again,
+  close,
+}: {
+  way: ConnectionWay;
+  device: ConnectionDevice;
+  poll: () => Promise<boolean>;
+  again: () => void;
+  close: () => void;
+}) {
+  const [error, setError] = useState<unknown>(null);
+  const [now, setNow] = useState(Date.now());
+  const expired = now > device.expires_at;
+  // The latest calls, so a parent's new functions on a re-render never restart the wait.
+  const calls = useRef({ poll, close });
+  calls.current = { poll, close };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each new now schedules the next ask
+  useEffect(() => {
+    if (expired || error) return;
+    let live = true;
+    const t = setTimeout(() => {
+      calls.current.poll().then(
+        (done) => {
+          if (!live) return;
+          if (done) calls.current.close();
+          else setNow(Date.now());
+        },
+        (e) => live && setError(e),
+      );
+    }, Math.max(1, device.interval) * 1000);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [now, expired, error, device.interval]);
+  const left = Math.max(0, Math.round((device.expires_at - now) / 60_000));
+  const state = expired
+    ? 'The code ran out.'
+    : error
+      ? 'The sign-in stopped.'
+      : `Waiting, ${left} min left`;
+  return (
+    <div className="flex flex-col">
+      <SettingField
+        label="Code"
+        info={`Type this code on the page that opened, then approve. ${way.label} connects by itself.`}
+      >
+        <span className="flex min-w-0 items-center gap-1">
+          <kbd className="truncate font-code text-sm" title={device.code}>
+            {device.code}
+          </kbd>
+          <IconButton
+            icon={CopyIcon}
+            label="Copy code"
+            size="icon-sm"
+            variant="ghost"
+            onClick={() =>
+              void navigator.clipboard
+                ?.writeText(device.code)
+                .then(() => lumenToast.success('Code copied'))
+            }
+          />
+          <IconButton
+            icon={ExternalLinkIcon}
+            label="Open the approval page again"
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => window.open(device.url, '_blank', 'noopener')}
+          />
+        </span>
+      </SettingField>
+      <SettingField label="Status">
+        <span className="truncate text-muted-foreground text-sm" title={state}>
+          {state}
+        </span>
+      </SettingField>
+      <ErrorLine error={error} />
+      <FormFooter>
+        <Button type="button" size="sm" variant="ghost" onClick={close}>
+          Cancel
+        </Button>
+        {(expired || !!error) && (
+          <SaveButton issues={[]} icon={RefreshCwIcon} label="Try again" onSave={again} />
+        )}
       </FormFooter>
     </div>
   );
