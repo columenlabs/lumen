@@ -204,6 +204,18 @@ export function xaiFetch(base: typeof fetch = fetch, plan = false, conv?: string
     if (typeof key !== 'string') return send(input, init);
     const headers = new Headers(init.headers);
     if (!headers.has('x-grok-conv-id')) headers.set('x-grok-conv-id', conv ?? key);
+    // The request's shape, one line a call, as on a ChatGPT plan (`assistant_plan_request`): each text
+    // as its length and a short hash, never its words, so a cache miss shows what the call changed.
+    try {
+      console.log(
+        JSON.stringify({
+          event: 'xai_request',
+          plan,
+          ...requestShape(JSON.parse(init.body) as Record<string, unknown>, headers),
+          conv: shapeHash(headers.get('x-grok-conv-id') ?? ''),
+        }),
+      );
+    } catch {}
     return send(input, { ...init, headers });
   };
 }
