@@ -425,7 +425,7 @@ export {
   useApp,
   useShell,
 } from './shell';
-export { API_TIMEOUT_MS, apiJson } from './api-fetch';
+export { API_TIMEOUT_MS, ApiError, apiJson } from './api-fetch';
 export { FETCH_MS, fetchWithin } from './fetch-within';
 export {
   savedAnswers,
