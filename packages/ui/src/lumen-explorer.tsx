@@ -207,6 +207,9 @@ export interface LumenExplorerProps<D = unknown> {
   ) => HTMLAttributes<HTMLDivElement>;
   /** Rollback bars, one per list of rows (each part's steps). */
   bars?: ExplorerBar[];
+  /** The element its drag and drop listens on. Two explorers that take drags on one page (a dialog's
+   *  over the page's) each need their own: one per root. Absent: the window. */
+  dndRoot?: HTMLElement | null;
   apiRef?: Ref<ExplorerApi<D> | null>;
   className?: string;
 }
@@ -1022,6 +1025,7 @@ export function LumenExplorer<D = unknown>({
   openByDefault = true,
   rowProps,
   bars = [],
+  dndRoot,
   apiRef,
   className,
 }: LumenExplorerProps<D>) {
@@ -1164,6 +1168,7 @@ export function LumenExplorer<D = unknown>({
       rowHeight={h}
       indent={touch ? 18 : 14}
       openByDefault={openByDefault}
+      dndRootElement={dndRoot ?? undefined}
       initialOpenState={initialOpen}
       searchTerm={search ?? ''}
       searchMatch={(n, s) =>
