@@ -78,12 +78,15 @@ export const CLAUDE_MODELS: ModelDef[] = [
 
 /** OpenAI models, smallest first (list prices from OpenAI's pricing page, October 2026; Sol 6.2 November 2026). */
 export const OPENAI_MODELS: ModelDef[] = [
-  ['gpt-6-luna', 'GPT-6 Luna', 0.1, 0.5, 0.01],
-  ['gpt-6.1-terra', 'GPT-6.1 Terra', 1, 5, 0.05],
-  ['gpt-6.1-sol', 'GPT-6.1 Sol', 2, 10, 0.1],
-  ['gpt-6.2-sol', 'GPT-6.2 Sol', 2, 10, 0.1],
-  ['gpt-6-astra', 'GPT-6 Astra', 10, 50, 1],
-].map(([id, label, i, o, r]) => ({
+  // id, label, prices, then the effort it runs at when none is sent (OpenAI's model pages and
+  // reasoning guide; 6.2 Sol's page names none, and its answers echo `reasoning.effort: medium`,
+  // checked 2026-11-25; Astra's pages name none, so it has none).
+  ['gpt-6-luna', 'GPT-6 Luna', 0.1, 0.5, 0.01, 'medium'],
+  ['gpt-6.1-terra', 'GPT-6.1 Terra', 1, 5, 0.05, 'medium'],
+  ['gpt-6.1-sol', 'GPT-6.1 Sol', 2, 10, 0.1, 'medium'],
+  ['gpt-6.2-sol', 'GPT-6.2 Sol', 2, 10, 0.1, 'medium'],
+  ['gpt-6-astra', 'GPT-6 Astra', 10, 50, 1, undefined],
+].map(([id, label, i, o, r, base]) => ({
   id: id as string,
   label: label as string,
   provider: 'openai' as const,
@@ -92,10 +95,7 @@ export const OPENAI_MODELS: ModelDef[] = [
   out: o as number,
   read: r as number,
   efforts: OPENAI_EFFORTS,
-  // OpenAI's model pages and reasoning guide: medium when `reasoning.effort` is left out (6.2 Sol's
-  // page names none; its answers echo `reasoning.effort: medium`, checked 2026-11-25). Astra's
-  // pages name no default, so it has none.
-  ...(id === 'gpt-6-astra' ? {} : { defaultEffort: 'medium' as const }),
+  ...(base ? { defaultEffort: base as AssistantEffort } : {}),
 }));
 
 /**
