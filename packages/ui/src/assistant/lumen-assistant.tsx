@@ -767,11 +767,29 @@ function FreshCard() {
 const RetryTurn = createContext<RetryFn | null>(null);
 
 /** Where a turn's unretried error sits in the chat, when the turn starts with a message. */
-function failedAt(t: { from: number; items: (ChatItem | LiveItem)[] }): number | null {
-  if (t.items[0]?.kind !== 'user') return null;
+/**
+ * Where a turn failed, for Retry: its error, or the task block it ended inside (an end lands in the
+ * block its turn ran in), with the message to send again (the block's newest ask before the error).
+ */
+function failedAt(t: {
+  from: number;
+  items: (ChatItem | LiveItem)[];
+}): { at: number; user: UserItem } | null {
+  const first = t.items[0];
+  if (first?.kind !== 'user') return null;
   for (let i = t.items.length - 1; i > 0; i--) {
     const it = t.items[i];
-    if (it?.kind === 'error') return it.retried ? null : t.from + i;
+    if (it?.kind === 'error') return it.retried ? null : { at: t.from + i, user: first };
+    if (it?.kind === 'task' && i === t.items.length - 1) {
+      const inner = it.items as (ChatItem | LiveItem)[];
+      const e = inner.findLastIndex((x) => x.kind === 'error');
+      const ask = inner.findLastIndex((x) => x.kind === 'user' && !x.steered);
+      const err = inner[e];
+      if (e < 0 || ask > e || err?.kind !== 'error') return null;
+      if (err.retried) return null;
+      const user = ask >= 0 ? (inner[ask] as UserItem) : first;
+      return { at: t.from + i, user };
+    }
   }
   return null;
 }
@@ -829,7 +847,7 @@ function Items({
                       icon={RefreshCwIcon}
                       label="Retry"
                       className="size-6"
-                      onClick={() => retry(failed, t.items[0] as UserItem)}
+                      onClick={() => retry(failed.at, failed.user)}
                     />
                   )}
                   <div className="flex opacity-0 transition-opacity group-hover/turn:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">

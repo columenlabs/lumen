@@ -135,8 +135,12 @@ export const TURN_LIMIT_MS = 5 * 60_000;
 
 /** How long a model call may think before its first output: a long reasoning fits (3 minutes). */
 const FIRST_OUTPUT_MS = 3 * 60_000;
-/** How long a model call may go quiet once it has started answering (1 minute). */
-const QUIET_MS = 60_000;
+/**
+ * How long a model call may go quiet once it has started answering (3 minutes, as before its first
+ * output): a reasoning model can think for minutes between the parts it streams, and that is work,
+ * not a dead stream. The turn's own limit still ends one that never comes back.
+ */
+const QUIET_MS = 3 * 60_000;
 /** What the person reads when a model call went quiet. */
 const QUIET_TEXT =
   'The model stopped answering, so this turn ended. Send your message again to retry.';
@@ -1215,9 +1219,15 @@ export abstract class LumenSession {
           }
         })().catch(() => undefined);
         for await (const chunk of stream as AsyncIterable<{ type: string; [k: string]: unknown }>) {
-          if (chunk.type === 'error') {
+          // An abort nobody asked for (no Stop, not the turn's limit) is the SDK's quiet timeout: the
+          // model call went silent. It ends as a failure in plain words, kept for a reload and offered
+          // again with Retry, never as a Stopped the person did not press.
+          const quiet = chunk.type === 'abort' && !this.#stopping && !abort.signal.aborted;
+          if (chunk.type === 'error' || quiet) {
             failed = true;
-            const text = String(chunk.errorText ?? 'The answer failed.').slice(0, 500);
+            const text = quiet
+              ? QUIET_TEXT
+              : String(chunk.errorText ?? 'The answer failed.').slice(0, 500);
             shown = shown?.message === text ? shown : { message: text };
             await out.event({ event: 'error', data: shown });
             continue;

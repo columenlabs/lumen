@@ -104,8 +104,9 @@ export interface AssistantChatState {
    */
   send: (message: string, extra?: Extra, how?: 'steer' | 'queue') => void;
   /**
-   * Sends a failed turn again (Retry): `user` is the turn's message, `at` the error it ended in, which
-   * then stops offering Retry. Its words, parts, tier and images go again, with `extra` from now.
+   * Sends a failed turn again (Retry): `user` is the turn's message, `at` the error it ended in (or the
+   * task block it ended inside), which then stops offering Retry. Its words, parts, tier and images go
+   * again, with `extra` from now.
    */
   retry: (at: number, user: Extract<ChatItem, { kind: 'user' }>, extra?: Extra) => void;
   /** A queued message steered into the running answer now. */
@@ -282,11 +283,13 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
     case 'fresh':
       items.push({ kind: 'fresh' });
       break;
+    // A turn's end lands where the turn ran: inside its task's block, as the server keeps it, so the
+    // next message for the same task joins that block (one card) instead of opening a second one.
     case 'stopped':
-      items.push({ kind: 'stopped', ...(e.data.reason ? { reason: e.data.reason } : {}) });
+      sink.push({ kind: 'stopped', ...(e.data.reason ? { reason: e.data.reason } : {}) });
       break;
     case 'error':
-      items.push({
+      sink.push({
         kind: 'error',
         text: plainError(e.data.message),
         ...(e.data.code ? { code: e.data.code } : {}),
@@ -294,6 +297,17 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
       break;
   }
   return items;
+}
+
+/** An end the panel itself drew (the stream failed): where the turn ran, as `applyEvent` puts one. */
+function endIn(prev: LiveItem[], end: LiveItem): LiveItem[] {
+  const top = prev[prev.length - 1];
+  if (top?.kind === 'task' && top.live)
+    return [
+      ...prev.slice(0, -1),
+      { ...top, items: [...(top.items as LiveItem[]), end] } as LiveItem,
+    ];
+  return [...prev, end];
 }
 
 /**
@@ -370,6 +384,33 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     });
   }, []);
 
+  /**
+   * The server's copy shows the steers its answer read: those leave the queue, so a panel that missed
+   * the `steered` event (it followed the server's copy instead of the stream) never sends one twice.
+   */
+  const readSteers = useCallback((list: ChatItem[]) => {
+    const read: string[] = [];
+    const walk = (xs: ChatItem[]) => {
+      for (const x of xs) {
+        if (x.kind === 'user' && x.steered) read.push(x.text);
+        else if (x.kind === 'task' || x.kind === 'handoff') walk((x.items ?? []) as ChatItem[]);
+      }
+    };
+    walk(list);
+    if (!read.length) return;
+    setQueue((q) => {
+      const left = [...read];
+      const kept = q.filter((m) => {
+        if (!m.steering) return true;
+        const at = left.indexOf(m.message);
+        if (at < 0) return true;
+        left.splice(at, 1);
+        return false;
+      });
+      return kept.length === q.length ? q : kept;
+    });
+  }, []);
+
   // After a stream that ended without the answer's end: the chat read again every RESUME_EVERY_MS. When
   // the server is still running the answer, or holds more of it than the panel showed (`shown` ended
   // steps), the panel follows the server's copy (each read shown) until it ends, then shows it as saved.
@@ -390,6 +431,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         if (!following && !c.running && endedSteps(c.items) <= shown) return false;
         following = true;
         setItems(c.items);
+        readSteers(c.items);
         setUsage(c.usage ?? null);
         setTask(c.task ?? null);
         if (c.running) continue;
@@ -397,7 +439,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       }
       return false;
     },
-    [client],
+    [client, readSteers],
   );
   const run = useCallback(
     async (message: string, extra?: Extra, retried?: boolean) => {
@@ -457,6 +499,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
           if (c.running && endedSteps(c.items) <= shown) return;
           taken = true;
           setItems(c.items);
+          readSteers(c.items);
           setUsage(c.usage ?? null);
           setTask(c.task ?? null);
           let now = c;
@@ -468,6 +511,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
               continue;
             }
             setItems(now.items);
+            readSteers(now.items);
             setUsage(now.usage ?? null);
             setTask(now.task ?? null);
           }
@@ -535,8 +579,8 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         if (id && !ctl.signal.aborted && (await resumed(id, ctl.signal, shown))) return;
         for (const o of sent) if (!outcomes.current?.has(o.id)) outcomes.current?.set(o.id, o);
         if (outcomes.current) keepOutcomes(outcomes.current);
-        if (ctl.signal.aborted) setItems((p) => [...p, { kind: 'stopped' }]);
-        else setItems((p) => [...p, { kind: 'error', text: errorText(err) }]);
+        if (ctl.signal.aborted) setItems((p) => applyEvent(p, { event: 'stopped', data: {} }));
+        else setItems((p) => endIn(p, { kind: 'error', text: errorText(err) }));
       } finally {
         clearInterval(watch);
         setItems(settled);
@@ -546,7 +590,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         setBusy(false);
       }
     },
-    [client, unsteer, resumed],
+    [client, unsteer, resumed, readSteers],
   );
 
   // A queued message goes once the answer ends, one an answer.
@@ -603,9 +647,17 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   const retry = useCallback(
     (at: number, user: Extract<ChatItem, { kind: 'user' }>, extra?: Extra) => {
       if (abort.current) return;
-      setItems((p) =>
-        p.map((x, i) => (i === at && x.kind === 'error' ? { ...x, retried: true } : x)),
-      );
+      // `at` is the error, or the task block whose turn failed (its newest error is the one).
+      const mark = (x: LiveItem): LiveItem => {
+        if (x.kind === 'error') return { ...x, retried: true };
+        if (x.kind !== 'task') return x;
+        const inner = x.items as LiveItem[];
+        const e = inner.findLastIndex((i) => i.kind === 'error');
+        return e < 0
+          ? x
+          : ({ ...x, items: inner.map((i, j) => (j === e ? mark(i) : i)) } as LiveItem);
+      };
+      setItems((p) => p.map((x, i) => (i === at ? mark(x) : x)));
       void run(user.text, { ...extra, ...resendOf(user) }, true);
     },
     [run],
