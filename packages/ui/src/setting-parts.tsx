@@ -13,7 +13,14 @@ import {
   RefreshCwIcon,
   Trash2Icon,
 } from 'lucide-react';
-import { type ComponentType, type ReactNode, createContext, useContext, useState } from 'react';
+import {
+  type CSSProperties,
+  type ComponentType,
+  type ReactNode,
+  createContext,
+  useContext,
+  useState,
+} from 'react';
 import { LumenConfirm } from './confirm';
 import { IconButton } from './icon-button';
 import { InfoTip } from './info-tip';
@@ -28,6 +35,53 @@ import { Label } from './ui/label';
 export const SettingsSearch = createContext('');
 export const settingMatches = (query: string, ...texts: ReactNode[]) =>
   texts.some((t) => typeof t === 'string' && t.toLowerCase().includes(query.toLowerCase()));
+
+/** How many control columns the `SettingColumns` around a `SettingField` has; 0 outside one. */
+const SettingColumnsCount = createContext(0);
+
+/**
+ * Rows of the same controls (a model and an effort picker, then a switch) in shared columns: each
+ * control of a `SettingField` takes its own column, as wide as that column's widest control (capped
+ * at `max`, a longer value ends in an ellipsis with the full text on hover), so every row's
+ * controls start and end on the same edges. CSS grid with subgrid, nothing measured. On a phone
+ * the label takes its own line and the controls keep their columns under it.
+ */
+export function SettingColumns({
+  columns,
+  max = '16rem',
+  className,
+  children,
+}: {
+  /** How many controls a row holds at most (its `end` switch not counted). */
+  columns: number;
+  /** The widest a control column grows. */
+  max?: string;
+  className?: string;
+  /** `SettingField`s, each with its controls as direct children, one per column. */
+  children?: ReactNode;
+}) {
+  return (
+    <SettingColumnsCount.Provider value={columns}>
+      <div
+        data-slot="setting-columns"
+        className={cn(
+          'grid gap-x-2 [grid-template-columns:var(--setting-grid)] max-sm:[grid-template-columns:var(--setting-grid-phone)]',
+          className,
+        )}
+        style={
+          {
+            // label | each control, as wide as its widest, up to max | end.
+            '--setting-grid': `minmax(min(8rem,100%),1fr) repeat(${columns},fit-content(${max})) auto`,
+            // A phone: the label takes its own line, the first control the room the rest leave.
+            '--setting-grid-phone': `minmax(0,1fr)${columns > 1 ? ` repeat(${columns - 1},minmax(0,max-content))` : ''} auto`,
+          } as CSSProperties
+        }
+      >
+        {children}
+      </div>
+    </SettingColumnsCount.Provider>
+  );
+}
 
 /** One setting inside an item: its label, then its control group, then an optional switch at the end. */
 export function SettingField({
@@ -53,12 +107,45 @@ export function SettingField({
   children?: ReactNode;
 }) {
   const query = useContext(SettingsSearch);
+  const columns = useContext(SettingColumnsCount);
   // Inside a loading scope the label stays; the control and the switch are bars in their places.
   const loading = useLumenLoading();
   if (query && !settingMatches(query, label, info)) return null;
   const control =
     loading && children !== undefined ? <LoadingBar className="h-8 w-full max-w-56" /> : children;
   const tail = loading && end ? <LoadingBar className="h-5 w-9 rounded-full" /> : end;
+  if (columns)
+    return (
+      <div
+        data-slot="setting-field"
+        data-columns
+        className={cn(
+          // One row of the SettingColumns grid: its cells sit on the shared columns.
+          'col-span-full grid min-h-10 grid-cols-subgrid items-center gap-y-1.5 border-t border-border/60 py-1.5 first:border-t-0',
+          className,
+        )}
+      >
+        <div
+          className={cn(
+            'col-start-1 flex min-w-0 items-center gap-1.5',
+            // On a phone the label takes its own line; with no control it sits beside `end`.
+            control === undefined ? 'col-end-[-2]' : 'max-sm:col-span-full',
+          )}
+        >
+          <Label
+            htmlFor={htmlFor}
+            className="truncate py-0.5 leading-normal font-normal text-muted-foreground"
+            title={label}
+          >
+            {label}
+          </Label>
+          {info && <InfoTip label={`About ${label}`}>{info}</InfoTip>}
+        </div>
+        {/* Each control is a cell of its own column and fills it, so the rows' edges line up. */}
+        {control !== undefined && <div className="contents *:w-full *:min-w-0">{control}</div>}
+        {tail && <div className="col-[-2/-1] justify-self-end">{tail}</div>}
+      </div>
+    );
   return (
     <div
       data-slot="setting-field"
