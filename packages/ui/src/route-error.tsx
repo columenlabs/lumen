@@ -55,13 +55,19 @@ function mayReload(): boolean {
 export function reloadForNewBuild(): boolean {
   if (reloadStarted) return true;
   if (!mayReload()) return false;
-  try {
-    sessionStorage.setItem(KEY, String(Date.now()));
-  } catch {
-    // No sessionStorage (private mode): reload anyway.
-  }
   reloadStarted = true;
-  window.location.reload();
+  const go = () => {
+    try {
+      sessionStorage.setItem(KEY, String(Date.now()));
+    } catch {
+      // No sessionStorage (private mode): reload anyway.
+    }
+    window.location.reload();
+  };
+  // Offline, a reload lands on the browser's own offline page, which never comes back by itself:
+  // wait for the connection, then reload.
+  if (navigator.onLine === false) window.addEventListener('online', go, { once: true });
+  else go();
   return true;
 }
 
@@ -96,14 +102,39 @@ function preloadPages(router: LazyRoutes) {
   else window.addEventListener('load', idle, { once: true });
 }
 
+export interface WatchNewBuildsOptions {
+  /**
+   * What to do once a file failed to load because a deploy replaced this tab's build. Default:
+   * reload at once (`reloadForNewBuild`). An app whose page can hold unsaved work (a chat answer
+   * streaming, a draft, a job running in the tab) passes its own, which waits until nothing would be
+   * lost and then calls `reloadForNewBuild`.
+   */
+  onNewBuild?: () => void;
+}
+
 /**
  * Keeps an open tab working across deploys: every page's files load up front (when a router is
- * given), and a file a deploy removed reloads the tab onto the new build. The event is never
- * cancelled: cancelling it makes the import resolve to nothing, which the page then hits as a bug.
+ * given), and a file a deploy removed moves the tab onto the new build (`onNewBuild`). The event is
+ * never cancelled: cancelling it makes the import resolve to nothing, which the page then hits as a
+ * bug. A file that failed while offline, or for a moment with no new build out, is not a new build:
+ * the import fails as it is (a lazy part tries again when next drawn) and the tab stays as it is.
+ * A part the page needs now still reloads through its own error page or boundary.
  */
-export function watchNewBuilds(router?: LazyRoutes) {
+export function watchNewBuilds(router?: LazyRoutes, options: WatchNewBuildsOptions = {}) {
+  const onNewBuild = options.onNewBuild ?? (() => void reloadForNewBuild());
+  let checking = false;
   window.addEventListener('vite:preloadError', () => {
-    reloadForNewBuild();
+    // The kit's idle preloads fail too when the connection is down; a reload then lands on the
+    // browser's offline page (2026-11-25).
+    if (navigator.onLine === false || checking) return;
+    checking = true;
+    void newBuildOut()
+      .then((out) => {
+        if (out) onNewBuild();
+      })
+      .finally(() => {
+        checking = false;
+      });
   });
   if (router) preloadPages(router);
   watchDeploys();
