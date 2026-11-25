@@ -368,11 +368,15 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     });
   }, []);
 
-  // After a cut stream: the chat read again every RESUME_EVERY_MS while the server says its answer runs,
-  // then shown as saved. False when it cannot be read (the panel then shows the cut-off error).
+  // After a stream that ended without the answer's end: the chat read again every RESUME_EVERY_MS. When
+  // the server is still running the answer, or holds more of it than the panel showed (`shown` ended
+  // steps), the panel follows the server's copy (each read shown) until it ends, then shows it as saved.
+  // False when the server has nothing more (the panel keeps what it showed, such as a refusal) or cannot
+  // be read in RESUME_MS.
   const resumed = useCallback(
-    async (id: string, signal: AbortSignal) => {
+    async (id: string, signal: AbortSignal, shown: number) => {
       const until = Date.now() + RESUME_MS;
+      let following = false;
       while (Date.now() < until && !signal.aborted) {
         await new Promise((r) => setTimeout(r, RESUME_EVERY_MS));
         let c: Awaited<ReturnType<typeof client.chat>>;
@@ -381,10 +385,12 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         } catch {
           continue;
         }
-        if (c.running) continue;
+        if (!following && !c.running && endedSteps(c.items) <= shown) return false;
+        following = true;
         setItems(c.items);
         setUsage(c.usage ?? null);
         setTask(c.task ?? null);
+        if (c.running) continue;
         return true;
       }
       return false;
@@ -420,8 +426,9 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       const sent = [...(outcomes.current?.values() ?? [])];
       outcomes.current?.clear();
       keepOutcomes(new Map());
-      // The app was updated while the answer ran: the server carries it on or keeps how it ended.
-      let updated = false;
+      // The answer's own end reached this tab. Without it (an error, a cut, an app update) the server
+      // may still be running it or have kept another end, so the panel follows the server's copy.
+      let ended = false;
       // A stream that went quiet while the server's answer moved on (the server keeps each step as it
       // ends): the panel follows the server's copy instead, so the screen never sits behind it.
       let last = Date.now();
@@ -489,8 +496,10 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             else if (e.event === 'task') {
               setTask(e.data.state === 'open' ? e.data : null);
               setItems((p) => applyEvent(p, e));
-            } else if (e.event === 'done') setUsage(e.data.usage);
-            else if (e.event === 'steered') {
+            } else if (e.event === 'done') {
+              ended = true;
+              setUsage(e.data.usage);
+            } else if (e.event === 'steered') {
               // Read by the answer here: the line moves from the queue into the chat.
               setQueue((q) => {
                 const at = q.findIndex((m) => m.steering && m.message === e.data.text);
@@ -501,7 +510,6 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
               );
             } else if (e.event === 'unsteered') unsteer(e.data.texts);
             else {
-              if (e.event === 'error' && e.data.code === 'app_updated') updated = true;
               setItems((p) => applyEvent(p, e));
             }
           },
@@ -514,19 +522,14 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         // So the panel shows what the server holds (the answer carried on, or its end kept), never
         // only what this stream saw before it was cut.
         const id = idRef.current;
-        if (updated && id && !ctl.signal.aborted) await resumed(id, ctl.signal);
+        if (!ended && id && !ctl.signal.aborted) await resumed(id, ctl.signal, shown);
       } catch (err) {
         if (taken) return;
-        // The stream was cut (the network dropped, not Stop): the answer goes on on the server, so the
-        // panel reads the chat again until it ends and shows it as saved, never a cut-off error.
+        // The stream failed (the network dropped, the server restarted; not Stop): the answer goes on
+        // on the server or its end is kept there, so the panel reads the chat again until it ends and
+        // shows it as saved, never a cut-off error.
         const id = idRef.current;
-        if (
-          err instanceof TypeError &&
-          id &&
-          !ctl.signal.aborted &&
-          (await resumed(id, ctl.signal))
-        )
-          return;
+        if (id && !ctl.signal.aborted && (await resumed(id, ctl.signal, shown))) return;
         for (const o of sent) if (!outcomes.current?.has(o.id)) outcomes.current?.set(o.id, o);
         if (outcomes.current) keepOutcomes(outcomes.current);
         if (ctl.signal.aborted) setItems((p) => [...p, { kind: 'stopped' }]);
