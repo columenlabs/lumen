@@ -994,7 +994,10 @@ export class Assistant {
         fallback = { model: main.model, key: { apiKey: shared.apiKey }, label: sharedLabel };
       }
     } else if (key.plan) {
-      const claude = this.models.find((m) => m.provider === 'anthropic');
+      // The tier's own fallback when it is a Claude, else the app's smallest Claude.
+      const own = this.modelById(main.tier.fallback);
+      const claude =
+        own?.provider === 'anthropic' ? own : this.models.find((m) => m.provider === 'anthropic');
       const claudeKey = claude ? keyOf('anthropic') : null;
       if (claude && claudeKey)
         fallback = { model: claude, key: claudeKey, label: `${main.tier.label} · ${claude.label}` };
