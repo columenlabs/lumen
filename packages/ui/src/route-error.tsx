@@ -110,6 +110,12 @@ export interface WatchNewBuildsOptions {
    * lost and then calls `reloadForNewBuild`.
    */
   onNewBuild?: () => void;
+  /**
+   * What to do when the periodic check (on coming back into view and every 10 minutes) finds that a
+   * deploy replaced this tab's build. Default: a toast with Reload. An app that must not keep running
+   * an old build passes its own (a dialog that stops further work until the person reloads).
+   */
+  onDeploy?: () => void;
 }
 
 /**
@@ -137,7 +143,7 @@ export function watchNewBuilds(router?: LazyRoutes, options: WatchNewBuildsOptio
       });
   });
   if (router) preloadPages(router);
-  watchDeploys();
+  watchDeploys(options.onDeploy);
 }
 
 /** How often a tab in view asks whether a deploy has replaced its build. */
@@ -169,7 +175,7 @@ async function newBuildOut(): Promise<boolean> {
  * deploy has replaced its build when it comes back into view and every 10 minutes while in view,
  * and offers Reload once per new build. It never reloads on its own: that would cut work short.
  */
-function watchDeploys() {
+function watchDeploys(onDeploy?: () => void) {
   let offered = false;
   let busy = false;
   const check = async () => {
@@ -178,6 +184,7 @@ function watchDeploys() {
     try {
       if (!(await newBuildOut())) return;
       offered = true;
+      if (onDeploy) return onDeploy();
       toast('A new version is ready', {
         duration: Number.POSITIVE_INFINITY,
         action: { label: 'Reload', onClick: () => window.location.reload() },

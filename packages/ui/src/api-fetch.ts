@@ -35,15 +35,15 @@ export const API_TIMEOUT_MS = { read: 15_000, write: 60_000 };
 /**
  * A JSON request; `where` names the caller in the error log (`assistant.undo`, `workspace.read`).
  * It gives up after `API_TIMEOUT_MS` (or `timeoutMs`); a caller's own `signal` still aborts it. A string
- * body is sent as JSON; FormData or a Blob keeps its own content type. A 2xx that is not JSON fails.
+ * body is sent as JSON; FormData or a Blob keeps its own content type. A 2xx that is not JSON fails. `onResponse` sees the answer (its headers) before the body is read.
  */
 export async function apiJson<T>(
   url: string,
-  init: RequestInit & { timeoutMs?: number } = {},
+  init: RequestInit & { timeoutMs?: number; onResponse?: (res: Response) => void } = {},
   where = 'api',
 ): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
-  const { timeoutMs, ...rest } = init;
+  const { timeoutMs, onResponse, ...rest } = init;
   const timeout = AbortSignal.timeout(
     timeoutMs ?? (method === 'GET' ? API_TIMEOUT_MS.read : API_TIMEOUT_MS.write),
   );
@@ -74,6 +74,10 @@ export async function apiJson<T>(
     reportFailedFetch(apiRoute(url), 0);
     throw e;
   }
+  // The caller reads the answer's headers (a version the server names, a rate limit) before its body.
+  try {
+    onResponse?.(res);
+  } catch {}
   const text = await res.text();
   let body: unknown = null;
   let json = true;
