@@ -55,6 +55,14 @@ No chips or pills in the header and no empty columns: counts and names go in the
 
 Every row has an icon. Give `icon` the thing's logo or icon (`SettingIcon icon={…}` draws it on a tile); left out, the row draws the name's first letter on that tile. So names start on one edge down a list, and the health dot never draws without an icon to sit on.
 
+**Rows of the same controls line up.** When several `SettingField`s each hold the same controls (a model and an effort picker, then a switch), wrap them in `SettingColumns columns={n}` and give each field its controls as direct children, one per column. Each column is as wide as its widest control (up to `max`, 16rem by default; a longer value ends in an ellipsis with the full text on hover), so every row's controls start and end on the same edges and the `end` switches stand in one column. It is CSS grid with subgrid, nothing measured. A long label ends in an ellipsis with its full text on hover; on a phone the label takes its own line and the controls keep their columns under it. Never size a control with `w-*` to fake the line-up.
+
+```
+Default           [GPT-6.2 Sol       ⌄] [Medium ⌄] [on]
+Prompt reviewer   [Claude Haiku 5.5  ⌄] [Low    ⌄] [off]
+Chat              [GPT-6.1 Terra     ⌄] [Low    ⌄] [on]
+```
+
 While a section's reads run, wrap it in `LumenLoading` ([loading.md](loading.md)): each row keeps its name and icon, its detail and switch are bars, no dot shows, and a list of data rows (`LumenExpandList id`) draws as many bar rows as it had last time. Never draw a section's empty, Add or "Not set up" state before its reads answer.
 
 ## Three slots (every thing in a section)

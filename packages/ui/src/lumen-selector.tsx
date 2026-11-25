@@ -490,6 +490,8 @@ export function LumenSelector<V extends string = string>(props: LumenSelectorPro
           'min-w-0 flex-1 truncate text-left',
           !selected && !values.length && 'text-muted-foreground',
         )}
+        // A name cut short shows in full on hover.
+        title={selected?.label}
       >
         {selected
           ? (display ?? selected.content ?? selected.label)

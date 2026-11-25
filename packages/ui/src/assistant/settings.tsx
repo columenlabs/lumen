@@ -50,7 +50,7 @@ import { LumenSelector } from '../lumen-selector';
 import { useLumenLoad } from '../lumen-source';
 import { lumenToast } from '../lumen-toast';
 import { LumenPending } from '../pending';
-import { SettingField } from '../setting-parts';
+import { SettingColumns, SettingField } from '../setting-parts';
 import type { SettingsSectionDef } from '../settings';
 import { ShareMeter } from '../share-meter';
 import { Badge } from '../ui/badge';
@@ -601,33 +601,43 @@ function Models({ client }: { client: AssistantAdapter }) {
         const tiers = s.tiers.map((t) => ({ value: t.id, label: t.label }));
         return (
           <div className="flex flex-col">
-            {s.tiers.map((t) => {
-              const p = s.providers.find((x) => x.id === t.provider);
-              const keyless = p && !p.app.set && !p.app.from_env && !p.own.set && !p.plan?.set;
-              return (
-                <SettingField key={t.id} label={t.label} info={t.about}>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {keyless && <Badge variant="outline">No {p.label} key</Badge>}
-                    <LumenSelector
-                      label={`${t.label} model`}
-                      size="sm"
-                      className="w-36 sm:w-44"
-                      value={t.model}
-                      options={models}
-                      onChange={(model) => set({ tiers: { [t.id]: { model } } })}
-                    />
+            <SettingColumns columns={2}>
+              {s.tiers.map((t) => {
+                const p = s.providers.find((x) => x.id === t.provider);
+                const keyless = p && !p.app.set && !p.app.from_env && !p.own.set && !p.plan?.set;
+                // The level the provider runs the model at when none is sent reads Default.
+                const base = s.models.find((m) => m.id === t.model)?.default_effort;
+                const efforts = EFFORTS.map((e) =>
+                  e.value === base
+                    ? { ...e, detail: 'Default' }
+                    : e.value === 'default' && base
+                      ? { ...e, detail: EFFORTS.find((x) => x.value === base)?.label }
+                      : e,
+                );
+                return (
+                  <SettingField key={t.id} label={t.label} info={t.about}>
+                    <div className="flex items-center gap-2">
+                      {keyless && <Badge variant="outline">No {p.label} key</Badge>}
+                      <LumenSelector
+                        label={`${t.label} model`}
+                        size="sm"
+                        className="min-w-0 flex-1"
+                        value={t.model}
+                        options={models}
+                        onChange={(model) => set({ tiers: { [t.id]: { model } } })}
+                      />
+                    </div>
                     <LumenSelector
                       label={`${t.label} effort`}
                       size="sm"
-                      className="w-24 sm:w-32"
                       value={t.effort}
-                      options={EFFORTS}
+                      options={efforts}
                       onChange={(effort) => set({ tiers: { [t.id]: { effort } } })}
                     />
-                  </div>
-                </SettingField>
-              );
-            })}
+                  </SettingField>
+                );
+              })}
+            </SettingColumns>
             {s.tasks.length > 1 &&
               s.pick_tier !== false &&
               !s.models_by &&

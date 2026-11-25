@@ -24,7 +24,7 @@ import { type ModelMessage, type ToolSet, generateText, jsonSchema, stepCountIs,
 import OpenAI, { toFile } from 'openai';
 import type { AgentTurnEnd, AgentTurnPlan, TurnTools } from '../agent/agent';
 import { backoffFetch } from '../agent/backoff';
-import { type ModelKey, aiModel, planLimited, turnSettings } from '../agent/models';
+import { type ModelKey, aiModel, planFetch, planLimited, turnSettings } from '../agent/models';
 import type { OpenedTools, SourceAt } from '../agent/tools';
 import { tokenUsage } from '../agent/usage';
 import { type WebLookupOptions, webLookupTools } from '../subagents/web';
@@ -756,6 +756,58 @@ export class Assistant {
       fetch: backoffFetch(this.o.fetch ?? fetch),
     });
   }
+  /** One image on a ChatGPT plan: the plan's Responses model with only the image tool, made to call it. */
+  private async planImage(
+    token: string,
+    o: { prompt: string; size?: string; quality?: string; signal?: AbortSignal },
+    refs: CompleteImage[],
+  ): Promise<{ data: string; tokens: { in: number; out: number } }> {
+    const model = this.models.find((x) => x.provider === 'openai');
+    if (!model)
+      throw new AssistantError('No ChatGPT model is set up to make images.', 'upstream', 502);
+    const client = new OpenAI({
+      apiKey: token,
+      maxRetries: 0,
+      fetch: planFetch(backoffFetch(this.o.fetch ?? fetch), this.name),
+    });
+    const res = await client.responses.create(
+      {
+        model: model.id,
+        instructions: 'Make the image the person asks for with the image tool.',
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: o.prompt.slice(0, 4000) },
+              ...refs.map((r) => ({
+                type: 'input_image' as const,
+                image_url: `data:${r.mediaType};base64,${r.data}`,
+                detail: 'auto' as const,
+              })),
+            ],
+          },
+        ],
+        tools: [
+          {
+            type: 'image_generation',
+            size: (o.size ?? '1024x1024') as '1024x1024',
+            quality: (o.quality ?? 'medium') as 'medium',
+            output_format: 'png',
+          },
+        ],
+        tool_choice: { type: 'image_generation' },
+      },
+      o.signal ? { signal: o.signal } : undefined,
+    );
+    const call = res.output.find((x) => x.type === 'image_generation_call') as
+      | { result?: string | null }
+      | undefined;
+    if (!call?.result) throw new AssistantError('The image model sent no image.', 'upstream', 502);
+    return {
+      data: call.result,
+      tokens: { in: res.usage?.input_tokens ?? 0, out: res.usage?.output_tokens ?? 0 },
+    };
+  }
   /** The providers the app's models run on, in the order the models list them. */
   get providers(): AssistantProvider[] {
     return [...new Set(this.models.map((m) => m.provider))];
@@ -1402,6 +1454,7 @@ export class Assistant {
         label: m.label,
         group: m.group,
         provider: m.provider,
+        ...(m.defaultEffort ? { default_effort: m.defaultEffort } : {}),
       })),
       tasks: this.tasks.map((t) => ({
         id: t.id,
@@ -1896,21 +1949,29 @@ export class Assistant {
 
   /**
    * A new chat's name from the person's first message, on the `titles` task's tier and the app's
-   * key (the app's own housekeeping, never the person's spend). Null when the app names no titles
+   * key, or whoever pays the chat when the app has no key of its own (a fraction of a cent). Null when the app names no titles
    * task, the message says too little, or the call fails or answers something that is not a name;
    * it never throws, and gives up after 8 s.
    */
   async nameChat(caller: Caller, message: string): Promise<string | null> {
     const task = this.o.titles?.task;
     if (!task || !nameable(message)) return null;
-    try {
-      const out = await this.complete(caller, {
+    const signal = AbortSignal.timeout(8000);
+    const ask = (payer?: AssistantPayer) =>
+      this.complete(caller, {
         task,
         system: chatNameSystem(this.name, this.o.app),
         prompt: `The person's message: ${message.trim().slice(0, 2000)}`,
         maxTokens: 400,
-        payer: 'app',
-        signal: AbortSignal.timeout(8000),
+        ...(payer ? { payer } : {}),
+        signal,
+      });
+    try {
+      // The app's key first; an app with none (or past its cap) names on whoever pays the chat.
+      const out = await ask('app').catch((e) => {
+        const code = (e as { code?: string }).code;
+        if (code === 'not_connected' || code === 'app_cap') return ask();
+        throw e;
       });
       return out.cut ? null : cleanName(out.text);
     } catch {
@@ -2092,9 +2153,9 @@ export class Assistant {
       throw new AssistantError(waitText(code, 'openai', !!this.o.allowance), code, 402);
     }
     const key = paying.keys.openai;
-    if (!key || paying.plans.openai)
-      throw new AssistantError(waitText('not_connected', 'openai'), 'not_connected', 402);
+    if (!key) throw new AssistantError(waitText('not_connected', 'openai'), 'not_connected', 402);
     const m = IMAGE_MODEL;
+    const plan = !!paying.plans.openai;
     const client = this.openai(key);
     const common = {
       model: m.id,
@@ -2107,6 +2168,14 @@ export class Assistant {
     let tokens = { in: 0, out: 0 };
     try {
       const refs = (o.images ?? []).slice(0, 4);
+      if (plan) {
+        // A ChatGPT plan has no Images API: its Responses model calls the built-in image tool
+        // (gpt-image-2), as OpenAI's own Codex client does, counted against the plan's own limits.
+        const made = await this.planImage(key, o, refs);
+        tokens = made.tokens;
+        usd = m.fallbackUsd;
+        return { data: made.data, mediaType: 'image/png', usd, model: m.id };
+      }
       const res = refs.length
         ? await client.images.edit(
             {

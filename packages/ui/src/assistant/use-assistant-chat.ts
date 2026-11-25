@@ -104,8 +104,9 @@ export interface AssistantChatState {
    */
   send: (message: string, extra?: Extra, how?: 'steer' | 'queue') => void;
   /**
-   * Sends a failed turn again (Retry): `user` is the turn's message, `at` the error it ended in, which
-   * then stops offering Retry. Its words, parts, tier and images go again, with `extra` from now.
+   * Sends a failed turn again (Retry): `user` is the turn's message, `at` the error it ended in (or the
+   * task block it ended inside), which then stops offering Retry. Its words, parts, tier and images go
+   * again, with `extra` from now.
    */
   retry: (at: number, user: Extract<ChatItem, { kind: 'user' }>, extra?: Extra) => void;
   /** A queued message steered into the running answer now. */
@@ -113,7 +114,15 @@ export interface AssistantChatState {
   /** Takes a queued message out; its words and extras come back (Edit puts them in the box). */
   unqueue: (id: string) => QueuedMessage | undefined;
   stop: () => void;
+  /**
+   * Shows a saved chat. An answer still running in it is followed live (busy; Stop and Steer work) until
+   * it ends. A read that lands after a newer message, `open` or `reset` changes nothing.
+   */
   open: (id: string) => Promise<void>;
+  /**
+   * Empties the panel for a new chat. A running answer stops streaming here but runs on in the server;
+   * `open` on its chat follows it again.
+   */
   reset: () => void;
   settle: (draft: DraftItem, action: 'save' | 'dismiss') => Promise<void>;
   /** Takes back a change the assistant made at once (Undo on its line). */
@@ -282,11 +291,13 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
     case 'fresh':
       items.push({ kind: 'fresh' });
       break;
+    // A turn's end lands where the turn ran: inside its task's block, as the server keeps it, so the
+    // next message for the same task joins that block (one card) instead of opening a second one.
     case 'stopped':
-      items.push({ kind: 'stopped', ...(e.data.reason ? { reason: e.data.reason } : {}) });
+      sink.push({ kind: 'stopped', ...(e.data.reason ? { reason: e.data.reason } : {}) });
       break;
     case 'error':
-      items.push({
+      sink.push({
         kind: 'error',
         text: plainError(e.data.message),
         ...(e.data.code ? { code: e.data.code } : {}),
@@ -294,6 +305,17 @@ export function applyEvent(prev: LiveItem[], e: AssistantEvent): LiveItem[] {
       break;
   }
   return items;
+}
+
+/** An end the panel itself drew (the stream failed): where the turn ran, as `applyEvent` puts one. */
+function endIn(prev: LiveItem[], end: LiveItem): LiveItem[] {
+  const top = prev[prev.length - 1];
+  if (top?.kind === 'task' && top.live)
+    return [
+      ...prev.slice(0, -1),
+      { ...top, items: [...(top.items as LiveItem[]), end] } as LiveItem,
+    ];
+  return [...prev, end];
 }
 
 /**
@@ -343,8 +365,15 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   // An adapter whose app has no steer route: Steer hides and messages queue.
   const [steerOff, setSteerOff] = useState(false);
   const abort = useRef<AbortController | null>(null);
-  /** How many messages this panel has sent, so a chat read that a newer message overtook is dropped (`open`). */
-  const sends = useRef(0);
+  /**
+   * Who owns the panel now: each message, `open` and `reset` takes the next number. Work started by an
+   * earlier owner (a chat read still on its way, a stream that was cut off, a running answer being
+   * followed) checks it when it lands and changes nothing once another has taken over, so the newest
+   * action always wins and a late read never brings an earlier chat back.
+   */
+  const gen = useRef(0);
+  /** The `open` whose Loading shows: an earlier read that lands late never turns it off. */
+  const loadingFor = useRef(0);
   const outcomes = useRef<Map<string, AssistantScreenOutcome> | null>(null);
   outcomes.current ??= readOutcomes();
   const idRef = useRef<string | null>(null);
@@ -370,6 +399,33 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     });
   }, []);
 
+  /**
+   * The server's copy shows the steers its answer read: those leave the queue, so a panel that missed
+   * the `steered` event (it followed the server's copy instead of the stream) never sends one twice.
+   */
+  const readSteers = useCallback((list: ChatItem[]) => {
+    const read: string[] = [];
+    const walk = (xs: ChatItem[]) => {
+      for (const x of xs) {
+        if (x.kind === 'user' && x.steered) read.push(x.text);
+        else if (x.kind === 'task' || x.kind === 'handoff') walk((x.items ?? []) as ChatItem[]);
+      }
+    };
+    walk(list);
+    if (!read.length) return;
+    setQueue((q) => {
+      const left = [...read];
+      const kept = q.filter((m) => {
+        if (!m.steering) return true;
+        const at = left.indexOf(m.message);
+        if (at < 0) return true;
+        left.splice(at, 1);
+        return false;
+      });
+      return kept.length === q.length ? q : kept;
+    });
+  }, []);
+
   // After a stream that ended without the answer's end: the chat read again every RESUME_EVERY_MS. When
   // the server is still running the answer, or holds more of it than the panel showed (`shown` ended
   // steps), the panel follows the server's copy (each read shown) until it ends, then shows it as saved.
@@ -387,9 +443,11 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         } catch {
           continue;
         }
+        if (signal.aborted) return false;
         if (!following && !c.running && endedSteps(c.items) <= shown) return false;
         following = true;
         setItems(c.items);
+        readSteers(c.items);
         setUsage(c.usage ?? null);
         setTask(c.task ?? null);
         if (c.running) continue;
@@ -397,13 +455,15 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       }
       return false;
     },
-    [client],
+    [client, readSteers],
   );
   const run = useCallback(
     async (message: string, extra?: Extra, retried?: boolean) => {
       const ctl = new AbortController();
       abort.current = ctl;
-      sends.current += 1;
+      const g = ++gen.current;
+      // Still this answer's panel: a reset or another chat opened since leaves it alone.
+      const mine = () => gen.current === g;
       setBusy(true);
       if (message !== '/compact')
         setItems((p) => [
@@ -453,10 +513,11 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         checking = true;
         try {
           const c = await client.chat(id);
-          if (taken || Date.now() - last < QUIET_CHECK_MS) return;
+          if (taken || !mine() || Date.now() - last < QUIET_CHECK_MS) return;
           if (c.running && endedSteps(c.items) <= shown) return;
           taken = true;
           setItems(c.items);
+          readSteers(c.items);
           setUsage(c.usage ?? null);
           setTask(c.task ?? null);
           let now = c;
@@ -467,7 +528,9 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             } catch {
               continue;
             }
+            if (ctl.signal.aborted || !mine()) break;
             setItems(now.items);
+            readSteers(now.items);
             setUsage(now.usage ?? null);
             setTask(now.task ?? null);
           }
@@ -489,7 +552,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
           },
           (e) => {
             last = Date.now();
-            if (taken) return;
+            if (taken || !mine()) return;
             if (e.event === 'step') shown += 1;
             if (e.event === 'chat') {
               idRef.current = e.data.id;
@@ -527,7 +590,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         const id = idRef.current;
         if (!ended && id && !ctl.signal.aborted) await resumed(id, ctl.signal, shown);
       } catch (err) {
-        if (taken) return;
+        if (taken || !mine()) return;
         // The stream failed (the network dropped, the server restarted; not Stop): the answer goes on
         // on the server or its end is kept there, so the panel reads the chat again until it ends and
         // shows it as saved, never a cut-off error.
@@ -535,18 +598,21 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         if (id && !ctl.signal.aborted && (await resumed(id, ctl.signal, shown))) return;
         for (const o of sent) if (!outcomes.current?.has(o.id)) outcomes.current?.set(o.id, o);
         if (outcomes.current) keepOutcomes(outcomes.current);
-        if (ctl.signal.aborted) setItems((p) => [...p, { kind: 'stopped' }]);
-        else setItems((p) => [...p, { kind: 'error', text: errorText(err) }]);
+        if (ctl.signal.aborted) setItems((p) => applyEvent(p, { event: 'stopped', data: {} }));
+        else setItems((p) => endIn(p, { kind: 'error', text: errorText(err) }));
       } finally {
         clearInterval(watch);
-        setItems(settled);
-        // Steers the answer never read (Stop, an error) wait for the next answer instead.
-        unsteer();
-        abort.current = null;
-        setBusy(false);
+        if (abort.current === ctl) abort.current = null;
+        // A reset or another chat took the panel: its answer runs on in the server, and the panel is theirs.
+        if (mine()) {
+          setItems(settled);
+          // Steers the answer never read (Stop, an error) wait for the next answer instead.
+          unsteer();
+          setBusy(false);
+        }
       }
     },
-    [client, unsteer, resumed],
+    [client, unsteer, resumed, readSteers],
   );
 
   // A queued message goes once the answer ends, one an answer.
@@ -603,9 +669,17 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   const retry = useCallback(
     (at: number, user: Extract<ChatItem, { kind: 'user' }>, extra?: Extra) => {
       if (abort.current) return;
-      setItems((p) =>
-        p.map((x, i) => (i === at && x.kind === 'error' ? { ...x, retried: true } : x)),
-      );
+      // `at` is the error, or the task block whose turn failed (its newest error is the one).
+      const mark = (x: LiveItem): LiveItem => {
+        if (x.kind === 'error') return { ...x, retried: true };
+        if (x.kind !== 'task') return x;
+        const inner = x.items as LiveItem[];
+        const e = inner.findLastIndex((i) => i.kind === 'error');
+        return e < 0
+          ? x
+          : ({ ...x, items: inner.map((i, j) => (j === e ? mark(i) : i)) } as LiveItem);
+      };
+      setItems((p) => p.map((x, i) => (i === at ? mark(x) : x)));
       void run(user.text, { ...extra, ...resendOf(user) }, true);
     },
     [run],
@@ -682,6 +756,11 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
 
   const reset = useCallback(() => {
     abort.current?.abort();
+    abort.current = null;
+    gen.current += 1;
+    loadingFor.current = 0;
+    setBusy(false);
+    setLoading(false);
     setQueue([]);
     setChatId(null);
     idRef.current = null;
@@ -694,17 +773,33 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   const open = useCallback(
     async (id: string) => {
       abort.current?.abort();
+      abort.current = null;
+      const g = ++gen.current;
+      setBusy(false);
       setQueue([]);
       // Reading the chat that is on screen again (a task ended, a change was kept) swaps its items in
       // place: the list stays, so the person's place in it stays. Only another chat shows Loading.
-      if (idRef.current !== id) setLoading(true);
-      const sent = sends.current;
+      if (idRef.current !== id) {
+        loadingFor.current = g;
+        setLoading(true);
+      }
+      let c: Awaited<ReturnType<typeof client.chat>>;
       try {
-        const c = await client.chat(id);
-        // A message sent while this read was on its way is newer than the copy it brings back: the copy
-        // would drop that message and its answer would open a second block. The new answer's own stream
-        // (and its end) bring the chat up to date instead.
-        if (sends.current !== sent && idRef.current === c.id) return;
+        c = await client.chat(id);
+      } catch (err) {
+        if (gen.current === g) setItems([{ kind: 'error', text: errorText(err) }]);
+        return;
+      } finally {
+        if (loadingFor.current === g) {
+          loadingFor.current = 0;
+          setLoading(false);
+        }
+      }
+      // Anything newer since (a message sent, a reset, another chat opened) wins over the copy this read
+      // brings back: a message's own stream brings the chat up to date, and a late copy never shows an
+      // earlier chat over the one on screen.
+      if (gen.current !== g) return;
+      {
         idRef.current = c.id;
         setChatId(c.id);
         setTitle(c.title);
@@ -720,13 +815,39 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         );
         setUsage(c.usage ?? null);
         setTask(c.task ?? null);
-      } catch (err) {
-        setItems([{ kind: 'error', text: errorText(err) }]);
+      }
+      // Its answer is still running (opened again mid-answer, from another tab or after leaving it): the
+      // panel follows the server's copy until it ends, busy, so Stop and Steer work as on a sent message.
+      if (!c.running) return;
+      const ctl = new AbortController();
+      abort.current = ctl;
+      setBusy(true);
+      try {
+        const until = Date.now() + RESUME_MS;
+        let now = c;
+        while (now.running && Date.now() < until && !ctl.signal.aborted && gen.current === g) {
+          await new Promise((r) => setTimeout(r, RESUME_EVERY_MS));
+          try {
+            now = await client.chat(id);
+          } catch {
+            continue;
+          }
+          if (ctl.signal.aborted || gen.current !== g) break;
+          setItems(now.items);
+          readSteers(now.items);
+          setUsage(now.usage ?? null);
+          setTask(now.task ?? null);
+        }
       } finally {
-        setLoading(false);
+        if (abort.current === ctl) abort.current = null;
+        if (gen.current === g) {
+          setItems(settled);
+          unsteer();
+          setBusy(false);
+        }
       }
     },
-    [client],
+    [client, readSteers, unsteer],
   );
 
   // Puts a settled card or an undone line back in place, in a hand-off section too.

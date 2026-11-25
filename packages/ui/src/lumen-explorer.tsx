@@ -35,6 +35,7 @@ import {
 import { type NodeApi, type NodeRendererProps, Tree, type TreeApi } from 'react-arborist';
 import { IconButton } from './icon-button';
 import { cn } from './lib/utils';
+import { LoadingBar, useLumenLoading, useRememberedCount } from './loading';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -158,6 +159,9 @@ export type ExplorerApi<D = unknown> = TreeApi<ExplorerItem<D>>;
 
 export interface LumenExplorerProps<D = unknown> {
   data: ExplorerItem<D>[];
+  /** Names the list, so inside a loading `LumenLoading` scope it draws as many bar rows as it showed
+   *  last time on this device (see docs/parts/loading.md). Without it the list draws three. */
+  id?: string;
   /** The tree's accessible name. */
   label: string;
   toggles?: ExplorerToggle<D>[];
@@ -1001,6 +1005,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
  */
 export function LumenExplorer<D = unknown>({
   data,
+  id,
   label,
   toggles = [],
   menu,
@@ -1079,6 +1084,12 @@ export function LumenExplorer<D = unknown>({
   }, [selection, data]);
 
   const h = rowHeight ?? (touch ? 36 : 26);
+  // Inside a loading scope the rows are not known yet: bars in the icon and name slots, as many rows as
+  // the list showed last time, never the rows it holds now (they may be another view's).
+  const loading = useLumenLoading();
+  const shown = (xs: ExplorerItem<D>[]): number =>
+    xs.reduce((a, x) => a + 1 + shown(x.children ?? []), 0);
+  const skeletonRows = useRememberedCount(id, shown(data), loading);
   const box = touch ? 'size-6' : 'size-4';
   const slot = touch ? 'size-7' : 'size-5';
   const glyph = touch ? '[&_svg]:size-4.5' : '[&_svg]:size-3.5';
@@ -1203,7 +1214,23 @@ export function LumenExplorer<D = unknown>({
       {ExplorerRow<D>}
     </Tree>
   );
-  const wrapped = <RowCtx.Provider value={ctx}>{t}</RowCtx.Provider>;
+  const wrapped = loading ? (
+    <div aria-busy="true" aria-label={label} data-loading="">
+      {Array.from({ length: skeletonRows }, (_, i) => (
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: placeholder rows
+          key={i}
+          className={cn('flex items-center gap-1.5 px-1.5', !flat && (touch ? 'pl-7' : 'pl-5'))}
+          style={{ height: h }}
+        >
+          <LoadingBar className={cn(box, 'shrink-0 rounded-sm')} />
+          <LoadingBar className={cn('h-3', ['w-28', 'w-20', 'w-36', 'w-24'][i % 4])} />
+        </div>
+      ))}
+    </div>
+  ) : (
+    <RowCtx.Provider value={ctx}>{t}</RowCtx.Provider>
+  );
   return fill ? (
     <div
       ref={measure}

@@ -26,9 +26,15 @@ export interface ModelDef {
    * effort is sent as asked; an effort not listed is never sent (the call runs at the model's own).
    */
   efforts?: AssistantEffort[];
+  /**
+   * The effort the provider runs it at when none is sent (its docs), so a picker can mark it.
+   * Left out where the provider names none.
+   */
+  defaultEffort?: AssistantEffort;
 }
 
-/** Claude 5.5 efforts (Anthropic's effort docs: low to max on Haiku, Sonnet and Opus 5.5). */
+/** Claude 5.5 efforts (Anthropic's effort docs: low to max on Haiku, Sonnet and Opus 5.5). Left
+ *  unset, Haiku and Opus 5.5 run at medium and Sonnet 5.5 at high (the same docs). */
 const CLAUDE_EFFORTS: AssistantEffort[] = ['low', 'medium', 'high', 'max'];
 /** GPT-6 reasoning efforts the kit sends (OpenAI's reasoning guide; `max` is not one of its levels). */
 const OPENAI_EFFORTS: AssistantEffort[] = ['low', 'medium', 'high'];
@@ -44,6 +50,7 @@ export const CLAUDE_MODELS: ModelDef[] = [
     out: 0.5,
     read: 0.01,
     efforts: CLAUDE_EFFORTS,
+    defaultEffort: 'medium',
   },
   {
     id: 'claude-sonnet-5-5',
@@ -54,6 +61,7 @@ export const CLAUDE_MODELS: ModelDef[] = [
     out: 10,
     read: 0.2,
     efforts: CLAUDE_EFFORTS,
+    defaultEffort: 'high',
   },
   {
     id: 'claude-opus-5-5',
@@ -64,17 +72,21 @@ export const CLAUDE_MODELS: ModelDef[] = [
     out: 20,
     read: 0.2,
     efforts: CLAUDE_EFFORTS,
+    defaultEffort: 'medium',
   },
 ];
 
 /** OpenAI models, smallest first (list prices from OpenAI's pricing page, October 2026; Sol 6.2 November 2026). */
 export const OPENAI_MODELS: ModelDef[] = [
-  ['gpt-6-luna', 'GPT-6 Luna', 0.1, 0.5, 0.01],
-  ['gpt-6.1-terra', 'GPT-6.1 Terra', 1, 5, 0.05],
-  ['gpt-6.1-sol', 'GPT-6.1 Sol', 2, 10, 0.1],
-  ['gpt-6.2-sol', 'GPT-6.2 Sol', 2, 10, 0.1],
-  ['gpt-6-astra', 'GPT-6 Astra', 10, 50, 1],
-].map(([id, label, i, o, r]) => ({
+  // id, label, prices, then the effort it runs at when none is sent (OpenAI's model pages and
+  // reasoning guide; 6.2 Sol's page names none, and its answers echo `reasoning.effort: medium`,
+  // checked 2026-11-25; Astra's pages name none, so it has none).
+  ['gpt-6-luna', 'GPT-6 Luna', 0.1, 0.5, 0.01, 'medium'],
+  ['gpt-6.1-terra', 'GPT-6.1 Terra', 1, 5, 0.05, 'medium'],
+  ['gpt-6.1-sol', 'GPT-6.1 Sol', 2, 10, 0.1, 'medium'],
+  ['gpt-6.2-sol', 'GPT-6.2 Sol', 2, 10, 0.1, 'medium'],
+  ['gpt-6-astra', 'GPT-6 Astra', 10, 50, 1, undefined],
+].map(([id, label, i, o, r, base]) => ({
   id: id as string,
   label: label as string,
   provider: 'openai' as const,
@@ -83,6 +95,7 @@ export const OPENAI_MODELS: ModelDef[] = [
   out: o as number,
   read: r as number,
   efforts: OPENAI_EFFORTS,
+  ...(base ? { defaultEffort: base as AssistantEffort } : {}),
 }));
 
 /**

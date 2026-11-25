@@ -20,6 +20,7 @@ What each part draws inside a loading scope:
 | `LumenConnection` | Its row as above, so no "Not set up" meta and no Add |
 | `Tile`, `TileToggleGroup` | Its label stays; the number, caption, lines and spark are bars of the same heights |
 | `FactList` | Its labels stay; each value is a bar |
+| `LumenExplorer id` | As many rows as it showed last time on this device, each an icon bar and a name bar; never the rows it holds now (they may still be another view's). Without `id`, three |
 | `LumenView`, `LumenTable` | Its own header, then the rows it showed last as bars in each column, numbers on the right edge. No empty state, "No rows match", count, pager or Total |
 
 A section built from its data (it cannot draw its rows before the read answers) uses `LumenPending` instead: `<LumenPending id="…" load={load} data={q.data}>{(data) => …}</LumenPending>`. Until the read answers it draws the order of field rows and expand rows the section showed last time on this device, each as bars (`shape` fixes it when the caller knows it, such as `"r"` for one row). A failed read shows the kit's error with Retry. The kit's own assistant, notification and email settings use it.
