@@ -1,3 +1,4 @@
+import * as React from "react"
 import { cn } from "../lib/utils"
 import * as ResizablePrimitive from "react-resizable-panels"
 
@@ -17,8 +18,22 @@ function ResizablePanelGroup({
   )
 }
 
-function ResizablePanel({ ...props }: ResizablePrimitive.PanelProps) {
-  return <ResizablePrimitive.Panel data-slot="resizable-panel" {...props} />
+// A panel drawn at 0 px (collapsed, or dragged shut) is closed: it stays mounted, so work inside it keeps
+// going, but it is inert, so its controls are no Tab stop, no screen-reader item and no click target.
+function ResizablePanel({ onResize, ...props }: ResizablePrimitive.PanelProps) {
+  const [shut, setShut] = React.useState(false)
+  return (
+    <ResizablePrimitive.Panel
+      data-slot="resizable-panel"
+      data-closed={shut || undefined}
+      inert={shut || undefined}
+      onResize={(size, id, prev) => {
+        setShut(size.inPixels < 1)
+        onResize?.(size, id, prev)
+      }}
+      {...props}
+    />
+  )
 }
 
 function ResizableHandle({
