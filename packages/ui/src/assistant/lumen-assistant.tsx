@@ -92,7 +92,7 @@ import { type ScreenApi, screenMapFor, useAssistantScreen } from '../assistant-s
 import { FactList } from '../fact-list';
 import { deviceNow } from '../hooks/use-device';
 import { IconButton } from '../icon-button';
-import { errorText } from '../integrations';
+import { errorText, plainError } from '../integrations';
 import { lazyPart } from '../lazy-part';
 import { cn } from '../lib/utils';
 import {
@@ -998,7 +998,7 @@ function Item({
           )}
         >
           <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
-          {item.text}
+          {plainError(item.text)}
         </p>
       );
   }

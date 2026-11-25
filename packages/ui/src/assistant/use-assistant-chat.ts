@@ -21,6 +21,16 @@ import type { AssistantAdapter } from './client';
 /** How long a panel whose stream was cut keeps reading the chat for the answer to end, and how often. */
 const RESUME_MS = 5 * 60_000;
 const RESUME_EVERY_MS = 2_000;
+/** A stream with no event this long is checked against the server's copy of the chat. */
+const QUIET_CHECK_MS = 15_000;
+
+/** Steps that have ended, nested ones included: how far an answer has got. */
+const endedSteps = (items: readonly ChatItem[] | readonly LiveItem[]): number =>
+  (items as readonly LiveItem[]).reduce((n, i) => {
+    if (i.kind === 'step') return n + ('live' in i && i.live ? 0 : 1);
+    if (i.kind === 'handoff' || i.kind === 'task') return n + endedSteps(i.items as LiveItem[]);
+    return n;
+  }, 0);
 
 /** The browser's IANA zone, sent with each message for the assistant's bearings. */
 function browserZone(): string | undefined {
@@ -410,8 +420,56 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       const sent = [...(outcomes.current?.values() ?? [])];
       outcomes.current?.clear();
       keepOutcomes(new Map());
+      // The app was updated while the answer ran: the server carries it on or keeps how it ended.
+      let updated = false;
+      // A stream that went quiet while the server's answer moved on (the server keeps each step as it
+      // ends): the panel follows the server's copy instead, so the screen never sits behind it.
+      let last = Date.now();
+      let taken = false;
+      let shown = 0;
+      setItems((p) => {
+        shown = endedSteps(p);
+        return p;
+      });
+      let release: () => void = () => undefined;
+      const takenOver = new Promise<void>((r) => {
+        release = r;
+      });
+      let checking = false;
+      const watch = setInterval(async () => {
+        const id = idRef.current;
+        if (taken || checking || !id || ctl.signal.aborted || Date.now() - last < QUIET_CHECK_MS)
+          return;
+        checking = true;
+        try {
+          const c = await client.chat(id);
+          if (taken || Date.now() - last < QUIET_CHECK_MS) return;
+          if (c.running && endedSteps(c.items) <= shown) return;
+          taken = true;
+          setItems(c.items);
+          setUsage(c.usage ?? null);
+          setTask(c.task ?? null);
+          let now = c;
+          while (now.running && !ctl.signal.aborted) {
+            await new Promise((r) => setTimeout(r, RESUME_EVERY_MS));
+            try {
+              now = await client.chat(id);
+            } catch {
+              continue;
+            }
+            setItems(now.items);
+            setUsage(now.usage ?? null);
+            setTask(now.task ?? null);
+          }
+          release();
+        } catch {
+          // a read that fails is tried again on the next check
+        } finally {
+          checking = false;
+        }
+      }, QUIET_CHECK_MS / 3);
       try {
-        await client.send(
+        const sending = client.send(
           {
             message,
             ...(idRef.current ? { chat_id: idRef.current } : {}),
@@ -420,6 +478,9 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
             ...(sent.length ? { outcomes: sent } : {}),
           },
           (e) => {
+            last = Date.now();
+            if (taken) return;
+            if (e.event === 'step') shown += 1;
             if (e.event === 'chat') {
               idRef.current = e.data.id;
               setChatId(e.data.id);
@@ -439,11 +500,23 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
                 steeredInto(p, { kind: 'user', text: e.data.text, at: e.data.at, steered: true }),
               );
             } else if (e.event === 'unsteered') unsteer(e.data.texts);
-            else setItems((p) => applyEvent(p, e));
+            else {
+              if (e.event === 'error' && e.data.code === 'app_updated') updated = true;
+              setItems((p) => applyEvent(p, e));
+            }
           },
           ctl.signal,
         );
+        // Followed from the server's copy instead: a late end of this stream changes nothing.
+        sending.catch(() => undefined);
+        await Promise.race([sending, takenOver]);
+        if (taken) return;
+        // So the panel shows what the server holds (the answer carried on, or its end kept), never
+        // only what this stream saw before it was cut.
+        const id = idRef.current;
+        if (updated && id && !ctl.signal.aborted) await resumed(id, ctl.signal);
       } catch (err) {
+        if (taken) return;
         // The stream was cut (the network dropped, not Stop): the answer goes on on the server, so the
         // panel reads the chat again until it ends and shows it as saved, never a cut-off error.
         const id = idRef.current;
@@ -459,6 +532,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
         if (ctl.signal.aborted) setItems((p) => [...p, { kind: 'stopped' }]);
         else setItems((p) => [...p, { kind: 'error', text: errorText(err) }]);
       } finally {
+        clearInterval(watch);
         setItems(settled);
         // Steers the answer never read (Stop, an error) wait for the next answer instead.
         unsteer();
