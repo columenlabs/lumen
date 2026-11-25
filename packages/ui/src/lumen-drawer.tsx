@@ -150,7 +150,16 @@ export function LumenDrawer({
     // Not modal on desktop: the assistant, docked beside it, stays usable while the drawer is open.
     <Sheet open={open} onOpenChange={(o) => !o && onClose()} modal={isMobile}>
       {isMobile ? (
-        <SheetContent side="bottom" className="max-h-[85svh] gap-0 overflow-hidden">
+        <SheetContent
+          side="bottom"
+          className="max-h-[85svh] gap-0 overflow-hidden"
+          // The sheet takes focus itself, not its first control: a focused button would open its
+          // tooltip on a phone, and the first Esc would close that tooltip instead of the sheet.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement).focus();
+          }}
+        >
           <SheetHeader className="order-first shrink-0 border-b pt-3">{head}</SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto pt-2">{body}</div>
           {foot}
