@@ -184,13 +184,14 @@ export function planFetch(base: typeof fetch = fetch, name = 'Assistant'): typeo
 
 /**
  * xAI keeps a prompt cache per server and picks the server by the request's `prompt_cache_key` or
- * its `x-grok-conv-id` header (docs.x.ai, prompt caching: "functions identically"; one key per
- * conversation). When the call names its conversation (`conv`, the session's id), both carry it, as
- * the Grok CLI names its own; else both carry the shared start's key. A shared body key beside a
- * per-chat header left calls that only added to the one before reading 1.2k of 27-31k (grok-4.7
- * on a plan, 3 of 18 turns in 3 six-turn chats, 2026-11-25).
+ * its `x-grok-conv-id` header (docs.x.ai, prompt caching: "functions identically"). Both carry the
+ * shared start's key, so every chat that starts alike reaches the server holding that start. A key
+ * per chat sent each new chat to a server that had never seen it: a new grok-4.6 chat read 128 of
+ * its ~18k shared start every time (5 of 5), a new grok-4.7 chat 1.2k in 4 of 10, while mid-chat
+ * misses stayed as they were (4 of 15 calls on one key, 3 of 13 on a key per chat; gamma,
+ * 2026-11-24/25).
  */
-export function xaiFetch(base: typeof fetch = fetch, plan = false, conv?: string): typeof fetch {
+export function xaiFetch(base: typeof fetch = fetch, plan = false): typeof fetch {
   // A Grok plan call carries the Grok CLI's headers at its current version (`grokPlanFetch`).
   const send = plan ? grokPlanFetch(base) : base;
   return async (input, init) => {
@@ -203,14 +204,8 @@ export function xaiFetch(base: typeof fetch = fetch, plan = false, conv?: string
     }
     if (typeof body.prompt_cache_key !== 'string') return send(input, init);
     const headers = new Headers(init.headers);
-    if (!headers.has('x-grok-conv-id'))
-      headers.set('x-grok-conv-id', conv ?? body.prompt_cache_key);
+    if (!headers.has('x-grok-conv-id')) headers.set('x-grok-conv-id', body.prompt_cache_key);
     const id = headers.get('x-grok-conv-id') ?? '';
-    let sent = init;
-    if (id && body.prompt_cache_key !== id) {
-      body.prompt_cache_key = id;
-      sent = { ...init, body: JSON.stringify(body) };
-    }
     // The request's shape, one line a call, as on a ChatGPT plan (`assistant_plan_request`): each text
     // as its length and a short hash, never its words, so a cache miss shows what the call changed.
     try {
@@ -223,7 +218,7 @@ export function xaiFetch(base: typeof fetch = fetch, plan = false, conv?: string
         }),
       );
     } catch {}
-    return send(input, { ...sent, headers });
+    return send(input, { ...init, headers });
   };
 }
 
@@ -393,7 +388,7 @@ export function aiModel(model: ModelDef, key: ModelKey, o: AiModelOptions = {}):
         ? createOpenAI({
             apiKey: key.apiKey,
             baseURL: key.plan ? GROK_PLAN_BASE_URL : XAI_BASE_URL,
-            fetch: xaiFetch(f, !!key.plan, o.calls?.session),
+            fetch: xaiFetch(f, !!key.plan),
           }).responses(model.id)
         : createOpenAI({
             apiKey: key.apiKey,
