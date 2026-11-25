@@ -1949,21 +1949,29 @@ export class Assistant {
 
   /**
    * A new chat's name from the person's first message, on the `titles` task's tier and the app's
-   * key (the app's own housekeeping, never the person's spend). Null when the app names no titles
+   * key, or whoever pays the chat when the app has no key of its own (a fraction of a cent). Null when the app names no titles
    * task, the message says too little, or the call fails or answers something that is not a name;
    * it never throws, and gives up after 8 s.
    */
   async nameChat(caller: Caller, message: string): Promise<string | null> {
     const task = this.o.titles?.task;
     if (!task || !nameable(message)) return null;
-    try {
-      const out = await this.complete(caller, {
+    const signal = AbortSignal.timeout(8000);
+    const ask = (payer?: AssistantPayer) =>
+      this.complete(caller, {
         task,
         system: chatNameSystem(this.name, this.o.app),
         prompt: `The person's message: ${message.trim().slice(0, 2000)}`,
         maxTokens: 400,
-        payer: 'app',
-        signal: AbortSignal.timeout(8000),
+        ...(payer ? { payer } : {}),
+        signal,
+      });
+    try {
+      // The app's key first; an app with none (or past its cap) names on whoever pays the chat.
+      const out = await ask('app').catch((e) => {
+        const code = (e as { code?: string }).code;
+        if (code === 'not_connected' || code === 'app_cap') return ask();
+        throw e;
       });
       return out.cut ? null : cleanName(out.text);
     } catch {
