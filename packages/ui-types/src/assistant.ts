@@ -506,6 +506,8 @@ export interface AssistantModelRow {
   label: string;
   group: string;
   provider: AssistantProvider;
+  /** The effort the provider runs it at when none is sent, marked in the effort picker. */
+  default_effort?: AssistantEffort;
 }
 
 /** One provider's keys as Settings shows them: the app's (admins see its state) and the person's. */

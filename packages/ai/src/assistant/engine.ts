@@ -1454,6 +1454,7 @@ export class Assistant {
         label: m.label,
         group: m.group,
         provider: m.provider,
+        ...(m.defaultEffort ? { default_effort: m.defaultEffort } : {}),
       })),
       tasks: this.tasks.map((t) => ({
         id: t.id,
