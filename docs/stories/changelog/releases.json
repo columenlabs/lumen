@@ -1,5 +1,161 @@
 [
   {
+    "tag": "v0.1.402",
+    "date": "2026-11-25T19:20:21Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Models declare their default effort",
+        "body": "In `@columenlabs/lumen-ai`, `ModelDef` has a new optional `defaultEffort` field holding the effort level the provider runs that model at when no effort is sent, so you can read it instead of hard-coding it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Assistant model rows carry the default effort",
+        "body": "From `@columenlabs/lumen-ui-types`, `AssistantModelRow` has a new optional `default_effort` field, so a Settings screen can show a model's default without extra lookups. It is additive, and existing rows still type-check."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The effort picker marks the default",
+        "body": "In the Settings ▸ Models effort picker, the provider's default level now shows **Default** on the right, and the \"Model default\" choice shows which level it maps to."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.401",
+    "date": "2026-11-25T19:17:01Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Shared columns for settings rows",
+        "body": "In `@columenlabs/lumen-ui`, wrap `SettingField` rows in the new `SettingColumns` with `columns={n}` and each control lines up in its own column across every row."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Column widths that fit the content",
+        "body": "`SettingColumns` takes an optional `max` prop (default `16rem`), so each column is as wide as its widest control up to that cap, and a `SettingField` with the `end` switch gets its own column."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Settings rows stay aligned on phones",
+        "body": "Inside `SettingColumns`, the `SettingField` label moves to its own line on small screens while the controls keep their shared columns beneath it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Full label on hover",
+        "body": "The `LumenSelector` trigger now sets a `title` with the full selected label, so a truncated name can be read by hovering."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.400",
+    "date": "2026-11-25T19:12:48Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A turn's end stays in its task's card",
+        "body": "In `useAssistantChat` from @columenlabs/lumen-ui, `stopped` and `error` ends now land inside the running task's block, so sending another message for the same open task no longer opens a second card and the live panel matches a reload."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A silent model call is a failure, not \"Stopped\"",
+        "body": "In `LumenAssistant`, a model call that sends nothing is now cut after 3 minutes and shown as an error with Retry, instead of reading as if the person pressed Stop."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Retry works inside a task block",
+        "body": "`LumenAssistant`'s Retry now finds a failure inside a task block and re-sends that block's newest ask, so you no longer have to retype it."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Read steers are not re-sent",
+        "body": "When `useAssistantChat` follows the server's copy (`resumed` or a quiet-stream take-over), steers that copy already shows as read now leave the queue instead of going out again as a new message."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.399",
+    "date": "2026-11-25T19:08:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Images for people signed in with a plan",
+        "body": "In `@columenlabs/lumen-ai`, `AssistantEngine.image()` no longer refuses a payer who signed in with a subscription plan, and it generates the image through the plan's built-in image tool, so you don't need a separate provider key."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One admin-chosen model per job",
+        "body": "In `createAssistant`, the new `modelsBy: 'app'` option lets an admin pick each tier's model and effort once for everyone, and with `pickTier: false` each tier becomes a job (the chat, a background task, chat names)."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New chats named by a small model",
+        "body": "`createAssistant({ titles: { task } })` and the new `Assistant.nameChat(caller, message)` give a new chat a short name from a small model, and you can override the protected `LumenAgent.nameChat(input)` hook to stream that name to the client."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A fallback model per tier",
+        "body": "The new `TierDef.fallback` field sets the model a tier runs on when nobody can pay for its own, such as a person with no plan sign-in and no shared provider key."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.398",
+    "date": "2026-11-25T19:04:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Task card Plan and Result rows no longer show raw Markdown while streaming",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` task cards now render the Plan and Result rows through the live Markdown path, so an unfinished `**` while words stream in no longer appears as literal marks."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Reply and Follow-up rows stream cleanly too",
+        "body": "In `LumenAssistant` task cards, the Reply and Follow-up rows now keep the item's `live` flag, so streamed text is tidied the same way as a plain assistant answer."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Drop-in upgrade, no code changes",
+        "body": "`LumenAssistant` keeps the same props and public API, and finished task rows still render exactly as written."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.397",
     "date": "2026-11-25T17:23:54Z",
     "takeaways": [

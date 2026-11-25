@@ -10,6 +10,24 @@ An app's Settings page: one dialog on every host, General first, then a group pe
 - One or two per-device choices of the app's own (what scrolling does, a default view): `preferences` on `LumenSettings` or `LumenShell`, `SettingField` rows added under General ▸ Preferences after the kit's. Never a section of its own for a single row. `observability={false}` hides Preferences ▸ Observability details (each view's load time) from people who don't need it, such as everyone but an app's admins.
 - Alerts split from delivery: `NotificationsSettings parts="channels"` in one section (where messages go: email, ntfy, webhooks, set up once) and `parts="events"` in another (what goes where: one line per event, a column per channel). Events with a `group` sit under its label ("Limits", "Watchdog").
 
+## Groups in the list (`sub`)
+
+A section with `sub: true` sections after it is a group in the Settings list (Sage ▸ Providers, Models, Skills). Nothing else to pass: the kit folds it.
+
+- Folded by default. The group holding the open section unfolds itself, however it was opened (a click, `?settings=`, the assistant).
+- The name opens the group's own section; the chevron at the right only folds or unfolds it (a disclosure button: `aria-expanded`, "Show/Hide <name> pages", Tab then Enter).
+- Folded, the parent carries a problem of its sections (red failed, else grey not tested), never their green, and stands selected when one of them is open.
+- Search unfolds every group (a matching section keeps its parent above it); clearing it folds them back as they were.
+- Kept while the app runs; a reload folds them again. On a phone the section picker stays a flat, indented list.
+
+```
+✦ Sage            ● ›     folded: a red or grey dot only when one of its sections has one
+⚑ Feature flags
+✦ Sage              ⌄     unfolded
+   🔑 Providers      ●
+   ▣  Models
+```
+
 ## One row standard (every setting, every app)
 
 Three kinds of row, and two questions decide the rest, so a new setting needs no new design.
