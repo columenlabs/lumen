@@ -343,6 +343,8 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
   // An adapter whose app has no steer route: Steer hides and messages queue.
   const [steerOff, setSteerOff] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  /** How many messages this panel has sent, so a chat read that a newer message overtook is dropped (`open`). */
+  const sends = useRef(0);
   const outcomes = useRef<Map<string, AssistantScreenOutcome> | null>(null);
   outcomes.current ??= readOutcomes();
   const idRef = useRef<string | null>(null);
@@ -401,6 +403,7 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
     async (message: string, extra?: Extra, retried?: boolean) => {
       const ctl = new AbortController();
       abort.current = ctl;
+      sends.current += 1;
       setBusy(true);
       if (message !== '/compact')
         setItems((p) => [
@@ -695,8 +698,13 @@ export function useAssistantChat(client: AssistantAdapter): AssistantChatState {
       // Reading the chat that is on screen again (a task ended, a change was kept) swaps its items in
       // place: the list stays, so the person's place in it stays. Only another chat shows Loading.
       if (idRef.current !== id) setLoading(true);
+      const sent = sends.current;
       try {
         const c = await client.chat(id);
+        // A message sent while this read was on its way is newer than the copy it brings back: the copy
+        // would drop that message and its answer would open a second block. The new answer's own stream
+        // (and its end) bring the chat up to date instead.
+        if (sends.current !== sent && idRef.current === c.id) return;
         idRef.current = c.id;
         setChatId(c.id);
         setTitle(c.title);
