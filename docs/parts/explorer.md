@@ -39,6 +39,8 @@ One line a row, 26px (36px with `touch`). Slots from the left, each a fixed widt
 
 `attrs` puts the app's own `data-*` attributes on the ⋯ button and the Rename item (`attrs={{ menu: {...}, rename: {...} }}`), and a toggle's `attrs` on its button, so an app can tag them for its own checks.
 
+**Loading.** Inside a `LumenLoading` scope that is loading, the explorer draws bar rows in place of its rows ([loading.md](loading.md)): as many as it showed last time under its `id`, so a view that waits on a read never shows another view's rows. Give each view of a list its own `id`.
+
 **Nothing moves.** Hover, focus, selection and an open menu change opacity, never width.
 
 ## Do / Don't

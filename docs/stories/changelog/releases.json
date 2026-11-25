@@ -1,32 +1,5 @@
 [
   {
-    "tag": "v0.1.402",
-    "date": "2026-11-25T19:20:21Z",
-    "takeaways": [
-      {
-        "kinds": [
-          "feature"
-        ],
-        "title": "Models declare their default effort",
-        "body": "In `@columenlabs/lumen-ai`, `ModelDef` has a new optional `defaultEffort` field holding the effort level the provider runs that model at when no effort is sent, so you can read it instead of hard-coding it."
-      },
-      {
-        "kinds": [
-          "improvement"
-        ],
-        "title": "Assistant model rows carry the default effort",
-        "body": "From `@columenlabs/lumen-ui-types`, `AssistantModelRow` has a new optional `default_effort` field, so a Settings screen can show a model's default without extra lookups. It is additive, and existing rows still type-check."
-      },
-      {
-        "kinds": [
-          "improvement"
-        ],
-        "title": "The effort picker marks the default",
-        "body": "In the Settings ▸ Models effort picker, the provider's default level now shows **Default** on the right, and the \"Model default\" choice shows which level it maps to."
-      }
-    ]
-  },
-  {
     "tag": "v0.1.401",
     "date": "2026-11-25T19:17:01Z",
     "takeaways": [
