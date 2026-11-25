@@ -64,7 +64,11 @@ export interface AssistantAdapter {
   removeConnector?(id: string): Promise<AssistantStatus>;
   /** Admin: lists its tools again. */
   testConnector?(id: string): Promise<Test>;
-  chats(): Promise<AssistantChatRow[]>;
+  /**
+   * The person's chats, newest first. With `scope`, only the chats started in that place (`chatScope`
+   * `current`), so a place's older chats still list when the person has many newer ones elsewhere.
+   */
+  chats(scope?: string): Promise<AssistantChatRow[]>;
   chat(id: string): Promise<AssistantChat>;
   removeChat(id: string): Promise<void>;
   /** The person's use in a month (`YYYY-MM`, this month when left out): each model, chat and run. */
@@ -162,7 +166,7 @@ export function assistantClient(base: string): AssistantAdapter {
     saveConnector: (id, input) => send('PUT', `/connectors/${encodeURIComponent(id)}`, input),
     removeConnector: (id) => send('DELETE', `/connectors/${encodeURIComponent(id)}`),
     testConnector: (id) => send('POST', `/connectors/${encodeURIComponent(id)}/test`),
-    chats: () => get('/chats'),
+    chats: (scope) => get(scope ? `/chats?scope=${encodeURIComponent(scope)}` : '/chats'),
     chat: (id) => get(`/chats/${encodeURIComponent(id)}`),
     removeChat: async (id) => {
       await send('DELETE', `/chats/${encodeURIComponent(id)}`);

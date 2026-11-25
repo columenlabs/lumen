@@ -178,7 +178,8 @@ export interface LumenAssistantProps {
    * Chats belong to a place in the app (a workspace, a project): the Chats menu lists the
    * `current` one's chats (rows whose `scope` matches) and a switch named `label` shows them all,
    * each with its place's `name`. The switch is kept on this device. A row with no `scope` shows
-   * only with the switch on.
+   * only with the switch on. The menu asks the client for the `current` place's chats
+   * (`chats(scope)`), so a server that caps its list still lists that place's older chats.
    */
   chatScope?: { current: string; label: string; name?: (scope: string) => string | undefined };
   /** Closes the panel (its ✕). */
@@ -294,11 +295,21 @@ export function LumenAssistant({
   const qc = useQueryClient();
   const status = useAssistantStatus(client);
   const [allScopes, setAllScopes] = useAllScopes(client.key);
+  // The Chats menu asks for this place's chats (`chatScope`) unless All is on, so they list however
+  // many newer chats other places have.
+  const scope = chatScope && !allScopes ? chatScope.current : undefined;
   const chats = useQuery({
-    queryKey: ['lumen-assistant', client.key, 'chats'],
-    queryFn: () => client.chats(),
+    queryKey: ['lumen-assistant', client.key, 'chats', ...(scope ? [scope] : [])],
+    queryFn: () => client.chats(scope),
     enabled: false,
   });
+  // Once the menu has been opened, the All switch reads the list it now shows.
+  const listed = useRef(false);
+  const refetchChats = chats.refetch;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new scope reads its own list
+  useEffect(() => {
+    if (listed.current) void refetchChats();
+  }, [scope, refetchChats]);
   const s = status.data;
   const name = s?.name ?? 'Assistant';
   // A finished answer changes the spend and the chats list.
@@ -457,7 +468,10 @@ export function LumenAssistant({
           value={chat.chatId ?? undefined}
           toggle={chatScope && { label: chatScope.label, on: allScopes, onChange: setAllScopes }}
           note={`Chats are kept ${keepDays} days after their last message.`}
-          onRefresh={() => void chats.refetch()}
+          onRefresh={() => {
+            listed.current = true;
+            void chats.refetch();
+          }}
           onOpen={(c) => void chat.open(c.id)}
         />
         <IconButton
