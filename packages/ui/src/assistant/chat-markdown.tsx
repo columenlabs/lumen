@@ -6,10 +6,15 @@
  * A table keeps the kit's rules: every row is one line, a long value ends in an ellipsis with the
  * whole text in its hover, a column of numbers right-aligns on one edge (header included) in
  * tabular figures, and a table wider than the chat scrolls sideways inside its own box.
+ *
+ * While an answer still streams (`live`), remend closes the Markdown it has cut off (an open `**`,
+ * a half link, an unclosed code span), so no raw marks show for the moment before the rest arrives.
+ * A finished answer is drawn as written.
  */
 import type { ComponentProps, ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remend, { type RemendOptions } from 'remend';
 import { cn } from '../lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 
@@ -86,6 +91,21 @@ function rehypeNumberColumns() {
   return (tree: HNode) => visit(tree);
 }
 
+/**
+ * remend's options while an answer streams: a half link shows as its words, and a mark the stream has
+ * only just opened (`text **`, nothing after it yet) waits off screen until its first letter arrives.
+ */
+const STREAMING: RemendOptions = {
+  linkMode: 'text-only',
+  handlers: [
+    {
+      name: 'open-mark',
+      priority: 0,
+      handle: (t) => t.replace(/(^|\s)(\*{1,3}|_{1,3}|~~|`{1,3})$/, '$1'),
+    },
+  ],
+};
+
 type CellProps = { children?: ReactNode; 'data-num'?: string; 'data-text'?: string };
 
 // A header keeps the label font; only its edge follows the numbers under it.
@@ -116,7 +136,7 @@ const components = {
   ),
 };
 
-export default function ChatMarkdown({ children }: { children: string }) {
+export default function ChatMarkdown({ children, live }: { children: string; live?: boolean }) {
   return (
     <Markdown
       remarkPlugins={[remarkGfm]}
@@ -125,7 +145,7 @@ export default function ChatMarkdown({ children }: { children: string }) {
       unwrapDisallowed
       components={components}
     >
-      {children}
+      {live ? remend(children, STREAMING) : children}
     </Markdown>
   );
 }
