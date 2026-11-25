@@ -153,6 +153,12 @@ export interface TierDef {
    * `pickTier: false` the app picks, so this wins over a person's saved effort.
    */
   effort?: AssistantEffort;
+  /**
+   * The model the tier runs on when nobody can pay for its own (a ChatGPT-plan model for a person
+   * with no sign-in and no shared OpenAI key): its provider's key or sign-in pays instead, at the
+   * tier's effort where that model takes it. Left out, such a turn waits for a key.
+   */
+  fallback?: string;
 }
 
 /** The effort a call to `model` sends: `want` when the model takes it, else the model's own (`default`). */

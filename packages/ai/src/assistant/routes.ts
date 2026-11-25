@@ -45,6 +45,7 @@ import {
   ASSISTANT_OWN_WAYS,
   ASSISTANT_PAYERS,
   ASSISTANT_SCREEN,
+  type AssistantEffort,
   type AssistantProvider,
   type AssistantSettingsPatch,
   COMPACT_CHOICES,
@@ -174,6 +175,21 @@ function settingsChange(a: Assistant, groups: string[], b: Record<string, unknow
   };
 }
 
+/** The admin's tier picks with `patch` applied (checked by `settingsChange`). */
+function appTiers(
+  a: Assistant,
+  now: Record<string, { model: string; effort: AssistantEffort }>,
+  patch: NonNullable<AssistantSettingsPatch['tiers']>,
+) {
+  const out = { ...now };
+  for (const [id, t] of Object.entries(patch)) {
+    const tier = a.tiers.find((x) => x.id === id);
+    const prev = out[id] ?? { model: tier?.model ?? '', effort: tier?.effort ?? 'default' };
+    out[id] = { model: t.model ?? prev.model, effort: t.effort ?? prev.effort };
+  }
+  return out;
+}
+
 export function assistantRoutes(
   app: Assistant,
   o: AssistantRoutesOptions,
@@ -233,8 +249,23 @@ export function assistantRoutes(
 
         case 'PUT /settings': {
           const groups = (await a.status(caller)).groups.map((g) => g.id);
-          const change = settingsChange(a, groups, await body(req));
+          const b = await body(req);
+          const change = settingsChange(a, groups, b);
           if (typeof change === 'string') return fail(change);
+          if (a.modelsByApp) {
+            // The admin's picks are everyone's: kept in the app's documents, never a person's.
+            const { tiers, tasks } = b as AssistantSettingsPatch;
+            if (tasks !== undefined) return fail('The app picks which tier each task runs on.');
+            if (tiers !== undefined) {
+              const no = admin();
+              if (no) return no;
+              await a.state.setApp((d) => ({ ...d, tiers: appTiers(a, d.tiers ?? {}, tiers) }));
+            }
+            const { tiers: _t, ...own } = change({});
+            if (Object.keys(own).length)
+              await a.state.setPerson(caller.id, (d) => ({ ...d, ...own }));
+            return status();
+          }
           await a.state.setPerson(caller.id, change);
           return status();
         }

@@ -708,6 +708,11 @@ export interface AssistantStatus {
    * panel shows no tier menu, `#` or /model. Left out, the person picks.
    */
   pick_tier?: boolean;
+  /**
+   * `app` when an admin picks each tier's model for everyone (`createAssistant` `modelsBy`):
+   * `tiers` carries the admin's picks, Settings shows them only in the admin's Models section.
+   */
+  models_by?: 'app';
   models: AssistantModelRow[];
   tasks: { id: string; label: string; about: string; tier: string }[];
   groups: {

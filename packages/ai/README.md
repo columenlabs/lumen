@@ -73,6 +73,8 @@ const assistant = createAssistant({
   system: 'You help people with their notes. Use the notes tools for facts.',
   hideModel: true, // never names its model, provider or tier; asked, it is just "Helper"
   // pickTier: false, // the app picks each turn's tier (agentTurn input.tier); no tier menu in the panel and no hand-off: its pick is the only routing
+  // modelsBy: 'app', // an admin picks each tier's model and effort for everyone (assistantAdminSections models: true); with pickTier: false each tier is a job
+  // titles: { task: 'chat_name' }, // new chats get a short name from a small model (nameChat; a LumenAgent returns it from its nameChat)
   // Smallest first. The app names them; a person picks each tier's model and effort.
   tiers: [
     { id: 'fast', label: 'Fast', about: 'Quick lookups', model: 'claude-haiku-5-5' },
@@ -289,6 +291,8 @@ This holds only while later calls read most of the prompt from cache: a turn's c
 **A write in progress.** A tool line starts (`step_start`) as soon as the model starts the call, while it is still writing the arguments. For a Read + write tool it carries `write: true`, and `useAssistantChat` marks that running step `writing` until its result lands or the answer ends, so an app can show what the tool changes as being changed now (a pending edit is not ready to accept while the model rewrites it).
 
 **Steps.** One answer makes at most `plan.maxSteps` model calls (`MAX_STEPS`, 8). The last one runs with no tools and `LAST_STEP_NOTE`, so an answer always ends in words: what it found, and what is left when the task did not fit.
+
+**Jobs and chat names.** With `modelsBy: 'app'` an admin sets each tier's model and effort once for everyone (`PUT /settings {tiers}`, admins only, kept in the app's documents); Settings shows them in the admin's Models section (`assistantAdminSections({ models: true })`) and the person's own Models section is left out (`assistantSettingsSections({ models: false })`). With `pickTier: false` too, each tier is a job (the chat, a background task, chat names), and the remesh-style "one model per job" falls out. `titles: { task }` names each new chat: a `LumenAgent` overrides `nameChat(input)` to return `assistant.nameChat(caller, input.message)`, which runs on that task's tier and the app's key, gives up after 8 s and never throws; the agent sends the name as a second `chat` event while the answer runs and keeps it as the chat's title. A first message under three words keeps itself as the name. A tier's `fallback` names the model it runs on when nobody can pay for its own (a ChatGPT-plan model for a person who has not signed in and no shared OpenAI key): `{ id: 'studio', model: 'gpt-6.2-sol', effort: 'medium', fallback: 'claude-sonnet-5-5' }` answers on the person's ChatGPT plan, else on Sonnet.
 
 **Stop.** The panel's Stop calls the adapter's `stop(chatId)`; the app routes `POST /chats/:id/stop` to the agent's `stop()`, the answer ends on the server with what it said and made so far, and its stream ends with `stopped`. An app without the route falls back to dropping the stream after a few seconds; the answer then runs on (`waitUntil`) and its result is in the chat when it is opened again.
 

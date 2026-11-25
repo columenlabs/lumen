@@ -137,23 +137,27 @@ function General({ client }: { client: AssistantAdapter }) {
     <WithStatus id="general" client={client}>
       {(s) => {
         const above = s.tiers.slice(s.tiers.findIndex((t) => t.id === s.tier) + 1);
+        // The app picks each turn's tier (pick_tier false): no tier, hand-off or advice rows.
+        const picks = s.pick_tier !== false;
         return (
           <div className="flex flex-col">
-            <SettingField label="Tier">
-              <LumenSelector
-                label="Tier"
-                size="sm"
-                className="w-44"
-                value={s.tier}
-                options={s.tiers.map((t) => ({
-                  value: t.id,
-                  label: t.label,
-                  detail: t.model_label,
-                }))}
-                onChange={(tier) => void set({ tier })}
-              />
-            </SettingField>
-            {s.tiers.length > 1 && (
+            {picks && (
+              <SettingField label="Tier">
+                <LumenSelector
+                  label="Tier"
+                  size="sm"
+                  className="w-44"
+                  value={s.tier}
+                  options={s.tiers.map((t) => ({
+                    value: t.id,
+                    label: t.label,
+                    detail: t.model_label,
+                  }))}
+                  onChange={(tier) => void set({ tier })}
+                />
+              </SettingField>
+            )}
+            {picks && s.tiers.length > 1 && (
               <SettingField
                 label="Hand off the work"
                 info="On its own, a higher tier takes one task in its own section of the chat and sends back a memo. It costs more."
@@ -168,7 +172,7 @@ function General({ client }: { client: AssistantAdapter }) {
                 />
               </SettingField>
             )}
-            {s.tiers.length > 1 && (
+            {picks && s.tiers.length > 1 && (
               <SettingField
                 label="Ask for advice"
                 info="A bigger tier reads the chat and sends a plan before hard questions. It runs no tools, at most twice an answer."
@@ -625,6 +629,8 @@ function Models({ client }: { client: AssistantAdapter }) {
               );
             })}
             {s.tasks.length > 1 &&
+              s.pick_tier !== false &&
+              !s.models_by &&
               s.tasks.map((task) => (
                 <SettingField key={task.id} label={`${task.label} starts on`}>
                   <LumenSelector
@@ -1257,8 +1263,14 @@ export function assistantAdminSections({
   allowance = false,
   providers,
   connectors = false,
+  models = false,
 }: {
   client: AssistantAdapter;
+  /**
+   * Add Models: each tier's (each job's) model and effort for everyone. For an app whose server
+   * sets `modelsBy: 'app'`; pass `models: false` to `assistantSettingsSections` beside it.
+   */
+  models?: boolean;
   /** Add Allowance requests (the app set `allowance` on the server). */
   allowance?: boolean;
   /** Add Connectors: outside MCP servers the assistant may use (the app set `connectors` on the server). */
@@ -1296,6 +1308,17 @@ export function assistantAdminSections({
       ];
   return [
     ...keys,
+    ...(models
+      ? [
+          {
+            id: 'assistant-job-models',
+            title: 'Models',
+            icon: LayersIcon,
+            description: "Each job's model and effort, for everyone",
+            content: <Models client={client} />,
+          },
+        ]
+      : []),
     ...(allowance
       ? [
           {
@@ -1331,10 +1354,14 @@ export function assistantSettingsSections({
   web = true,
   allowance = false,
   usage = false,
+  models = true,
 }: {
   client: AssistantAdapter;
   /** The assistant's name, the parent section's title. */
   name: string;
+  /** Show Models (each tier's model, the person's own). False when an admin picks them for
+   *  everyone (`modelsBy: 'app'`, `assistantAdminSections` `models`). */
+  models?: boolean;
   /** Show the Web section (the app set up `web` on the server). */
   web?: boolean;
   /** Show Allowance: what is left on the shared keys, and Request more (`allowance` on the server). */
@@ -1348,7 +1375,7 @@ export function assistantSettingsSections({
       id: 'assistant',
       title: name,
       icon: SparklesIcon,
-      description: 'Which tier answers, and when it asks a bigger one',
+      description: 'How it answers, compacts and moves the screen',
       content: <General client={client} />,
     },
     {
@@ -1359,14 +1386,18 @@ export function assistantSettingsSections({
       description: 'Your own key for each provider',
       content: <Providers client={client} usage={usage} />,
     },
-    {
-      id: 'assistant-models',
-      title: 'Models',
-      icon: LayersIcon,
-      sub: true,
-      description: "Each tier's model and effort",
-      content: <Models client={client} />,
-    },
+    ...(models
+      ? [
+          {
+            id: 'assistant-models',
+            title: 'Models',
+            icon: LayersIcon,
+            sub: true,
+            description: "Each tier's model and effort",
+            content: <Models client={client} />,
+          },
+        ]
+      : []),
     {
       id: 'assistant-tools',
       title: 'Tools',

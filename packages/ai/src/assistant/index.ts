@@ -13,6 +13,7 @@
  * calls OpenAI itself (`LumenChatgptSignin` is the panel's part for it).
  */
 export * from './bearings';
+export * from './chat-name';
 export * from './chatgpt';
 export * from './grok';
 export * from './connectors';
