@@ -374,6 +374,7 @@ export {
   reloadForNewBuild,
   reportError,
   watchNewBuilds,
+  type WatchNewBuildsOptions,
 } from './route-error';
 export {
   LumenSettings,
