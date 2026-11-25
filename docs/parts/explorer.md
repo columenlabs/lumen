@@ -31,7 +31,7 @@ One line a row, 26px (36px with `touch`). Slots from the left, each a fixed widt
 
 **The ⋯ menu has no slot.** On hover it floats just left of the field and toggles, on a fade of the row's colour, over the end of the name or meta. It never covers a value. Right-click opens the same menu. Opening it picks the row first when it is not picked, because the menu acts on what is picked. A row whose `menu` returns nothing has no ⋯ (a group of parameters). `renameInMenu` adds Rename. With `touch` there is no hover: the ⋯ gets a slot of its own and is always shown, a long press shows the full name, and a tap on a picked row unpicks it.
 
-`locked` rows take no rename and no drops (a group the app builds itself); drag needs `onMove`.
+`locked` rows take no rename and no drops (a group the app builds itself); drag needs `onMove`. Two explorers that take drags on one page (a dialog's over the page's) each get their own `dndRoot`: drag and drop allows one per root.
 
 `open` sets a folder's first state over `openByDefault` (a loop's passes start folded).
 
