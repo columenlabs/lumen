@@ -1,5 +1,768 @@
 [
   {
+    "tag": "v0.1.388",
+    "date": "2026-11-25T04:57:33Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A model call now names its conversation in both routing signals",
+        "body": "In `@columenlabs/lumen-ai`, `xaiFetch` now sends the conversation's id in the request body's `prompt_cache_key` as well as in the `x-grok-conv-id` header, so the two signals agree."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Calls without a session stay consistent",
+        "body": "When you call `xaiFetch` without a session, it still sends the shared key (`lumen-shared`) in both `prompt_cache_key` and `x-grok-conv-id`, so you don't need to change anything for session-less calls."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Better prompt-cache reuse from the second turn on",
+        "body": "Multi-turn chats through `xaiFetch` no longer send two different keys on one call, which should stop the occasional near-total cache misses on follow-up turns. The target is at least 80% cached input from turn 2."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.387",
+    "date": "2026-11-25T04:19:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Request shape logging for `xaiFetch`",
+        "body": "In `@columenlabs/lumen-ai`, `xaiFetch` now writes one `xai_request` log line per call, so when a prompt cache miss shows up you can compare that call's request with the one before it."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "Hashes instead of prompt text in request logs",
+        "body": "The `xai_request` line from `xaiFetch` records each text as a short hash plus its length, hashes the conversation id header, and leaves out the token, so you can turn it on without leaking words or credentials."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Same log shape as `assistant_plan_request`",
+        "body": "The `xai_request` line carries the same kind of fields as the existing `assistant_plan_request` line, including `plan`, so one query can compare cache behavior across plans."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.386",
+    "date": "2026-11-25T03:01:35Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Chat panel recovers when a stream drops mid-answer",
+        "body": "In `useAssistantChat` from `@columenlabs/lumen-ui`, a send that ends without the answer's own `done` (an error event, a thrown error or a cut connection) now makes the panel read the chat again, so a turn the server finished no longer stays on Building."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Panel follows the server's copy until the answer ends",
+        "body": "When `useAssistantChat` finds the server still running the answer, or holding more ended steps than the panel showed, it updates the chat items on every read, so the card moves with the server without a reload."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Refusals keep what the panel showed",
+        "body": "If the re-read finds nothing new and the server is not running the answer, for example a refusal before the run, `useAssistantChat` keeps the error and steps already on screen instead of replacing them."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.385",
+    "date": "2026-11-25T02:21:45Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A failed preload while offline no longer reloads the tab",
+        "body": "In `@columenlabs/lumen-ui`, `watchNewBuilds` now ignores a failed preload when the browser is offline, so a dropped connection can't send the tab to the browser's offline page."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A failed preload only reloads when a new build is actually out",
+        "body": "`watchNewBuilds` now runs the same `newBuildOut` check as `watchDeploys` before acting, so a failed file with no new deploy no longer triggers a reload."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose how your app reacts to a new build",
+        "body": "`watchNewBuilds(router?, { onNewBuild })` takes a handler, so an app whose page can hold unsaved work or a live answer can reload only once that is safe."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "`reloadForNewBuild()` waits until you are back online",
+        "body": "When called offline, it now waits for the `online` event before reloading, so the page never lands on a blank offline screen."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.384",
+    "date": "2026-11-25T01:49:37Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Finished steps now survive reloads and restarts",
+        "body": "`LumenSession` in `@columenlabs/lumen-ai/agent` now saves an answer's steps as each one ends (text done, tool output or error), so an interrupted turn keeps the work that already ran instead of keeping only the person's message."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Turn endings are stored with the turn",
+        "body": "`LumenSession` now records an error (its plain words and `code`, including `app_updated`) or a stop (`cap`, `limit`, or Stop) in the session kv under `ends`, so the failure or stop line is still there after a reload."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`itemsOf` draws how a turn ended",
+        "body": "`itemsOf` now shows the stored ending after that turn, as the same item the live stream drew, so a reloaded chat looks like the one in the open tab."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.383",
+    "date": "2026-11-25T00:45:44Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Give each explorer its own drag-and-drop root",
+        "body": "In `@columenlabs/lumen-ui`, `LumenExplorer` has a new optional `dndRoot` prop (an `HTMLElement | null`), so you can put an explorer in a dialog over another explorer on the page and both can accept drags."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.382",
+    "date": "2026-11-25T00:41:05Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Rollback bars in LumenExplorer",
+        "body": "In `@columenlabs/lumen-ui`, `LumenExplorer`'s new `bars` prop takes a list of `ExplorerBar` objects, each drawing a draggable rollback marker under the row named by its `at` field, so you can build a history list like a CAD feature tree."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Choose a folder's first open state",
+        "body": "On an `ExplorerItem`, the new `open` field sets whether that folder starts open or folded, overriding `openByDefault`, so a loop's passes can start folded while other folders stay open."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Per-row toggle attributes",
+        "body": "`ExplorerToggle`'s `attrs` option can now be a function of the row as well as a plain object, so one visibility toggle can tag rows of different kinds (such as dimensions and sections) differently."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.381",
+    "date": "2026-11-24T23:47:47Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Put your own control in an Explorer row",
+        "body": "In `LumenExplorer` from @columenlabs/lumen-ui, the new `ExplorerItem.control` option renders your own control in the field slot, for values the built-in `field` (number, text, switch) can't hold, such as a list, a vector, or a value in your app's own units with limits that depend on other values."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Custom controls line up with built-in fields",
+        "body": "In `LumenExplorer`, an item's `control` sits `fieldWidth` wide inside a borderless `fieldset` named for the row, so custom and built-in values stay aligned and the control has an accessible group name."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Clicks and keys stay with your control",
+        "body": "In `LumenExplorer`, clicks, key presses and double-clicks inside `ExplorerItem.control` no longer pick the row, start a rename or move the selection with the arrow keys, so you can build inputs without fighting the row's own handling."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.380",
+    "date": "2026-11-24T23:03:03Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One explorer row and tree",
+        "body": "From `@columenlabs/lumen-ui`, the new `LumenExplorer` component renders parts, parameters, build steps, dimensions, folders or a selection as one virtualized tree with keyboard support, multi-select, rename and drag into a folder."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Editable fields and toggles on every row",
+        "body": "In `LumenExplorer`, a row's field accepts a number, text or switch and commits on Enter or blur, and its toggles take `slot: 'rail' | 'icon' | 'menu'`, `quiet` and `when`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Controlled selection, rename and move",
+        "body": "`LumenExplorer` takes `data`, `selection` with `onSelect`, `onRename`, `onMove`, `canDrop`, `renameInMenu` and `apiRef`, and fills its parent when `height` is left out."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Row text tokens",
+        "body": "The new theme tokens `text-row` and `text-row-meta` set the size of explorer row names and meta text without adding magic numbers to your own styles."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.379",
+    "date": "2026-11-24T22:23:20Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Boot guard waits for files to load before judging a page stuck",
+        "body": "The boot guard's 30-second \"nothing drew\" timer now starts at the window's `load` event instead of at page open, so an app on a slow connection that is still downloading its files is no longer reloaded by mistake."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.378",
+    "date": "2026-11-24T22:17:44Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Boot guard keeps a page from sticking on its splash after a deploy",
+        "body": "Add `bootGuard({ splash, name, timeoutMs? })` from `@columenlabs/lumen-ui/boot` to the `plugins` array in your Vite config, and a page that fails to load right after a deploy reloads itself onto the current build."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Use the guard without Vite",
+        "body": "`bootGuardScript()` from `@columenlabs/lumen-ui/boot` returns the same guard script as a string, so you can inline it first in `<head>` with any other build setup."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A clear stop when loading keeps failing",
+        "body": "After 3 reload attempts in 2 minutes, the splash that you pass to `bootGuard` shows \"<name> couldn't load. Check your connection, then reload.\" with a Reload icon button instead of looping."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.377",
+    "date": "2026-11-24T22:04:08Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Each chat names itself to the provider",
+        "body": "In `@columenlabs/lumen-ai`, `aiModel` now sends the session id you set in `AiModelOptions.calls.session` as the `x-grok-conv-id` header, so a long chat keeps reading its own cached prompt instead of sometimes missing it."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Same behavior when no session is set",
+        "body": "If you leave `AiModelOptions.calls.session` unset, `aiModel` still sends the cache key in `x-grok-conv-id`, so existing setups keep working without changes."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Optional third argument on `xaiFetch`",
+        "body": "In `@columenlabs/lumen-ai`, `xaiFetch` gains an optional third argument, so existing two-argument calls compile and run unchanged."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.376",
+    "date": "2026-11-24T21:36:49Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Coverage map shows every summary column on a phone",
+        "body": "In `@columenlabs/lumen-ui`, `LumenCoverageMap` now draws every summary column your app passes on every device, so a stale Last date is no longer hidden on a phone."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Coverage map opens at today with `snapToEnd`",
+        "body": "In `LumenCoverageMap`, the `snapToEnd` option now opens the strip with the newest block and the first summary column in view, so you can see the current period straight away."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Wide strips keep the other summaries one scroll away",
+        "body": "When `LumenCoverageMap` is too wide for the screen, the remaining summary columns wait one scroll to the right, with the edge of the next column peeking in so users can tell there is more."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Summary header cells carry `data-sum`",
+        "body": "In `LumenCoverageMap`, each summary header cell now has a `data-sum` attribute, which the snap uses to find its position and which you can use to target these cells in tests or styles."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.375",
+    "date": "2026-11-24T21:26:56Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Group by now shows on a phone",
+        "body": "In the Signals panel in `@columenlabs/lumen-ui`, the Group by switch (\"By level\" / \"By <group>\") now appears on every device, so signals that carry a `group` can be grouped by it on a phone instead of only by level."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.374",
+    "date": "2026-11-24T20:59:07Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan calls no longer fail with \"CLI version outdated\"",
+        "body": "In `@columenlabs/lumen-ai`, the helper that sends model calls through a provider's CLI plan now reads the provider's current CLI release version and sends it with each call, so the proxy no longer answers 426."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "The CLI version refreshes itself on a 426",
+        "body": "The same helper keeps the version it read for 6 hours. If the proxy answers 426, it reads the release feed again and resends the call once, so your app doesn't need a redeploy when the provider ships a new CLI."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A feed outage no longer breaks plan calls",
+        "body": "If the release feed is down, the helper keeps using the last version it had and checks the feed again a minute later, falling back to a mirror of the feed when the main one fails."
+      },
+      {
+        "kinds": [
+          "security"
+        ],
+        "title": "The version lookup carries no credentials",
+        "body": "The feed read is a plain GET with a 5 second timeout and sends no token or cookie, and the token path for plan calls is unchanged."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.373",
+    "date": "2026-11-24T20:25:16Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan sign-ins now call the plan proxy",
+        "body": "In `@columenlabs/lumen-auth`, model calls and the Test for a plan sign-in go to the host in `GROK_PLAN_BASE_URL` with the headers from `grokPlanHeaders`, so they bill the plan rather than the account's API credits."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Test shows the provider's own error words",
+        "body": "In `@columenlabs/lumen-auth`, a refused call in the sign-in Test now shows the provider's error text trimmed to one line (160 characters at most), so you can see why it was refused instead of only an HTTP status."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "A 402 has its own plain-words message",
+        "body": "`shownError` now maps a 402 response to a clear message, both in the sign-in Test and in chat, so an app can tell a user their account has no credit for the call."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.372",
+    "date": "2026-11-24T20:22:20Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Plan token hash is now visible in logs",
+        "body": "In `@columenlabs/lumen-ai`, the `assistant_plan_request` log line now records the short one-way hash of the plan's bearer token under the field `signin` instead of `auth`, so you can trace token changes again. Log platforms mask fields named `auth`, so the old field always showed `******`. Any saved log query or dashboard that reads the `auth` field on this event should switch to `signin`."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.371",
+    "date": "2026-11-24T20:06:11Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Submenus no longer cut their labels on narrow screens",
+        "body": "In `@columenlabs/lumen-ui`, `DropdownMenuSubContent` now overlaps its parent menu when there is no room beside it, so every label stays readable on a phone-width screen."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Submenus size to their content and stay inside the screen",
+        "body": "`DropdownMenuSubContent` now takes the width of its labels, capped at the screen width minus 1rem, and keeps an 8 px `collisionPadding` from the screen edge."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Your own `sideOffset` still wins",
+        "body": "If you pass `sideOffset` to `DropdownMenuSubContent`, Lumen uses your value and skips its automatic overlap, so existing custom placement keeps working."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.370",
+    "date": "2026-11-24T19:30:22Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "One plan token refresh at a time per sign-in",
+        "body": "In `@columenlabs/lumen-ai`, the assistant's `State.planToken` now allows at most one refresh in flight per person and sign-in document, so concurrent reads no longer spend the same single-use refresh token twice."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A failed refresh no longer rolls back a newer token",
+        "body": "`refreshPlan` now writes new tokens, or a failure note, only while the stored sign-in still holds the refresh token it used, so a rotated refresh token is never overwritten with a stale copy."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Refresh starts from the stored copy",
+        "body": "`refreshPlan` now reads the sign-in through `Docs.readStored` instead of the request's cached copy, and uses the stored tokens as they are if they are already fresh."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "One table for every plan kind",
+        "body": "`planToken` and `refreshPlan` now take their per-kind settings from a single `PLAN_WAYS` table, with no per-provider branch."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.369",
+    "date": "2026-11-24T19:19:06Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "One hook answers \"what device is this\"",
+        "body": "From `@columenlabs/lumen-ui`, `useDevice()` returns `{ narrow, sideways, phone, touch, handheld }` from media queries only, so you can branch on device in a component with one call, with the correct value on the first render."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Read the device outside React",
+        "body": "From `@columenlabs/lumen-ui`, `deviceNow()` returns the same snapshot as `useDevice()`, so plain functions, utilities and event handlers can check the device without a component."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Older device hooks now wrap the new one",
+        "body": "In `@columenlabs/lumen-ui`, `useIsMobile()` (now `useDevice().narrow`) and `usePhoneLayout()` (now `{ phone, sideways }`) are marked `@deprecated` and still use the same `(max-width: 767px)` query, so existing apps keep working and can move to `useDevice()` when convenient."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.368",
+    "date": "2026-11-24T18:38:08Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Catch loading states that look empty",
+        "body": "`lumen-ship check parts` has a new `loading-as-empty` rule that flags `Loading…` or `Loading...` text, and `return null` while a query is pending or has no data (for example `if (q.isPending) return null` or `if (!q.data) return null`), so you can switch those spots to a `LumenLoading` scope or `LumenPending`."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Catch hand-built skeletons",
+        "body": "`lumen-ship check parts` has a new `hand-skeleton` rule that flags any import of `@columenlabs/lumen-ui/ui/skeleton` and any `LumenSkeleton`, so you can drop your own placeholders and let the parts inside `LumenLoading` draw their own shape."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "New rules adopt through your parts baseline",
+        "body": "like the existing `check parts` rules, `loading-as-empty` and `hand-skeleton` let each count only fall against your app's parts baseline, so you can record today's counts when you upgrade and bring them down over time."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.367",
+    "date": "2026-11-24T18:32:05Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Long tool results no longer break a chat",
+        "body": "In `@columenlabs/lumen-ai`, `LumenAgent` and `AgentSession` now store each card's result through a new `cardResult` helper, so a write tool result over 20,000 characters is saved as valid JSON (`{ cut: true, text }`) instead of a cut-off string that made every later turn fail with \"Unterminated string in JSON\"."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Chats already broken by a cut result work again",
+        "body": "`cardOf` now reads stored card results with a parse that never throws, so a row cut by an older release comes back as `{ cut: true, text }` and you don't need to migrate or delete any data."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Pictures no longer bloat stored cards",
+        "body": "`cardResult` leaves out picture `data` strings longer than 1,000 characters, because the model already received them, so tools that return base64 images are far less likely to hit the 20,000-character limit."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.366",
+    "date": "2026-11-24T18:28:49Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Token identity on every plan request",
+        "body": "In @columenlabs/lumen-ai, the `assistant_plan_request` log line now carries an `auth` field, a short one-way hash of the bearer token, so you can tell whether two calls used the same token or a refreshed one."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "See where an answer came from",
+        "body": "In @columenlabs/lumen-ai, the `assistant_plan_usage` log line now includes `route` (response headers, minus cookies and authorization, each cut to 80 characters) and `served` (the model and service tier the answer reports), so you can compare the route and model behind a cache miss with those of a hit."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Token refreshes are logged",
+        "body": "In @columenlabs/lumen-ai, a new `assistant_plan_refresh` log line is written each time a plan token is refreshed, so you can line refreshes up against cache misses."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.365",
+    "date": "2026-11-24T18:23:55Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Payer reads start before the tier is known",
+        "body": "`agentEarly` in @columenlabs/lumen-ai now starts the reads for who can pay (the person, the app's keys, the person's own keys including a plan token, spend, own cap and app budget) up front, so `agentTurn` setup no longer waits for the route and tier before beginning them."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Reads and pick are now separate steps",
+        "body": "`State.paying` is split into `payerReads(id, ways)`, which does all the I/O, and `pickPayer(reads, provider, rules)`, which does none, so you can fetch the reads early and choose the payer once the provider is known."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Plan fallback reuses the same reads",
+        "body": "`AgentEarly` gains a `payers` field, and `agentTurn` picks both the main payer and the plan's shared-key fallback (`only: 'app'`) from it, so a plan-token turn no longer reads the payer data a second time, one after the other."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.364",
+    "date": "2026-11-24T18:16:26Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "LumenPending keeps a section's shape while it loads",
+        "body": "From `@columenlabs/lumen-ui`, wrap a section whose rows are built from data in `<LumenPending id load data>{(data) => …}</LumenPending>` and it draws the section's last shape on this device as bars until the read answers."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Fix the loading shape up front",
+        "body": "On `LumenPending`, the new `shape` prop lets you set the field rows and expand rows to draw when you already know them, instead of the three field rows drawn on a first visit."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Failed reads and empty states behave",
+        "body": "`LumenPending` shows `LumenError` with Retry when `load` fails, and only calls `children` once data exists, so an empty or \"not set up\" state can never flash early."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Kit screens drop \"Loading…\" text",
+        "body": "The assistant settings sections, `NotificationsSettings` (channels and events), the people email settings row, the person drawer audit list and the `LumenView` server group \"loading more\" row now draw bars instead."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New skeleton building blocks",
+        "body": "`@columenlabs/lumen-ui` now exports `SettingFieldSkeleton` and `ExpandRowSkeleton`, the same bars `LumenPending` draws, so you can use them in your own loading states."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.363",
+    "date": "2026-11-24T18:09:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Loading that looks like the thing itself",
+        "body": "In `@columenlabs/lumen-ui`, wrap the parts a screen draws from its reads in `<LumenLoading load={useLumenLoad(q…)}>` and every data part inside draws its own shape, with bars where data will fill, instead of an empty state."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Lists remember how many rows they had",
+        "body": "`LumenExpandList` has a new `id` prop, and with it the list draws as many placeholder rows as it showed last time on this device, through `useRememberedCount` (3 on the first visit)."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Tables and views load without flashing \"empty\"",
+        "body": "`LumenTable` has a new `loading` prop (a row count, or `true`), and `LumenView` inherits the surrounding `LumenLoading` scope's load when it has none of its own."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Failed reads show a retry, not an empty screen",
+        "body": "When the read behind a `LumenLoading` scope fails, the scope shows the kit's `LumenError` with Retry in its place, never the empty or signed-out state."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.362",
+    "date": "2026-11-24T18:03:23Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Health dots no longer float above the row text",
+        "body": "In `LumenExpandRow` from `@columenlabs/lumen-ui`, leaving out the `icon` prop used to draw the health dot at the corner of an empty box above the name, and now the dot sits on a letter tile."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Every settings row has an icon",
+        "body": "`LumenExpandRow` now always renders its icon slot, using your `icon` if you pass one and otherwise the first letter of `name` on a tile, so names in a list share one left edge even when a row has no health dot."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "New `SettingIcon` export",
+        "body": "`@columenlabs/lumen-ui` now exports `SettingIcon`, which draws either an icon or the first letter of the `text` you pass on a tile, so you can match the row look in your own settings parts."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.361",
+    "date": "2026-11-24T17:38:54Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Assistant turns reach the first model call sooner",
+        "body": "In `@columenlabs/lumen-ai`, `Assistant.agentTurn` now runs its setup reads side by side instead of one after another, where they used to add about 0.7 s in an app that measured it."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Start the tier-free reads early",
+        "body": "The new `agentEarly(caller)` in the `Assistant` starts the reads that need neither the message nor the tier (person, system text, paying rules, tool sources), so an app can run them while it does other work."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Pass early reads into a turn",
+        "body": "`agentTurn` now takes an optional third argument, `agentTurn(caller, input, early)`, so an app that first routes the message (for example through a prompt reviewer) can run `agentEarly` beside that step and hand over the result."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "No change needed for existing callers",
+        "body": "If you call `agentTurn(caller, input)` without `early`, it starts those reads itself, so current code keeps working and gets the speedup."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.360",
     "date": "2026-11-24T16:03:16Z",
     "takeaways": [
