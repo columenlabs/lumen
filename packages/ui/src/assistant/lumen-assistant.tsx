@@ -145,7 +145,9 @@ import {
 const ChatMarkdown = lazyPart(
   () => import('./chat-markdown').then((m) => m.default),
   null,
-  ({ children }: { children: string }) => <p className="whitespace-pre-wrap">{children}</p>,
+  ({ children }: { children: string; live?: boolean }) => (
+    <p className="whitespace-pre-wrap">{children}</p>
+  ),
 );
 
 /** The main model's context drawn full (tokens); the mark sits where the assistant compacts. */
@@ -952,7 +954,7 @@ function Item({
           data-chat-from="assistant"
           className="prose-sm min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] [&_code]:font-code [&_code]:text-xs [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1.5 [&_ul]:list-disc"
         >
-          <ChatMarkdown>{item.text}</ChatMarkdown>
+          <ChatMarkdown live={item.live}>{item.text}</ChatMarkdown>
           {item.live && (
             <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-foreground/60 align-middle" />
           )}
