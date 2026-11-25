@@ -17,23 +17,23 @@
     "./subagents": "./src/subagents/index.ts"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.96",
-    "@ai-sdk/openai": "4.0.108",
+    "@ai-sdk/anthropic": "4.0.107",
+    "@ai-sdk/openai": "4.0.122",
     "@anthropic-ai/sdk": "0.133.0",
-    "@cloudflare/computer": "0.8.0",
-    "@cloudflare/think": "0.23.0",
+    "@cloudflare/computer": "0.11.4",
+    "@cloudflare/think": "0.24.0",
     "@columenlabs/lumen-ops": "workspace:*",
     "@columenlabs/lumen-ui-types": "workspace:*",
-    "agents": "0.32.0",
-    "ai": "7.0.162",
-    "just-bash": "3.6.0",
-    "openai": "7.32.0",
+    "agents": "0.34.0",
+    "ai": "7.0.179",
+    "just-bash": "3.6.1",
+    "openai": "7.62.0",
     "zod": "^4.3.6"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0"
+    "@modelcontextprotocol/sdk": "1.32.2"
   }
 }
