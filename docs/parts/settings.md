@@ -12,7 +12,7 @@ An app's Settings page: one dialog on every host, General first, then a group pe
 
 ## Groups in the list (`sub`)
 
-A section with `sub: true` sections after it is a group in the Settings list (Sage ▸ Providers, Models, Skills). Nothing else to pass: the kit folds it.
+A section with `sub: true` sections after it is a group in the Settings list (the assistant ▸ Providers, Models, Skills). Nothing else to pass: the kit folds it.
 
 - Folded by default. The group holding the open section unfolds itself, however it was opened (a click, `?settings=`, the assistant).
 - The name opens the group's own section; the chevron at the right only folds or unfolds it (a disclosure button: `aria-expanded`, "Show/Hide <name> pages", Tab then Enter).
@@ -21,9 +21,9 @@ A section with `sub: true` sections after it is a group in the Settings list (Sa
 - Kept while the app runs; a reload folds them again. On a phone the section picker stays a flat, indented list.
 
 ```
-✦ Sage            ● ›     folded: a red or grey dot only when one of its sections has one
+✦ Assistant       ● ›     folded: a red or grey dot only when one of its sections has one
 ⚑ Feature flags
-✦ Sage              ⌄     unfolded
+✦ Assistant         ⌄     unfolded
    🔑 Providers      ●
    ▣  Models
 ```
