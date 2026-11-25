@@ -33,6 +33,10 @@ One line a row, 26px (36px with `touch`). Slots from the left, each a fixed widt
 
 `locked` rows take no rename and no drops (a group the app builds itself); drag needs `onMove`.
 
+`open` sets a folder's first state over `openByDefault` (a loop's passes start folded).
+
+**Rollback bar.** `bars` draws a CAD history's marker under the row it sits `at`, one bar per list of `rows` (each part's steps). Drag it, click the gap under another row, or move it with ↑ ↓ Home End (Esc goes to the end). Rows after it dim; the app moves it in `onMove(row)`. It hides while `search` filters.
+
 `attrs` puts the app's own `data-*` attributes on the ⋯ button and the Rename item (`attrs={{ menu: {...}, rename: {...} }}`), and a toggle's `attrs` on its button, so an app can tag them for its own checks.
 
 **Nothing moves.** Hover, focus, selection and an open menu change opacity, never width.

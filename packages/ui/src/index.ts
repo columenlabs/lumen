@@ -633,6 +633,7 @@ export {
 } from './assistant-panel';
 export {
   type ExplorerApi,
+  type ExplorerBar,
   type ExplorerField,
   type ExplorerItem,
   type ExplorerStatus,
