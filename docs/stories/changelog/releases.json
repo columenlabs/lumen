@@ -1,5 +1,194 @@
 [
   {
+    "tag": "v0.1.397",
+    "date": "2026-11-25T17:23:54Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A chat read overtaken by a new message no longer replaces the chat",
+        "body": "In `@columenlabs/lumen-ui`, `useAssistantChat().open()` now discards its result when the person sends a message while the read is still in flight, so the message stays in the items and the answer's `task` event folds into one block instead of opening a second card."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.396",
+    "date": "2026-11-25T16:57:21Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Show your own notice when a new build ships",
+        "body": "In `@columenlabs/lumen-ui`, `watchNewBuilds(router, { onDeploy })` now calls your `onDeploy` function instead of showing the default \"A new version is ready\" toast, so an app that must not keep running an old build can show its own message and stop work."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Read response headers before the body",
+        "body": "In `@columenlabs/lumen-ui`, `apiJson(url, { onResponse })` now hands your callback the `Response` before the body is read, so you can check headers such as a server-sent version on every answer."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Learn about a deploy on your next API call",
+        "body": "Using `apiJson`'s `onResponse` to read a version the server names on each reply, an app can spot a new deploy on its next request instead of waiting for the 10-minute `watchNewBuilds` check. Both hooks are optional, and nothing changes unless you pass them."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.394",
+    "date": "2026-11-25T10:06:57Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Chat-provider calls name their chat in both cache keys again",
+        "body": "In `@columenlabs/lumen-ai`, calls to the chat provider once more include the chat's own name in both cache keys, undoing the change that had moved them onto one shared key, so you don't need to change anything in your app."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "Mid-chat cache reads recover",
+        "body": "With the per-chat key restored, later calls in a chat on one of the two tested models read 96-100% of the prompt from cache again, where 9 of 31 later calls had missed under the shared key."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "New chats still miss the shared start, and the key isn't the cause",
+        "body": "The first call of a new chat read only a small cached prefix with either key setup, so keep the per-chat key and don't expect a shared key to warm new chats."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.393",
+    "date": "2026-11-25T09:32:00Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix",
+          "performance"
+        ],
+        "title": "New chats reuse the shared start's cache again",
+        "body": "In `@columenlabs/lumen-ai`, `xaiFetch` now sends the shared start's cache key in both `prompt_cache_key` and the conversation-id header on every call, so a new chat is routed to the cache server that already holds the shared start."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "`xaiFetch` loses its `conv` argument",
+        "body": "If your app calls `xaiFetch` directly, stop passing `conv`, because the key no longer varies per chat and the argument is ignored."
+      },
+      {
+        "kinds": [
+          "performance"
+        ],
+        "title": "First-call cache reads recover for new chats",
+        "body": "With a key per chat, new chats read as little as 128 of about 18k shared tokens, while a single shared key read 16k to 17.5k of about 17k to 18k."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.392",
+    "date": "2026-11-25T08:59:13Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A closed `ResizablePanel` is now inert",
+        "body": "In `@columenlabs/lumen-ui`, a `ResizablePanel` drawn at 0 px, whether collapsed or dragged shut, now gets the `inert` attribute and a `data-closed` attribute, so its controls are no longer Tab stops, screen-reader items or click targets."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A collapsed off-canvas `Sidebar` is now inert",
+        "body": "In `@columenlabs/lumen-ui`, the desktop `Sidebar` container is now `inert` when it is collapsed off canvas, while the icon rail (`collapsible=\"icon\"`) stays fully usable."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Closed regions keep working in the background",
+        "body": "A closed `ResizablePanel` or `Sidebar` stays mounted, so a draft in a text box or a streaming answer keeps going, and your own `onResize` handler on `ResizablePanel` still receives every size change."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.391",
+    "date": "2026-11-25T06:01:17Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Chats menu lists the current scope's chats",
+        "body": "In `@columenlabs/lumen-ui`, `LumenAssistant` with a `chatScope` now asks the server for `chatScope.current`'s chats, so a place with older chats no longer shows \"No chats yet\" when the server only returns its newest page."
+      },
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "Optional scope on the chats adapter",
+        "body": "`AssistantAdapter.chats(scope?)` now receives the scope, and the default client sends `GET /chats?scope=<scope>`, so your server can return just that scope's chats."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Toggling All refreshes the open menu",
+        "body": "In `LumenAssistant`, turning All on or off while the Chats menu is open now reads the matching list straight away, because the query key includes the scope."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.390",
+    "date": "2026-11-25T05:44:28Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "feature"
+        ],
+        "title": "`ApiError` is now exported next to `apiJson`",
+        "body": "From `@columenlabs/lumen-ui`, import `ApiError` alongside `apiJson` and `API_TIMEOUT_MS`, so you can write `e instanceof ApiError` and read `e.status`, `e.code`, `e.method` and `e.url` when `apiJson` throws, without keeping your own fetch wrapper or error class."
+      }
+    ]
+  },
+  {
+    "tag": "v0.1.389",
+    "date": "2026-11-25T05:36:47Z",
+    "takeaways": [
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "Uploads keep their own content type",
+        "body": "In `@columenlabs/lumen-ui`, `apiJson` now labels only a string `body` as `application/json`, so a `FormData`, `Blob` or `URLSearchParams` body is sent with the type `fetch` sets, including the multipart boundary."
+      },
+      {
+        "kinds": [
+          "fix"
+        ],
+        "title": "A 2xx that is not JSON now fails",
+        "body": "`apiJson` now throws an `ApiError` carrying the response status when a successful response has a non-JSON body (a sign-in page or a proxy's error page), instead of returning `null` as if it were an answer."
+      },
+      {
+        "kinds": [
+          "improvement"
+        ],
+        "title": "Fewer reasons for a custom fetch wrapper",
+        "body": "You can now send file uploads and detect non-JSON success responses through `apiJson` itself, so an app no longer needs its own wrapper for either case."
+      }
+    ]
+  },
+  {
     "tag": "v0.1.388",
     "date": "2026-11-25T04:57:33Z",
     "takeaways": [

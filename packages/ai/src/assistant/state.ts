@@ -84,6 +84,8 @@ export interface TokenDoc {
 export interface AppDoc {
   /** USD each person may spend a month on the app's key. */
   cap_usd?: number;
+  /** Each tier's model and effort for everyone, when an admin picks them (`modelsBy: 'app'`). */
+  tiers?: Record<string, { model: string; effort: AssistantEffort }>;
 }
 
 export interface PersonDoc {

@@ -620,6 +620,45 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
    * The panel then shows a card: ＋ sends the message in a new chat, × sends it here again with
    * `stay`. Off (`false`) unless the app overrides it; a throw counts as `false`.
    */
+  /**
+   * A new chat's name from its first message, or null to keep that message as its name (the
+   * default). An app returns its assistant's `nameChat`, which runs on the app's titles task.
+   */
+  protected async nameChat(_input: AskInput): Promise<string | null> {
+    return null;
+  }
+
+  /**
+   * The answer's stream with the chat's name sent in it once it is ready: a second `chat` event the
+   * panel reads like the first, between the answer's own events, and before `done` it waits for a
+   * name still on its way. The name is kept as the chat's title.
+   */
+  #withName(sink: AskSink, naming: Promise<string | null>): AskSink {
+    let name: string | null | undefined;
+    let sent = false;
+    void naming.then((n) => {
+      name = n;
+    });
+    const send = async () => {
+      if (sent || !name) return;
+      sent = true;
+      this.#put('title', name);
+      await sink.event({ event: 'chat', data: { id: this.name, title: name } });
+    };
+    return {
+      event: async (e) => {
+        if (e.event === 'done') {
+          name = await naming;
+          await send();
+          await sink.event(e);
+          return;
+        }
+        await sink.event(e);
+        await send();
+      },
+    };
+  }
+
   protected async offerFresh(_input: AskInput): Promise<boolean> {
     return false;
   }
@@ -861,9 +900,12 @@ export abstract class LumenAgent<Env = unknown> extends Think<Env> {
    * One answer to `input`, its events sent to `sink` in the panel's words: the chat's title, the
    * text, each tool line and card, then its use. The app's route calls it over RPC.
    */
-  async ask(input: AskInput, sink: AskSink): Promise<void> {
+  async ask(input: AskInput, given: AskSink): Promise<void> {
     const at = Date.now();
     this.#capped = false;
+    // A new chat is named while its first answer runs (`nameChat`); its first message stands in.
+    const naming = this.#get<string>('title') ? null : this.nameChat(input).catch(() => null);
+    const sink = naming ? this.#withName(given, naming) : given;
     let title = this.#get<string>('title');
     if (!title) {
       title = input.message.replace(/\s+/g, ' ').trim().slice(0, 60);

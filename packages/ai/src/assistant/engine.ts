@@ -1,12 +1,3 @@
-/**
- * The assistant: what every chat shares, for any app. Its tiers, tasks and models, who pays and
- * their caps, keys and the ChatGPT sign-in, tool groups and their access, the allowance, background
- * answers (`complete`) and the plan each agent turn runs on (`agentTurn`). The chat itself runs on
- * the agent (`../agent`, LumenAgent); chats saved by the old turn loop stay readable until purged.
- *
- * Spend: every call is priced at list price as it runs; past what its payer has left this month the
- * model must answer from what it has.
- */
 import Anthropic from '@anthropic-ai/sdk';
 import type {
   AllowanceRequest,
@@ -38,6 +29,16 @@ import type { OpenedTools, SourceAt } from '../agent/tools';
 import { tokenUsage } from '../agent/usage';
 import { type WebLookupOptions, webLookupTools } from '../subagents/web';
 import { type BearingsExtra, type BearingsNow, bearings } from './bearings';
+/**
+ * The assistant: what every chat shares, for any app. Its tiers, tasks and models, who pays and
+ * their caps, keys and the ChatGPT sign-in, tool groups and their access, the allowance, background
+ * answers (`complete`) and the plan each agent turn runs on (`agentTurn`). The chat itself runs on
+ * the agent (`../agent`, LumenAgent); chats saved by the old turn loop stay readable until purged.
+ *
+ * Spend: every call is priced at list price as it runs; past what its payer has left this month the
+ * model must answer from what it has.
+ */
+import { chatNameSystem, cleanName, nameable } from './chat-name';
 import {
   CHATGPT_REDIRECT,
   type ChatgptRegistration,
@@ -262,6 +263,19 @@ export interface AssistantOptions {
    * (no escalate tool): the app's pick is the only routing. True by default.
    */
   pickTier?: boolean;
+  /**
+   * Who picks each tier's model and effort. `person` (the default): each person in Settings ▸
+   * Models. `app`: an admin, once for everyone (`assistantAdminSections` `models`), kept in the
+   * app's documents; a person's own picks are ignored. With `pickTier: false` each tier is a job
+   * (the chat, a background task, chat names) and the admin sets each job's model.
+   */
+  modelsBy?: 'person' | 'app';
+  /**
+   * Names each new chat with a few words about it, from the person's first message, on this task's
+   * tier and the app's key (`nameChat`). Until a name lands, and when it fails, the chat keeps its
+   * first message as its name.
+   */
+  titles?: { task: string };
   /**
    * The app's slash commands, listed in the composer when the person types `/`. A message
    * `/name words` is sent to the model as `prompt` with `{args}` replaced by the words (or what the
@@ -774,8 +788,22 @@ export class Assistant {
     return this.models.find((m) => m.id === id);
   }
 
-  /** The person's model and effort for a tier, or the tier's own when unset or gone. */
+  /** Whether an admin picks each tier's model for everyone (`modelsBy: 'app'`). */
+  get modelsByApp() {
+    return this.o.modelsBy === 'app';
+  }
+
+  /**
+   * The model and effort a tier runs on: the admin's pick (`modelsBy: 'app'`) or the person's,
+   * else the tier's own when unset or gone.
+   */
   private async pick(caller: Caller, tier: TierDef) {
+    if (this.modelsByApp) {
+      const saved = (await this.state.app()).tiers?.[tier.id];
+      const model =
+        this.modelById(saved?.model) ?? this.modelById(tier.model) ?? (this.models[0] as ModelDef);
+      return { model, effort: saved?.effort ?? tier.effort ?? ('default' as AssistantEffort) };
+    }
     const saved = (await this.state.person(caller.id)).tiers?.[tier.id];
     const model =
       this.modelById(saved?.model) ?? this.modelById(tier.model) ?? (this.models[0] as ModelDef);
@@ -1342,6 +1370,7 @@ export class Assistant {
       tier: main.id,
       tiers,
       ...(this.o.pickTier === false ? { pick_tier: false } : {}),
+      ...(this.modelsByApp ? { models_by: 'app' as const } : {}),
       models: this.models.map((m) => ({
         id: m.id,
         label: m.label,
@@ -1835,6 +1864,32 @@ export class Assistant {
     });
     s.meter.add(tokenUsage(r.usage), plan);
     return { text: r.text, cut: r.finishReason === 'length' };
+  }
+
+  // ---------------------------------------------------------------- chat names
+
+  /**
+   * A new chat's name from the person's first message, on the `titles` task's tier and the app's
+   * key (the app's own housekeeping, never the person's spend). Null when the app names no titles
+   * task, the message says too little, or the call fails or answers something that is not a name;
+   * it never throws, and gives up after 8 s.
+   */
+  async nameChat(caller: Caller, message: string): Promise<string | null> {
+    const task = this.o.titles?.task;
+    if (!task || !nameable(message)) return null;
+    try {
+      const out = await this.complete(caller, {
+        task,
+        system: chatNameSystem(this.name, this.o.app),
+        prompt: `The person's message: ${message.trim().slice(0, 2000)}`,
+        maxTokens: 400,
+        payer: 'app',
+        signal: AbortSignal.timeout(8000),
+      });
+      return out.cut ? null : cleanName(out.text);
+    } catch {
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------- one-shot work
