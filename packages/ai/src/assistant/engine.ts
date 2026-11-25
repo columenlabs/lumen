@@ -763,7 +763,8 @@ export class Assistant {
     refs: CompleteImage[],
   ): Promise<{ data: string; tokens: { in: number; out: number } }> {
     const model = this.models.find((x) => x.provider === 'openai');
-    if (!model) throw new AssistantError('No ChatGPT model is set up to make images.', 'upstream', 502);
+    if (!model)
+      throw new AssistantError('No ChatGPT model is set up to make images.', 'upstream', 502);
     const client = new OpenAI({
       apiKey: token,
       maxRetries: 0,
