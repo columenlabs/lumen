@@ -131,9 +131,11 @@ export interface ExplorerToggle<D = unknown> {
    *  column, the icon turns into the toggle on hover and shows it while on); or only in the ⋯ menu
    *  (`menu`: a small mark after the name while it is on). */
   slot?: 'rail' | 'icon' | 'menu';
-  /** Data attributes for the toggle's button or menu item (an app's own action registry or tests). */
-  attrs?: Record<`data-${string}`, string>;
+  /** Data attributes for the toggle's button or menu item (an app's own action registry or tests),
+   *  or a function of the row when rows of different kinds share the toggle. */
+  attrs?: DataAttrs | ((item: ExplorerItem<D>) => DataAttrs);
 }
+type DataAttrs = Record<`data-${string}`, string>;
 
 /**
  * A rollback bar (a CAD history's marker): drawn under the row it sits after; drag it, click the gap under
@@ -211,6 +213,8 @@ export interface LumenExplorerProps<D = unknown> {
 
 /** How long a finger rests on a row before its full name shows (touch). */
 const LONG_PRESS_MS = 500;
+const attrsOf = <D,>(t: ExplorerToggle<D>, it: ExplorerItem<D>) =>
+  typeof t.attrs === 'function' ? t.attrs(it) : t.attrs;
 
 const DOT: Record<ExplorerStatusTone, string> = {
   error: 'bg-destructive',
@@ -589,7 +593,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     return (
       <IconButton
         key={t.id}
-        {...t.attrs}
+        {...attrsOf(t, it)}
         icon={!on && t.offIcon ? t.offIcon : t.icon}
         label={t.label(it, on)}
         size="icon-xs"
@@ -615,7 +619,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     <Tip label={iconT.label(it, isOn(it, iconT))}>
       <button
         type="button"
-        {...iconT.attrs}
+        {...attrsOf(iconT, it)}
         aria-label={iconT.label(it, isOn(it, iconT))}
         aria-pressed={iconOn}
         className={cn(
@@ -690,7 +694,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
           .map((t) => {
             const on = isOn(it, t);
             return (
-              <DropdownMenuItem key={t.id} {...t.attrs} onSelect={() => flip(it, t)}>
+              <DropdownMenuItem key={t.id} {...attrsOf(t, it)} onSelect={() => flip(it, t)}>
                 {!on && t.offIcon ? <t.offIcon /> : <t.icon />}
                 {t.label(it, on)}
               </DropdownMenuItem>
