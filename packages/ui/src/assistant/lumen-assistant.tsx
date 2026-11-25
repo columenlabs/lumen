@@ -1800,6 +1800,8 @@ type TaskRow =
       kind: 'words';
       tag: 'Plan' | 'Result' | 'Follow-up' | 'Reply';
       text: string;
+      /** The words are still streaming: drawn like a live answer (no raw Markdown marks). */
+      live?: boolean;
       choices?: StepChoices;
     }
   | { key: string; kind: 'you'; text: string; steered: boolean };
@@ -1954,7 +1956,7 @@ function taskRows(items: LiveItem[], answerable: StepChoices | null): TaskRow[] 
         : turnHasTools || rows.slice(turnStart).some((r) => r.kind !== 'words')
           ? 'Result'
           : 'Reply';
-      rows.push({ key: `t${n}`, kind: 'words', tag, text: it.text });
+      rows.push({ key: `t${n}`, kind: 'words', tag, text: it.text, live: it.live });
       return;
     }
     if (it.kind === 'step' || it.kind === 'draft') turnHasTools = true;
@@ -2099,7 +2101,7 @@ function TaskRowView({
             <FoldDetail steps={row.steps} />
           ) : row.kind === 'words' ? (
             <Item
-              item={{ kind: 'text', text: row.text } as LiveItem}
+              item={{ kind: 'text', text: row.text, live: row.live } as LiveItem}
               onSettle={onSettle}
               busy={busy}
             />
