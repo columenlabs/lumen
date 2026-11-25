@@ -2,7 +2,7 @@
 
 ## Use it for
 
-The details or the editor of one row, opened from a list, a card or a link. A right-side panel on desktop whose width drags (320px to 60%), a bottom sheet on a phone.
+The details or the editor of one row, opened from a list, a card or a link. A right-side panel on desktop whose width drags (320px to 60%), a bottom sheet on a phone. On a phone the sheet takes focus itself when it opens, never its first control, so no tooltip pops up and the first Esc closes it.
 
 - A list whose rows each open it: pass `dock="<name>"`, so it sits beside the page and the next row swaps it in place.
 - A yes or no before something destructive: `LumenConfirm`, not a drawer.
