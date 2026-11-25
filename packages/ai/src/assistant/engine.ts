@@ -75,6 +75,7 @@ import {
   type TaskDef,
   type TierDef,
   XAI_BASE_URL,
+  effortFor,
 } from './models';
 import {
   DEFAULT_CAP,
@@ -812,6 +813,18 @@ export class Assistant {
     return { model, effort: own ?? saved?.effort ?? tier.effort ?? ('default' as AssistantEffort) };
   }
 
+  /** The tier's `fallback` model as a session, when it names one this assistant runs. */
+  private fallbackOf(s: Session): Session | undefined {
+    const model = this.modelById(s.tier.fallback);
+    if (!model || model.id === s.model.id) return undefined;
+    return {
+      tier: s.tier,
+      model,
+      effort: effortFor(model, s.effort),
+      meter: new Meter(model, `${s.tier.label} · ${model.label}`),
+    };
+  }
+
   private async session(caller: Caller, tier: TierDef, label?: string): Promise<Session> {
     const { model, effort } = await this.pick(caller, tier);
     return {
@@ -924,12 +937,17 @@ export class Assistant {
         input.tier && (byApp || !this.above(picked).some((t) => t.id === input.tier))
           ? this.tierById(input.tier)
           : undefined;
-      const main = await this.session(caller, lower ?? picked);
+      let main = await this.session(caller, lower ?? picked);
       const free = await this.freeTier(main.tier.id);
       const base = await e.rules;
       const rules: PayingRules = free ? { ...base, only: 'app', free: true } : base;
       const reads = await e.payers;
-      const { paying, wait } = this.state.pickPayer(reads, main.model.provider, rules);
+      let { paying, wait } = this.state.pickPayer(reads, main.model.provider, rules);
+      const fb = paying ? undefined : this.fallbackOf(main);
+      if (fb) {
+        const other = this.state.pickPayer(reads, fb.model.provider, rules);
+        if (other.paying) ({ main, paying, wait } = { main: fb, ...other });
+      }
       if (!paying) {
         const code = wait ?? 'not_connected';
         throw new AssistantError(
@@ -1337,9 +1355,14 @@ export class Assistant {
         this.state.spend(caller.id),
         this.state.appCap(),
         this.state.ownCap(caller.id),
-        this.rulesFor(caller, main.id).then(({ rules }) =>
-          this.state.paying(caller.id, mainModel.provider, rules),
-        ),
+        this.rulesFor(caller, main.id).then(async ({ rules }) => {
+          const now = await this.state.paying(caller.id, mainModel.provider, rules);
+          // Nobody pays the tier's model, but its fallback's provider does: the chat can answer.
+          const fb = now.paying ? undefined : this.modelById(main.fallback);
+          if (!fb) return now;
+          const other = await this.state.paying(caller.id, fb.provider, rules);
+          return other.paying ? other : now;
+        }),
         this.state.ownUsed(caller.id, ownWays),
       ]);
     const link = await linkTest;
@@ -1954,10 +1977,15 @@ export class Assistant {
     payer: AssistantPayer;
   }> {
     const began = Date.now();
-    const s = await this.session(caller, await this.mainTier(caller, o.task));
+    let s = await this.session(caller, await this.mainTier(caller, o.task));
     const { rules, free } = await this.rulesFor(caller, s.tier.id, o.payer);
+    let { paying, wait } = await this.state.paying(caller.id, s.model.provider, rules);
+    const fb = paying ? undefined : this.fallbackOf(s);
+    if (fb) {
+      const other = await this.state.paying(caller.id, fb.model.provider, rules);
+      if (other.paying) ({ s, paying, wait } = { s: fb, ...other });
+    }
     s.meter.ctx = { task: o.task, ...(o.run && { run: o.run.id }) };
-    const { paying, wait } = await this.state.paying(caller.id, s.model.provider, rules);
     if (!paying) {
       const code = wait ?? 'not_connected';
       throw new AssistantError(waitText(code, s.model.provider, !!this.o.allowance), code, 402);
