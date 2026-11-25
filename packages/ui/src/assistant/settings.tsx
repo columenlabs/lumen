@@ -605,6 +605,15 @@ function Models({ client }: { client: AssistantAdapter }) {
               {s.tiers.map((t) => {
                 const p = s.providers.find((x) => x.id === t.provider);
                 const keyless = p && !p.app.set && !p.app.from_env && !p.own.set && !p.plan?.set;
+                // The level the provider runs the model at when none is sent reads Default.
+                const base = s.models.find((m) => m.id === t.model)?.default_effort;
+                const efforts = EFFORTS.map((e) =>
+                  e.value === base
+                    ? { ...e, detail: 'Default' }
+                    : e.value === 'default' && base
+                      ? { ...e, detail: EFFORTS.find((x) => x.value === base)?.label }
+                      : e,
+                );
                 return (
                   <SettingField key={t.id} label={t.label} info={t.about}>
                     <div className="flex items-center gap-2">
@@ -622,7 +631,7 @@ function Models({ client }: { client: AssistantAdapter }) {
                       label={`${t.label} effort`}
                       size="sm"
                       value={t.effort}
-                      options={EFFORTS}
+                      options={efforts}
                       onChange={(effort) => set({ tiers: { [t.id]: { effort } } })}
                     />
                   </SettingField>
