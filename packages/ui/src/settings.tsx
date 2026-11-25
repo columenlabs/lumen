@@ -6,6 +6,7 @@
 // A search box tops the list and filters the rows on every section.
 // `?settings=<section>` in the URL opens it at that section (GitHub's install page returns there).
 import {
+  ChevronRightIcon,
   MonitorIcon,
   MoonIcon,
   PaletteIcon,
@@ -44,8 +45,10 @@ import {
   SettingStatus,
   SettingsSearch,
   settingMatches as matches,
+  sectionHealth,
 } from './setting-parts';
 import { TimeZoneSelect } from './status';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group';
 import { Label } from './ui/label';
@@ -55,6 +58,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from './ui/sidebar';
@@ -312,6 +316,132 @@ export function allSettings(
   ];
 }
 
+/** The group parent of a section: itself when sections follow it as `sub`, the section before
+ *  its run of `sub` sections when it is one, else null. */
+function navParent(lists: SettingsSectionDef[][], id: string): string | null {
+  const list = lists.find((l) => l.some((s) => s.id === id)) ?? [];
+  const i = list.findIndex((s) => s.id === id);
+  if (i < 0) return null;
+  if (!list[i]?.sub) return list[i + 1]?.sub ? id : null;
+  for (let j = i - 1; j >= 0; j--) if (!list[j]?.sub) return list[j]?.id ?? null;
+  return null;
+}
+
+/** One nav group's rows: plain sections, and each section with `sub` sections after it as a
+ *  folding group (WAI disclosure: the label opens the section, the chevron only folds). */
+function SettingsNavRows({
+  items,
+  all,
+  activeId,
+  searching,
+  unfolded,
+  onUnfold,
+  onGo,
+}: {
+  /** The sections shown (all, or the search's matches). */
+  items: SettingsSectionDef[];
+  /** Every section of the group, so a matching sub section keeps its parent above it. */
+  all: SettingsSectionDef[];
+  activeId: string | null;
+  searching: boolean;
+  unfolded: ReadonlySet<string>;
+  onUnfold: (id: string, on: boolean) => void;
+  onGo: (id: string) => void;
+}) {
+  const shown = new Set(items.map((s) => s.id));
+  const runs: { head: SettingsSectionDef; subs: SettingsSectionDef[] }[] = [];
+  for (const s of all) {
+    const last = runs[runs.length - 1];
+    if (s.sub && last) last.subs.push(s);
+    else runs.push({ head: s, subs: [] });
+  }
+  const row = (
+    s: SettingsSectionDef,
+    o: { active: boolean; sub?: boolean; health?: SettingHealth | null; healthTitle?: string },
+  ) => (
+    <SidebarMenuButton
+      isActive={o.active}
+      className={o.sub ? 'pl-7' : undefined}
+      title={s.title}
+      onClick={() => onGo(s.id)}
+    >
+      <s.icon />
+      <span>{s.title}</span>
+      {o.health && o.health !== 'off' && (
+        <SettingStatus health={o.health} title={o.healthTitle} dot />
+      )}
+    </SidebarMenuButton>
+  );
+  return runs.map(({ head, subs }) => {
+    const subsShown = subs.filter((s) => shown.has(s.id));
+    if (!shown.has(head.id) && !subsShown.length) return null;
+    if (!subs.length)
+      return (
+        <SidebarMenuItem key={head.id}>
+          {row(head, {
+            active: head.id === activeId,
+            health: head.health,
+            healthTitle: head.healthTitle,
+          })}
+        </SidebarMenuItem>
+      );
+    const open = searching || unfolded.has(head.id);
+    const childActive = subs.some((s) => s.id === activeId);
+    // Folded, the parent carries a problem of its sections (failed, then not tested), never
+    // their green: all fine shows only its own dot. It stands in for an open section too.
+    const own = head.health ?? null;
+    const problem = open
+      ? undefined
+      : (['failed', 'untested'] as const).find((h) => subs.some((s) => s.health === h));
+    const worst =
+      problem && sectionHealth([own ?? 'off', problem]) === problem && problem !== own
+        ? problem
+        : own;
+    const blame = worst !== own ? subs.find((s) => s.health === worst) : undefined;
+    const contentId = `settings-nav-${head.id}`;
+    return (
+      <Collapsible key={head.id} asChild open={open} onOpenChange={(o) => onUnfold(head.id, o)}>
+        <SidebarMenuItem>
+          {row(head, {
+            active: head.id === activeId || (!open && childActive),
+            health: worst,
+            healthTitle: blame
+              ? `${blame.title}${blame.healthTitle ? `: ${blame.healthTitle}` : ''}`
+              : head.healthTitle,
+          })}
+          {!searching && (
+            <CollapsibleTrigger asChild>
+              <SidebarMenuAction
+                data-slot="settings-nav-fold"
+                aria-controls={contentId}
+                aria-label={`${open ? 'Hide' : 'Show'} ${head.title} pages`}
+                title={`${open ? 'Hide' : 'Show'} ${head.title} pages`}
+                className="top-1 size-6 w-6 text-muted-foreground [&>svg]:transition-transform data-[state=open]:[&>svg]:rotate-90"
+              >
+                <ChevronRightIcon />
+              </SidebarMenuAction>
+            </CollapsibleTrigger>
+          )}
+          <CollapsibleContent id={contentId}>
+            <SidebarMenu>
+              {subsShown.map((s) => (
+                <SidebarMenuItem key={s.id}>
+                  {row(s, {
+                    active: s.id === activeId,
+                    sub: true,
+                    health: s.health,
+                    healthTitle: s.healthTitle,
+                  })}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </CollapsibleContent>
+        </SidebarMenuItem>
+      </Collapsible>
+    );
+  });
+}
+
 export function LumenSettings({
   open,
   section,
@@ -396,18 +526,42 @@ export function LumenSettings({
     );
     return () => cancelAnimationFrame(id);
   }, [open]);
+  // A section with `sub` sections after it is a group in the nav, folded until it is opened by
+  // its chevron or holds the open section. Kept while the app runs; a reload folds them again.
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
+  const unfold = (id: string, on: boolean) =>
+    setUnfolded((u) => {
+      if (u.has(id) === on) return u;
+      const next = new Set(u);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  // Opening a section any way (a click, a link, the assistant) unfolds the group that holds it,
+  // even when it was folded while one of its sections stayed open.
+  const navLists = [general, shared, ...groups.map((g) => g.sections), sections];
+  const sectionsNow = useRef(navLists);
+  sectionsNow.current = navLists;
+  useEffect(() => {
+    const parent = navParent(sectionsNow.current, current.id);
+    if (parent) setUnfolded((u) => (u.has(parent) ? u : new Set(u).add(parent)));
+  }, [current.id]);
   const shown = (s: SettingsSectionDef) => !q || found.includes(s.id);
   const go = (id: string) => {
     setQuery('');
+    const parent = navParent(navLists, id);
+    if (parent) unfold(parent, true);
     onOpen(id);
   };
 
   const navGroups = [
-    { label: 'General', items: general.filter(shown) },
-    { label: sharedLabel, items: shared.filter(shown) },
-    ...groups.map((g) => ({ label: g.label, items: g.sections.filter(shown) })),
-    ...(sections.length ? [{ label: appLabel, items: sections.filter(shown) }] : []),
-  ].filter((g) => g.items.length);
+    { label: 'General', all: general },
+    { label: sharedLabel, all: shared },
+    ...groups.map((g) => ({ label: g.label, all: g.sections })),
+    ...(sections.length ? [{ label: appLabel, all: sections }] : []),
+  ]
+    .map((g) => ({ ...g, items: g.all.filter(shown) }))
+    .filter((g) => g.items.length);
 
   const search = (
     <InputGroup className="bg-background">
@@ -502,21 +656,15 @@ export function LumenSettings({
                 <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {g.items.map((s) => (
-                      <SidebarMenuItem key={s.id}>
-                        <SidebarMenuButton
-                          isActive={!q && s.id === current.id}
-                          className={s.sub ? 'pl-7' : undefined}
-                          onClick={() => go(s.id)}
-                        >
-                          <s.icon />
-                          <span>{s.title}</span>
-                          {s.health && s.health !== 'off' && (
-                            <SettingStatus health={s.health} title={s.healthTitle} dot />
-                          )}
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
+                    <SettingsNavRows
+                      items={g.items}
+                      all={g.all}
+                      activeId={q ? null : current.id}
+                      searching={!!q}
+                      unfolded={unfolded}
+                      onUnfold={unfold}
+                      onGo={go}
+                    />
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
