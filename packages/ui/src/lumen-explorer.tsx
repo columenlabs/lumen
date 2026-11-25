@@ -106,6 +106,8 @@ export interface ExplorerItem<D = unknown> {
   /** No rename, and nothing is dropped into it (a group the app builds itself). */
   locked?: boolean;
   children?: ExplorerItem<D>[];
+  /** A folder's first state, open or folded, over `openByDefault` (a loop's passes start folded). */
+  open?: boolean;
   /** The app's own record, handed back in every callback. */
   data?: D;
 }
@@ -129,10 +131,28 @@ export interface ExplorerToggle<D = unknown> {
    *  column, the icon turns into the toggle on hover and shows it while on); or only in the ⋯ menu
    *  (`menu`: a small mark after the name while it is on). */
   slot?: 'rail' | 'icon' | 'menu';
-  /** Data attributes for the toggle's button or menu item (an app's own action registry or tests). */
+  /** Data attributes for the toggle's button or menu item (an app's own action registry or tests),
+   *  or a function of the row when rows of different kinds share the toggle. */
+  attrs?: DataAttrs | ((item: ExplorerItem<D>) => DataAttrs);
+}
+type DataAttrs = Record<`data-${string}`, string>;
+
+/**
+ * A rollback bar (a CAD history's marker): drawn under the row it sits after; drag it, click the gap under
+ * another row, or move it with ↑ ↓ Home End. Rows after it in `rows` dim. Hidden while searching.
+ */
+export interface ExplorerBar {
+  /** The rows it can sit after, in order (one part's steps). */
+  rows: string[];
+  /** The row it sits after. */
+  at: string;
+  /** The person moved it: the row it now sits after. */
+  onMove: (row: string) => void;
+  /** Its name, before the row's: "Rollback bar" → "Rollback bar, after Fillet". */
+  label?: string;
+  /** Data attributes for the bar and the gaps under rows (an app's own action registry or tests). */
   attrs?: Record<`data-${string}`, string>;
 }
-
 /** The tree's handle: open, select, scroll to or rename a row from the app (keyboard shortcuts). */
 export type ExplorerApi<D = unknown> = TreeApi<ExplorerItem<D>>;
 
@@ -185,12 +205,16 @@ export interface LumenExplorerProps<D = unknown> {
     item: ExplorerItem<D>,
     node: NodeApi<ExplorerItem<D>>,
   ) => HTMLAttributes<HTMLDivElement>;
+  /** Rollback bars, one per list of rows (each part's steps). */
+  bars?: ExplorerBar[];
   apiRef?: Ref<ExplorerApi<D> | null>;
   className?: string;
 }
 
 /** How long a finger rests on a row before its full name shows (touch). */
 const LONG_PRESS_MS = 500;
+const attrsOf = <D,>(t: ExplorerToggle<D>, it: ExplorerItem<D>) =>
+  typeof t.attrs === 'function' ? t.attrs(it) : t.attrs;
 
 const DOT: Record<ExplorerStatusTone, string> = {
   error: 'bg-destructive',
@@ -490,6 +514,13 @@ interface RowContext<D> {
     item: ExplorerItem<D>,
     node: NodeApi<ExplorerItem<D>>,
   ) => HTMLAttributes<HTMLDivElement>;
+  /** Each bar row's bar and place in it, while the bars show (not while searching). */
+  barOf: Map<string, { bar: number; at: number }>;
+  bars: ExplorerBar[];
+  barAt: (bar: number) => number;
+  setDrag: (d: { bar: number; at: number } | null) => void;
+  moveBar: (bar: number, at: number) => void;
+  barKeyed: { current: number | null };
 }
 
 // Rows read the tree's settings from here, so the row component keeps one identity: a field being typed
@@ -527,12 +558,22 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     onSelect,
     nameFor,
     setNameFor,
+    barOf,
+    bars,
+    barAt,
+    setDrag,
+    moveBar,
+    barKeyed,
   } = useContext(RowCtx) as RowContext<D>;
   // Touch: a long press shows the full name (the tap that ends it does nothing else); a tap on a picked row
   // unpicks it.
   const hold = useRef<{ timer?: number; fired: boolean }>({ fired: false });
   useEffect(() => () => window.clearTimeout(hold.current.timer), []);
-  const it = node.data;
+  const it0 = node.data;
+  // The rollback bar: this row's place in a bar, the bar under it or the gap that moves it here.
+  const inBar = barOf.get(it0.id);
+  const barHere = inBar ? barAt(inBar.bar) : -1;
+  const it = inBar && inBar.at > barHere && !it0.dim ? { ...it0, dim: true } : it0;
   const menuOpen = menuFor === it.id;
   // Selected rows too show the ⋯ only on hover, so the meta stays readable.
   const showAll = touch || menuOpen;
@@ -552,7 +593,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     return (
       <IconButton
         key={t.id}
-        {...t.attrs}
+        {...attrsOf(t, it)}
         icon={!on && t.offIcon ? t.offIcon : t.icon}
         label={t.label(it, on)}
         size="icon-xs"
@@ -578,7 +619,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     <Tip label={iconT.label(it, isOn(it, iconT))}>
       <button
         type="button"
-        {...iconT.attrs}
+        {...attrsOf(iconT, it)}
         aria-label={iconT.label(it, isOn(it, iconT))}
         aria-pressed={iconOn}
         className={cn(
@@ -653,7 +694,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
           .map((t) => {
             const on = isOn(it, t);
             return (
-              <DropdownMenuItem key={t.id} {...t.attrs} onSelect={() => flip(it, t)}>
+              <DropdownMenuItem key={t.id} {...attrsOf(t, it)} onSelect={() => flip(it, t)}>
                 {!on && t.offIcon ? <t.offIcon /> : <t.icon />}
                 {t.label(it, on)}
               </DropdownMenuItem>
@@ -707,6 +748,95 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
     </fieldset>
   ) : null;
   const own = rowProps?.(it, node) ?? {};
+  const barEl = inBar
+    ? (() => {
+        const b = bars[inBar.bar] as ExplorerBar;
+        const name = b.label ?? 'Rollback bar';
+        if (inBar.at !== barHere)
+          return (
+            // The gap under a row: a click there puts the bar after it.
+            <button
+              type="button"
+              {...b.attrs}
+              aria-label={`${name}: move after ${it.name}`}
+              tabIndex={-1}
+              className="absolute inset-x-6 -bottom-1 z-[5] h-2 cursor-pointer rounded-sm hover:bg-primary/40 pointer-coarse:-bottom-2 pointer-coarse:h-4"
+              onClick={(e) => {
+                e.stopPropagation();
+                moveBar(inBar.bar, inBar.at);
+              }}
+            />
+          );
+        const last = b.rows.length - 1;
+        return (
+          <button
+            type="button"
+            {...b.attrs}
+            data-explorer-bar
+            aria-label={`${name}, after ${it.name}`}
+            ref={(el) => {
+              if (el && barKeyed.current === inBar.bar) {
+                barKeyed.current = null;
+                el.focus();
+              }
+            }}
+            className="absolute inset-x-1 -bottom-1.5 z-10 flex h-3 cursor-ns-resize touch-none items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:-bottom-3 pointer-coarse:h-6"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              // The bar redraws under each row it passes, so the drag follows the window, not this button.
+              let to = inBar.at;
+              setDrag({ bar: inBar.bar, at: to });
+              const move = (m: globalThis.PointerEvent) => {
+                const el = document
+                  .elementFromPoint(m.clientX, m.clientY)
+                  ?.closest<HTMLElement>('[data-explorer-bar-at]');
+                if (!el || Number(el.dataset.explorerBarOf) !== inBar.bar) return;
+                const at = Number(el.dataset.explorerBarAt);
+                if (at !== to) {
+                  to = at;
+                  setDrag({ bar: inBar.bar, at });
+                }
+              };
+              const done = (u: globalThis.PointerEvent) => {
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', done);
+                window.removeEventListener('pointercancel', done);
+                setDrag(null);
+                if (u.type === 'pointerup' && to !== inBar.at) moveBar(inBar.bar, to);
+              };
+              window.addEventListener('pointermove', move);
+              window.addEventListener('pointerup', done);
+              window.addEventListener('pointercancel', done);
+            }}
+            onKeyDown={(e) => {
+              const to =
+                e.key === 'ArrowUp'
+                  ? inBar.at - 1
+                  : e.key === 'ArrowDown'
+                    ? inBar.at + 1
+                    : e.key === 'Home'
+                      ? 0
+                      : e.key === 'End' || e.key === 'Escape'
+                        ? last
+                        : null;
+              e.stopPropagation();
+              if (to === null) return;
+              e.preventDefault();
+              barKeyed.current = inBar.bar;
+              moveBar(inBar.bar, to);
+            }}
+          >
+            <span className="h-0.5 flex-1 rounded-full bg-primary" aria-hidden />
+            <span
+              className="ml-1 size-2.5 flex-none rounded-full border-2 border-primary bg-background"
+              aria-hidden
+            />
+          </button>
+        );
+      })()
+    : null;
 
   return (
     <div
@@ -719,6 +849,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
           : 'color-mix(in oklab, var(--foreground) 6%, var(--background))',
       }}
       data-row={it.id}
+      {...(inBar && { 'data-explorer-bar-of': inBar.bar, 'data-explorer-bar-at': inBar.at })}
       className={cn(
         'group/row relative flex h-full items-center gap-1.5 rounded-md pr-1 whitespace-nowrap',
         node.isSelected ? 'bg-primary/15' : 'hover:bg-foreground/[.06]',
@@ -855,6 +986,7 @@ function ExplorerRow<D>({ node, style, dragHandle }: NodeRendererProps<ExplorerI
           {toggleBtns}
         </span>
       )}
+      {barEl}
     </div>
   );
 }
@@ -889,6 +1021,7 @@ export function LumenExplorer<D = unknown>({
   onToggleOpen,
   openByDefault = true,
   rowProps,
+  bars = [],
   apiRef,
   className,
 }: LumenExplorerProps<D>) {
@@ -961,6 +1094,29 @@ export function LumenExplorer<D = unknown>({
           ? String(leaves(x))
           : groupMeta(x);
 
+  // Rollback bars: each row's place in its bar, where a drag would drop it, a key move's focus.
+  const searching = !!search?.trim();
+  const barOf = new Map<string, { bar: number; at: number }>();
+  if (!searching) bars.forEach((b, bar) => b.rows.forEach((id, at) => barOf.set(id, { bar, at })));
+  const [drag, setDrag] = useState<{ bar: number; at: number } | null>(null);
+  const barKeyed = useRef<number | null>(null);
+  const barAt = (bar: number) =>
+    drag?.bar === bar ? drag.at : Math.max(0, bars[bar]?.rows.indexOf(bars[bar]?.at ?? '') ?? 0);
+  const moveBar = (bar: number, at: number) => {
+    const b = bars[bar];
+    if (!b) return;
+    const to = b.rows[Math.max(0, Math.min(b.rows.length - 1, at))];
+    if (to !== undefined && to !== b.at) b.onMove(to);
+  };
+  const initialOpen: Record<string, boolean> = {};
+  const opens = (xs: ExplorerItem<D>[]) => {
+    for (const x of xs) {
+      if (x.open !== undefined) initialOpen[x.id] = x.open;
+      opens(x.children ?? []);
+    }
+  };
+  opens(data);
+
   const ctx: RowContext<D> = {
     menuFor,
     setMenuFor,
@@ -990,6 +1146,12 @@ export function LumenExplorer<D = unknown>({
     onSelect,
     nameFor,
     setNameFor,
+    barOf,
+    bars,
+    barAt,
+    setDrag,
+    moveBar,
+    barKeyed,
   };
 
   const fill = height === undefined;
@@ -1002,6 +1164,7 @@ export function LumenExplorer<D = unknown>({
       rowHeight={h}
       indent={touch ? 18 : 14}
       openByDefault={openByDefault}
+      initialOpenState={initialOpen}
       searchTerm={search ?? ''}
       searchMatch={(n, s) =>
         (n.data.display ?? n.data.name).toLowerCase().includes(s.toLowerCase())
