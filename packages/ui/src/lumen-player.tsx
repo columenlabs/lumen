@@ -82,6 +82,11 @@ export interface LumenPlayerProps {
   onEnded?: () => void;
   /** Plays as soon as it can (the next item of a series, after the last one ended). */
   autoPlay?: boolean;
+  /**
+   * The player fills its parent's height (a page's stage): the picture shrinks to fit above the
+   * controls, never pushing them out of view. The parent needs a set height (`flex-1 min-h-0`).
+   */
+  fill?: boolean;
   className?: string;
 }
 
@@ -130,6 +135,7 @@ export function LumenPlayer({
   onProgress,
   onEnded,
   autoPlay,
+  fill = false,
   className,
 }: LumenPlayerProps) {
   const root = useRef<HTMLDivElement>(null);
@@ -289,6 +295,7 @@ export function LumenPlayer({
       className={cn(
         'flex min-w-0 flex-col gap-3 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
         full && 'justify-center bg-background p-4',
+        fill && !full && 'h-full min-h-0',
         className,
       )}
     >
@@ -296,7 +303,7 @@ export function LumenPlayer({
         className={cn(
           'relative overflow-hidden rounded-md',
           (video || slides) && 'bg-black',
-          full && 'min-h-0 flex-1',
+          (full || fill) && 'min-h-0 flex-1',
         )}
       >
         {video ? (
@@ -306,7 +313,7 @@ export function LumenPlayer({
             poster={poster}
             title={title}
             onClick={toggle}
-            className={cn('w-full', full ? 'h-full object-contain' : 'aspect-video')}
+            className={cn('w-full', full || fill ? 'h-full object-contain' : 'aspect-video')}
           >
             {tracks?.map((t) => (
               <track
@@ -326,7 +333,7 @@ export function LumenPlayer({
               <img
                 src={slide.image}
                 alt={slide.alt ?? title ?? ''}
-                className={cn('w-full object-contain', full ? 'h-full' : 'aspect-video')}
+                className={cn('w-full object-contain', full || fill ? 'h-full' : 'aspect-video')}
               />
             ) : null}
           </>
@@ -358,7 +365,7 @@ export function LumenPlayer({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex shrink-0 flex-col gap-1">
         <Slider
           aria-label="Seek"
           min={0}
