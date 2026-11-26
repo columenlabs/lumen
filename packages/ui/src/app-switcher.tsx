@@ -5,9 +5,10 @@
 // a separate one. `LumenSuiteSwitcher` reads the list from an address instead, for an app that
 // joins a suite it doesn't run (the address is set per deployment; none, the menu lists only itself).
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRightIcon, ChevronsUpDownIcon } from 'lucide-react';
-import { Fragment, type ReactNode, useState } from 'react';
+import { ArrowUpRightIcon, ChevronDownIcon, ChevronsUpDownIcon } from 'lucide-react';
+import { Fragment, type ReactNode, useContext, useState } from 'react';
 import { fetchWithin } from './fetch-within';
+import { InHeader } from './header-slot';
 import { cn } from './lib/utils';
 import type { NavIcon } from './nav';
 import {
@@ -82,6 +83,7 @@ export function LumenAppSwitcher({
   menuLabel?: string;
 }) {
   const { isMobile } = useSidebar();
+  const header = useContext(InHeader);
   const groups: { label: string; apps: LumenApp[] }[] = [];
   for (const a of apps) {
     const label = a.group ?? menuLabel;
@@ -90,6 +92,69 @@ export function LumenAppSwitcher({
     else if (a.group) groups.push({ label, apps: [a] });
     else groups.unshift({ label, apps: [a] });
   }
+  const menu = (
+    <DropdownMenuContent
+      className="min-w-56 max-w-96 rounded-lg"
+      align="start"
+      side={header || isMobile ? 'bottom' : 'right'}
+      sideOffset={4}
+    >
+      {groups.map((g, i) => (
+        <Fragment key={g.label}>
+          {i > 0 && <DropdownMenuSeparator />}
+          <DropdownMenuLabel className="text-xs text-muted-foreground">{g.label}</DropdownMenuLabel>
+          {g.apps.map((a) => (
+            <DropdownMenuItem
+              key={a.id}
+              asChild
+              className={cn('gap-2 p-2', a.id === current.id && 'bg-muted')}
+            >
+              <a href={a.href} aria-current={a.id === current.id ? 'page' : undefined}>
+                {a.tile ? (
+                  <AppMark app={a} className="size-6 shrink-0 rounded-md" />
+                ) : (
+                  <div className="flex size-6 shrink-0 items-center justify-center rounded-md border">
+                    <AppMark app={a} className="size-3.5 shrink-0" />
+                  </div>
+                )}
+                <span className={cn('truncate', a.external && 'shrink-0')}>
+                  {a.label ?? a.name}
+                </span>
+                {a.external && (
+                  <>
+                    <span className="ml-auto min-w-0 truncate text-xs text-muted-foreground">
+                      {hostOf(a.href)}
+                    </span>
+                    <ArrowUpRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  </>
+                )}
+              </a>
+            </DropdownMenuItem>
+          ))}
+        </Fragment>
+      ))}
+    </DropdownMenuContent>
+  );
+  if (header)
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={`${current.name}: switch app`}
+          className="-ml-1 flex min-w-0 shrink-0 items-center gap-2 rounded-md px-1.5 py-1 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent"
+        >
+          {current.tile ? (
+            <AppMark app={current} className="aspect-square size-7 shrink-0 rounded-md" />
+          ) : (
+            <span className="flex aspect-square size-7 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+              <AppMark app={current} className="size-4" />
+            </span>
+          )}
+          <span className="truncate text-sm font-semibold">{current.label ?? current.name}</span>
+          <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        </DropdownMenuTrigger>
+        {menu}
+      </DropdownMenu>
+    );
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -117,49 +182,7 @@ export function LumenAppSwitcher({
               <ChevronsUpDownIcon className="ml-auto" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="min-w-56 max-w-96 rounded-lg"
-            align="start"
-            side={isMobile ? 'bottom' : 'right'}
-            sideOffset={4}
-          >
-            {groups.map((g, i) => (
-              <Fragment key={g.label}>
-                {i > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="text-xs text-muted-foreground">
-                  {g.label}
-                </DropdownMenuLabel>
-                {g.apps.map((a) => (
-                  <DropdownMenuItem
-                    key={a.id}
-                    asChild
-                    className={cn('gap-2 p-2', a.id === current.id && 'bg-muted')}
-                  >
-                    <a href={a.href} aria-current={a.id === current.id ? 'page' : undefined}>
-                      {a.tile ? (
-                        <AppMark app={a} className="size-6 shrink-0 rounded-md" />
-                      ) : (
-                        <div className="flex size-6 shrink-0 items-center justify-center rounded-md border">
-                          <AppMark app={a} className="size-3.5 shrink-0" />
-                        </div>
-                      )}
-                      <span className={cn('truncate', a.external && 'shrink-0')}>
-                        {a.label ?? a.name}
-                      </span>
-                      {a.external && (
-                        <>
-                          <span className="ml-auto min-w-0 truncate text-xs text-muted-foreground">
-                            {hostOf(a.href)}
-                          </span>
-                          <ArrowUpRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                        </>
-                      )}
-                    </a>
-                  </DropdownMenuItem>
-                ))}
-              </Fragment>
-            ))}
-          </DropdownMenuContent>
+          {menu}
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>

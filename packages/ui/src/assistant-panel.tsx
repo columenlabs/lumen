@@ -10,6 +10,8 @@ import { useDevice } from './hooks/use-device';
 import { cn } from './lib/utils';
 import { LumenBoundary } from './lumen-boundary';
 import { LumenSelector } from './lumen-selector';
+import { LumenTabs } from './lumen-tabs';
+import { pickPanelTab, setPanelTabSlot, usePanelTabs } from './panel-tabs';
 import { ASSISTANT_WIDTH, usePrefs } from './prefs';
 import { ResizeEdge, tabState } from './side-dock';
 import { Button } from './ui/button';
@@ -23,6 +25,11 @@ export { tabState };
 
 /** Whether the assistant is open in this tab. */
 export const assistantOpen = tabState('assistant_open', false, (raw) => raw === '1');
+/** Open the docked panel on a page's tab (`LumenPanelTab`), or on the assistant with null. */
+export function openPanelTab(value: string | null) {
+  pickPanelTab(value);
+  assistantOpen.write(true);
+}
 /** Dragged width in px, within ASSISTANT_WIDTH; 0 is the shell's default. */
 const assistantWidth = tabState('assistant_width', 0, (raw) => {
   const n = Number(raw);
@@ -123,14 +130,39 @@ export function LumenAssistantPanel({
               Chat with {name} about your data.
             </SheetDescription>
             <LumenBoundary where="assistant" what="panel">
-              {children(true)}
+              <Tabbed name={name}>{children(true)}</Tabbed>
             </LumenBoundary>
           </SheetContent>
         </Sheet>
       </>
     );
   if (!open) return null;
-  return <Docked name={name}>{children(false)}</Docked>;
+  return (
+    <Docked name={name}>
+      <Tabbed name={name}>{children(false)}</Tabbed>
+    </Docked>
+  );
+}
+
+/** The assistant alone, or, while a page adds tabs (`LumenPanelTab`), a tab row with it first. */
+function Tabbed({ name, children }: { name: string; children: ReactNode }) {
+  const { tabs, picked } = usePanelTabs();
+  if (!tabs.length) return children;
+  return (
+    <div data-slot="assistant-tabs" className="flex h-full min-h-0 flex-col">
+      {/* As tall as the page header beside it, so the two read as one bar. */}
+      <div className="flex h-(--shell-header-height) shrink-0 items-end border-b px-3">
+        <LumenTabs
+          tabs={[{ value: '', label: name, icon: SparklesIcon }, ...tabs]}
+          value={picked ?? ''}
+          onChange={(v) => pickPanelTab(v || null)}
+        />
+      </div>
+      {/* The chat stays mounted under a page tab, so a reply keeps streaming. */}
+      <div className={cn('min-h-0 flex-1', picked && 'hidden')}>{children}</div>
+      {picked && <div ref={setPanelTabSlot} className="min-h-0 flex-1 overflow-y-auto" />}
+    </div>
+  );
 }
 
 function Docked({ name, children }: { name: string; children: ReactNode }) {

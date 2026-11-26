@@ -300,6 +300,11 @@
   color-scheme: light;
 }
 
+/* A full-screen tool (LumenShell sidebar={false}): the compact header, as in a CAD or video editor. */
+[data-shell-frame="tool"] {
+  --shell-header-height: 40px;
+}
+
 @media (min-width: 768px) {
   :root {
     --shell-gutter: 16px;

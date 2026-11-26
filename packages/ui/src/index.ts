@@ -67,6 +67,7 @@ export { CardSegments, CardSwitch } from './card-switch';
 export { PageInput, PageInputs } from './page-inputs';
 export { LumenBulkBar } from './lumen-bulk-bar';
 export { type LumenTab, LumenTabs } from './lumen-tabs';
+export { LumenPanelTab, type PanelTabInfo, pickPanelTab, usePanelTabs } from './panel-tabs';
 export { LumenTabDrawer, TAB_NAME_MAX } from './lumen-tab-drawer';
 export { IconPicker } from './icon-picker';
 export {
@@ -630,6 +631,7 @@ export {
   LumenAssistantChats,
   LumenAssistantPanel,
   assistantOpen,
+  openPanelTab,
   tabState,
   useAssistantHotkey,
 } from './assistant-panel';
