@@ -17,7 +17,7 @@ Built on react-arborist: rows are virtualized, and the keyboard (arrows, Enter, 
 One line a row, 26px (36px with `touch`). Slots from the left, each a fixed width:
 
 1. **Indent and chevron.** A `folder` (or a row with `children`) has a chevron and folds. A flat list (no folder at the top) keeps no chevron room.
-2. **Icon.** The item's type `icon` (a lucide icon, or the app's own small control such as a colour swatch), coloured by `tint`. Its `status` is a dot on the icon, its words in the hover; `busy` spins in its place. `statusAt="end"` moves the status to the row's end.
+2. **Icon.** The item's type `icon` (a lucide icon, or the app's own small control such as a colour swatch), coloured by `tint`. A folder with no `icon` shows the amber folder, so its slot is never empty. Its `status` is a dot on the icon, its words in the hover; `busy` spins in its place. `statusAt="end"` moves the status to the row's end.
 3. **Swatch.** An optional 12px control after the icon (a part's colour or material). When any row has one, the others keep its room, so names line up.
 4. **Name.** One line; a long name ends in an ellipsis, the full name in its hover. `display` shows a shorter text. `info` turns the hover into a card: what it does (`text`), what it touches (`tags`, under `tagsLabel`, default "Rebuilds"), and the field's usual range. Never a second line.
 5. **Marks.** Small fixed-width things right after the name (a spinner and its time, a retry).

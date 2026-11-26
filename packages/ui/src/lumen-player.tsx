@@ -83,10 +83,13 @@ export interface LumenPlayerProps {
   /** Plays as soon as it can (the next item of a series, after the last one ended). */
   autoPlay?: boolean;
   /**
-   * The player fills its parent's height (a page's stage): the picture shrinks to fit above the
-   * controls, never pushing them out of view. The parent needs a set height (`flex-1 min-h-0`).
+   * The player fills its parent (a page's stage): the picture is drawn at its own shape (no black
+   * bars beyond it), as large as fits above the controls, and the controls sit right under it at its
+   * width. The parent needs a set height (`flex-1 min-h-0`).
    */
   fill?: boolean;
+  /** The picture's width over its height (`16 / 9`), until the file says; `fill` sizes to it. */
+  aspect?: number;
   className?: string;
 }
 
@@ -136,6 +139,7 @@ export function LumenPlayer({
   onEnded,
   autoPlay,
   fill = false,
+  aspect,
   className,
 }: LumenPlayerProps) {
   const root = useRef<HTMLDivElement>(null);
@@ -151,6 +155,19 @@ export function LumenPlayer({
   const [rate, setRate] = useState<string>('1');
   const [captions, setCaptions] = useState(() => !!tracks?.some((t) => t.default));
   const [full, setFull] = useState(false);
+  // The picture's shape, from the file once it says, so `fill` draws it with no black bars.
+  const [shape, setShape] = useState<number | null>(null);
+  const ratio = shape ?? (aspect && aspect > 0 ? aspect : 16 / 9);
+  const bar = useRef<HTMLDivElement>(null);
+  const [barHeight, setBarHeight] = useState(72);
+  const fit = fill && !full;
+  useEffect(() => {
+    const el = bar.current;
+    if (!fit || !el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setBarHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit]);
   const last = useRef(0);
   const progress = useRef(onProgress);
   progress.current = onProgress;
@@ -245,6 +262,8 @@ export function LumenPlayer({
     onLoadedMetadata: (e: SyntheticEvent<HTMLMediaElement>) => {
       const el = e.currentTarget;
       setFailed(false);
+      if (el instanceof HTMLVideoElement && el.videoWidth && el.videoHeight)
+        setShape(el.videoWidth / el.videoHeight);
       setDuration(Number.isFinite(el.duration) ? el.duration : null);
       el.playbackRate = Number(rate);
       if (start && start > 0 && (!Number.isFinite(el.duration) || start < el.duration - 1)) {
@@ -295,140 +314,150 @@ export function LumenPlayer({
       className={cn(
         'flex min-w-0 flex-col gap-3 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
         full && 'justify-center bg-background p-4',
-        fill && !full && 'h-full min-h-0',
+        // Filling: a sized box (container query units), the picture and its controls centred in it.
+        fit && 'h-full w-full min-h-0 justify-center [container-type:size]',
         className,
       )}
     >
       <div
-        className={cn(
-          'relative overflow-hidden rounded-md',
-          (video || slides) && 'bg-black',
-          (full || fill) && 'min-h-0 flex-1',
-        )}
+        className={cn('flex min-h-0 flex-col gap-2', fit ? 'mx-auto' : 'contents')}
+        style={
+          fit ? { width: `min(100cqw, calc((100cqh - ${barHeight + 8}px) * ${ratio}))` } : undefined
+        }
       >
-        {video ? (
-          <video
-            key={url}
-            {...events}
-            poster={poster}
-            title={title}
-            onClick={toggle}
-            className={cn('w-full', full || fill ? 'h-full object-contain' : 'aspect-video')}
-          >
-            {tracks?.map((t) => (
-              <track
-                key={t.src}
-                kind="captions"
-                src={t.src}
-                srcLang={t.srcLang}
-                label={t.label}
-                default={t.default}
+        <div
+          className={cn(
+            'relative overflow-hidden rounded-md',
+            (video || slides) && 'bg-black',
+            full && 'min-h-0 flex-1',
+            fit && 'w-full shrink-0',
+          )}
+          style={fit && (video || slides) ? { aspectRatio: String(ratio) } : undefined}
+        >
+          {video ? (
+            <video
+              key={url}
+              {...events}
+              poster={poster}
+              title={title}
+              onClick={toggle}
+              className={cn('w-full', full || fit ? 'h-full object-contain' : 'aspect-video')}
+            >
+              {tracks?.map((t) => (
+                <track
+                  key={t.src}
+                  kind="captions"
+                  src={t.src}
+                  srcLang={t.srcLang}
+                  label={t.label}
+                  default={t.default}
+                />
+              ))}
+            </video>
+          ) : (
+            <>
+              <audio key={url} {...events} title={title} className="hidden" />
+              {slide ? (
+                <img
+                  src={slide.image}
+                  alt={slide.alt ?? title ?? ''}
+                  className={cn('w-full object-contain', full || fit ? 'h-full' : 'aspect-video')}
+                />
+              ) : null}
+            </>
+          )}
+          {waiting && !failed ? (
+            <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+              <Spinner className="size-6 text-white" />
+            </span>
+          ) : null}
+          {failed ? (
+            <div
+              role="alert"
+              className={cn(
+                'flex items-center justify-center gap-2 p-4 text-sm',
+                video || slides ? 'absolute inset-0 bg-black/70 text-white' : 'text-destructive',
+              )}
+            >
+              <span className="truncate">Could not load this recording</span>
+              <IconButton
+                icon={RotateCwIcon}
+                label="Try again"
+                variant="secondary"
+                onClick={() => {
+                  setFailed(false);
+                  media.current?.load();
+                }}
               />
-            ))}
-          </video>
-        ) : (
-          <>
-            <audio key={url} {...events} title={title} className="hidden" />
-            {slide ? (
-              <img
-                src={slide.image}
-                alt={slide.alt ?? title ?? ''}
-                className={cn('w-full object-contain', full || fill ? 'h-full' : 'aspect-video')}
-              />
-            ) : null}
-          </>
-        )}
-        {waiting && !failed ? (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/20">
-            <Spinner className="size-6 text-white" />
-          </span>
-        ) : null}
-        {failed ? (
-          <div
-            role="alert"
-            className={cn(
-              'flex items-center justify-center gap-2 p-4 text-sm',
-              video || slides ? 'absolute inset-0 bg-black/70 text-white' : 'text-destructive',
-            )}
-          >
-            <span className="truncate">Could not load this recording</span>
+            </div>
+          ) : null}
+        </div>
+
+        <div ref={bar} className="flex shrink-0 flex-col gap-1">
+          <Slider
+            aria-label="Seek"
+            min={0}
+            max={end || 1}
+            step={1}
+            value={[Math.min(now, end || 1)]}
+            disabled={!end}
+            onValueChange={([v]) => v !== undefined && seek(v)}
+            className="py-2"
+          />
+          <div className="flex min-w-0 items-center gap-1">
+            <IconButton
+              icon={playing ? PauseIcon : PlayIcon}
+              label={playing ? 'Pause' : 'Play'}
+              variant="default"
+              onClick={toggle}
+              disabled={failed}
+            />
+            <IconButton
+              icon={RotateCcwIcon}
+              label={`Back ${SKIP} seconds`}
+              onClick={() => seek(now - SKIP)}
+            />
             <IconButton
               icon={RotateCwIcon}
-              label="Try again"
-              variant="secondary"
-              onClick={() => {
-                setFailed(false);
-                media.current?.load();
-              }}
+              label={`Forward ${SKIP} seconds`}
+              onClick={() => seek(now + SKIP)}
             />
+            <span className="num ml-1 min-w-0 truncate text-xs text-muted-foreground">
+              {playerClock(now)} / {duration === null ? '–:––' : playerClock(duration)}
+            </span>
+            <span className="ml-auto flex shrink-0 items-center gap-1">
+              <LumenSelector
+                trigger="chip"
+                size="sm"
+                icon={GaugeIcon}
+                label="Speed"
+                value={rate}
+                display={<span className="num">{rate}×</span>}
+                options={SPEEDS.map((s) => ({ value: s, label: `${s}×` }))}
+                search={false}
+                align="end"
+                onChange={(v) => {
+                  setRate(v);
+                  if (media.current) media.current.playbackRate = Number(v);
+                }}
+              />
+              {video && tracks?.length ? (
+                <IconButton
+                  icon={CaptionsIcon}
+                  label={captions ? 'Hide captions' : 'Show captions'}
+                  pressed={captions}
+                  onClick={() => setCaptions((c) => !c)}
+                />
+              ) : null}
+              {video ? (
+                <IconButton
+                  icon={full ? MinimizeIcon : MaximizeIcon}
+                  label={full ? 'Exit full screen' : 'Full screen'}
+                  onClick={fullscreen}
+                />
+              ) : null}
+            </span>
           </div>
-        ) : null}
-      </div>
-
-      <div className="flex shrink-0 flex-col gap-1">
-        <Slider
-          aria-label="Seek"
-          min={0}
-          max={end || 1}
-          step={1}
-          value={[Math.min(now, end || 1)]}
-          disabled={!end}
-          onValueChange={([v]) => v !== undefined && seek(v)}
-          className="py-2"
-        />
-        <div className="flex min-w-0 items-center gap-1">
-          <IconButton
-            icon={playing ? PauseIcon : PlayIcon}
-            label={playing ? 'Pause' : 'Play'}
-            variant="default"
-            onClick={toggle}
-            disabled={failed}
-          />
-          <IconButton
-            icon={RotateCcwIcon}
-            label={`Back ${SKIP} seconds`}
-            onClick={() => seek(now - SKIP)}
-          />
-          <IconButton
-            icon={RotateCwIcon}
-            label={`Forward ${SKIP} seconds`}
-            onClick={() => seek(now + SKIP)}
-          />
-          <span className="num ml-1 min-w-0 truncate text-xs text-muted-foreground">
-            {playerClock(now)} / {duration === null ? '–:––' : playerClock(duration)}
-          </span>
-          <span className="ml-auto flex shrink-0 items-center gap-1">
-            <LumenSelector
-              trigger="chip"
-              size="sm"
-              icon={GaugeIcon}
-              label="Speed"
-              value={rate}
-              display={<span className="num">{rate}×</span>}
-              options={SPEEDS.map((s) => ({ value: s, label: `${s}×` }))}
-              search={false}
-              align="end"
-              onChange={(v) => {
-                setRate(v);
-                if (media.current) media.current.playbackRate = Number(v);
-              }}
-            />
-            {video && tracks?.length ? (
-              <IconButton
-                icon={CaptionsIcon}
-                label={captions ? 'Hide captions' : 'Show captions'}
-                pressed={captions}
-                onClick={() => setCaptions((c) => !c)}
-              />
-            ) : null}
-            {video ? (
-              <IconButton
-                icon={full ? MinimizeIcon : MaximizeIcon}
-                label={full ? 'Exit full screen' : 'Full screen'}
-                onClick={fullscreen}
-              />
-            ) : null}
-          </span>
         </div>
       </div>
 
