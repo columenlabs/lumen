@@ -46,6 +46,7 @@ import {
   StatusSignals,
 } from './status-bar';
 import { Avatar, AvatarFallback } from './ui/avatar';
+import { Button } from './ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,7 +71,7 @@ import {
   useSidebar,
 } from './ui/sidebar';
 import { Toaster } from './ui/sonner';
-import { TooltipProvider } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { WhatsNew as WhatsNewPart } from './whats-new';
 
 // Loaded when it first shows (lazy-part.tsx).
@@ -99,6 +100,10 @@ interface ShellContext {
   hideAmounts: boolean;
   /** The product's buttons on every page header, after Refresh (`headerActions`). */
   headerActions: ReactNode;
+  /** With `sidebar={false}`: the app's brand (its switcher) at the header's start, else null. */
+  headerBrand: ReactNode;
+  /** With `sidebar={false}`: the profile menu at the header's end, else null. */
+  headerUser: ReactNode;
 }
 const Ctx = createContext<ShellContext | null>(null);
 
@@ -181,11 +186,14 @@ function NavUser({
   signOutUrl,
   onSettings,
   onLogs,
+  compact = false,
 }: {
   who: ShellUser | null;
   signOutUrl?: string;
   onSettings: () => void;
   onLogs?: () => void;
+  /** In the page header (`sidebar={false}`): the avatar alone, its menu below it. */
+  compact?: boolean;
 }) {
   const { isMobile } = useSidebar();
   const person = (
@@ -196,6 +204,61 @@ function NavUser({
       <span className="flex-1 truncate text-left text-sm font-medium">{firstName(who)}</span>
     </>
   );
+  const menu = (
+    <DropdownMenuContent
+      className="min-w-56 rounded-lg"
+      side={compact || isMobile ? 'bottom' : 'right'}
+      align="end"
+      sideOffset={4}
+    >
+      <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
+        {who?.email ?? 'Signed in'}
+      </DropdownMenuLabel>
+      <DropdownMenuGroup>
+        <DropdownMenuItem onSelect={onSettings}>
+          <SettingsIcon />
+          Settings
+          <DropdownMenuShortcut>{SETTINGS_KEYS}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        {onLogs ? (
+          <DropdownMenuItem onSelect={onLogs}>
+            <ScrollTextIcon />
+            Logs
+          </DropdownMenuItem>
+        ) : null}
+        <ThemeItem />
+      </DropdownMenuGroup>
+      {signOutUrl && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <a href={signOutUrl} data-sign-out>
+              <LogOutIcon />
+              Sign out
+            </a>
+          </DropdownMenuItem>
+        </>
+      )}
+    </DropdownMenuContent>
+  );
+  if (compact)
+    return (
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Profile" className="rounded-lg">
+                <Avatar className="size-7 rounded-lg">
+                  <AvatarFallback className="rounded-lg text-xs">{initials(who)}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Profile</TooltipContent>
+        </Tooltip>
+        {menu}
+      </DropdownMenu>
+    );
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -211,41 +274,7 @@ function NavUser({
               <ChevronsUpDownIcon className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="min-w-56 rounded-lg"
-            side={isMobile ? 'bottom' : 'right'}
-            align="end"
-            sideOffset={4}
-          >
-            <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
-              {who?.email ?? 'Signed in'}
-            </DropdownMenuLabel>
-            <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={onSettings}>
-                <SettingsIcon />
-                Settings
-                <DropdownMenuShortcut>{SETTINGS_KEYS}</DropdownMenuShortcut>
-              </DropdownMenuItem>
-              {onLogs ? (
-                <DropdownMenuItem onSelect={onLogs}>
-                  <ScrollTextIcon />
-                  Logs
-                </DropdownMenuItem>
-              ) : null}
-              <ThemeItem />
-            </DropdownMenuGroup>
-            {signOutUrl && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <a href={signOutUrl} data-sign-out>
-                    <LogOutIcon />
-                    Sign out
-                  </a>
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
+          {menu}
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
@@ -261,6 +290,11 @@ export interface LumenShellProps {
   brand: ReactNode;
   /** The app's sidebar content: `NavGroup`s and `SidebarSection`s. */
   nav: ReactNode;
+  /** False draws no sidebar: a full-screen tool (an editor, a canvas) whose `brand` (the app
+   *  switcher) leads every page header and whose profile menu ends it; `nav` is not drawn, so the
+   *  app reaches its pages from the page itself. Its header is the compact one (40 px). True by
+   *  default. */
+  sidebar?: boolean;
   /** The phone's bottom tab bar: up to four main pages, then More (the sidebar). None by default. */
   tabs?: NavItem[];
   /** The app's status bar (DESIGN.md, Status bar): its sync and messages as data; pages add theirs
@@ -333,6 +367,7 @@ export function LumenShell({
   appLabel,
   brand,
   nav,
+  sidebar = true,
   tabs,
   bar,
   status,
@@ -415,6 +450,16 @@ export function LumenShell({
           refreshing,
           hideAmounts,
           headerActions,
+          headerBrand: sidebar ? null : brand,
+          headerUser: sidebar ? null : (
+            <NavUser
+              who={user}
+              signOutUrl={signOutUrl}
+              onSettings={() => openSettings()}
+              onLogs={onLogs}
+              compact
+            />
+          ),
         }}
       >
         <StatusBarProvider>
@@ -423,7 +468,10 @@ export function LumenShell({
               <SourceHealthProvider>
                 {wrap(
                   <TooltipProvider delayDuration={200}>
-                    <SidebarProvider defaultOpen={sidebarOpen()}>
+                    <SidebarProvider
+                      defaultOpen={sidebarOpen()}
+                      data-shell-frame={sidebar ? undefined : 'tool'}
+                    >
                       <LumenFinder
                         app={app}
                         settings={findSettings}
@@ -431,19 +479,21 @@ export function LumenShell({
                         config={finder}
                       >
                         <CloseDrawerOnNavigate />
-                        <Sidebar collapsible="icon">
-                          <SidebarHeader>{brand}</SidebarHeader>
-                          <SidebarContent>{nav}</SidebarContent>
-                          <SidebarFooter>
-                            <NavUser
-                              who={user}
-                              signOutUrl={signOutUrl}
-                              onSettings={() => openSettings()}
-                              onLogs={onLogs}
-                            />
-                          </SidebarFooter>
-                          <SidebarRail />
-                        </Sidebar>
+                        {sidebar && (
+                          <Sidebar collapsible="icon">
+                            <SidebarHeader>{brand}</SidebarHeader>
+                            <SidebarContent>{nav}</SidebarContent>
+                            <SidebarFooter>
+                              <NavUser
+                                who={user}
+                                signOutUrl={signOutUrl}
+                                onSettings={() => openSettings()}
+                                onLogs={onLogs}
+                              />
+                            </SidebarFooter>
+                            <SidebarRail />
+                          </Sidebar>
+                        )}
                         <SidebarInset className="flex min-h-svh min-w-0 flex-col">
                           <SignalBanners />
                           <div key={epoch} className="flex min-w-0 flex-1 flex-col">

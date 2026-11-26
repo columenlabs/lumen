@@ -6,6 +6,7 @@ import { ChevronLeftIcon, EyeIcon, EyeOffIcon, RefreshCwIcon } from 'lucide-reac
 import { Fragment, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useAssistantNote } from './assistant-context';
+import { InHeader } from './header-slot';
 import { cn } from './lib/utils';
 import { setPref, usePrefs } from './prefs';
 import { useShell } from './shell';
@@ -52,7 +53,8 @@ export interface PageHeaderProps {
 /** The fixed-height header; `Page` renders it, or a page with several states renders it itself. */
 export function PageHeader({ crumbs, actions, layout, meta, status }: PageHeaderProps) {
   const router = useRouter();
-  const { statusSlot, refresh, refreshing, hideAmounts, headerActions } = useShell();
+  const { statusSlot, refresh, refreshing, hideAmounts, headerActions, headerBrand, headerUser } =
+    useShell();
   const hidden = usePrefs().hideAmounts;
   const { isMobile } = useSidebar();
   const parent = [...crumbs.slice(0, -1)].reverse().find((c) => c.to);
@@ -68,12 +70,16 @@ export function PageHeader({ crumbs, actions, layout, meta, status }: PageHeader
         data-slot="shell-header"
         className="sticky top-0 z-20 flex h-(--shell-header-height) shrink-0 items-center gap-2 overflow-hidden border-b bg-background px-(--shell-gutter)"
       >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <SidebarTrigger className="-ml-1" />
-          </TooltipTrigger>
-          <TooltipContent>Toggle sidebar</TooltipContent>
-        </Tooltip>
+        {headerBrand ? (
+          <InHeader.Provider value>{headerBrand}</InHeader.Provider>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SidebarTrigger className="-ml-1" />
+            </TooltipTrigger>
+            <TooltipContent>Toggle sidebar</TooltipContent>
+          </Tooltip>
+        )}
         <Separator
           orientation="vertical"
           className="hidden data-vertical:h-4 data-vertical:self-center md:block"
@@ -172,6 +178,7 @@ export function PageHeader({ crumbs, actions, layout, meta, status }: PageHeader
               />
             )}
             {headerActions}
+            {headerUser}
           </div>
         </div>
       </header>
