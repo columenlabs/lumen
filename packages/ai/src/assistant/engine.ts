@@ -113,10 +113,37 @@ export interface AssistantCommandDef {
 /** Who is asking: their id (the store's scope for their things) and whether they are an admin. */
 /** A photo `complete` reads with its prompt: base64 bytes and their media type (`image/jpeg`). */
 /**
- * The model `image` runs and its list price per million tokens (OpenAI, gpt-image-2: text in $5,
- * image in $8, image out $30). `fallbackUsd` is a medium square image, for an answer with no usage.
+ * The model `image` runs and its list price per million tokens (OpenAI, GPT-Image-2.6 Sunburst: text
+ * in $5, image in $8, image out $30). `fallbackUsd` stands in for an answer with no usage.
  */
-export const IMAGE_MODEL = { id: 'gpt-image-2', text: 5, image: 8, out: 30, fallbackUsd: 0.06 };
+export const IMAGE_MODEL = {
+  id: 'gpt-image-2.6-sunburst',
+  text: 5,
+  image: 8,
+  out: 30,
+  fallbackUsd: 0.25,
+};
+
+/**
+ * An image size the model takes, `WIDTHxHEIGHT`: each edge a multiple of 16 and at most 3840 px, the
+ * shape between 1:3 and 3:1, and 655,360 to 8,294,400 pixels (2K is 2048x2048, 4K 3840x2160).
+ */
+export function imageSizeOk(size: string): boolean {
+  const m = /^(\d{3,4})x(\d{3,4})$/.exec(size);
+  if (!m) return false;
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  const px = w * h;
+  return (
+    w % 16 === 0 &&
+    h % 16 === 0 &&
+    w <= 3840 &&
+    h <= 3840 &&
+    Math.max(w, h) <= 3 * Math.min(w, h) &&
+    px >= 655_360 &&
+    px <= 8_294_400
+  );
+}
 
 export interface CompleteImage {
   mediaType: string;
@@ -2083,8 +2110,8 @@ export class Assistant {
       task: string;
       prompt: string;
       images?: CompleteImage[];
-      /** Wide, tall or square (default). */
-      size?: '1024x1024' | '1536x1024' | '1024x1536';
+      /** `WIDTHxHEIGHT` (`imageSizeOk`), 1024x1024 by default; 2048x2048 is 2K, 3840x2160 4K. */
+      size?: string;
       quality?: 'low' | 'medium' | 'high';
       signal?: AbortSignal;
       run?: { id: string; title: string };
@@ -2106,11 +2133,14 @@ export class Assistant {
     const key = paying.keys.openai;
     if (!key) throw new AssistantError(waitText('not_connected', 'openai'), 'not_connected', 402);
     const m = IMAGE_MODEL;
+    if (o.size && !imageSizeOk(o.size))
+      throw new AssistantError(`${o.size} is not a size the image model takes.`, 'upstream', 400);
     const client = this.openai(key);
     const common = {
       model: m.id,
       prompt: o.prompt.slice(0, 4000),
-      size: o.size ?? '1024x1024',
+      // Any WxH the model takes; the SDK's type lists only the older fixed sizes.
+      size: (o.size ?? '1024x1024') as '1024x1024',
       quality: o.quality ?? 'medium',
       n: 1,
     } as const;
