@@ -201,6 +201,11 @@ export interface LumenAssistantProps {
    */
   images?: boolean;
   /**
+   * Gets each image as the person attached it (pasted, dropped or picked), before it is scaled to
+   * send: an app keeps its own copy (a media library) while the image still goes with the message.
+   */
+  onImages?: (files: File[]) => void;
+  /**
    * Toggles beside the paperclip, one per mode ("Make an image"): one turned on goes with the next
    * message as its `use`, and the app's plan reads it (call the tool that makes an image).
    */
@@ -278,6 +283,7 @@ export function LumenAssistant({
   commands = [],
   sources = [],
   images = false,
+  onImages,
   modes = [],
   imageTool,
   compactAt = COMPACT_AT,
@@ -554,6 +560,7 @@ export function LumenAssistant({
         sources={allSources}
         page={context?.label}
         images={images}
+        onImages={onImages}
         modes={modes}
         onSend={(text, more, how) => chat.send(text, { ...extra(), ...more }, how)}
         onStop={chat.stop}
@@ -2490,6 +2497,7 @@ export function LumenComposer({
   sources = [],
   page,
   images: canAttach = false,
+  onImages,
   modes = [],
   onSend,
   onStop,
@@ -2513,6 +2521,8 @@ export function LumenComposer({
   hint?: string;
   /** Images can be pasted or dropped on the box (`LumenAssistant` `images`). */
   images?: boolean;
+  /** Each attached image file, as it was (`LumenAssistant` `onImages`). */
+  onImages?: (files: File[]) => void;
   /** The page's name for `@` This page; the document's title by default. */
   page?: string;
   busy: boolean;
@@ -2604,6 +2614,7 @@ export function LumenComposer({
   const attach = (files: FileList | File[], pasted = false): boolean => {
     const picked = [...files].filter((f) => f.type.startsWith('image/'));
     if (!canAttach || !picked.length) return false;
+    onImages?.(picked);
     void (async () => {
       const read = (
         await Promise.all(
