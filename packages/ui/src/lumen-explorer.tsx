@@ -12,6 +12,7 @@ import {
   ChevronRightIcon,
   CircleAlertIcon,
   EllipsisIcon,
+  FolderIcon,
   LoaderCircleIcon,
   PencilIcon,
   TriangleAlertIcon,
@@ -78,7 +79,7 @@ export interface ExplorerItem<D = unknown> {
   name: string;
   /** A shorter text to show in the row (a part under its file's folder); the full `name` is its hover. */
   display?: string;
-  /** The type icon, or the app's own small control in the icon slot (a colour swatch). */
+  /** The type icon, or the app's own small control in the icon slot (a colour swatch). A folder without one shows the amber folder. */
   icon?: Icon | ReactNode;
   /** The icon's colour (a folder's amber, a part's swatch). */
   tint?: string;
@@ -288,8 +289,16 @@ function LeadIcon({
 }: { item: ExplorerItem<unknown>; statusAt: 'icon' | 'end'; box: string }) {
   const s = statusAt === 'icon' ? item.status : undefined;
   if (s?.tone === 'busy') return <StatusMark s={s} size={box} />;
-  const I = item.icon;
-  const glyph = isIcon(I) ? <I className="size-3.5" /> : I ? I : <span className="size-3.5" />;
+  // A folder the app gives no icon still shows one: the amber folder, never an empty slot.
+  const I: ExplorerItem<unknown>['icon'] = item.icon ?? (item.folder ? FolderIcon : undefined);
+  const amber = !item.icon && item.folder && !item.tint;
+  const glyph = isIcon(I) ? (
+    <I className={cn('size-3.5', amber && 'text-amber-600 dark:text-amber-400')} />
+  ) : I ? (
+    I
+  ) : (
+    <span className="size-3.5" />
+  );
   const body = (
     <span
       className={cn(

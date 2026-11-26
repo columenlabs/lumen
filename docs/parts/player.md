@@ -25,7 +25,7 @@ Transcript                                 its own scroll box; the line being sa
 - `tracks` (WebVTT captions, video), `chapters: [{ at, title }]`, `transcript: [{ start, end?, text, who? }]`, `poster`, `title`.
 - `start` (seconds) resumes where the person left off. `onProgress(seconds, { duration, ended })` fires about every 10 s while playing, on pause, at the end and when the player goes away; nothing fires for a recording opened and left unplayed. Save it there.
 - `onEnded` (play the next one), `autoPlay` (start as soon as it can; the browser may refuse without a tap).
-- `fill`: the player takes its parent's height (a page's stage, `flex-1 min-h-0`); the picture shrinks to fit and the controls always stay in view. Without it the picture is 16:9 at full width.
+- `fill`: the player fills its parent (a page's stage, `flex-1 min-h-0`). The picture keeps its own shape (read from the file, or `aspect` until then), as large as fits, with no black bars beyond it, and the controls sit right under it at its width, always in view. Without it the picture is 16:9 at full width.
 - Keys while the player has focus: space or k play and pause, j and l skip 15 s, ← and → 5 s, f full screen, c captions. A field or menu inside keeps its own keys.
 - A failed load shows one line and a Try again icon; the controls never spin forever.
 
